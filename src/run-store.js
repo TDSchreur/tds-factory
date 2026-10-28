@@ -220,6 +220,7 @@ export function openRunStore(callerDir) {
   const { dir: projectDir } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
   return {
+    projectDir,
     start: (data) => startRun(projectDir, data),
     update: (id, data) => updateRun(projectDir, id, data),
     list: () => listRuns(runsDir),

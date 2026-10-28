@@ -6,13 +6,15 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
-export const DEFAULT_PORT = 4317;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 const ghPrMerge = (url) => promisify(execFile)('gh', ['pr', 'merge', url, '--squash'], { timeout: 30_000 });
 const PR_CACHE_MS = 60_000;
 const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
 const HOST = '127.0.0.1';
+// Each repo gets its own stable port in 4300-4999, derived from its main checkout path.
+const repoPort = (dir) => 4300 + createHash('sha1').update(dir).digest().readUInt32BE(0) % 700;
 const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
 // The only files served besides the page; a request never picks a path, only one of these names.
 const JS = 'text/javascript';
@@ -41,9 +43,9 @@ export function interpretRun(entry) {
 }
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
-// Pass port 0 for a random free port. Resolves to { server, port, url, close }.
+// Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED and prMerge(url) squash-merges; both default to the `gh` CLI.
-export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT, prState = ghPrState, prMerge = ghPrMerge, dashboardDir = DASHBOARD_DIR } = {}) {
+export async function startDashboard({ projectDir = process.cwd(), port, prState = ghPrState, prMerge = ghPrMerge, dashboardDir = DASHBOARD_DIR } = {}) {
   const store = openRunStore(projectDir);
   const prCache = new Map();
   const lookup = (url) => {
@@ -111,9 +113,14 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
     }
   });
 
-  await new Promise((ok, fail) => {
+  const listen = (p) => new Promise((ok, fail) => {
     server.once('error', fail);
-    server.listen(port, HOST, ok);
+    server.listen(p, HOST, ok);
+  });
+  if (port !== undefined) await listen(port);
+  else await listen(repoPort(store.projectDir)).catch((err) => {
+    if (err.code !== 'EADDRINUSE') throw err;
+    return listen(0);
   });
   const actual = server.address().port;
   return {
