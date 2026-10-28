@@ -27,7 +27,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 15. As a developer, I want columns for Define, Prepare, Build, Check, Finish and Done, so that I see where each Run is in the Flow.
 16. As a developer, I want a card to show its title, activity note and agent, so that I can recognize it and see who is working on it.
 17. As a developer, I want a card to show Ticket progress (e.g. 3/5), so that I know how far Build is.
-18. As a developer, I want Standards and Spec chips on Check cards showing pass or fail, so that I see the outcome of the review at a glance.
+18. As a developer, I want Standards, Spec, Security and Infrastructure chips on Check cards showing pass or fail, so that I see the outcome of the review at a glance.
 19. As a developer, I want the Check loop count shown (e.g. "loop 1/2"), so that I know when the cap is near.
 20. As a developer, I want Runs waiting on me to stand out on the board, so that I notice them at once.
 21. As a developer, I want the reason a Run is waiting on me shown on the card, so that I know what it needs.

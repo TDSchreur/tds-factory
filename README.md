@@ -6,10 +6,13 @@ It is inspired by [zazencodes software-factory-claude-code](https://github.com/z
 
 ## The flow
 
-A Run is one pass through five Stages. Start it with the `factory` skill (`/factory`).
+A Run is one pass through five Stages, after a Preflight. Start it with the `factory` skill (`/factory`).
 
 ```mermaid
 flowchart LR
+    subgraph Preflight
+        P[conventions and verify command]
+    end
     subgraph Define
         A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
     end
@@ -20,30 +23,34 @@ flowchart LR
         E[implement-spec with tdd]
     end
     subgraph Check
-        F[code-review]
+        F[code-review, security-scan, infrastructure]
     end
     subgraph Finish
         G[pr] --> H[unslop]
     end
 
+    P --> A
     C --> D --> E --> F
     F -->|problems found, fewer than 2 loops so far| E
     F -->|clean, or loop cap reached| G
+    F -.->|infrastructure fail: ask first| G
 ```
 
 | Stage | Skills | Result |
 |---|---|---|
-| Define | `grill-with-docs`, `to-spec`, `to-tickets` | A Spec in `docs/specs/` and a GitHub Issue per Ticket |
+| Define | `grill-with-docs`, `to-spec`, `to-tickets` | A Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker |
 | Prepare | `ponytail` | Build writes the minimum code that works |
 | Build | `implement-spec`, `tdd` | Every Ticket done, test-first |
-| Check | `code-review`, `security-scan` | A Standards, a Spec and a Security verdict |
+| Check | `code-review`, `security-scan` | A Standards, a Spec, a Security and an Infrastructure verdict |
 | Finish | `pr`, `unslop` | A prepared pull request |
 
-Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
+Preflight reads the project's conventions (`AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists) and finds the verify command in its `## Commands` section. If there is none, it asks you once and never guesses. Build runs the verify command after each Ticket. Check gives the Standards review the guides whose `applyTo` globs match the changed files and flags a canonical spec left stale, and gives the Security review the project's "Universal safeguards".
 
-Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and its body closes every Ticket with `Closes #N`.
+Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security or infrastructure finding. After that it reports what is still open and moves on to Finish. The Infrastructure axis runs only when the diff changes Bicep, Azure Pipelines or `bicepconfig.json` files, otherwise it is `skipped`. It runs `bicep build` and `bicep lint`, checks pipeline YAML for plaintext secrets, unpinned versions and missing approval gates on production stages, and never deploys. If it cannot validate a file it says "not validated", never pass. Infrastructure is the one axis that blocks Finish: on `fail` or "not validated" the skill asks whether to accept the risk and prepares the PR only after a yes. The skill never pushes or opens the PR without your go-ahead.
 
-Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these.
+Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and fills in the project's PR template (`.github/`, `.azuredevops/` or `docs/pull_request_template.md`) when there is one, including its Infrastructure checklist. When the tracker is GitHub the body closes every Ticket with `Closes #N`; otherwise it lists the Ticket paths and has no `Closes` lines.
+
+Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these. Besides the verdicts (`standards`, `spec`, `security`, `infrastructure`), `run.json` holds `commands` (the verify command) and `conventions` (the paths Preflight read).
 
 ## Setup
 
@@ -81,7 +88,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 | Route | Returns |
 |---|---|
-| `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. |
+| `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
 | `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
 
