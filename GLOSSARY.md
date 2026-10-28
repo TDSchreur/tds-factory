@@ -70,3 +70,7 @@ _Avoid_: Board, Monitor
 **Run detail**:
 The side panel the Dashboard opens beside the board when a Run's card is selected, showing its status, links and Stage summaries.
 _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Modal
+
+**Release**:
+A packaged build of the Factory that GitHub publishes for every change merged to the default branch. Colleagues install the latest Release with one command.
+_Avoid_: Package, Distribution
