@@ -34,7 +34,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `stage` | `define`, `prepare`, `build`, `check` or `finish` |
 | `status` | `running`, `waiting` (blocked on the user), `done` or `abandoned` |
 | `waiting_on_human` | Boolean, `true` while blocked on the user, otherwise `false` |
-| `waiting_reason` | Short line saying what the user must do, e.g. `sign off the Spec`; empty string when not waiting |
+| `waiting_reason` | Short line saying what the user must do, e.g. `confirm the shared understanding`; empty string when not waiting |
 | `activity` | One short line on what is happening now, e.g. `implementing ticket #12` |
 | `agent` | Name of the writing agent: `claude`, `codex` or `copilot` |
 | `tickets_total` | Number of Tickets cut from the Spec. Set once the Tickets exist |
@@ -59,7 +59,7 @@ At the end of each Stage, write a short Markdown summary (a few lines: what was 
 
 Set `status` to `waiting`, `waiting_on_human` to `true` and `waiting_reason` to a short line, and write `run.json`, before you ask the user at each of these points:
 
-- Define: a question for the user, and the Spec sign-off.
+- Define: a question for the user or confirmation of the shared understanding after grilling.
 - Check: after the loop cap, when problems are still open.
 - Finish: before pushing or opening the PR.
 
@@ -68,8 +68,8 @@ When the user answers and the Run continues, set `status` back to `running`, `wa
 ## Define
 
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
-2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`.
-3. Invoke `to-tickets` to cut the Spec into Tickets, stored as GitHub Issues. If a label the tracker needs does not exist, ask the user before creating it.
+2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`. Choose the test seams yourself and proceed without asking for seam confirmation or Spec sign-off.
+3. Invoke `to-tickets` to cut the Spec into Tickets, stored as GitHub Issues. Choose the breakdown and publish it without asking the user to review or approve it. If a label the tracker needs does not exist, ask the user before creating it.
 
 ## Prepare
 
