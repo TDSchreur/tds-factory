@@ -205,7 +205,17 @@
       var p = el('div', 'pr');
       if (safeUrl(run.pr)) p.appendChild(link('Pull request', run.pr));
       else p.textContent = 'PR: ' + run.pr;
+      var prLabel = { open: 'Open', merged: 'Merged', closed: 'Closed' }[run.prState];
+      if (prLabel) p.appendChild(el('span', null, ' · ' + prLabel));
       more.appendChild(p);
+      if (run.prState === 'open') {
+        var merge = el('button', null, 'Merge');
+        merge.type = 'button';
+        merge.setAttribute('aria-label', 'Squash and merge the pull request of ' + run.title);
+        merge.addEventListener('click', function (e) { e.stopPropagation(); mergeRun(run); });
+        merge.addEventListener('keydown', function (e) { e.stopPropagation(); });
+        more.appendChild(merge);
+      }
     }
     if (run.column === 'done') {
       var del = el('button', null, 'Delete');
@@ -282,6 +292,15 @@
       } catch (err) { failed.push(runs[i].title); }
     }
     if (failed.length) window.alert('Could not delete: ' + failed.join(', '));
+    poll();
+  }
+
+  async function mergeRun(run) {
+    if (!window.confirm('Squash and merge the pull request of "' + run.title + '"?')) return;
+    try {
+      var response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge', { method: 'POST' });
+      if (!response.ok) window.alert('Could not merge: ' + (await response.text()));
+    } catch (err) { window.alert('Could not merge: ' + run.title); }
     poll();
   }
 

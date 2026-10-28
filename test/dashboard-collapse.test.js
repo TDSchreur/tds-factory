@@ -14,12 +14,12 @@ const descendants = (node) => [node, ...node.childNodes.flatMap(descendants)];
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const now = () => new Date().toISOString();
 
-async function page(runs) {
+async function page(runs, { confirm: answers = [], calls = [] } = {}) {
   const elements = Object.fromEntries(['older', 'board', 'status', 'detail', 'project'].map((id) => [id, new Element(id)]));
-  const fetch = async (url) => ({ ok: true, json: async () => (url === '/api/info' ? { project: 'test' } : runs) });
+  const fetch = async (url, init) => { if (init?.method) calls.push(`${init.method} ${url}`); return { ok: true, text: async () => '', json: async () => (url === '/api/info' ? { project: 'test' } : runs) }; };
   const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-  runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag) }, window: { confirm: () => false, alert() {} }, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
+  runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag) }, window: { confirm: () => answers.shift() ?? false, alert() {} }, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
   await flush();
   const card = (title) => descendants(elements.board).find((e) => e.tag === 'li' && descendants(e).some((c) => c.textContent === title));
   return { card };
@@ -75,4 +75,29 @@ test('a collapsed abandoned card still says it was abandoned', async () => {
   const { card } = await page([{ ...done, status: 'abandoned' }]);
   const li = card('Done run');
   assert.ok(li.childNodes.some((e) => e.textContent === 'Abandoned'));
+});
+
+const withState = (prState) => ({ ...done, prState });
+const text = (li) => descendants(li).map((e) => e.textContent).join('|');
+const mergeButton = (li) => descendants(li).find((e) => e.tag === 'button' && e.textContent === 'Merge');
+
+test('a Done card shows the PR state next to the link', async () => {
+  for (const [state, label] of [['open', 'Open'], ['merged', 'Merged'], ['closed', 'Closed']]) {
+    const { card } = await page([withState(state)]);
+    assert.match(text(card('Done run')), new RegExp(`Pull request\\|.*${label}`));
+  }
+  const { card } = await page([withState('')]);
+  assert.doesNotMatch(text(card('Done run')), /Open|Merged|Closed/);
+});
+
+test('only an open PR gets a Merge button, which confirms and posts to the merge route', async () => {
+  assert.equal(mergeButton((await page([withState('merged')])).card('Done run')), undefined);
+  assert.equal(mergeButton((await page([withState('')])).card('Done run')), undefined);
+  const calls = [];
+  const { card } = await page([withState('open')], { confirm: [false, true], calls });
+  const button = mergeButton(card('Done run'));
+  await button.handlers.click({ stopPropagation() {} });
+  assert.deepEqual(calls, []);
+  await button.handlers.click({ stopPropagation() {} });
+  assert.deepEqual(calls, ['POST /api/runs/d/merge']);
 });

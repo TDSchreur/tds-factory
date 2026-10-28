@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_PORT = 4317;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
+const ghPrMerge = (url) => promisify(execFile)('gh', ['pr', 'merge', url, '--squash'], { timeout: 30_000 });
 const PR_CACHE_MS = 60_000;
 const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
 const HOST = '127.0.0.1';
@@ -34,8 +35,8 @@ export function interpretRun(entry) {
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Pass port 0 for a random free port. Resolves to { server, port, url, close }.
-// prState(url) resolves to OPEN, MERGED or CLOSED; it defaults to asking GitHub through `gh`.
-export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT, prState = ghPrState } = {}) {
+// prState(url) resolves to OPEN, MERGED or CLOSED and prMerge(url) squash-merges; both default to the `gh` CLI.
+export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT, prState = ghPrState, prMerge = ghPrMerge } = {}) {
   const store = openRunStore(projectDir);
   const prCache = new Map();
   const lookup = (url) => {
@@ -68,6 +69,20 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
         const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409, 'worktree-refused': 409 }[outcome];
         const text = { deleted: 'deleted', 'worktree-refused': 'the Run worktree has uncommitted changes or cannot be removed; commit or discard them first' }[outcome] ?? 'cannot delete Run';
         return send(status, 'text/plain', text);
+      }
+      const merge = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/merge$/);
+      if (merge) {
+        if (req.headers.origin !== `http://${req.headers.host}`) return send(403, 'text/plain', 'forbidden');
+        let id;
+        try { id = decodeURIComponent(merge[1]); } catch { return send(400, 'text/plain', 'invalid id'); }
+        const entry = (await store.list()).find((e) => e.id === id);
+        if (!entry) return send(404, 'text/plain', 'not found');
+        const v = interpretRun(entry);
+        if (v.column !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
+        if (String(await Promise.resolve().then(() => prState(v.pr)).catch(() => '')).toLowerCase() !== 'open') return send(409, 'text/plain', 'the PR is not open');
+        prCache.delete(v.pr);
+        try { await prMerge(v.pr); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); }
+        return send(200, 'text/plain', 'merged');
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {
