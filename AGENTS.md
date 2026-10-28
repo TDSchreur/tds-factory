@@ -11,3 +11,7 @@ Issues live in the repo's GitHub Issues. See `docs/agents/issue-tracker.md`.
 ### Domain docs
 
 Single-context layout: `GLOSSARY.md` at repo root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+
+## Commands
+
+- Verify: `npm test` (runs `node --test test/`, which checks the skills and the sync and dashboard code).
