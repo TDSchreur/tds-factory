@@ -80,6 +80,7 @@ test('Check continues to Finish only when clean, otherwise it asks the user firs
   assert.match(check, /no verdict/i);
   assert.match(check, /not validated/i);
   assert.match(check, /loop cap/i);
+  assert.match(check, /no problem worth fixing is left/i);
   assert.match(check, /`waiting`/);
   assert.match(check, /explicit yes/i);
   assert.match(check, /`finish\.md`/);
