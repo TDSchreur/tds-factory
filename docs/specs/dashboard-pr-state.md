@@ -27,7 +27,7 @@ An expanded Done card with an open PR also has a Merge button that squash-merges
 - The server runs `gh pr view <url> --json state` and exposes `prState` (`open`, `merged`, `closed` or empty) in the interpreted Run from `/api/views`.
 - Results are cached per URL for 60 seconds, so the 2-second poll does not call `gh` each time. A failed lookup yields an empty state.
 - The card shows the state as a short label after the "Pull request" link.
-- `POST /api/runs/<id>/merge` runs `gh pr merge <url> --squash`. It has the same loopback Host and same-origin checks as Delete. It merges only a Done Run whose PR is a GitHub pull request URL and whose state, looked up fresh, is open; otherwise 409. A failed `gh` gives 502. The cached state for that URL is dropped after a merge.
+- `POST /api/runs/<id>/merge` runs `gh pr merge <url> --squash`. It has the same loopback Host and same-origin checks as Delete. It merges only a Run with status `done` (not `abandoned`) whose PR is a GitHub pull request URL and whose state, looked up fresh, is open; otherwise 409. A failed `gh` gives 502. The cached state for that URL is dropped once the merge attempt ends.
 - The merge command is injectable (`startDashboard({ prMerge })`) so tests never run `gh`.
 - The Merge button shows only for state `open`, asks for confirmation, and the board refreshes after it.
 - The canonical Dashboard Spec is updated.

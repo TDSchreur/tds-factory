@@ -78,10 +78,9 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
         const entry = (await store.list()).find((e) => e.id === id);
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
-        if (v.column !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
+        if (v.status !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
         if (String(await Promise.resolve().then(() => prState(v.pr)).catch(() => '')).toLowerCase() !== 'open') return send(409, 'text/plain', 'the PR is not open');
-        prCache.delete(v.pr);
-        try { await prMerge(v.pr); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); }
+        try { await prMerge(v.pr); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); } finally { prCache.delete(v.pr); }
         return send(200, 'text/plain', 'merged');
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');

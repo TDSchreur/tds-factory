@@ -12,7 +12,7 @@ async function views(prs, prState) {
   prs.forEach((pr, i) => {
     const dir = join(project, '.factory', 'runs', `2026-01-0${i + 1}-r`);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'run.json'), JSON.stringify({ title: `r${i}`, status: i === 9 ? 'running' : 'done', pr }));
+    writeFileSync(join(dir, 'run.json'), JSON.stringify({ title: `r${i}`, status: 'done', pr }));
   });
   const dash = await startDashboard({ projectDir: project, port: 0, prState });
   try {
@@ -46,12 +46,12 @@ async function mergeSetup(state, prMerge, pr = GH, status = 'done') {
   const dir = join(project, '.factory', 'runs', '2026-01-01-r');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'run.json'), JSON.stringify({ title: 'r', status, pr }));
-  const dash = await startDashboard({ projectDir: project, port: 0, prState: async () => state, prMerge });
+  const dash = await startDashboard({ projectDir: project, port: 0, prState: async () => (typeof state === 'function' ? state() : state), prMerge });
   const post = (id = '2026-01-01-r', origin = dash.url) => fetch(`${dash.url}/api/runs/${id}/merge`, { method: 'POST', headers: { origin } });
   return { dash, post };
 }
 
-test('Merge squash-merges an open PR of a Done run and drops the cached state', async () => {
+test('Merge squash-merges an open PR of a Done run', async () => {
   const merged = [];
   const { dash, post } = await mergeSetup('open', async (url) => { merged.push(url); });
   try {
@@ -66,6 +66,7 @@ test('Merge refuses other origins, unknown runs, non-open PRs, active runs and n
     ['open', GH, 'done', 'nope', undefined, 404],
     ['merged', GH, 'done', undefined, undefined, 409],
     ['open', GH, 'running', undefined, undefined, 409],
+    ['open', GH, 'abandoned', undefined, undefined, 409],
     ['open', 'https://example.com/pr/1', 'done', undefined, undefined, 409],
   ]) {
     const merged = [];
@@ -80,4 +81,15 @@ test('Merge refuses other origins, unknown runs, non-open PRs, active runs and n
 test('Merge reports 502 when gh fails', async () => {
   const { dash, post } = await mergeSetup('open', async () => { throw new Error('conflict'); });
   try { assert.equal((await post()).status, 502); } finally { await dash.close(); }
+});
+
+test('a merge attempt drops the cached state, so the next poll asks again', async () => {
+  let current = 'open';
+  const { dash, post } = await mergeSetup(() => current, async () => { current = 'merged'; });
+  const states = async () => (await (await fetch(`${dash.url}/api/views`)).json())[0].prState;
+  try {
+    assert.equal(await states(), 'open');
+    assert.equal((await post()).status, 200);
+    assert.equal(await states(), 'merged');
+  } finally { await dash.close(); }
 });

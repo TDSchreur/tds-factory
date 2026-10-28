@@ -208,7 +208,7 @@
       var prLabel = { open: 'Open', merged: 'Merged', closed: 'Closed' }[run.prState];
       if (prLabel) p.appendChild(el('span', null, ' · ' + prLabel));
       more.appendChild(p);
-      if (run.prState === 'open') {
+      if (run.prState === 'open' && run.status === 'done') {
         var merge = el('button', null, 'Merge');
         merge.type = 'button';
         merge.setAttribute('aria-label', 'Squash and merge the pull request of ' + run.title);
@@ -296,7 +296,7 @@
   }
 
   async function mergeRun(run) {
-    if (!window.confirm('Squash and merge the pull request of "' + run.title + '"?')) return;
+    if (!window.confirm('Squash and merge the pull request of "' + run.title + '"?\n' + run.pr)) return;
     try {
       var response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge', { method: 'POST' });
       if (!response.ok) window.alert('Could not merge: ' + (await response.text()));

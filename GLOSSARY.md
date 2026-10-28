@@ -64,5 +64,5 @@ The git worktree and branch a Run works in, so agents running at the same time n
 _Avoid_: Sandbox, Workspace
 
 **Dashboard**:
-A web page that shows every Run as a card in a column per Stage, flags the Runs that are waiting on a human, and can delete completed or abandoned Run history.
+A web page that shows every Run as a card in a column per Stage, flags the Runs that are waiting on a human, shows the state of a finished Run's pull request, can squash-merge an open one, and can delete completed or abandoned Run history.
 _Avoid_: Board, Monitor
