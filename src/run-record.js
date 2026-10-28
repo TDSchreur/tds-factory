@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 const stages = ['define', 'prepare', 'build', 'check', 'finish'];
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
@@ -70,9 +70,16 @@ export function startRun(projectDir, data) {
   catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
+export function withRunLock(root, id, action) {
+  const lock = path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
+  const fd = fs.openSync(lock, 'wx');
+  try { return action(); }
+  finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+}
 export function updateRun(projectDir, id, data) {
   if (!validId(id)) throw new Error('invalid Run id');
   const root = runRoot(projectDir, false);
+  return withRunLock(root, id, () => {
   const dir = path.join(root, id);
   if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
   const file = path.join(dir, 'run.json');
@@ -80,12 +87,13 @@ export function updateRun(projectDir, id, data) {
   const old = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
   write(dir, apply(old, data));
+  });
 }
 
 const str = (v) => typeof v === 'string' ? v.trim() : '';
 const strList = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
 export function interpretRun(entry) {
-  const id = str(entry?.id), files = strList(entry?.files);
+  const id = typeof entry?.id === 'string' ? entry.id : '', files = strList(entry?.files);
   if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') return { id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files, links: [], status: '', pr: '' };
   const r = entry.record, status = str(r.status), stage = str(r.stage).toLowerCase();
   const num = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;

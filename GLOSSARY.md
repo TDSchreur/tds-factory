@@ -56,5 +56,5 @@ The status file a Run keeps up to date as it moves through the Stages, read by t
 _Avoid_: Log, State file
 
 **Dashboard**:
-A read-only web page that shows every Run as a card in a column per Stage, and flags the Runs that are waiting on a human.
+A web page that shows every Run as a card in a column per Stage, flags the Runs that are waiting on a human, and can delete completed or abandoned Run history.
 _Avoid_: Board, Monitor

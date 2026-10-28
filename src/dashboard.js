@@ -1,5 +1,6 @@
 import http from 'node:http';
-import { interpretRun } from './run-record.js';
+import fs from 'node:fs';
+import { interpretRun, withRunLock } from './run-record.js';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,7 +81,31 @@ async function readRunFile(runsDir, rawPath) {
   }
 }
 
-// Serves the .factory/runs folder of projectDir, read-only, on 127.0.0.1.
+// Deletes only a terminal Run in the project's own, unlinked storage.
+function deleteRun(projectDir, id) {
+  if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 400;
+  const project = fs.realpathSync(projectDir);
+  const factory = join(project, '.factory');
+  const root = join(factory, 'runs');
+  const dir = join(root, id);
+  try {
+    if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) return 409;
+    return withRunLock(root, id, () => {
+    if (fs.realpathSync(dir) !== dir || fs.lstatSync(join(dir, 'run.json')).isSymbolicLink()) return 409;
+    const record = JSON.parse(fs.readFileSync(join(dir, 'run.json'), 'utf8'));
+    if (!record || !['done', 'abandoned'].includes(record.status)) return 409;
+    fs.rmSync(dir, { recursive: true });
+    return 200;
+    });
+  } catch (err) {
+    if (err.code === 'ENOENT') return 404;
+    if (err.code === 'EEXIST') return 409;
+    if (err instanceof SyntaxError) return 409;
+    throw err;
+  }
+}
+
+// Serves the .factory/runs folder of projectDir on 127.0.0.1.
 // Pass port 0 for a random free port. Resolves to { server, port, url, close }.
 export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT } = {}) {
   const runsDir = resolve(projectDir, '.factory', 'runs');
@@ -93,9 +118,16 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
     // Only our own loopback names, so a web page can't reach us through DNS rebinding.
     const { port: own } = server.address();
     if (![`127.0.0.1:${own}`, `localhost:${own}`].includes(req.headers.host)) return send(403, 'text/plain', 'forbidden');
-    if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
     const path = (req.url ?? '/').split('?')[0];
     try {
+      if (req.method === 'DELETE' && path.startsWith('/api/runs/')) {
+        if (req.headers.origin !== `http://${req.headers.host}`) return send(403, 'text/plain', 'forbidden');
+        let id;
+        try { id = decodeURIComponent(path.slice('/api/runs/'.length)); } catch { return send(400, 'text/plain', 'invalid id'); }
+        const status = deleteRun(projectDir, id);
+        return send(status, 'text/plain', status === 200 ? 'deleted' : 'cannot delete Run');
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {
         return send(200, 'text/html', await readFile(PAGE, 'utf8').catch(() => FALLBACK_PAGE));
       }

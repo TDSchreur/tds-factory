@@ -1,7 +1,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
@@ -185,7 +186,7 @@ test('server listens on loopback only', () => {
   assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/);
 });
 
-test('is read-only: non-GET methods are rejected', async () => {
+test('unsupported methods are rejected', async () => {
   for (const path of ['/api/runs', '/api/info']) {
     const status = await new Promise((resolve) => {
       const req = http.request({ host: '127.0.0.1', port: dash.port, path, method: 'POST' }, (res) => {
@@ -196,4 +197,58 @@ test('is read-only: non-GET methods are rejected', async () => {
     });
     assert.equal(status, 405, path);
   }
+});
+
+test('deletion removes completed Runs and protects active Runs', async () => {
+  run('2026-02-01-finished', { 'run.json': JSON.stringify({ status: 'done' }), 'finish.md': 'history' });
+  const request = (id) => fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal((await request('2026-02-01-finished')).status, 200);
+  assert.equal((await request('2026-01-01-good')).status, 409);
+  assert.equal((await get(dash, '/files/2026-02-01-finished/finish.md')).status, 404);
+  assert.ok((await list()).some((r) => r.id === '2026-01-01-good'));
+});
+
+
+test('deletion rejects foreign origins, unreadable records, traversal and linked storage', async () => {
+  run('2026-02-02-abandoned', { 'run.json': JSON.stringify({ status: 'abandoned' }) });
+  const request = (path, origin = dash.url) => fetch(`${dash.url}${path}`, { method: 'DELETE', headers: { Origin: origin } });
+  assert.equal((await request('/api/runs/2026-02-02-abandoned', 'http://evil.example')).status, 403);
+  assert.equal((await request('/api/runs/2026-01-02-broken')).status, 409);
+  assert.equal((await request('/api/runs/%2e%2e%2fsecret')).status, 400);
+  const outside = join(tmp, 'outside');
+  mkdirSync(outside);
+  writeFileSync(join(outside, 'run.json'), JSON.stringify({ status: 'done' }));
+  symlinkSync(outside, join(project, '.factory', 'runs', 'linked'));
+  assert.equal((await request('/api/runs/linked')).status, 409);
+  assert.ok(existsSync(join(outside, 'run.json')));
+  assert.equal((await request('/api/runs/2026-02-02-abandoned')).status, 200);
+});
+
+test('terminal Runs with older directory names can be deleted', async () => {
+  run('2026-02-03_Ünicode legacy!.run', { 'run.json': JSON.stringify({ status: 'done' }) });
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal(response.status, 200);
+});
+
+test('deletion refuses a Run while its update lock is held', async () => {
+  const id = '2026-02-04-locked';
+  run(id, { 'run.json': JSON.stringify({ status: 'done' }) });
+  const lock = join(project, '.factory', 'runs', '.lock-' + createHash('sha256').update(id).digest('hex'));
+  writeFileSync(lock, 'held');
+  const response = await fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal(response.status, 409);
+  assert.ok((await list()).some((r) => r.id === id));
+  rmSync(lock);
+});
+
+test('deleting a Run with a whitespace-padded ID preserves the similarly named Run', async () => {
+  run(' padded ', { 'run.json': JSON.stringify({ status: 'done', title: 'Padded' }) });
+  run('padded', { 'run.json': JSON.stringify({ status: 'done', title: 'Unpadded' }) });
+  const views = JSON.parse((await get(dash, '/api/views')).body);
+  const padded = views.find((r) => r.title === 'Padded');
+  assert.equal(padded.id, ' padded ');
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal(response.status, 200);
+  assert.ok((await list()).some((r) => r.id === 'padded'));
+  assert.ok(!(await list()).some((r) => r.id === ' padded '));
 });

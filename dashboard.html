@@ -151,6 +151,14 @@
       else p.textContent = 'PR: ' + run.pr;
       li.appendChild(p);
     }
+    if (run.column === 'done') {
+      var del = el('button', null, 'Delete');
+      del.type = 'button';
+      del.setAttribute('aria-label', 'Delete ' + run.title);
+      del.addEventListener('click', function (e) { e.stopPropagation(); removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record and summaries?'); });
+      del.addEventListener('keydown', function (e) { e.stopPropagation(); });
+      li.appendChild(del);
+    }
     return li;
   }
 
@@ -187,6 +195,19 @@
     detailEl.replaceChildren.apply(detailEl, kids);
   }
 
+  async function removeRuns(runs, message) {
+    if (!window.confirm(message)) return;
+    var failed = [];
+    for (var i = 0; i < runs.length; i++) {
+      try {
+        var response = await fetch('/api/runs/' + encodeURIComponent(runs[i].id), { method: 'DELETE' });
+        if (!response.ok) failed.push(runs[i].title);
+      } catch (err) { failed.push(runs[i].title); }
+    }
+    if (failed.length) window.alert('Could not delete: ' + failed.join(', '));
+    poll();
+  }
+
   function render(entries) {
     lastEntries = entries;
     var runs = (Array.isArray(entries) ? entries : []);
@@ -205,6 +226,15 @@
       h.id = 'col-' + c.key;
       section.setAttribute('aria-labelledby', h.id);
       section.appendChild(h);
+      if (c.key === 'done') {
+        var doneRuns = lastEntries.filter(function (r) { return r.column === 'done'; });
+        if (doneRuns.length) {
+          var delAll = el('button', null, 'Delete all');
+          delAll.type = 'button';
+          delAll.addEventListener('click', function () { removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records and summaries, including hidden older Runs?'); });
+          section.appendChild(delAll);
+        }
+      }
       var list = el('ul', 'cards');
       var mine = runs.filter(function (r) { return r.column === c.key; });
       mine.forEach(function (r) { list.appendChild(renderCard(r)); });
