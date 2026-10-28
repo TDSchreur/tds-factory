@@ -10,7 +10,7 @@ const flow = readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
 
 test('the factory invokes exactly the skills we expect', () => {
-  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'to-spec', 'to-tickets'];
+  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'to-spec', 'to-tickets', 'unslop'];
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
