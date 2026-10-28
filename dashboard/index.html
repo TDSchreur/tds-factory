@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>tds-factory dashboard</title>
+<script id="theme-init">
+(function () {
+  var key = 'dashboard-theme';
+  var choice = 'system';
+  try {
+    var saved = localStorage.getItem(key);
+    if (saved === 'light' || saved === 'dark' || saved === 'system') choice = saved;
+  } catch (err) {}
+  document.documentElement.dataset.theme = choice;
+  document.addEventListener('DOMContentLoaded', function () {
+    var selector = document.getElementById('theme');
+    selector.value = choice;
+    selector.addEventListener('change', function () {
+      choice = selector.value;
+      document.documentElement.dataset.theme = choice;
+      try { localStorage.setItem(key, choice); } catch (err) {}
+    });
+  });
+})();
+</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>tds-factory dashboard</h1>
+  <span id="project"></span>
+  <span id="status" role="status" aria-live="polite">Loading...</span>
+  <label for="theme">Theme</label>
+  <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+  <button id="older" type="button" hidden></button>
+</header>
+<details id="intro">
+  <summary>What is this?</summary>
+  <p>The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Hover or focus a Stage heading or a chip for details.</p>
+  <ol>
+    <li><strong>Define</strong>: settle what to build, write a Spec and cut it into Tickets.</li>
+    <li><strong>Prepare</strong>: switch to the minimal-code working style.</li>
+    <li><strong>Build</strong>: implement the Tickets test-first.</li>
+    <li><strong>Check</strong>: independent reviews of Standards, Spec, Security and Infrastructure.</li>
+    <li><strong>Finish</strong>: open the pull request.</li>
+  </ol>
+  <p>A red card marked "Needs you" is waiting for your answer in the agent session. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
+</details>
+<main id="board" aria-label="Runs by Stage" tabindex="-1"></main>
+<section id="detail" aria-label="Run detail" hidden></section>
+<dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-message">
+  <div class="dialog-content">
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-message"></p>
+    <div class="dialog-actions">
+      <button id="dialog-cancel" type="button" autofocus>Cancel</button>
+      <button id="dialog-confirm" type="button" class="primary"></button>
+    </div>
+  </div>
+</dialog>
+<script src="/markdown.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

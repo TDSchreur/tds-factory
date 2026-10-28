@@ -1,9 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { html } from './dashboard-files.js';
 import { runInNewContext } from 'node:vm';
 
-const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
 function load(saved, storageFails = false) {
   const root = { dataset: {} };
   const select = { value: '', handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; } };

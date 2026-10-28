@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { index, markdownScript } from './dashboard-files.js';
 import vm from 'node:vm';
 
-const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
-const source = html.match(/<script id="markdown">([\s\S]*?)<\/script>/)?.[1] ?? '';
+const source = markdownScript;
 const parse = (text) => JSON.parse(JSON.stringify(vm.runInNewContext(`${source}\nparseMarkdown`)(text)));
 const t = (v) => ({ t: 'text', v });
 
-test('the renderer is a script block of the Dashboard page', () => {
-  assert.ok(source, 'dashboard.html has <script id="markdown">');
+test('the renderer is its own script file of the Dashboard page', () => {
+  assert.ok(source, 'markdown.js has content');
+  assert.match(index, /<script src="\/markdown\.js"><\/script>/);
 });
 
 test('headings, paragraphs and rules become blocks', () => {

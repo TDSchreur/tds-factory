@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { index, appScript } from './dashboard-files.js';
 import { runInNewContext } from 'node:vm';
 
 class Element {
@@ -14,7 +14,7 @@ class Element {
 const descendants = (node) => [node, ...node.childNodes.flatMap(descendants)];
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
+const html = index;
 
 test('page has a collapsed introduction to the Factory', () => {
   assert.match(html, /<details id="intro"(?![^>]*\bopen\b)[^>]*>\s*<summary>What is this\?/);
@@ -24,7 +24,7 @@ test('Stage headings and chips carry tooltips', async () => {
   const elements = Object.fromEntries(['older', 'board', 'status', 'detail', 'project', 'dialog', 'dialog-title', 'dialog-message', 'dialog-cancel', 'dialog-confirm'].map((id) => [id, new Element(id)]));
   const runs = [{ id: 'a', title: 'A', column: 'check', updated: new Date().toISOString(), files: [], links: [], ticketsTotal: 2, ticketsDone: 1, standards: 'pass', spec: 'pass', security: 'fail', infrastructure: 'skipped', loops: 1 }];
   const fetch = async (url) => ({ ok: true, json: async () => url === '/api/info' ? { project: 'test' } : runs });
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = appScript;
   runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag) }, window: {}, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
   await flush();
   const all = descendants(elements.board);
