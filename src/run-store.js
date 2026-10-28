@@ -56,7 +56,7 @@ function runRoot(projectDir, create) {
   if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
   return root;
 }
-export function startRun(projectDir, data) {
+function startRun(projectDir, data) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
@@ -70,13 +70,13 @@ export function startRun(projectDir, data) {
   catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
-export function withRunLock(root, id, action) {
+function withRunLock(root, id, action) {
   const lock = path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
   const fd = fs.openSync(lock, 'wx');
   try { return action(); }
   finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
-export function updateRun(projectDir, id, data) {
+function updateRun(projectDir, id, data) {
   if (!validId(id)) throw new Error('invalid Run id');
   const root = runRoot(projectDir, false);
   return withRunLock(root, id, () => {
@@ -90,15 +90,103 @@ export function updateRun(projectDir, id, data) {
   });
 }
 
-const str = (v) => typeof v === 'string' ? v.trim() : '';
-const strList = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
-export function interpretRun(entry) {
-  const id = typeof entry?.id === 'string' ? entry.id : '', files = strList(entry?.files);
-  if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') return { id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files, links: [], status: '', pr: '' };
-  const r = entry.record, status = str(r.status), stage = str(r.stage).toLowerCase();
-  const num = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
-  const verdict = (v, skip) => { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : ''; };
-  const links = [];
-  for (const [label, values] of [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]]) for (const value of Array.isArray(values) ? values : [values]) if (str(value)) links.push({ label, href: str(value) });
-  return { id, unreadable: false, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
+const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+// Sort Stage summaries in Flow order, with numbered Check passes sorted numerically.
+function stageOrder(name) {
+  const base = name.replace(/\.md$/, '');
+  const m = /^check-(\d+)$/.exec(base);
+  const index = stages.indexOf(m ? 'check' : base);
+  return [index < 0 ? stages.length : index, m ? Number(m[1]) : 0];
+}
+const byStage = (a, b) => {
+  const [x, y] = [stageOrder(a), stageOrder(b)];
+  return x[0] - y[0] || x[1] - y[1] || a.localeCompare(b);
+};
+
+// Names of the Markdown files directly inside a Run folder, in Stage order.
+async function listMarkdown(dir) {
+  try {
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    return entries.filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name)).map((e) => e.name).sort(byStage);
+  } catch {
+    return [];
+  }
+}
+
+async function listRuns(runsDir) {
+  let entries;
+  try {
+    entries = await fs.promises.readdir(runsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const runs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const files = await listMarkdown(path.join(runsDir, entry.name));
+    try {
+      const record = JSON.parse(await fs.promises.readFile(path.join(runsDir, entry.name, 'run.json'), 'utf8'));
+      if (record === null || typeof record !== 'object' || Array.isArray(record)) throw new Error('not an object');
+      runs.push({ id: entry.name, unreadable: false, record, files });
+    } catch {
+      runs.push({ id: entry.name, unreadable: true, record: null, files });
+    }
+  }
+  return runs.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+// Returns file contents, or null if the path is not a Markdown file inside a Run folder.
+async function readRunFile(runsDir, rawPath) {
+  let parts;
+  try {
+    parts = rawPath.split('/').map(decodeURIComponent);
+  } catch {
+    return null;
+  }
+  if (parts.length !== 2 || !parts.every((p) => SEGMENT.test(p) && !p.startsWith('..'))) return null;
+  if (!parts[1].endsWith('.md')) return null;
+  try {
+    const root = await fs.promises.realpath(runsDir);
+    const file = await fs.promises.realpath(path.resolve(root, ...parts));
+    if (!file.startsWith(root + path.sep)) return null;
+    return await fs.promises.readFile(file, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+// Deletes only a terminal Run in the project's own, unlinked storage.
+function removeRun(projectDir, id) {
+  if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
+  const project = fs.realpathSync(projectDir);
+  const factory = path.join(project, '.factory');
+  const root = path.join(factory, 'runs');
+  const dir = path.join(root, id);
+  try {
+    if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) return 'not-allowed';
+    return withRunLock(root, id, () => {
+      if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink()) return 'not-allowed';
+      const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
+      if (!record || !['done', 'abandoned'].includes(record.status)) return 'not-allowed';
+      fs.rmSync(dir, { recursive: true });
+      return 'deleted';
+    });
+  } catch (err) {
+    if (err.code === 'ENOENT') return 'not-found';
+    if (err.code === 'EEXIST' || err instanceof SyntaxError) return 'not-allowed';
+    throw err;
+  }
+}
+
+// The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed' or 'invalid'.
+export function openRunStore(projectDir) {
+  const runsDir = path.resolve(projectDir, '.factory', 'runs');
+  return {
+    start: (data) => startRun(projectDir, data),
+    update: (id, data) => updateRun(projectDir, id, data),
+    list: () => listRuns(runsDir),
+    readFile: (rawPath) => readRunFile(runsDir, rawPath),
+    remove: (id) => removeRun(projectDir, id),
+  };
 }

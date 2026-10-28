@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { install } from '../src/install.js';
-import { startRun, updateRun } from '../src/run-record.js';
+import { openRunStore } from '../src/run-store.js';
 import { sync } from '../src/sync.js';
 import { startDashboard, DEFAULT_PORT } from '../src/dashboard.js';
 
@@ -30,8 +30,9 @@ try {
   const [command] = positionals;
   if (command === 'run') {
     const data = JSON.parse(values.data);
-    if (positionals[1] === 'start') console.log(startRun(process.cwd(), data));
-    else if (positionals[1] === 'update') updateRun(process.cwd(), values.id, data);
+    const store = openRunStore(process.cwd());
+    if (positionals[1] === 'start') console.log(store.start(data));
+    else if (positionals[1] === 'update') store.update(values.id, data);
     else throw new Error('expected run start or run update');
   }
   else if (command === 'sync') sync();

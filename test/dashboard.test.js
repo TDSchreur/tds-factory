@@ -252,3 +252,18 @@ test('deleting a Run with a whitespace-padded ID preserves the similarly named R
   assert.ok((await list()).some((r) => r.id === 'padded'));
   assert.ok(!(await list()).some((r) => r.id === ' padded '));
 });
+
+test('Dashboard interprets incomplete and unreadable Run records', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'factory-view-'));
+  for (const id of ['old', 'broken']) mkdirSync(join(cwd, '.factory', 'runs', id), { recursive: true });
+  writeFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json'), JSON.stringify({ stage: 'unknown', status: 'waiting', extra: 1 }));
+  writeFileSync(join(cwd, '.factory', 'runs', 'broken', 'run.json'), '{');
+  const dashboard = await startDashboard({ projectDir: cwd, port: 0 });
+  try {
+    const records = await (await fetch(dashboard.url + '/api/views')).json();
+    const old = records.find((r) => r.id === 'old');
+    assert.equal(old.column, 'define');
+    assert.equal(old.waiting, true);
+    assert.equal(records.find((r) => r.id === 'broken').unreadable, true);
+  } finally { await dashboard.close(); }
+});
