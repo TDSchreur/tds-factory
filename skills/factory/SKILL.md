@@ -12,7 +12,7 @@ Walk the work through the Stages below in order. Finish each Stage and tell the 
 
 Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourself; do not skip it.
 
-**Start.** Before the first Stage, create the Run folder `.factory/runs/YYYY-MM-DD-<slug-of-title>/` in the project being built, using today's date and a lowercase, hyphenated slug of the work title. If that folder already exists, append `-2`, `-3`, and so on until the name is free. Never reuse or overwrite another Run's folder. Write `run.json` in it.
+**Start.** Before the first Stage, create the Run folder `.factory/runs/YYYY-MM-DD-<slug-of-title>/` in the project being built, using today's date and a lowercase, hyphenated slug of the work title. If that folder already exists, append `-2`, `-3`, and so on until the name is free. Never reuse or overwrite another Run's folder. Write `run.json` in it, with `check_loops` set to `0`.
 
 **Update.** Rewrite `run.json` whenever a Stage starts (including when Check sends you back to Build), when the work becomes `waiting` on the user or is released again, and when the Run ends. Also rewrite it each time a Ticket is completed (`tickets_done`) and after each review (`standards`, `spec`, `security`, `check_loops`). Always refresh `activity` and `updated`. Keep the `created` value and any fields you do not change.
 
@@ -40,7 +40,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set after each review, replacing the old value |
 | `spec` | `pass` or `fail`: the Spec verdict of the latest `code-review`. Set after each review, replacing the old value |
 | `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set after each review, replacing the old value |
-| `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Raise it by 1 on each return to Build |
+| `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Starts at `0`; raise it by 1 on each return to Build |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
 | `spec_link` | Link to the Spec (path or URL). Optional; set once the Spec exists |
@@ -61,13 +61,13 @@ Set `status` to `waiting`, `waiting_on_human` to `true` and `waiting_reason` to 
 - Check: after the loop cap, when problems are still open.
 - Finish: before pushing or opening the PR.
 
-When the user answers and the Run continues, set `status` back to `running`, `waiting_on_human` to `false` and `waiting_reason` to an empty string, and write `run.json` before doing anything else. Also clear them when the Run ends.
+When the user answers and the Run continues, set `status` back to `running`, `waiting_on_human` to `false` and `waiting_reason` to an empty string, and write `run.json` before doing anything else. Also clear them when the Run ends. If an answer needs no work before your next question, skip that clearing write: set the new `waiting_reason` in the next `waiting` write and write `running` only when real work starts.
 
 ## Define
 
-1. Invoke `grill-with-docs` to settle what has to be done. Update `GLOSSARY.md` and `docs/adr/` as it goes.
+1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
 2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`.
-3. Invoke `to-tickets` to cut the Spec into Tickets, stored as GitHub Issues.
+3. Invoke `to-tickets` to cut the Spec into Tickets, stored as GitHub Issues. If a label the tracker needs does not exist, ask the user before creating it.
 
 ## Prepare
 
@@ -75,12 +75,12 @@ Invoke `ponytail` so the Build stage writes the minimum code that works.
 
 ## Build
 
-Invoke `implement-spec`, working test-first with `tdd`, until every Ticket is done.
+Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
 
 ## Check
 
-In one pass, run two reviews on the changes. Invoke `code-review` for the Standards and Spec axes. Invoke `security-scan` for the Security axis. Report each axis separately and never merge them. Scope `security-scan` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
+In one pass, run two reviews on the changes, each in a fresh read-only subagent so the reviewer did not write the code. Invoke `code-review` for the Standards and Spec axes. Invoke `security-scan` for the Security axis. Report each axis separately and never merge them. Scope `security-scan` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
 
 ## Finish
 
-Invoke `pr` to prepare the pull request. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
+Invoke `pr` to prepare the pull request, and save the draft as `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
