@@ -138,6 +138,12 @@ test('page route serves the real board page', async () => {
   assert.doesNotMatch(res.body, /not installed/);
 });
 
+test('info route names the project directory the Dashboard serves', async () => {
+  const res = await get(dash, '/api/info');
+  assert.equal(res.status, 200);
+  assert.deepEqual(JSON.parse(res.body), { project });
+});
+
 test('server listens on loopback only', () => {
   assert.equal(dash.server.address().address, '127.0.0.1');
   assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/);
