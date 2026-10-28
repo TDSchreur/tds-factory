@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { install } from '../src/install.js';
 import { openRunStore } from '../src/run-store.js';
@@ -6,6 +7,7 @@ import { sync } from '../src/sync.js';
 import { startDashboard } from '../src/dashboard.js';
 
 const USAGE = `Usage:
+  tds-factory --version
   tds-factory sync
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force]
   tds-factory dashboard [--port N]
@@ -23,12 +25,14 @@ const { values, positionals } = parseArgs({
     data: { type: 'string' },
     id: { type: 'string' },
     port: { type: 'string' },
+    version: { type: 'boolean', default: false },
   },
 });
 
 try {
   const [command] = positionals;
-  if (command === 'run') {
+  if (values.version) console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
+  else if (command === 'run') {
     const data = JSON.parse(values.data);
     const store = openRunStore(process.cwd());
     if (positionals[1] === 'start') console.log(store.start(data));

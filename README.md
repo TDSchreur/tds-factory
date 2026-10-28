@@ -44,7 +44,18 @@ Agents need `tds-factory` on PATH to create and update the Run record (`run.json
 
 ## Setup
 
-You need Node 20 or newer. After cloning, run `./setup.sh` (or `powershell -ExecutionPolicy Bypass -File .\setup.ps1` on Windows) to put the CLI on PATH (it runs `npm install -g .` and checks Node 20+), then run `tds-factory install` to install the skills. Clone with `--recurse-submodules`, or run `git submodule update --init` afterwards.
+You need Node 20 or newer. Install the latest Release with one command, the same on macOS, Linux and Windows:
+
+```sh
+npm install -g https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
+tds-factory install
+```
+
+Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself. Every change merged to `master` publishes a new Release (see `docs/adr/0005-release-per-merge-from-latest-url.md`).
+
+### Working from a checkout
+
+To work on the Factory itself, clone with `--recurse-submodules` (or run `git submodule update --init` afterwards) and run `./setup.sh` (or `powershell -ExecutionPolicy Bypass -File .\setup.ps1` on Windows). It puts the CLI on PATH from the checkout (it runs `npm install -g .` and checks Node 20+). Then run `tds-factory install`.
 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/

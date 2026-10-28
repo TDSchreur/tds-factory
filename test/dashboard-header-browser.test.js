@@ -5,12 +5,12 @@ import { openPage, run } from './browser.js';
 const dot = "return getComputedStyle(document.getElementById('status'), '::before').backgroundColor";
 
 test('the header shows the project as a pill with the full path as tooltip', async (t) => {
-  const page = await openPage(t, { project: '/home/dennis/repos/tds-factory', runs: [run()] });
+  const page = await openPage(t, { project: '/work/tds-factory', runs: [run()] });
   if (!page) return;
   try {
     assert.equal(await page.execute("return document.querySelector('header h1').textContent"), 'tds-factory');
     assert.equal(await page.execute("return document.getElementById('project').textContent"), 'tds-factory');
-    assert.equal(await page.execute("return document.getElementById('project').title"), '/home/dennis/repos/tds-factory');
+    assert.equal(await page.execute("return document.getElementById('project').title"), '/work/tds-factory');
     assert.equal(await page.execute("return getComputedStyle(document.getElementById('project')).textOverflow"), 'ellipsis');
   } finally { await page.close(); }
 });
