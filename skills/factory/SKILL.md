@@ -86,3 +86,5 @@ In one pass, review the changes on three axes, each in its own fresh read-only s
 ## Finish
 
 Invoke `pr` to prepare the pull request. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
+
+When the PR is merged or closed, switch the checkout back to the default branch and fast-forward it if possible. Preserve any uncommitted work; if it prevents switching or fast-forwarding, explain the blocker instead of discarding it.
