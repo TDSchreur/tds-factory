@@ -72,6 +72,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
     ${run.waiting && html`<div class="reason">Needs you${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
     <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
+    ${done && run.prState === 'open' && html`<div class="open-pr"><span class="badge open">Open PR</span></div>`}
     ${!done && more}
     ${done && html`<button type="button" class="toggle" aria-expanded=${String(expanded)} aria-label=${toggleText + ': ' + run.title} onClick=${(e) => { stop(e); onToggle(run.id); }} onKeyDown=${stop}>${expanded ? '▾' : '▸'} ${toggleText}</button>`}
     ${done && html`<div class="details" hidden=${!expanded}>${more}</div>`}
