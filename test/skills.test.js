@@ -94,11 +94,12 @@ test('Check continues to Finish only when clean, otherwise it asks the user firs
 test('Finish has no gate of its own and still fills in the PR checklists', () => {
   const finish = section('Finish');
   assert.doesNotMatch(finish, /`waiting`/);
-  assert.doesNotMatch(finish, /explicit yes/i);
+  assert.doesNotMatch(finish, /explicit yes|go-ahead|approval/i);
+  assert.match(finish, /push the branch and open the PR/i);
   assert.doesNotMatch(finish, /accept the risk/i);
   assert.match(finish, /Infrastructure checklist/);
   assert.match(finish, /Documentation checklist/);
-  assert.doesNotMatch(section('Waiting on the user'), /Finish: when the `infrastructure`/);
+  assert.doesNotMatch(section('Waiting on the user'), /Finish:/);
 });
 
 test('every skill the factory invokes can be called by the model', () => {
