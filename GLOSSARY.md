@@ -41,7 +41,7 @@ The project's own rules: `AGENTS.md` or `CLAUDE.md`, the instruction guides it r
 _Avoid_: Standards
 
 **Spec**:
-The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/`.
+The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/` while the work is in flight, and moved to `docs/specs/archive/` once it has shipped.
 
 **Ticket**:
 One unit of work cut from a Spec, stored in the project's Issue tracker.
