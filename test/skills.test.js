@@ -66,6 +66,19 @@ test('Check runs an Infrastructure axis without a new Skill', () => {
   assert.match(readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8'), /^\| `infrastructure` \|/m);
 });
 
+test('Finish is blocked by an Infrastructure fail or unvalidated file until the user accepts', () => {
+  const finish = section('Finish');
+  assert.ok(finish.indexOf('`infrastructure`') < finish.indexOf('Invoke `pr`'));
+  assert.match(finish, /`fail`/);
+  assert.match(finish, /not validated/i);
+  assert.match(finish, /`waiting`/);
+  assert.match(finish, /explicit yes/i);
+  assert.match(finish, /`finish\.md`/);
+  assert.match(finish, /Infrastructure checklist/);
+  assert.match(finish, /other axes/i);
+  assert.match(section('Waiting on the user'), /Infrastructure/);
+});
+
 test('every skill the factory invokes can be called by the model', () => {
   for (const name of invoked) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
