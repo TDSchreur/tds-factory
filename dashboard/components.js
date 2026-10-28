@@ -3,7 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
-import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, safeUrl } from './model.js';
+import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, safeUrl, ticketsOf } from './model.js';
 
 export const html = htm.bind(h);
 
@@ -51,6 +51,12 @@ function Chips({ run }) {
   return chips.length ? html`<div class="chips">${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}</div>` : null;
 }
 
+function Tickets({ run }) {
+  const tickets = ticketsOf(run);
+  const mark = { done: '✓', active: '▶', todo: '○' };
+  return tickets.length ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => html`<li key=${t.href} class=${'ticket ' + t.state}><span aria-hidden="true">${mark[t.state]}</span> <${Link} href=${t.href}>${t.label}<//><span class="sr"> (${t.state})</span></li>`)}</ul>` : null;
+}
+
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
 export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onDelete }) {
   const done = run.column === 'done';
@@ -59,6 +65,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
   const prLabel = { open: 'Open', merged: 'Merged', closed: 'Closed' }[run.prState];
   const more = [
     run.activity && html`<div class="activity">${run.activity}</div>`,
+    html`<${Tickets} run=${run} />`,
     html`<${Chips} run=${run} />`,
     done && run.pr && html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
     done && html`<div class="actions">
