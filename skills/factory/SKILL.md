@@ -14,7 +14,7 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 
 **Start.** Before the first Stage, create the Run folder `.factory/runs/YYYY-MM-DD-<slug-of-title>/` in the project being built, using today's date and a lowercase, hyphenated slug of the work title. If that folder already exists, append `-2`, `-3`, and so on until the name is free. Never reuse or overwrite another Run's folder. Write `run.json` in it.
 
-**Update.** Rewrite `run.json` whenever a Stage starts (including when Check sends you back to Build), when the work becomes `waiting` on the user or is released again, and when the Run ends. Also rewrite it each time a Ticket is completed (`tickets_done`) and after each review (`standards`, `spec`, `check_loops`). Always refresh `activity` and `updated`. Keep the `created` value and any fields you do not change.
+**Update.** Rewrite `run.json` whenever a Stage starts (including when Check sends you back to Build), when the work becomes `waiting` on the user or is released again, and when the Run ends. Also rewrite it each time a Ticket is completed (`tickets_done`) and after each review (`standards`, `spec`, `security`, `check_loops`). Always refresh `activity` and `updated`. Keep the `created` value and any fields you do not change.
 
 **Gitignore.** If `.factory/` is not covered by the project's `.gitignore`, tell the user to add it. Do not edit `.gitignore` yourself.
 
@@ -39,6 +39,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build |
 | `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set after each review, replacing the old value |
 | `spec` | `pass` or `fail`: the Spec verdict of the latest `code-review`. Set after each review, replacing the old value |
+| `security` | `pass` or `fail`: the Security verdict of the latest `security-review`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set after each review, replacing the old value |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Raise it by 1 on each return to Build |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
@@ -50,7 +51,7 @@ Record the Spec, Tickets and PR as links only; never copy their content into the
 
 ### Stage summaries
 
-At the end of each Stage, write a short Markdown summary (a few lines: what was done, what was decided, what is open) into the Run folder: `define.md`, `build.md`, `check-N.md` (one per Check pass, `N` counting from 1, so a Check that sends you back to Build and runs again writes `check-2.md`), and `finish.md`. Write plain Markdown only; the Dashboard shows these files as plain text. Never overwrite another Stage's file.
+At the end of each Stage, write a short Markdown summary (a few lines: what was done, what was decided, what is open) into the Run folder: `define.md`, `build.md`, `check-N.md` (one per Check pass, `N` counting from 1, so a Check that sends you back to Build and runs again writes `check-2.md`; it holds a Standards, a Spec and a Security section), and `finish.md`. Write plain Markdown only; the Dashboard shows these files as plain text. Never overwrite another Stage's file.
 
 ## Waiting on the user
 
@@ -78,7 +79,7 @@ Invoke `implement-spec`, working test-first with `tdd`, until every Ticket is do
 
 ## Check
 
-Invoke `code-review` on the changes. If it finds problems worth fixing, go back to Build and fix them, then review again. Go back at most 2 times; after that, report what is still open and continue to Finish.
+In one pass, run two reviews on the changes. Invoke `code-review` for the Standards and Spec axes. Invoke `security-review` for the Security axis. Report each axis separately and never merge them. Scope `security-review` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
 
 ## Finish
 

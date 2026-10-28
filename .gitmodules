@@ -7,3 +7,6 @@
 [submodule "vendor/pstack"]
 	path = vendor/pstack
 	url = https://github.com/backnotprop/pstack
+[submodule "vendor/awesome-copilot"]
+	path = vendor/awesome-copilot
+	url = https://github.com/github/awesome-copilot
