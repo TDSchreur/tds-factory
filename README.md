@@ -108,7 +108,7 @@ The skills come from four upstream sources.
 - [mattpocock/skills](https://github.com/mattpocock/skills)
 - [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)
 - [backnotprop/pstack](https://github.com/backnotprop/pstack/tree/main/skills/unslop), which provides `unslop`
-- [github/awesome-copilot](https://github.com/github/awesome-copilot), which provides `security-scan`
+- [github/awesome-copilot](https://github.com/github/awesome-copilot/tree/main/skills/security-review), which provides `security-scan` (its `security-review` skill, renamed)
 
 The upstream repos are git submodules in `vendor/`. `skills/` holds committed copies of the skills the factory uses, so a change upstream shows up in a diff before it reaches you. See `docs/adr/0001-committed-skill-copies.md`.
 
