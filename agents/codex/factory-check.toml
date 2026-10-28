@@ -1,0 +1,6 @@
+name = "factory-check"
+description = "Factory check Stage worker"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = "Perform the assigned independent read-only Factory review axis. Do not edit files or perform writes. Use the diff and command output the coordinator passes you. Report findings with evidence and a verdict to the coordinator."
