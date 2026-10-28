@@ -129,6 +129,7 @@
     #status { order: 1; }
     #project { order: 2; }
     #theme, #older { order: 3; }
+    .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; min-height: 44px; }
     #board { grid-template-columns: 1fr; padding: 1rem; }
     #layout.open { grid-template-columns: minmax(0, 1fr); }
     #detail { position: fixed; inset: 0; z-index: 20; max-height: none; margin: 0; padding: 0 1rem 1rem; border: 0; border-radius: 0; }
