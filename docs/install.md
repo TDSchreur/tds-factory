@@ -35,7 +35,7 @@ The Factory is a set of skills. Install them with:
 tds-factory install
 ```
 
-This copies the skills into `~/.claude/skills` and `~/.agents/skills` and prints one `installed` line per skill. GitHub Copilot reads both folders, so for Copilot this one command is enough.
+This copies the skills into `~/.claude/skills` and `~/.agents/skills` and prints an `installed` line for each skill in each folder. GitHub Copilot reads both folders, so for Copilot this one command is enough.
 
 To install for one agent only, use `--agent`:
 
@@ -50,12 +50,12 @@ tds-factory install --agent copilot
 | `codex` | `~/.agents/skills` |
 | `all` (the default) | Claude and Codex folders, which Copilot also reads |
 
-Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create; `--force` does.
+Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create. `--force` does overwrite it, so a skill of your own with the same name would be lost.
 
 ### Check that your agent sees the skills
 
 - **GitHub Copilot in VS Code:** open the chat and type `/`. The list should include `factory`. Type `/skills` to open the skills menu. Restart VS Code if the list is empty.
-- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again, then type `/factory`.
+- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs, so if `/factory` does not work, write the request in words: "Use the factory skill to ...".
 
 ## 4. Update
 
@@ -73,8 +73,8 @@ tds-factory install
 Do this once per project you want to build with the Factory.
 
 1. Open the project in your agent. It must be a git repository with an `origin` remote on GitHub, and `gh repo view` must print the repository.
-2. Run `/setup-matt-pocock-skills` in the chat. In Copilot, type `/` and choose it; this skill only runs when you start it yourself. It asks where issues live (choose GitHub) and where the domain docs live (keep `GLOSSARY.md` and `docs/adr/`). It writes `docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `AGENTS.md`.
-3. Add a `## Commands` section to `AGENTS.md` with the command that checks the project, for example `- Verify: npm test`. If it is missing, `/factory` asks you once.
+2. Run `/setup-matt-pocock-skills` in the chat. In Copilot, type `/` and choose it; this skill only runs when you start it yourself. It looks at the repository, asks where issues live (choose GitHub) and shows you a draft before it writes anything. It uses one `GLOSSARY.md` and `docs/adr/` at the root without asking, unless the project looks like a monorepo. It writes `docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `CLAUDE.md` if that file exists, otherwise `AGENTS.md` (it asks which to create if neither exists).
+3. Add a `## Commands` section to `AGENTS.md` (or `CLAUDE.md`, whichever the project uses) with the command that checks the project, for example `- Verify: npm test`. If it is missing, `/factory` asks you once.
 4. Add `.factory/` to the project's `.gitignore`. That folder holds Run records and Run worktrees, and must not end up in commits.
 5. Make sure the label `ready-for-agent` exists in the repository's GitHub Issues. If it does not, the agent asks before it creates it.
 
@@ -100,4 +100,4 @@ npm install -g --prefix ~/.local https://github.com/TDSchreur/tds-factory/releas
 
 **`/factory` stops at Preflight.** The project is not prepared. Do part 5.
 
-**`tds-factory run start` fails with an error about `origin`.** The project has no reachable `origin` remote, or no commit yet. Fix the remote or make a first commit.
+**`tds-factory run start` fails.** The error says what is missing: the folder is not a git repository (run `git init`), the repository has no commit yet (make a first commit), or the `origin` default branch cannot be determined (check `git remote -v` and that you can reach the remote).

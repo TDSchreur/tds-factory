@@ -1,6 +1,6 @@
 # Use the Factory
 
-This guide walks through one piece of work, from the first message to the merged pull request. Install the Factory first: [install guide](install.md). The examples use GitHub Copilot; Claude Code and Codex work the same way once `/factory` is available.
+This guide walks through one piece of work, from the first message to the merged pull request. Install the Factory first: [install guide](install.md). The examples use GitHub Copilot; Claude Code and Codex work the same way once the agent has found the skill.
 
 ## The Flow in one picture
 
@@ -13,7 +13,7 @@ you describe the work
   Finish    the agent pushes the branch and opens the pull request              (you review and merge)
 ```
 
-Only Define needs you. After that the agent works on its own, and stops only if Check finds something it cannot clear.
+Define is where the agent needs you most. After that it works on its own and stops only for a missing verify command, a missing label or a Check that is not clean (see part 4).
 
 ## 1. Start a Run
 
@@ -23,7 +23,7 @@ Open your prepared project (see part 5 of the [install guide](install.md)) in yo
 /factory Add a CSV export button to the reports page
 ```
 
-In Copilot, type `/`, choose `factory`, and write the description after it. If your chat does not take text after the skill name, write it as a normal request: "Use the factory skill to add a CSV export button to the reports page."
+In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In other agents, or if your chat does not take text after the skill name, write it as a normal request: "Use the factory skill to add a CSV export button to the reports page."
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
@@ -52,14 +52,15 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 - **Check:** four reviewers, each a fresh read-only agent that did not write the code, report separately. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
 
-Each Stage leaves a short summary in `.factory/runs/<run id>/` (`define.md`, `build.md`, `check-1.md`, `finish.md` and a `run.json`). Read them when you want to know what was decided.
+Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md` and the pull request text in `pr.md`. Prepare leaves none. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
 
 ## 4. When the Run needs you
 
-A Run stops and asks you in two cases:
+A Run stops and asks you in these cases:
 
 1. **During Define,** with questions or to confirm the shared understanding.
-2. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in `finish.md`), or no to abandon the Run.
+2. **Before Build,** if the project has no verify command or a label the Tickets need does not exist. The agent asks before it creates the label.
+3. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in `finish.md`), or no to abandon the Run.
 
 The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
 
@@ -73,13 +74,13 @@ Start the Dashboard from the project folder:
 tds-factory dashboard
 ```
 
-It prints an address such as `http://127.0.0.1:4521`. Each repository gets its own port and keeps it. Open it in a browser.
+It prints an address such as `http://127.0.0.1:4521`. Each repository gets its own port, and normally keeps it; if that port is busy, the Dashboard takes a free one and prints it. Open the address in a browser.
 
 - Each **card** is one Run. It moves left to right through the columns Define, Prepare, Build, Check, Finish and Done.
 - The **chips** show the Ticket progress, the four Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer.
-- Click a card to open the **Run detail** on the right: its links, Tickets and the stage summaries. Click the card again, press Esc or use the close button to close it.
-- On a Done card, **Merge** squash-merges the open pull request after you confirm, and **Delete** removes the Run record and its worktree. Branches are never deleted.
+- Click a card to open the **Run detail** on the right: its links, Tickets and the Stage summaries. Click the card again, press Esc or use the close button to close it.
+- Done cards start collapsed. Press **Show details** on a Done card to see its pull request link, **Merge** and **Delete**. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** removes the Run record and its worktree. Branches are never deleted.
 - Older Runs are folded away; "Show older" brings them back.
 
 Leave the Dashboard open while you work. It refreshes every two seconds.
@@ -113,6 +114,6 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Check axis | One of the independent reviews in Check: Standards, Spec, Security, Infrastructure. |
 | Clean | A Check where every axis passes (Infrastructure may be skipped). Only a clean Check goes on without asking you. |
 | Run worktree | The git worktree and branch a Run works in, so Runs never share files. |
-| Run detail | The panel on the Dashboard that shows a Run's links and stage summaries. |
+| Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
 
 The full list is in [GLOSSARY.md](../GLOSSARY.md).

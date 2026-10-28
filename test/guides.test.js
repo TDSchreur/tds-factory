@@ -22,6 +22,10 @@ test('the README links to both guides directly under its opening paragraph', () 
   }
 });
 
+test('the guides present the release install, not the setup scripts, as the way to install', () => {
+  for (const file of ['docs/install.md', 'docs/usage.md']) assert.doesNotMatch(read(file), /setup\.(sh|ps1)/, file);
+});
+
 for (const file of GUIDES) {
   test(`${file}: every relative link resolves to a file`, () => {
     assert.ok(existsSync(resolve(file)), file + ' exists');

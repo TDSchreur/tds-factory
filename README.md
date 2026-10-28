@@ -103,7 +103,7 @@ Add `.factory/` to the `.gitignore` of any project you run the factory in.
 
 ## Skills
 
-The skills come from three upstream sources.
+The skills come from four upstream sources.
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)
 - [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)
