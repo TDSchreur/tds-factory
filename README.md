@@ -117,6 +117,10 @@ The upstream repos are git submodules in `vendor/`. `skills/` holds committed co
 - The installer copies skills unchanged. Codex ignores the Claude-only `disable-model-invocation` frontmatter, so Codex may invoke user-only skills such as `factory` on its own.
 - From ponytail, the installer copies only `SKILL.md`. Its hooks and slash commands are not installed.
 
+## License
+
+MIT, see [LICENSE](LICENSE). The skills come from other MIT projects; their notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 ## More
 
 `GLOSSARY.md` defines the terms used here (Run, Stage, Spec, Ticket and others). Design decisions live in `docs/adr/`.
