@@ -236,6 +236,20 @@ test('on a narrow screen the Run detail is a full-screen sheet with a close butt
   } finally { await page.close(); }
 });
 
+test('switching to another Run opens its detail at the top', async (t) => {
+  const long = '# Long\n\n' + Array.from({ length: 150 }, (_, i) => `- finding ${i}`).join('\n');
+  const page = await openPage(t, { runs: [run({ id: 'a', title: 'A', files: ['define.md'] }), run({ id: 'b', title: 'B', files: ['define.md'] })], files: { 'a/define.md': long, 'b/define.md': long } });
+  if (!page) return;
+  try {
+    await page.execute("document.querySelector('[data-id=a]').click()");
+    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    await page.execute("document.getElementById('detail').scrollTop = 800");
+    await page.execute("document.querySelector('[data-id=b]').click()");
+    await page.waitFor("return document.querySelector('#detail h2').textContent === 'B'");
+    assert.equal(await page.execute("return document.getElementById('detail').scrollTop"), 0);
+  } finally { await page.close(); }
+});
+
 test('the Run detail closes when its Run is no longer shown', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })] });
   if (!page) return;
