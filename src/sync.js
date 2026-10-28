@@ -10,26 +10,30 @@ function invokedByFactory() {
 }
 
 // Copies the skills listed in the manifest from the vendor submodules into skills/.
+// An entry is a path, or { path, as } to ship the skill under another name.
 // Our own skills (no marker) are never touched.
 export function sync() {
   const { skills } = JSON.parse(fs.readFileSync(path.join(ROOT, 'skills.manifest.json'), 'utf8'));
   const invoked = invokedByFactory();
-  for (const rel of skills) {
+  for (const entry of skills) {
+    const rel = typeof entry === 'string' ? entry : entry.path;
+    const name = typeof entry === 'string' ? path.basename(rel) : entry.as;
     const src = path.join(ROOT, rel);
     if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
       throw new Error(`${rel} has no SKILL.md (run: git submodule update --init)`);
     }
-    const dest = path.join(SKILLS_DIR, path.basename(rel));
+    const dest = path.join(SKILLS_DIR, name);
     if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, MARKER))) {
-      throw new Error(`skills/${path.basename(rel)} is not synced from upstream; refusing to overwrite`);
+      throw new Error(`skills/${name} is not synced from upstream; refusing to overwrite`);
     }
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
-    if (invoked.has(path.basename(rel))) {
-      const file = path.join(dest, 'SKILL.md');
-      fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^disable-model-invocation:.*\n/m, ''));
-    }
+    const file = path.join(dest, 'SKILL.md');
+    let text = fs.readFileSync(file, 'utf8');
+    if (name !== path.basename(rel)) text = text.replace(/^name:.*$/m, `name: ${name}`);
+    if (invoked.has(name)) text = text.replace(/^disable-model-invocation:.*\n/m, '');
+    fs.writeFileSync(file, text);
     fs.writeFileSync(path.join(dest, MARKER), `${rel}\n`);
-    console.log(`synced ${path.basename(rel)}`);
+    console.log(`synced ${name}`);
   }
 }

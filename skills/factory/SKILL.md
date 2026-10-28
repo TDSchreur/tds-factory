@@ -39,7 +39,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build |
 | `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set after each review, replacing the old value |
 | `spec` | `pass` or `fail`: the Spec verdict of the latest `code-review`. Set after each review, replacing the old value |
-| `security` | `pass` or `fail`: the Security verdict of the latest `security-review`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set after each review, replacing the old value |
+| `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set after each review, replacing the old value |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Raise it by 1 on each return to Build |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
@@ -79,7 +79,7 @@ Invoke `implement-spec`, working test-first with `tdd`, until every Ticket is do
 
 ## Check
 
-In one pass, run two reviews on the changes. Invoke `code-review` for the Standards and Spec axes. Invoke `security-review` for the Security axis. Report each axis separately and never merge them. Scope `security-review` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
+In one pass, run two reviews on the changes. Invoke `code-review` for the Standards and Spec axes. Invoke `security-scan` for the Security axis. Report each axis separately and never merge them. Scope `security-scan` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
 
 ## Finish
 

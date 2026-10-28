@@ -34,8 +34,9 @@ test('install replaces a symlinked skill with a copy', () => {
   assert.ok(existsSync(other));
 });
 
-test('security-review ships with its reference files', () => {
-  const dir = join(SKILLS_DIR, 'security-review');
-  assert.ok(existsSync(join(dir, 'SKILL.md')));
+test('the vendored security skill ships as security-scan with its reference files', () => {
+  const dir = join(SKILLS_DIR, 'security-scan');
+  assert.match(readFileSync(join(dir, 'SKILL.md'), 'utf8'), /^name: security-scan$/m);
   assert.ok(readdirSync(join(dir, 'references')).includes('vuln-categories.md'));
+  assert.ok(!existsSync(join(SKILLS_DIR, 'security-review')));
 });
