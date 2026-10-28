@@ -169,7 +169,7 @@
     if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets'));
     if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
     if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
-    if (run.loops !== null) chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
+    if (typeof run.loops === 'number') chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
     if (chips.childNodes.length) li.appendChild(chips);
     if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
     var age = ageMs(run.updated);
