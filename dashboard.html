@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>tds-factory dashboard</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
+    --border: #cdd3da; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
+      --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; gap: 1rem; align-items: baseline; padding: .75rem 1rem; }
+  h1 { font-size: 1.1rem; margin: 0; }
+  #status { color: var(--muted); font-size: .85rem; }
+  #status.error { color: var(--flag); }
+  #board { display: grid; grid-template-columns: repeat(6, minmax(10rem, 1fr)); gap: .75rem; padding: 0 1rem 1rem; overflow-x: auto; }
+  .column { background: var(--panel); border-radius: 8px; padding: .5rem; min-width: 0; }
+  .column h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; margin: .25rem .25rem .5rem; color: var(--muted); }
+  .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .6rem; overflow-wrap: anywhere; }
+  .card .title { font-weight: 600; }
+  .card .activity { color: var(--muted); margin-top: .2rem; }
+  .card .agent { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+  .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
+  .card.unreadable .title { color: var(--flag); }
+  .card .updated { font-size: .8rem; color: var(--muted); margin-top: .2rem; }
+  .card .updated.stale { color: var(--amber); font-weight: 600; }
+  .card .pr { font-size: .85rem; margin-top: .3rem; }
+  .card.abandoned { opacity: .7; }
+  #older { font: inherit; font-size: .85rem; margin-left: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; font-size: .8rem; }
+  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .5rem; color: var(--muted); }
+  .chip.pass { color: var(--ok); border-color: var(--ok); }
+  .chip.fail { color: var(--flag); border-color: var(--flag); }
+
+  .card { cursor: pointer; }
+  .card.selected { outline: 2px solid var(--muted); }
+  #detail { margin: 0 1rem 1rem; padding: .75rem; background: var(--panel); border-radius: 8px; }
+  #detail[hidden] { display: none; }
+  #detail h2 { font-size: 1rem; margin: 0 0 .5rem; }
+  #detail pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .5rem; margin: .25rem 0 .75rem; }
+  #detail h3 { font-size: .85rem; margin: .5rem 0 0; color: var(--muted); }
+  .card.waiting { border: 2px solid var(--flag); background: var(--flag-bg); }
+  .card .reason { color: var(--flag); font-weight: 600; margin-top: .3rem; }
+  .empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>tds-factory dashboard</h1>
+  <span id="status" role="status" aria-live="polite">Loading...</span>
+  <button id="older" type="button" hidden></button>
+</header>
+<main id="board" aria-label="Runs by Stage"></main>
+<section id="detail" aria-label="Run detail" hidden></section>
+<script>
+(function () {
+  'use strict';
+  var COLUMNS = [
+    { key: 'define', label: 'Define' },
+    { key: 'prepare', label: 'Prepare' },
+    { key: 'build', label: 'Build' },
+    { key: 'check', label: 'Check' },
+    { key: 'finish', label: 'Finish' },
+    { key: 'done', label: 'Done' }
+  ];
+  var BASE_TITLE = document.title;
+  var POLL_MS = 2000;
+  var STALE_MS = 10 * 60 * 1000;
+  var OLD_MS = 7 * 24 * 60 * 60 * 1000;
+  var showOlder = false; // lives here because render() rebuilds the board every poll
+  var olderBtn = document.getElementById('older');
+  var board = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+
+  // Lenient reader: any field may be missing or of the wrong type; unknown fields are ignored.
+  function str(v) { return typeof v === 'string' ? v.trim() : ''; }
+
+  function strList(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string' && x; }) : []; }
+
+  // Spec, Tickets and PR links from the record; each may be a string or (tickets) an array.
+  function readLinks(r) {
+    var out = [];
+    [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]].forEach(function (p) {
+      (Array.isArray(p[1]) ? p[1] : [p[1]]).forEach(function (v) { if (str(v)) out.push({ label: p[0], href: str(v) }); });
+    });
+    return out;
+  }
+
+  // Age in ms of an ISO timestamp, or null when missing/unparseable.
+  function ageMs(iso) {
+    var t = Date.parse(iso);
+    return isNaN(t) ? null : Date.now() - t;
+  }
+  function ago(ms) {
+    var m = Math.floor(ms / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 1440) return Math.floor(m / 60) + ' h ago';
+    return Math.floor(m / 1440) + ' d ago';
+  }
+  // Only http(s) links become anchors.
+  function safeUrl(v) { var u = str(v); return /^https?:\/\//i.test(u) ? u : ''; }
+
+  // Maps a /api/runs entry to the fields the page uses. Never throws.
+  function readRun(entry) {
+    var id = str(entry && entry.id);
+    if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') {
+      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files: strList(entry && entry.files), links: [], status: '', pr: '' };
+    }
+    var r = entry.record;
+    var status = str(r.status);
+    var stage = str(r.stage).toLowerCase();
+    var column = 'define';
+    if (status === 'done' || status === 'abandoned') column = 'done';
+    else if (COLUMNS.some(function (c) { return c.key === stage && c.key !== 'done'; })) column = stage;
+    function num(v) { return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : null; }
+    function verdict(v) { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' ? v : ''; }
+    var active = status !== 'done' && status !== 'abandoned';
+    return {
+      id: id, unreadable: false, column: column, status: status,
+      pr: str(r.pr),
+      ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total),
+      standards: verdict(r.standards), spec: verdict(r.spec), loops: num(r.check_loops),
+      waiting: active && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason),
+      title: str(r.title) || id || 'Untitled run',
+      activity: str(r.activity), agent: str(r.agent), updated: str(r.updated),
+      files: strList(entry.files), links: readLinks(r)
+    };
+  }
+
+  // An anchor that opens in a new tab when href is an http(s) URL; otherwise plain text in an anchor-less span.
+  function link(text, href) {
+    var url = safeUrl(href);
+    if (!url) return el('span', null, text);
+    var a = el('a', null, text);
+    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    return a;
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  // One card per Run.
+  function renderCard(run) {
+    var li = el('li', 'card' + (run.unreadable ? ' unreadable' : '') + (run.waiting ? ' waiting' : ''));
+    li.dataset.id = run.id;
+    if (run.id === selectedId) li.classList.add('selected');
+    li.tabIndex = 0;
+    li.addEventListener('click', function () { select(run.id); });
+    li.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(run.id); });
+    if (run.waiting) li.appendChild(el('div', 'reason', 'Needs you' + (run.reason ? ': ' + run.reason : '')));
+    li.appendChild(el('div', 'title', (run.unreadable ? 'Unreadable record: ' : '') + run.title));
+    if (run.activity) li.appendChild(el('div', 'activity', run.activity));
+    var chips = el('div', 'chips');
+    if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets'));
+    if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
+    if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
+    if (typeof run.loops === 'number') chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
+    if (chips.childNodes.length) li.appendChild(chips);
+    if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
+    var age = ageMs(run.updated);
+    var active = run.column !== 'done' && !run.unreadable;
+    li.appendChild(el('div', 'updated' + (age !== null && active && age > STALE_MS ? ' stale' : ''), 'Updated: ' + (age === null ? 'unknown' : ago(age))));
+    if (run.status === 'abandoned') {
+      li.classList.add('abandoned');
+      li.appendChild(el('div', 'agent', 'Abandoned'));
+    }
+    if (run.column === 'done' && run.pr) {
+      var p = el('div', 'pr');
+      if (safeUrl(run.pr)) p.appendChild(link('Pull request', run.pr));
+      else p.textContent = 'PR: ' + run.pr;
+      li.appendChild(p);
+    }
+    return li;
+  }
+
+  var selectedId = null;
+  var lastEntries = [];
+  var detailEl = document.getElementById('detail');
+  var shown = null; // key of what the detail view currently shows, to avoid flicker on each poll
+
+  function select(id) { selectedId = selectedId === id ? null : id; render(lastEntries); }
+
+  function renderDetail(runs) {
+    var run = selectedId && runs.filter(function (r) { return r.id === selectedId; })[0];
+    if (!run) { shown = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
+    var key = JSON.stringify([run.id, run.title, run.updated, run.files, run.links]);
+    if (key === shown) return;
+    shown = key;
+    detailEl.hidden = false;
+    var kids = [el('h2', null, run.title)];
+    run.links.forEach(function (l) {
+      var p = el('div', 'link');
+      p.appendChild(link(l.label + ': ' + l.href, l.href));
+      kids.push(p);
+    });
+    if (!run.files.length) kids.push(el('div', 'empty', 'No summaries yet'));
+    run.files.forEach(function (name) {
+      kids.push(el('h3', null, name));
+      var pre = el('pre', null, 'Loading...');
+      kids.push(pre);
+      fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
+        .then(function (t) { pre.textContent = t; })
+        .catch(function (err) { pre.textContent = 'Cannot load ' + name + ' (' + err.message + ')'; });
+    });
+    detailEl.replaceChildren.apply(detailEl, kids);
+  }
+
+  function render(entries) {
+    lastEntries = entries;
+    var runs = (Array.isArray(entries) ? entries : []).map(readRun);
+    var n = runs.filter(function (r) { return r.waiting; }).length;
+    // Runs waiting on the user are never hidden.
+    var older = runs.filter(function (r) { var a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
+    if (!showOlder) runs = runs.filter(function (r) { return older.indexOf(r) < 0; });
+    olderBtn.hidden = older.length === 0;
+    olderBtn.textContent = showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')';
+    // Newest first within a column; unreadable and undated records sort last.
+    runs.sort(function (a, b) { return b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id); });
+    var cols = COLUMNS.map(function (c) {
+      var section = el('section', 'column');
+      section.dataset.stage = c.key;
+      var h = el('h2', null, c.label);
+      h.id = 'col-' + c.key;
+      section.setAttribute('aria-labelledby', h.id);
+      section.appendChild(h);
+      var list = el('ul', 'cards');
+      var mine = runs.filter(function (r) { return r.column === c.key; });
+      mine.forEach(function (r) { list.appendChild(renderCard(r)); });
+      section.appendChild(list);
+      if (!mine.length) section.appendChild(el('div', 'empty', 'No runs'));
+      return section;
+    });
+    board.replaceChildren.apply(board, cols);
+    renderDetail(runs);
+    document.title = (n ? '(' + n + ') ' : '') + BASE_TITLE;
+  }
+
+  olderBtn.addEventListener('click', function () { showOlder = !showOlder; render(lastEntries); });
+
+  function poll() {
+    fetch('/api/runs', { cache: 'no-store' })
+      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+      .then(function (data) {
+        render(data);
+        statusEl.className = '';
+        statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      })
+      .catch(function (err) {
+        statusEl.className = 'error';
+        statusEl.textContent = 'Cannot reach the server (' + err.message + '); showing last data. Retrying...';
+      });
+  }
+
+  render([]);
+  poll();
+  setInterval(poll, POLL_MS);
+})();
+</script>
+</body>
+</html>

@@ -28,3 +28,15 @@ The written definition of what to build, kept as a Markdown file in the repo und
 **Ticket**:
 One unit of work cut from a Spec, stored as a GitHub Issue.
 _Avoid_: Task, story
+
+**Run**:
+One pass of the Flow for one piece of work, from idea to pull request.
+_Avoid_: Job, Pipeline
+
+**Run record**:
+The status file a Run keeps up to date as it moves through the Stages, read by the Dashboard.
+_Avoid_: Log, State file
+
+**Dashboard**:
+A read-only web page that shows every Run as a card in a column per Stage, and flags the Runs that are waiting on a human.
+_Avoid_: Board, Monitor
