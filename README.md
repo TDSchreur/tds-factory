@@ -40,6 +40,8 @@ Requires Node 20+. Clone with `--recurse-submodules` (or run `git submodule upda
 ```sh
 node bin/tds-factory.js sync      # copy the skills in skills.manifest.json from vendor/ into skills/
 node bin/tds-factory.js install   # install skills/ into ~/.claude/skills and ~/.agents/skills
+node bin/tds-factory.js dashboard # serve the Runs of ./.factory on http://127.0.0.1:4317
+npm test                          # run the tests (node:test)
 ```
 
 Options for `install`:
@@ -53,6 +55,8 @@ Options for `install`:
 | claude | `.claude/skills` | `~/.claude/skills` |
 | codex | `.agents/skills` | `~/.agents/skills` |
 | copilot | `.github/skills` | `~/.copilot/skills` |
+
+`dashboard` serves the `.factory/` folder of the current directory read-only on 127.0.0.1 (default port 4317, `--port` to change it) and prints the URL. Routes: `/` (the board page), `/api/runs` (JSON list of Run records; unreadable ones come back with `unreadable: true`) and `/files/<run-id>/<name>.md` (Markdown files of a Run). Each Run is a folder `.factory/runs/<id>/` with a `run.json` record.
 
 Run the flow above with the `factory` skill (`/factory`).
 

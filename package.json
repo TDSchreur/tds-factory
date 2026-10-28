@@ -4,7 +4,8 @@
   "description": "A simple software factory: curated agent skills installed into Claude, Codex and Copilot.",
   "type": "module",
   "bin": { "tds-factory": "bin/tds-factory.js" },
-  "files": ["bin", "src", "skills"],
+  "files": ["bin", "src", "skills", "dashboard.html"],
+  "scripts": { "test": "node --test test/" },
   "engines": { "node": ">=20" },
   "license": "MIT"
 }
