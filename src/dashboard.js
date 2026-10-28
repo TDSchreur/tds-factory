@@ -1,6 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
-import { interpretRun } from './run-record.js';
+import { interpretRun, withRunLock } from './run-record.js';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,19 +83,23 @@ async function readRunFile(runsDir, rawPath) {
 
 // Deletes only a terminal Run in the project's own, unlinked storage.
 function deleteRun(projectDir, id) {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) return 400;
+  if (!SEGMENT.test(id) || id.startsWith('..')) return 400;
   const project = fs.realpathSync(projectDir);
   const factory = join(project, '.factory');
   const root = join(factory, 'runs');
   const dir = join(root, id);
   try {
-    if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root || fs.realpathSync(dir) !== dir || fs.lstatSync(join(dir, 'run.json')).isSymbolicLink()) return 409;
+    if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) return 409;
+    return withRunLock(root, id, () => {
+    if (fs.realpathSync(dir) !== dir || fs.lstatSync(join(dir, 'run.json')).isSymbolicLink()) return 409;
     const record = JSON.parse(fs.readFileSync(join(dir, 'run.json'), 'utf8'));
     if (!record || !['done', 'abandoned'].includes(record.status)) return 409;
     fs.rmSync(dir, { recursive: true });
     return 200;
+    });
   } catch (err) {
     if (err.code === 'ENOENT') return 404;
+    if (err.code === 'EEXIST') return 409;
     if (err instanceof SyntaxError) return 409;
     throw err;
   }

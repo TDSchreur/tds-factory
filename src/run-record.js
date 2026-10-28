@@ -70,9 +70,16 @@ export function startRun(projectDir, data) {
   catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
+export function withRunLock(root, id, action) {
+  const lock = path.join(root, `.lock-${Buffer.from(id).toString('base64url')}`);
+  const fd = fs.openSync(lock, 'wx');
+  try { return action(); }
+  finally { fs.closeSync(fd); fs.unlinkSync(lock); }
+}
 export function updateRun(projectDir, id, data) {
   if (!validId(id)) throw new Error('invalid Run id');
   const root = runRoot(projectDir, false);
+  return withRunLock(root, id, () => {
   const dir = path.join(root, id);
   if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
   const file = path.join(dir, 'run.json');
@@ -80,6 +87,7 @@ export function updateRun(projectDir, id, data) {
   const old = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
   write(dir, apply(old, data));
+  });
 }
 
 const str = (v) => typeof v === 'string' ? v.trim() : '';

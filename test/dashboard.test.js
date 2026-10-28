@@ -185,7 +185,7 @@ test('server listens on loopback only', () => {
   assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/);
 });
 
-test('is read-only: non-GET methods are rejected', async () => {
+test('unsupported methods are rejected', async () => {
   for (const path of ['/api/runs', '/api/info']) {
     const status = await new Promise((resolve) => {
       const req = http.request({ host: '127.0.0.1', port: dash.port, path, method: 'POST' }, (res) => {
@@ -221,4 +221,21 @@ test('deletion rejects foreign origins, unreadable records, traversal and linked
   assert.equal((await request('/api/runs/linked')).status, 409);
   assert.ok(existsSync(join(outside, 'run.json')));
   assert.equal((await request('/api/runs/2026-02-02-abandoned')).status, 200);
+});
+
+test('terminal Runs with older directory names can be deleted', async () => {
+  run('2026-02-03_Legacy.run', { 'run.json': JSON.stringify({ status: 'done' }) });
+  const response = await fetch(`${dash.url}/api/runs/2026-02-03_Legacy.run`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal(response.status, 200);
+});
+
+test('deletion refuses a Run while its update lock is held', async () => {
+  const id = '2026-02-04-locked';
+  run(id, { 'run.json': JSON.stringify({ status: 'done' }) });
+  const lock = join(project, '.factory', 'runs', '.lock-' + Buffer.from(id).toString('base64url'));
+  writeFileSync(lock, 'held');
+  const response = await fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal(response.status, 409);
+  assert.ok((await list()).some((r) => r.id === id));
+  rmSync(lock);
 });
