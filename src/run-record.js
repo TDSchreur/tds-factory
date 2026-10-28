@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 const stages = ['define', 'prepare', 'build', 'check', 'finish'];
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
@@ -71,7 +71,7 @@ export function startRun(projectDir, data) {
   return id;
 }
 export function withRunLock(root, id, action) {
-  const lock = path.join(root, `.lock-${Buffer.from(id).toString('base64url')}`);
+  const lock = path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
   const fd = fs.openSync(lock, 'wx');
   try { return action(); }
   finally { fs.closeSync(fd); fs.unlinkSync(lock); }

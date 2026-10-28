@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -224,15 +225,15 @@ test('deletion rejects foreign origins, unreadable records, traversal and linked
 });
 
 test('terminal Runs with older directory names can be deleted', async () => {
-  run('2026-02-03_Legacy.run', { 'run.json': JSON.stringify({ status: 'done' }) });
-  const response = await fetch(`${dash.url}/api/runs/2026-02-03_Legacy.run`, { method: 'DELETE', headers: { Origin: dash.url } });
+  run('2026-02-03_Ünicode legacy!.run', { 'run.json': JSON.stringify({ status: 'done' }) });
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, { method: 'DELETE', headers: { Origin: dash.url } });
   assert.equal(response.status, 200);
 });
 
 test('deletion refuses a Run while its update lock is held', async () => {
   const id = '2026-02-04-locked';
   run(id, { 'run.json': JSON.stringify({ status: 'done' }) });
-  const lock = join(project, '.factory', 'runs', '.lock-' + Buffer.from(id).toString('base64url'));
+  const lock = join(project, '.factory', 'runs', '.lock-' + createHash('sha256').update(id).digest('hex'));
   writeFileSync(lock, 'held');
   const response = await fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
   assert.equal(response.status, 409);

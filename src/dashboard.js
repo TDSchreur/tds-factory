@@ -83,7 +83,7 @@ async function readRunFile(runsDir, rawPath) {
 
 // Deletes only a terminal Run in the project's own, unlinked storage.
 function deleteRun(projectDir, id) {
-  if (!SEGMENT.test(id) || id.startsWith('..')) return 400;
+  if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 400;
   const project = fs.realpathSync(projectDir);
   const factory = join(project, '.factory');
   const root = join(factory, 'runs');
