@@ -15,10 +15,17 @@ if [ "$major" -lt 20 ]; then
   exit 1
 fi
 
-npm install -g .
+prefix=$(npm prefix -g)
+if [ -w "$prefix" ] && [ -w "$prefix/lib/node_modules" ] 2>/dev/null; then
+  npm install -g .
+else
+  prefix="$HOME/.local"
+  echo "npm's global prefix is not writable; installing to $prefix instead"
+  npm install -g --prefix "$prefix" .
+fi
 
 if ! command -v tds-factory >/dev/null 2>&1; then
-  echo "warning: tds-factory is installed but not on your PATH; add $(npm prefix -g)/bin to it" >&2
+  echo "warning: tds-factory is installed but not on your PATH; add $prefix/bin to it" >&2
 fi
 
 echo
