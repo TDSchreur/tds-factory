@@ -47,6 +47,15 @@ test('Build refuses to start without a Spec and Tickets, and Check needs every a
   assert.match(check, /every axis/i);
 });
 
+test('Check feeds project rules to Standards and Security', () => {
+  const check = section('Check');
+  assert.match(check, /`applyTo`/);
+  assert.match(check, /Universal safeguards/);
+  assert.match(check, /canonical spec/i);
+  assert.match(check, /stale/i);
+  assert.match(check, /no guides or safeguards/i);
+});
+
 test('every skill the factory invokes can be called by the model', () => {
   for (const name of invoked) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
