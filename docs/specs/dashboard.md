@@ -59,7 +59,7 @@ A Dashboard in the browser. The `factory` Skill keeps a Run record up to date as
 - **Page:** one HTML file with inline CSS and JS, no framework, no build step, no CDN. A labeled theme selector offers Light, Dark and System; it defaults to System and remembers the selection in browser storage. The header is sticky and the Stage columns stack on narrow screens. It polls the interpreted list route every 2 seconds. Columns are the 5 Stages plus Done. Markdown is shown as preformatted plain text. It can delete individual or all completed and abandoned Runs after confirmation; active and unreadable Runs are protected.
 - **Lenient reader:** the Dashboard's interpretation of a record treats every field as optional and ignores unknown fields. Missing fields render as blank or a neutral default.
 - **Stale indicator:** the "last updated" label is derived from the update timestamp and turns amber past a threshold (about 10 minutes).
-- **Done column and history:** Runs with status `done` or `abandoned` go to Done. Runs older than 7 days are hidden behind a "show older" toggle. Users can permanently delete individual Done Runs or all Done Runs, including hidden ones, after confirmation.
+- **Done column and history:** Runs with status `done` or `abandoned` go to Done, where each card starts collapsed to its title, update time and an expand toggle. Runs older than 7 days are hidden behind a "show older" toggle. Users can permanently delete individual Done Runs or all Done Runs, including hidden ones, after confirmation.
 - **Packaging:** the page ships in the package's `files` list so `npm`-style installs include it.
 - **Glossary:** Run, Run record, Run store and Dashboard are already in `GLOSSARY.md`. No ADR; the design is easy to change later.
 
