@@ -29,56 +29,81 @@
   :root {
     --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
     --border: #cdd3da; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
+    --primary: #2457c5; --primary-text: #fff; --header-bg: rgba(246, 247, 249, .88);
+    --radius: .5rem; --shadow: 0 1px 2px rgba(16, 24, 40, .08), 0 1px 3px rgba(16, 24, 40, .06);
+    --focus: rgba(36, 87, 197, .45);
   }
   :root[data-theme="light"] { color-scheme: light; }
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
     --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
+    --primary: #6e9bff; --primary-text: #0d1117; --header-bg: rgba(20, 23, 26, .88);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4); --focus: rgba(110, 155, 255, .5);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]):not([data-theme="dark"]) {
+      color-scheme: dark;
       --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
       --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
+      --primary: #6e9bff; --primary-text: #0d1117; --header-bg: rgba(20, 23, 26, .88);
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4); --focus: rgba(110, 155, 255, .5);
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); }
-  header { display: flex; gap: 1rem; align-items: baseline; padding: .75rem 1rem; }
-  h1 { font-size: 1.1rem; margin: 0; }
-  #project, #status { color: var(--muted); font-size: .85rem; }
-  #status.error { color: var(--flag); }
-  #board { display: grid; grid-template-columns: repeat(6, minmax(10rem, 1fr)); gap: .75rem; padding: 0 1rem 1rem; overflow-x: auto; }
-  .column { background: var(--panel); border-radius: 8px; padding: .5rem; min-width: 0; }
-  .column h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; margin: .25rem .25rem .5rem; color: var(--muted); }
-  .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .6rem; overflow-wrap: anywhere; }
-  .card .title { font-weight: 600; }
-  .card .activity { color: var(--muted); margin-top: .2rem; }
-  .card .agent { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  a { color: var(--primary); text-underline-offset: .15em; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  header { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .75rem 1.25rem; background: var(--header-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  h1 { font-size: 1.25rem; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  #project, #status { color: var(--muted); font-size: .875rem; }
+  #status.error { color: var(--flag); font-weight: 600; }
+  header label { font-size: .875rem; color: var(--muted); margin-left: auto; }
+  select, button { font: inherit; font-size: .875rem; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .3rem .7rem; cursor: pointer; transition: border-color .15s, background-color .15s; }
+  select:hover, button:hover { border-color: var(--primary); }
+  button:active { background: var(--panel); }
+
+  #board { display: grid; grid-template-columns: repeat(6, minmax(12rem, 1fr)); gap: 1rem; padding: 1.25rem; overflow-x: auto; align-items: start; }
+  .column { background: var(--panel); border-radius: calc(var(--radius) * 1.5); padding: .75rem; min-width: 0; }
+  .column h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: .1rem .25rem .75rem; color: var(--muted); }
+  .column > button { margin: 0 0 .75rem; }
+  .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .625rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; overflow-wrap: anywhere; box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .card:hover { border-color: var(--primary); }
+  .card .title { font-weight: 600; line-height: 1.3; }
+  .card .activity { color: var(--muted); font-size: .875rem; margin-top: .25rem; }
+  .card .agent { font-size: .8rem; color: var(--muted); margin-top: .5rem; }
   .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
   .card.unreadable .title { color: var(--flag); }
-  .card .updated { font-size: .8rem; color: var(--muted); margin-top: .2rem; }
+  .card .updated { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
   .card .updated.stale { color: var(--amber); font-weight: 600; }
-  .card .pr { font-size: .85rem; margin-top: .3rem; }
+  .card .pr { font-size: .875rem; margin-top: .4rem; }
+  .card > button { margin-top: .6rem; }
   .card.abandoned { opacity: .7; }
-  #older { font: inherit; font-size: .85rem; margin-left: auto; }
-  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; font-size: .8rem; }
-  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .5rem; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; font-size: .75rem; }
+  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .55rem; color: var(--muted); line-height: 1.5; }
   .chip.pass { color: var(--ok); border-color: var(--ok); }
   .chip.fail { color: var(--flag); border-color: var(--flag); }
   .chip.skipped { color: var(--muted); }
 
-  .card { cursor: pointer; }
-  .card.selected { outline: 2px solid var(--muted); }
-  #detail { margin: 0 1rem 1rem; padding: .75rem; background: var(--panel); border-radius: 8px; }
-  #detail[hidden] { display: none; }
-  #detail h2 { font-size: 1rem; margin: 0 0 .5rem; }
-  #detail pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .5rem; margin: .25rem 0 .75rem; }
-  #detail h3 { font-size: .85rem; margin: .5rem 0 0; color: var(--muted); }
+  .card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
   .card.waiting { border: 2px solid var(--flag); background: var(--flag-bg); }
-  .card .reason { color: var(--flag); font-weight: 600; margin-top: .3rem; }
-  .empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
+  .card .reason { color: var(--flag); font-weight: 700; font-size: .875rem; margin-bottom: .3rem; }
+  .empty { color: var(--muted); font-size: .875rem; padding: .25rem; }
+
+  #detail { max-width: 60rem; margin: 0 1.25rem 1.5rem; padding: 1.25rem; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: var(--shadow); }
+  #detail[hidden] { display: none; }
+  #detail h2 { font-size: 1.25rem; margin: 0 0 .75rem; }
+  #detail h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; margin: 1rem 0 0; color: var(--muted); }
+  #detail pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; margin: .4rem 0 .75rem; font-size: .875rem; }
+
+  @media (max-width: 48rem) {
+    header { padding: .6rem 1rem; }
+    header label { margin-left: 0; }
+    #board { grid-template-columns: 1fr; padding: 1rem; }
+    #detail { margin: 0 1rem 1rem; padding: 1rem; }
+  }
 </style>
 </head>
 <body>
