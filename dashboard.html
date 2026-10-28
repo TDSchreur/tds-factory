@@ -5,13 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>tds-factory dashboard</title>
+<script id="theme-init">
+(function () {
+  var key = 'dashboard-theme';
+  var choice = 'system';
+  try {
+    var saved = localStorage.getItem(key);
+    if (saved === 'light' || saved === 'dark' || saved === 'system') choice = saved;
+  } catch (err) {}
+  document.documentElement.dataset.theme = choice;
+  document.addEventListener('DOMContentLoaded', function () {
+    var selector = document.getElementById('theme');
+    selector.value = choice;
+    selector.addEventListener('change', function () {
+      choice = selector.value;
+      document.documentElement.dataset.theme = choice;
+      try { localStorage.setItem(key, choice); } catch (err) {}
+    });
+  });
+})();
+</script>
 <style>
   :root {
     --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
     --border: #cdd3da; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
   }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
+    --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
+  }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]):not([data-theme="dark"]) {
       --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
       --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
     }
@@ -60,6 +86,8 @@
   <h1>tds-factory dashboard</h1>
   <span id="project"></span>
   <span id="status" role="status" aria-live="polite">Loading...</span>
+  <label for="theme">Theme</label>
+  <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
   <button id="older" type="button" hidden></button>
 </header>
 <main id="board" aria-label="Runs by Stage"></main>
