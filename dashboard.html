@@ -123,7 +123,7 @@
   <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
   <button id="older" type="button" hidden></button>
 </header>
-<main id="board" aria-label="Runs by Stage"></main>
+<main id="board" aria-label="Runs by Stage" tabindex="-1"></main>
 <section id="detail" aria-label="Run detail" hidden></section>
 <dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-message">
   <div class="dialog-content">
@@ -239,7 +239,7 @@
       var del = el('button', null, 'Delete');
       del.type = 'button';
       del.setAttribute('aria-label', 'Delete ' + run.title);
-      del.addEventListener('click', function (e) { e.stopPropagation(); removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record and summaries?'); });
+      del.addEventListener('click', function (e) { e.stopPropagation(); removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?'); });
       del.addEventListener('keydown', function (e) { e.stopPropagation(); });
       more.appendChild(del);
       var open = !!expanded[run.id];
@@ -342,6 +342,12 @@
   }
 
   function render(entries) {
+    var focused = document.activeElement;
+    var focusCard = focused && focused.closest && focused.closest('.card');
+    var focusId = focusCard && focusCard.dataset.id;
+    var focusLabel = focused && focused.getAttribute && focused.getAttribute('aria-label');
+    var focusText = focused && focused.textContent;
+    var hadBoardFocus = focused && board.contains && board.contains(focused);
     lastEntries = entries;
     var runs = (Array.isArray(entries) ? entries : []);
     var n = runs.filter(function (r) { return r.waiting; }).length;
@@ -364,7 +370,7 @@
         if (doneRuns.length) {
           var delAll = el('button', null, 'Delete all');
           delAll.type = 'button';
-          delAll.addEventListener('click', function () { removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records and summaries, including hidden older Runs?'); });
+          delAll.addEventListener('click', function () { removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records, summaries, and Factory-created Run worktrees, including hidden older Runs?'); });
           section.appendChild(delAll);
         }
       }
@@ -376,6 +382,14 @@
       return section;
     });
     board.replaceChildren.apply(board, cols);
+    if (hadBoardFocus) {
+      var target = Array.from(board.querySelectorAll('button, .card')).find(function (candidate) {
+        var card = candidate.closest('.card');
+        return (card ? card.dataset.id : null) === (focusId || null) &&
+          (focusLabel ? candidate.getAttribute('aria-label') === focusLabel : candidate.textContent === focusText);
+      });
+      (target || board).focus();
+    }
     renderDetail(runs);
     document.title = (n ? '(' + n + ') ' : '') + BASE_TITLE;
   }
