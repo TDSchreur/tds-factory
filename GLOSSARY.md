@@ -22,6 +22,9 @@ The ordered Stages a piece of work moves through, encoded in the `factory` Skill
 One step of the Flow: Define, Prepare, Build, Check or Finish.
 _Avoid_: Phase, step
 
+**Preflight**:
+The checks before the first Stage: project setup and Conventions. Not a Stage.
+
 **Check axis**:
 One of the independent reviews in the Check Stage (Standards, Spec, Security, Infrastructure), each reporting its own verdict. Infrastructure may be skipped when no infrastructure file changed, and is the only one that blocks Finish.
 _Avoid_: Reviewer, Gate
