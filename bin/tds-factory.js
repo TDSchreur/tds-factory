@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { install } from '../src/install.js';
+import { startRun, updateRun } from '../src/run-record.js';
 import { sync } from '../src/sync.js';
 import { startDashboard, DEFAULT_PORT } from '../src/dashboard.js';
 
@@ -8,6 +9,8 @@ const USAGE = `Usage:
   tds-factory sync
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force]
   tds-factory dashboard [--port 4317]
+  tds-factory run start --data JSON
+  tds-factory run update --id ID --data JSON
 
 install defaults to the user-global directory; --project installs into the current directory.`;
 
@@ -17,13 +20,21 @@ const { values, positionals } = parseArgs({
     agent: { type: 'string', default: 'all' },
     project: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
+    data: { type: 'string' },
+    id: { type: 'string' },
     port: { type: 'string', default: String(DEFAULT_PORT) },
   },
 });
 
 try {
   const [command] = positionals;
-  if (command === 'sync') sync();
+  if (command === 'run') {
+    const data = JSON.parse(values.data);
+    if (positionals[1] === 'start') console.log(startRun(process.cwd(), data));
+    else if (positionals[1] === 'update') updateRun(process.cwd(), values.id, data);
+    else throw new Error('expected run start or run update');
+  }
+  else if (command === 'sync') sync();
   else if (command === 'install') install(values);
   else if (command === 'dashboard') {
     const port = Number(values.port);

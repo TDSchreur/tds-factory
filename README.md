@@ -52,7 +52,7 @@ Check sends the Run back to Build at most twice, for `code-review` problems wort
 
 Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and fills in the project's PR template (`.github/`, `.azuredevops/` or `docs/pull_request_template.md`) when there is one, including its Infrastructure checklist (from the Infrastructure verdict) and its Documentation checklist (from the stale-spec check). When the tracker is GitHub the body closes every Ticket with `Closes #N`; otherwise it lists the Ticket paths and has no `Closes` lines.
 
-Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these. Besides the verdicts (`standards`, `spec`, `security`, `infrastructure`), `run.json` holds `commands` (the verify command) and `conventions` (the paths Preflight read).
+The Factory requires `tds-factory` on PATH: agents use `tds-factory run start --data '<JSON>'` and `tds-factory run update --id <id> --data '<JSON>'` to create and update records. Updates validate changed fields and replace the record safely; the Dashboard reads older records tolerantly. Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these. Besides the verdicts (`standards`, `spec`, `security`, `infrastructure`), `run.json` holds `commands` (the verify command) and `conventions` (the paths Preflight read).
 
 ## Setup
 
@@ -91,6 +91,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 | Route | Returns |
 |---|---|
 | `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
+| `/api/views` | Run records interpreted for the Dashboard. |
 | `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
 

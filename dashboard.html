@@ -87,17 +87,6 @@
   // Lenient reader: any field may be missing or of the wrong type; unknown fields are ignored.
   function str(v) { return typeof v === 'string' ? v.trim() : ''; }
 
-  function strList(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string' && x; }) : []; }
-
-  // Spec, Tickets and PR links from the record; each may be a string or (tickets) an array.
-  function readLinks(r) {
-    var out = [];
-    [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]].forEach(function (p) {
-      (Array.isArray(p[1]) ? p[1] : [p[1]]).forEach(function (v) { if (str(v)) out.push({ label: p[0], href: str(v) }); });
-    });
-    return out;
-  }
-
   // Age in ms of an ISO timestamp, or null when missing/unparseable.
   function ageMs(iso) {
     var t = Date.parse(iso);
@@ -112,33 +101,6 @@
   }
   // Only http(s) links become anchors.
   function safeUrl(v) { var u = str(v); return /^https?:\/\//i.test(u) ? u : ''; }
-
-  // Maps a /api/runs entry to the fields the page uses. Never throws.
-  function readRun(entry) {
-    var id = str(entry && entry.id);
-    if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') {
-      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files: strList(entry && entry.files), links: [], status: '', pr: '' };
-    }
-    var r = entry.record;
-    var status = str(r.status);
-    var stage = str(r.stage).toLowerCase();
-    var column = 'define';
-    if (status === 'done' || status === 'abandoned') column = 'done';
-    else if (COLUMNS.some(function (c) { return c.key === stage && c.key !== 'done'; })) column = stage;
-    function num(v) { return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : null; }
-    function verdict(v, skip) { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : ''; }
-    var active = status !== 'done' && status !== 'abandoned';
-    return {
-      id: id, unreadable: false, column: column, status: status,
-      pr: str(r.pr),
-      ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total),
-      standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops),
-      waiting: active && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason),
-      title: str(r.title) || id || 'Untitled run',
-      activity: str(r.activity), agent: str(r.agent), updated: str(r.updated),
-      files: strList(entry.files), links: readLinks(r)
-    };
-  }
 
   // An anchor that opens in a new tab when href is an http(s) URL; otherwise plain text in an anchor-less span.
   function link(text, href) {
@@ -227,7 +189,7 @@
 
   function render(entries) {
     lastEntries = entries;
-    var runs = (Array.isArray(entries) ? entries : []).map(readRun);
+    var runs = (Array.isArray(entries) ? entries : []);
     var n = runs.filter(function (r) { return r.waiting; }).length;
     // Runs waiting on the user are never hidden.
     var older = runs.filter(function (r) { var a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
@@ -258,7 +220,7 @@
   olderBtn.addEventListener('click', function () { showOlder = !showOlder; render(lastEntries); });
 
   function poll() {
-    fetch('/api/runs', { cache: 'no-store' })
+    fetch('/api/views', { cache: 'no-store' })
       .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then(function (data) {
         render(data);

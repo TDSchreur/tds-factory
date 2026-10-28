@@ -48,7 +48,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 
 ## Implementation Decisions
 
-- **Run record writer: the `factory` Skill.** The Skill gains a rule to create the Run folder when the Factory starts and to update the Run record at every Stage transition and whenever it becomes blocked on or released from the human. The Skill owns the schema of the record, and it is documented in the Skill so every Agent target writes the same shape.
+- **Run record writer: the `factory` Skill.** The Skill gains a rule to create the Run folder when the Factory starts and to update the Run record at every Stage transition and whenever it becomes blocked on or released from the human. The Factory command owns record creation and updates; the Skill directs every Agent target to use it. Shared Run record behavior interprets records for the Dashboard.
 - **Run record contents:** title; current Stage; status (`running`, `waiting`, `done`, `abandoned`); `waiting_on_human` flag with a short reason; activity note; Check loop count (cap 2); Standards, Spec, Security and Infrastructure verdicts from the latest review; Ticket progress (done and total); links to the Spec, the Tickets and the PR; the writing agent's name; created and updated timestamps.
 - **Waiting on a human** is set at: Define questions and Spec sign-off, Check after the loop cap with problems still open, and Finish before pushing the PR.
 - **Stage summaries:** the Skill writes a short Markdown summary into the Run folder per Stage: define, build, one per Check pass, and finish. The Spec and Tickets are referenced by link only.
@@ -57,7 +57,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 - **Dashboard command:** a new `dashboard` command on the `tds-factory` CLI, with a `--port` option (default 4317). It serves the `.factory/` folder of the current directory and prints the URL.
 - **Server module:** a deep module that, given a project directory and a port, starts an HTTP server bound to 127.0.0.1 with four routes: the page, a JSON list of all Run records, an info route that returns the project directory, and a file route for the Markdown files of a Run. The file route is confined to `.factory/` and rejects path traversal. Every route answers 403 when the `Host` header is not the server's own `127.0.0.1:<port>` or `localhost:<port>`, so a web page can't read local data through DNS rebinding. The list route skips nothing that parses at all and tolerates unreadable or partial records by returning what it can with a flag, instead of failing the whole list.
 - **Page:** one HTML file with inline CSS and JS, no framework, no build step, no CDN. It polls the list route every 2 seconds. Columns are the 5 Stages plus Done. Markdown is shown as preformatted plain text. It is read-only, with no buttons that change a Run.
-- **Lenient reader:** the page treats every field as optional and ignores unknown fields. Missing fields render as blank or a neutral default.
+- **Lenient reader:** shared Run record interpretation treats every field as optional and ignores unknown fields. Missing fields render as blank or a neutral default.
 - **Stale indicator:** the "last updated" label is derived from the update timestamp and turns amber past a threshold (about 10 minutes).
 - **Done column and history:** Runs with status `done` or `abandoned` go to Done. Runs older than 7 days are hidden behind a "show older" toggle.
 - **Packaging:** the page ships in the package's `files` list so `npm`-style installs include it.
