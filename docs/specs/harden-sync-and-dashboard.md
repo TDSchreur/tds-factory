@@ -38,6 +38,7 @@ Make `sync` strict and testable. It validates every manifest entry before writin
 ## Implementation Decisions
 
 - **Manifest validation:** `sync` validates every entry before it writes any. The shipped name must be lowercase letters, digits and hyphens. The source, resolved against the repository root, must stay inside it, and the destination, resolved against the shipped skills folder, must stay inside that folder. Any failure throws an error that names the entry.
+- **Further refusals:** found by Check and kept: a source that is the repository root or sits inside the skills folder, a source that is or sits under a symlink, two entries that ship under the same name, and a malformed entry (each named in the error). A skill's Markdown walk rewrites only real files, so a directory named like a Markdown file cannot break a run.
 - **Symlinks:** before copying, `sync` walks the source skill folder and throws if it finds a symlink, naming the skill and the link. Nothing is written for that skill.
 - **Rename pattern:** the old name is escaped before it goes into the rename pattern. The boundary rule stays: the old name is replaced only when the next character is not a word character or a hyphen.
 - **Helper:** the rewrite of one Markdown file moves out of `sync` into a small function. It sets the frontmatter name for `SKILL.md`, rewrites old-name mentions, and strips the model-invocation flag for the skills the Flow invokes.

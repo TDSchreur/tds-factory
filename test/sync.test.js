@@ -150,3 +150,21 @@ test('sync replaces the files of a folder it synced before, dropping stale ones'
   assert.ok(!existsSync(join(skillsDir, 'alpha', 'stale.md')));
   assert.ok(existsSync(join(skillsDir, 'alpha', 'SKILL.md')));
 });
+
+test('sync ships a skill that holds a directory named like a Markdown file', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  mkdirSync(join(root, 'vendor/up/skills/alpha', 'weird.md'));
+  writeFileSync(join(root, 'vendor/up/skills/alpha', 'weird.md', 'inner.txt'), 'x');
+  quietSync({ root, skillsDir });
+  assert.ok(existsSync(join(skillsDir, 'alpha', 'weird.md', 'inner.txt')));
+});
+
+test('sync refuses a source that is the repository root or sits inside the skills folder', () => {
+  for (const entry of [{ path: '.', as: 'zzz' }, 'skills/factory']) {
+    const { root, skillsDir } = fakeRepo([entry], {}, '---\nname: factory\n---\n');
+    writeFileSync(join(root, 'SKILL.md'), '---\nname: root\n---\n');
+    writeFileSync(join(skillsDir, 'factory', MARKER), '');
+    assert.throws(() => quietSync({ root, skillsDir }), /repository root|skills folder/, JSON.stringify(entry));
+    assert.ok(existsSync(join(skillsDir, 'factory', 'SKILL.md')), JSON.stringify(entry));
+  }
+});

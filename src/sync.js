@@ -43,6 +43,7 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
     const dest = path.join(skillsDir, name);
     if (!/^[a-z0-9-]+$/.test(name)) throw bad('has an invalid shipped name (lowercase letters, digits and hyphens only)');
     if (leaves(root, src)) throw bad('leaves the repository');
+    if (path.relative(root, src) === '' || !leaves(skillsDir, src)) throw bad('is the repository root or sits inside the skills folder');
     if (leaves(skillsDir, dest)) throw bad('leaves the skills folder');
     if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
       throw new Error(`${rel} has no SKILL.md (run: git submodule update --init)`);
@@ -63,7 +64,9 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
   for (const { rel, name, src, dest } of plan) {
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
-    for (const f of fs.readdirSync(dest, { recursive: true }).filter((f) => f.endsWith('.md'))) {
+    const markdown = fs.readdirSync(dest, { recursive: true, withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.md'));
+    for (const e of markdown) {
+      const f = path.relative(dest, path.join(e.parentPath ?? e.path, e.name));
       const file = path.join(dest, f);
       const skillFile = f === 'SKILL.md';
       fs.writeFileSync(file, rewrite(fs.readFileSync(file, 'utf8'), { skillFile, from: path.basename(rel), to: name, unflag: skillFile && invoked.has(name) }));

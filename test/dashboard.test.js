@@ -161,7 +161,7 @@ test('a non-GET with a foreign Host is still rejected', async () => {
     req.on('error', reject);
     req.end();
   });
-  assert.ok([403, 405].includes(status), String(status));
+  assert.equal(status, 403);
 });
 
 test('a foreign Host header gets 403 on every route; loopback names still work', async () => {
