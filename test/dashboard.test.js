@@ -138,6 +138,13 @@ test('page route serves the real board page', async () => {
   assert.doesNotMatch(res.body, /not installed/);
 });
 
+test('page renders an Infrastructure chip only when the field is present', async () => {
+  const res = await get(dash, '/');
+  assert.match(res.body, /infrastructure: verdict\(r\.infrastructure, true\)/);
+  assert.match(res.body, /if \(run\.infrastructure\) chips\.appendChild\(el\('span', 'chip ' \+ run\.infrastructure, 'Infrastructure ' \+ run\.infrastructure\)\)/);
+  assert.match(res.body, /\.chip\.skipped/);
+});
+
 test('info route names the project directory the Dashboard serves', async () => {
   const res = await get(dash, '/api/info');
   assert.equal(res.status, 200);

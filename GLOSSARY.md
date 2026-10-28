@@ -22,15 +22,26 @@ The ordered Stages a piece of work moves through, encoded in the `factory` Skill
 One step of the Flow: Define, Prepare, Build, Check or Finish.
 _Avoid_: Phase, step
 
+**Preflight**:
+The checks before the first Stage: project setup and Conventions. Not a Stage.
+
 **Check axis**:
-One of the independent reviews in the Check Stage (Standards, Spec, Security), each reporting its own pass or fail verdict.
+One of the independent reviews in the Check Stage (Standards, Spec, Security, Infrastructure), each reporting its own verdict. Infrastructure may be skipped when no infrastructure file changed, and is the only one that blocks Finish.
 _Avoid_: Reviewer, Gate
+
+**Verify command**:
+The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
+_Avoid_: Test command
+
+**Conventions**:
+The project's own rules: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists, read at Preflight and given to the Standards and Security axes.
+_Avoid_: Standards
 
 **Spec**:
 The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/`.
 
 **Ticket**:
-One unit of work cut from a Spec, stored as a GitHub Issue.
+One unit of work cut from a Spec, stored in the project's Issue tracker.
 _Avoid_: Task, story
 
 **Run**:

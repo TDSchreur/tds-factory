@@ -7,11 +7,85 @@ import { install } from '../src/install.js';
 import { SKILLS_DIR, MARKER } from '../src/paths.js';
 
 const flow = readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8');
+
+function section(name) {
+  const found = flow.split(/^## /m).find((s) => s.startsWith(`${name}\n`));
+  if (!found) throw new Error(`SKILL.md has no "## ${name}" section`);
+  return found;
+}
+
+const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
 
 test('the factory invokes exactly the skills we expect', () => {
   const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'to-spec', 'to-tickets', 'unslop'];
   assert.deepEqual([...new Set(invoked)].sort(), expected);
+});
+
+test('the factory follows the configured tracker and the repo PR template', () => {
+  assert.doesNotMatch(flow, /GitHub Issues/);
+  assert.doesNotMatch(flow, /\. The PR body lists `Closes #N`/);
+  assert.match(flow, /docs\/agents\/issue-tracker\.md/);
+  for (const path of ['.github/pull_request_template.md', '.azuredevops/pull_request_template.md', 'docs/pull_request_template.md']) {
+    assert.ok(flow.includes(path), path);
+  }
+});
+
+test('Preflight reads project conventions and Build runs the verify command', () => {
+  assert.match(flow, /## Commands/);
+  assert.match(flow, /AGENTS\.md/);
+  assert.match(flow, /ask once/i);
+  assert.match(flow, /Not run/);
+  assert.match(flow, /`check-N\.md`/);
+  assert.match(section('Waiting on the user'), /Preflight/);
+  assert.match(flow, /\| `commands` \|/);
+  assert.match(flow, /\| `conventions` \|/);
+});
+
+test('Build refuses to start without a Spec and Tickets, and Check needs every axis verdict', () => {
+  const build = section('Build');
+  assert.match(build, /`spec_link`/);
+  assert.match(build, /`tickets`/);
+  assert.match(build, /`stage` to `define`/);
+  assert.match(build, /continue Define/i);
+  assert.match(check, /no verdict in `run\.json`/);
+  assert.match(check, /every axis/i);
+  assert.match(check, /run that axis again/i);
+  assert.doesNotMatch(check, /go back to Build and run it again/);
+  assert.equal(check.split('on every Run').length, 2);
+});
+
+test('Check feeds project rules to Standards and Security', () => {
+  assert.match(check, /`applyTo`/);
+  assert.match(check, /Universal safeguards/);
+  assert.match(check, /canonical spec/i);
+  assert.match(check, /stale/i);
+  assert.match(check, /no guides or safeguards/i);
+});
+
+test('Check runs an Infrastructure axis without a new Skill', () => {
+  assert.match(check, /Infrastructure/);
+  assert.match(check, /bicep lint/);
+  assert.match(check, /not validated/i);
+  assert.match(check, /never deploy/i);
+  assert.match(check, /`skipped`/);
+  assert.match(flow, /^\| `infrastructure` \|/m);
+});
+
+test('Finish is blocked by an Infrastructure fail or unvalidated file until the user accepts', () => {
+  const finish = section('Finish');
+  assert.ok(finish.indexOf('`infrastructure`') < finish.indexOf('Invoke `pr`'));
+  assert.match(finish, /`fail`/);
+  assert.match(finish, /not validated/i);
+  assert.match(finish, /`waiting`/);
+  assert.match(finish, /explicit yes/i);
+  assert.match(finish, /`finish\.md`/);
+  assert.match(finish, /Infrastructure checklist/);
+  assert.match(finish, /Documentation checklist/);
+  assert.match(finish, /`skipped`/);
+  assert.match(flow, /`fail`, never `pass`/);
+  assert.match(finish, /other axes/i);
+  assert.match(section('Waiting on the user'), /infrastructure/);
 });
 
 test('every skill the factory invokes can be called by the model', () => {

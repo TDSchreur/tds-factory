@@ -41,6 +41,7 @@
   .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .5rem; color: var(--muted); }
   .chip.pass { color: var(--ok); border-color: var(--ok); }
   .chip.fail { color: var(--flag); border-color: var(--flag); }
+  .chip.skipped { color: var(--muted); }
 
   .card { cursor: pointer; }
   .card.selected { outline: 2px solid var(--muted); }
@@ -125,13 +126,13 @@
     if (status === 'done' || status === 'abandoned') column = 'done';
     else if (COLUMNS.some(function (c) { return c.key === stage && c.key !== 'done'; })) column = stage;
     function num(v) { return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : null; }
-    function verdict(v) { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' ? v : ''; }
+    function verdict(v, skip) { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : ''; }
     var active = status !== 'done' && status !== 'abandoned';
     return {
       id: id, unreadable: false, column: column, status: status,
       pr: str(r.pr),
       ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total),
-      standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), loops: num(r.check_loops),
+      standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops),
       waiting: active && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason),
       title: str(r.title) || id || 'Untitled run',
       activity: str(r.activity), agent: str(r.agent), updated: str(r.updated),
@@ -171,6 +172,7 @@
     if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
     if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
     if (run.security) chips.appendChild(el('span', 'chip ' + run.security, 'Security ' + run.security));
+    if (run.infrastructure) chips.appendChild(el('span', 'chip ' + run.infrastructure, 'Infrastructure ' + run.infrastructure));
     if (typeof run.loops === 'number') chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
     if (chips.childNodes.length) li.appendChild(chips);
     if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));

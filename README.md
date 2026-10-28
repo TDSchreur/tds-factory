@@ -6,10 +6,13 @@ It is inspired by [zazencodes software-factory-claude-code](https://github.com/z
 
 ## The flow
 
-A Run is one pass through five Stages. Start it with the `factory` skill (`/factory`).
+A Run is one pass through five Stages, after a Preflight. Start it with the `factory` skill (`/factory`).
 
 ```mermaid
 flowchart LR
+    subgraph Preflight
+        P[conventions and verify command]
+    end
     subgraph Define
         A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
     end
@@ -20,30 +23,36 @@ flowchart LR
         E[implement-spec with tdd]
     end
     subgraph Check
-        F[code-review]
+        F[code-review, security-scan, infrastructure]
     end
     subgraph Finish
         G[pr] --> H[unslop]
     end
 
+    P --> A
     C --> D --> E --> F
     F -->|problems found, fewer than 2 loops so far| E
     F -->|clean, or loop cap reached| G
+    F -.->|infrastructure fail: ask first| G
 ```
 
-| Stage | Skills | Result |
-|---|---|---|
-| Define | `grill-with-docs`, `to-spec`, `to-tickets` | A Spec in `docs/specs/` and a GitHub Issue per Ticket |
-| Prepare | `ponytail` | Build writes the minimum code that works |
-| Build | `implement-spec`, `tdd` | Every Ticket done, test-first |
-| Check | `code-review`, `security-scan` | A Standards, a Spec and a Security verdict |
-| Finish | `pr`, `unslop` | A prepared pull request |
+| Stage | Skills | Claude | Codex | Copilot | Result |
+|---|---|---|---|---|---|
+| Define | `grill-with-docs`, `to-spec`, `to-tickets` | Sonnet, default | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set | A Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker |
+| Prepare | `ponytail` | Sonnet, default | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set | Build writes the minimum code that works |
+| Build | `implement-spec`, `tdd` | Sonnet, default | `gpt-6.1-terra`, medium | `gpt-5.3-codex`, not set | Every Ticket done, test-first |
+| Check | `code-review`, `security-scan`, plus the Infrastructure review | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-4.6`, not set | A Standards, a Spec, a Security and an Infrastructure verdict |
+| Finish | `pr`, `unslop` | Haiku, default | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set | A prepared pull request |
 
-Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
+Each cell is the model and its reasoning effort. "Default" means the agent definition sets no effort, so the session's own setting applies; "not set" means the Copilot target has no effort setting in its agent definition. The model columns show the defaults set in the `factory-define`, `factory-build`, `factory-check` and `factory-finish` agent definitions of each Agent target: `~/.claude/agents`, `~/.codex/agents` and `~/.copilot/agents`. Define and Prepare share `factory-define`. The installer does not ship these definitions yet, so they exist only where someone created them. Making them configurable per target is tracked in issue #32.
 
-Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and its body closes every Ticket with `Closes #N`.
+Preflight first checks that `/setup-matt-pocock-skills` has been run, then reads the project's conventions (`AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists) and finds the verify command in its `## Commands` section. If there is none, it tells you, asks once and never guesses. Build refuses to start until the Spec exists and the Tickets are published, and sends the Run back to Define if either is missing. Build runs the verify command after each Ticket; a command that cannot run in the environment (another shell, no container runtime) is listed under "Not run" in the Stage summary, never reported as passed. Check gives the Standards review the guides whose `applyTo` globs match the changed files and flags a canonical spec left stale, and gives the Security review the project's "Universal safeguards". Check runs every axis on every Run; an axis with no verdict is run again.
 
-Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these.
+Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security or infrastructure finding. After that it reports what is still open and moves on to Finish. The Infrastructure axis runs only when the diff changes Bicep, Azure Pipelines or `bicepconfig.json` files, otherwise it is `skipped`. It runs `bicep build` and `bicep lint`, checks pipeline YAML for plaintext secrets, unpinned versions and missing approval gates on production stages, and never deploys. A what-if runs only when Azure credentials and a target exist, and is reported as not run otherwise. If it cannot validate a file it says "not validated" and records `fail`, never `pass`. Infrastructure is the one axis that blocks Finish: on `fail` the skill asks whether to accept the risk and prepares the PR only after a yes. The skill never pushes or opens the PR without your go-ahead.
+
+Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and fills in the project's PR template (`.github/`, `.azuredevops/` or `docs/pull_request_template.md`) when there is one, including its Infrastructure checklist (from the Infrastructure verdict) and its Documentation checklist (from the stale-spec check). When the tracker is GitHub the body closes every Ticket with `Closes #N`; otherwise it lists the Ticket paths and has no `Closes` lines.
+
+Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these. Besides the verdicts (`standards`, `spec`, `security`, `infrastructure`), `run.json` holds `commands` (the verify command) and `conventions` (the paths Preflight read).
 
 ## Setup
 
@@ -81,7 +90,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 | Route | Returns |
 |---|---|
-| `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. |
+| `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
 | `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
 

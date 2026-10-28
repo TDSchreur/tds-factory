@@ -27,7 +27,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 15. As a developer, I want columns for Define, Prepare, Build, Check, Finish and Done, so that I see where each Run is in the Flow.
 16. As a developer, I want a card to show its title, activity note and agent, so that I can recognize it and see who is working on it.
 17. As a developer, I want a card to show Ticket progress (e.g. 3/5), so that I know how far Build is.
-18. As a developer, I want Standards and Spec chips on Check cards showing pass or fail, so that I see the outcome of the review at a glance.
+18. As a developer, I want Standards, Spec, Security and Infrastructure chips on Check cards, Security and Infrastructure showing pass or fail (Infrastructure may show skipped), so that I see the outcome of the review at a glance.
 19. As a developer, I want the Check loop count shown (e.g. "loop 1/2"), so that I know when the cap is near.
 20. As a developer, I want Runs waiting on me to stand out on the board, so that I notice them at once.
 21. As a developer, I want the reason a Run is waiting on me shown on the card, so that I know what it needs.
@@ -49,7 +49,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 ## Implementation Decisions
 
 - **Run record writer: the `factory` Skill.** The Skill gains a rule to create the Run folder when the Factory starts and to update the Run record at every Stage transition and whenever it becomes blocked on or released from the human. The Skill owns the schema of the record, and it is documented in the Skill so every Agent target writes the same shape.
-- **Run record contents:** title; current Stage; status (`running`, `waiting`, `done`, `abandoned`); `waiting_on_human` flag with a short reason; activity note; Check loop count (cap 2); Standards and Spec verdicts from the latest review; Ticket progress (done and total); links to the Spec, the Tickets and the PR; the writing agent's name; created and updated timestamps.
+- **Run record contents:** title; current Stage; status (`running`, `waiting`, `done`, `abandoned`); `waiting_on_human` flag with a short reason; activity note; Check loop count (cap 2); Standards, Spec, Security and Infrastructure verdicts from the latest review; Ticket progress (done and total); links to the Spec, the Tickets and the PR; the writing agent's name; created and updated timestamps.
 - **Waiting on a human** is set at: Define questions and Spec sign-off, Check after the loop cap with problems still open, and Finish before pushing the PR.
 - **Stage summaries:** the Skill writes a short Markdown summary into the Run folder per Stage: define, build, one per Check pass, and finish. The Spec and Tickets are referenced by link only.
 - **Abandoned:** the Skill sets it when the user says to stop. A Run that dies silently is not detected by the Skill; the Dashboard shows it as stale from the update timestamp.
@@ -79,7 +79,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 - Rendering Markdown as formatted HTML.
 - Authentication, remote access, or serving anything beyond localhost.
 - Deleting or archiving Run folders.
-- Per-reviewer chips beyond Standards, Spec and Security.
+- Per-reviewer chips beyond Standards, Spec, Security and Infrastructure.
 
 ## Further Notes
 
