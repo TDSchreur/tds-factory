@@ -17,7 +17,7 @@ Every Run starts in a newly created Run worktree and branch based on the freshly
 
 ## Implementation Decisions
 
-- Determine the current default branch from origin itself on each start, fetch it, and use the fetched remote-tracking commit as the new branch base.
+- Determine the current default branch from origin itself on each start, fetch it, and use the commit fetched by that Run as the new branch base, even when fetches run concurrently.
 - Never adopt the caller's worktree or fall back to a local commit. Preserve safe cleanup of previously adopted worktrees.
 - Fail before creating a Run record or worktree if discovery or fetch fails.
 - Update the Factory instructions and user documentation to describe the new behavior.

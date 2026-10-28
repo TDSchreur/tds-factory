@@ -67,8 +67,12 @@ function startRun(projectDir, data) {
   const remoteHead = git('ls-remote', '--symref', 'origin', 'HEAD');
   const branch = remoteHead.status === 0 && remoteHead.stdout.match(/^ref: refs\/heads\/([^\s]+)\s+HEAD$/m)?.[1];
   if (!branch || git('check-ref-format', '--branch', branch).status !== 0) throw new Error(`cannot determine origin default branch: ${remoteHead.stderr.trim()}`);
-  const fetched = git('fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
+  const fetchRef = `refs/tds-factory/fetch/${randomUUID()}`;
+  const fetched = git('fetch', '--no-write-fetch-head', 'origin', `+refs/heads/${branch}:${fetchRef}`);
   if (fetched.status !== 0) throw new Error(`cannot fetch origin default branch: ${fetched.stderr.trim()}`);
+  const commit = git('rev-parse', '--verify', `${fetchRef}^{commit}`);
+  git('update-ref', '-d', fetchRef);
+  if (commit.status !== 0) throw new Error('cannot resolve fetched origin default branch');
   const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'run';
   const base = `${new Date().toISOString().slice(0, 10)}-${slug}`;
   const root = runRoot(projectDir, true);
@@ -85,7 +89,7 @@ function startRun(projectDir, data) {
   const now = new Date().toISOString();
   try {
     const worktree = path.join(worktrees, id);
-    const added = git('worktree', 'add', '-b', id, worktree, `refs/remotes/origin/${branch}`);
+    const added = git('worktree', 'add', '-b', id, worktree, commit.stdout.trim());
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree }));
   } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
