@@ -26,8 +26,11 @@ _Avoid_: Phase, step
 The checks before the first Stage: project setup and Conventions. Not a Stage.
 
 **Check axis**:
-One of the independent reviews in the Check Stage (Standards, Spec, Security, Infrastructure), each reporting its own verdict. Infrastructure may be skipped when no infrastructure file changed, and is the only one that blocks Finish.
+One of the independent reviews in the Check Stage (Standards, Spec, Security, Infrastructure), each reporting its own verdict. Infrastructure may be skipped when no infrastructure file changed.
 _Avoid_: Reviewer, Gate
+
+**Clean**:
+The state of a Check that ends with every Check axis `pass`, where only Infrastructure may be `skipped`. An axis with no verdict, or an infrastructure file that is not validated, is not clean. Only a clean Check continues to Finish without asking the user.
 
 **Verify command**:
 The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
