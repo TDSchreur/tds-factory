@@ -37,5 +37,13 @@ export function install({ agent, project, force }) {
       fs.writeFileSync(path.join(dest, MARKER), '');
       console.log(`installed ${name}/${skill} -> ${dest}`);
     }
+    // Marked folders that are no longer shipped are ours to remove; unmarked ones never are.
+    for (const e of fs.readdirSync(targetDir, { withFileTypes: true })) {
+      const stale = path.join(targetDir, e.name);
+      if (e.isDirectory() && !skills.includes(e.name) && fs.existsSync(path.join(stale, MARKER))) {
+        fs.rmSync(stale, { recursive: true, force: true });
+        console.log(`removed ${name}/${e.name}`);
+      }
+    }
   }
 }

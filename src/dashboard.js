@@ -95,6 +95,7 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
       if (path === '/') {
         return send(200, 'text/html', await readFile(PAGE, 'utf8').catch(() => FALLBACK_PAGE));
       }
+      if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir) }));
       if (path === '/api/runs') return send(200, 'application/json', JSON.stringify(await listRuns(runsDir)));
       if (path.startsWith('/files/')) {
         const body = await readRunFile(runsDir, path.slice('/files/'.length));

@@ -20,7 +20,7 @@
   body { margin: 0; font: 15px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--text); }
   header { display: flex; gap: 1rem; align-items: baseline; padding: .75rem 1rem; }
   h1 { font-size: 1.1rem; margin: 0; }
-  #status { color: var(--muted); font-size: .85rem; }
+  #project, #status { color: var(--muted); font-size: .85rem; }
   #status.error { color: var(--flag); }
   #board { display: grid; grid-template-columns: repeat(6, minmax(10rem, 1fr)); gap: .75rem; padding: 0 1rem 1rem; overflow-x: auto; }
   .column { background: var(--panel); border-radius: 8px; padding: .5rem; min-width: 0; }
@@ -57,6 +57,7 @@
 <body>
 <header>
   <h1>tds-factory dashboard</h1>
+  <span id="project"></span>
   <span id="status" role="status" aria-live="polite">Loading...</span>
   <button id="older" type="button" hidden></button>
 </header>
@@ -267,6 +268,11 @@
         statusEl.textContent = 'Cannot reach the server (' + err.message + '); showing last data. Retrying...';
       });
   }
+
+  fetch('/api/info', { cache: 'no-store' })
+    .then(function (res) { return res.json(); })
+    .then(function (info) { document.getElementById('project').textContent = str(info.project); })
+    .catch(function () {});
 
   render([]);
   poll();

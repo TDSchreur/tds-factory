@@ -36,10 +36,12 @@ flowchart LR
 | Define | `grill-with-docs`, `to-spec`, `to-tickets` | A Spec in `docs/specs/` and a GitHub Issue per Ticket |
 | Prepare | `ponytail` | Build writes the minimum code that works |
 | Build | `implement-spec`, `tdd` | Every Ticket done, test-first |
-| Check | `code-review`, `security-review` | A Standards, a Spec and a Security verdict |
+| Check | `code-review`, `security-scan` | A Standards, a Spec and a Security verdict |
 | Finish | `pr` | A prepared pull request |
 
 Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
+
+Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and its body closes every Ticket with `Closes #N`.
 
 Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these.
 
@@ -69,7 +71,7 @@ Run the tests with `npm test`. They use `node:test`.
 | codex | `.agents/skills` | `~/.agents/skills` |
 | copilot | `.github/skills` | `~/.copilot/skills` |
 
-After you change a skill in `skills/`, run `install` again so the installed copy matches.
+After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
 
 ## Dashboard
 
