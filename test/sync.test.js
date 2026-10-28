@@ -99,3 +99,10 @@ test('sync refuses a symlink inside a shipped skill, naming the skill and the li
   assert.throws(() => quietSync({ root, skillsDir }), /alpha.*link\.md|link\.md.*alpha/);
   assert.ok(!existsSync(join(skillsDir, 'alpha')));
 });
+
+test('sync rewrites only the literal old name, so a regex character in it is not a wildcard', () => {
+  const dot = { 'SKILL.md': '---\nname: a.b\n---\nRun /a.b, not /axb.\n' };
+  const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/a.b', as: 'renamed' }], { 'a.b': dot });
+  quietSync({ root, skillsDir });
+  assert.match(readFileSync(join(skillsDir, 'renamed', 'SKILL.md'), 'utf8'), /Run \/renamed, not \/axb\./);
+});

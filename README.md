@@ -55,6 +55,8 @@ node bin/tds-factory.js install    # install skills/ into ~/.claude/skills and ~
 node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on http://127.0.0.1:4317
 ```
 
+`sync` refuses a manifest entry whose shipped name is not lowercase letters, digits and hyphens, whose source or destination leaves the repository or `skills/`, or whose skill folder contains a symlink. It validates every entry before it writes any.
+
 Run the tests with `npm test`. They use `node:test`.
 
 ### Install options

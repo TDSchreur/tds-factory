@@ -9,6 +9,18 @@ function invokedByFactory(skillsDir) {
   return new Set([...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]));
 }
 
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// One Markdown file of a shipped skill: set the name and rewrite `/from` mentions when renamed,
+// and drop the model-invocation flag when the factory has to call the skill.
+function rewrite(text, { skillFile, from, to, unflag }) {
+  if (from !== to) {
+    if (skillFile) text = text.replace(/^name:.*$/m, () => `name: ${to}`);
+    text = text.replaceAll(new RegExp(`/${escapeRegExp(from)}(?![\\w-])`, 'g'), () => `/${to}`);
+  }
+  return unflag ? text.replace(/^disable-model-invocation:.*\n/m, '') : text;
+}
+
 const leaves = (base, target) => path.relative(base, target).startsWith('..') || path.isAbsolute(path.relative(base, target));
 
 // Copies the skills listed in the manifest from the vendor submodules into skills/.
@@ -41,16 +53,10 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
   for (const { rel, name, src, dest } of plan) {
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
-    const upstream = path.basename(rel);
     for (const f of fs.readdirSync(dest, { recursive: true }).filter((f) => f.endsWith('.md'))) {
       const file = path.join(dest, f);
-      let text = fs.readFileSync(file, 'utf8');
-      if (name !== upstream) {
-        if (f === 'SKILL.md') text = text.replace(/^name:.*$/m, () => `name: ${name}`);
-        text = text.replaceAll(new RegExp(`/${upstream}(?![\\w-])`, 'g'), `/${name}`);
-      }
-      if (f === 'SKILL.md' && invoked.has(name)) text = text.replace(/^disable-model-invocation:.*\n/m, '');
-      fs.writeFileSync(file, text);
+      const skillFile = f === 'SKILL.md';
+      fs.writeFileSync(file, rewrite(fs.readFileSync(file, 'utf8'), { skillFile, from: path.basename(rel), to: name, unflag: skillFile && invoked.has(name) }));
     }
     fs.writeFileSync(path.join(dest, MARKER), `${rel}\n`);
     console.log(`synced ${name}`);
