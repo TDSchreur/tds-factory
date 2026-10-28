@@ -26,11 +26,12 @@ test('the dark parts of the logo change colour with the theme', async (t) => {
   } finally { await page.close(); }
 });
 
-test('on a phone the logo fits without widening the page', async (t) => {
+test('on a phone the logo and tagline sit inside the viewport and the page does not scroll sideways', async (t) => {
   const page = await openPage(t, { runs: [run()] }, { width: 375 });
   if (!page) return;
   try {
     assert.ok((await page.execute(logoBox))[1] > 0);
+    assert.equal(await page.execute("return document.querySelector('header .tagline').getBoundingClientRect().right <= document.documentElement.clientWidth"), true);
     assert.equal(await page.execute("return document.documentElement.scrollWidth <= document.documentElement.clientWidth"), true);
   } finally { await page.close(); }
 });

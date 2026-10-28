@@ -14,7 +14,7 @@ The top bar shows the logo as an SVG in place of the "tds-factory" heading text.
 2. As a developer using the dark theme, I want the dark parts of the logo to turn light, so that the logo stays readable
 3. As a developer using the light theme, I want the logo in its original colours, so that it matches the brand
 4. As a developer using a screen reader, I want the heading to still read "tds-factory", so that the page keeps its title
-5. As a developer on a phone, I want the logo to fit the top bar without wrapping the header, so that the bar stays compact
+5. As a developer on a phone, I want the logo and the "dashboard" tagline to fit inside the top bar, so that nothing is cut off. The top bar already wraps its items onto more rows on a phone, and that stays as it is
 6. As a developer, I want the logo to scale without blur on any screen, so that it looks sharp on high-density displays
 7. As a developer on a machine without internet, I want the logo to load, so that the Dashboard needs no external resource
 
@@ -31,7 +31,7 @@ The top bar shows the logo as an SVG in place of the "tds-factory" heading text.
 
 - A good test opens the real Dashboard page in headless Chromium and checks what a user sees.
 - One seam: the browser test helper that opens the Dashboard against a stub server.
-- Cases: the top bar contains a visible logo SVG of a sensible size; the heading text is still "tds-factory"; the dark parts of the logo have a different colour in the dark theme than in the light theme; the logo does not make the header overflow at phone width.
+- Cases: the top bar contains a visible logo SVG of a sensible size; the heading text is still "tds-factory"; the dark parts of the logo have a different colour in the dark theme than in the light theme; at phone width the logo and tagline sit inside the viewport and the page does not scroll sideways.
 - Prior art: `test/dashboard-header-browser.test.js` and `test/dashboard-theme.test.js`.
 - Run `npm test`.
 
