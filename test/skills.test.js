@@ -56,6 +56,16 @@ test('Check feeds project rules to Standards and Security', () => {
   assert.match(check, /no guides or safeguards/i);
 });
 
+test('Check runs an Infrastructure axis without a new Skill', () => {
+  const check = section('Check');
+  assert.match(check, /Infrastructure/);
+  assert.match(check, /bicep lint/);
+  assert.match(check, /not validated/i);
+  assert.match(check, /never deploy/i);
+  assert.match(check, /`skipped`/);
+  assert.match(readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8'), /^\| `infrastructure` \|/m);
+});
+
 test('every skill the factory invokes can be called by the model', () => {
   for (const name of invoked) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
