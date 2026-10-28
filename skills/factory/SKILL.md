@@ -14,7 +14,7 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 
 **Start.** Before the first Stage, create the Run folder `.factory/runs/YYYY-MM-DD-<slug-of-title>/` in the project being built, using today's date and a lowercase, hyphenated slug of the work title. If that folder already exists, append `-2`, `-3`, and so on until the name is free. Never reuse or overwrite another Run's folder. Write `run.json` in it.
 
-**Update.** Rewrite `run.json` whenever a Stage starts (including when Check sends you back to Build), when the work becomes `waiting` on the user or is released again, and when the Run ends. Always refresh `activity` and `updated`. Keep the `created` value and any fields you do not change.
+**Update.** Rewrite `run.json` whenever a Stage starts (including when Check sends you back to Build), when the work becomes `waiting` on the user or is released again, and when the Run ends. Also rewrite it each time a Ticket is completed (`tickets_done`) and after each review (`standards`, `spec`, `check_loops`). Always refresh `activity` and `updated`. Keep the `created` value and any fields you do not change.
 
 **Gitignore.** If `.factory/` is not covered by the project's `.gitignore`, tell the user to add it. Do not edit `.gitignore` yourself.
 
@@ -31,6 +31,11 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 | `status` | `running`, `waiting` (blocked on the user), `done` or `abandoned` |
 | `activity` | One short line on what is happening now, e.g. `implementing ticket #12` |
 | `agent` | Name of the writing agent: `claude`, `codex` or `copilot` |
+| `tickets_total` | Number of Tickets cut from the Spec. Set once the Tickets exist |
+| `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build |
+| `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set after each review, replacing the old value |
+| `spec` | `pass` or `fail`: the Spec verdict of the latest `code-review`. Set after each review, replacing the old value |
+| `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Raise it by 1 on each return to Build |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
 

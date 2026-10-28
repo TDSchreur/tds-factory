@@ -8,12 +8,12 @@
 <style>
   :root {
     --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
-    --border: #cdd3da; --flag: #b42318; --flag-bg: #fdecea;
+    --border: #cdd3da; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
-      --border: #3a4148; --flag: #ff8a80; --flag-bg: #3b1f1d;
+      --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d;
     }
   }
   * { box-sizing: border-box; }
@@ -32,6 +32,10 @@
   .card .agent { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
   .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
   .card.unreadable .title { color: var(--flag); }
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; font-size: .8rem; }
+  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .5rem; color: var(--muted); }
+  .chip.pass { color: var(--ok); border-color: var(--ok); }
+  .chip.fail { color: var(--flag); border-color: var(--flag); }
   .empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
 </style>
 </head>
@@ -71,8 +75,12 @@
     var column = 'define';
     if (status === 'done' || status === 'abandoned') column = 'done';
     else if (COLUMNS.some(function (c) { return c.key === stage && c.key !== 'done'; })) column = stage;
+    function num(v) { return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : null; }
+    function verdict(v) { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' ? v : ''; }
     return {
       id: id, unreadable: false, column: column,
+      ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total),
+      standards: verdict(r.standards), spec: verdict(r.spec), loops: num(r.check_loops),
       title: str(r.title) || id || 'Untitled run',
       activity: str(r.activity), agent: str(r.agent), updated: str(r.updated)
     };
@@ -91,6 +99,14 @@
     li.dataset.id = run.id;
     li.appendChild(el('div', 'title', (run.unreadable ? 'Unreadable record: ' : '') + run.title));
     if (run.activity) li.appendChild(el('div', 'activity', run.activity));
+    var chips = el('div', 'chips');
+    if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets'));
+    if (run.column === 'check') {
+      if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
+      if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
+    }
+    if (run.loops !== null) chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
+    if (chips.childNodes.length) li.appendChild(chips);
     if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
     return li;
   }
