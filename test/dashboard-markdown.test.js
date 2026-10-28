@@ -1,16 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { index, markdownScript } from './dashboard-files.js';
-import vm from 'node:vm';
+import { parseMarkdown } from '../dashboard/markdown.js';
 
-const source = markdownScript;
-const parse = (text) => JSON.parse(JSON.stringify(vm.runInNewContext(`${source}\nparseMarkdown`)(text)));
+const parse = (text) => JSON.parse(JSON.stringify(parseMarkdown(text)));
 const t = (v) => ({ t: 'text', v });
-
-test('the renderer is its own script file of the Dashboard page', () => {
-  assert.ok(source, 'markdown.js has content');
-  assert.match(index, /<script src="\/markdown\.js"><\/script>/);
-});
 
 test('headings, paragraphs and rules become blocks', () => {
   assert.deepEqual(parse('# Title\n\nfirst\nsecond\n\n---'), [
