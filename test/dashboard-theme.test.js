@@ -38,3 +38,38 @@ test('invalid or blocked browser storage falls back to system and remains usable
   blocked.select.value = 'dark'; blocked.select.handlers.change();
   assert.equal(blocked.root.dataset.theme, 'dark');
 });
+
+test('rendered theme follows system preference and manual overrides', async (t) => {
+  const { spawnSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const browser = spawnSync('sh', ['-c', 'command -v chromium || command -v chromium-browser || command -v google-chrome'], { encoding: 'utf8' }).stdout.trim();
+  if (!browser) { t.skip('Chromium is unavailable'); return; }
+  const dir = mkdtempSync(join(tmpdir(), 'dashboard-theme-'));
+  const probe = `<script>window.addEventListener('load', function () {
+    var result = { systemDark: matchMedia('(prefers-color-scheme: dark)').matches };
+    ['system', 'light', 'dark'].forEach(function (theme) {
+      document.documentElement.dataset.theme = theme;
+      result[theme] = getComputedStyle(document.body).backgroundColor;
+    });
+    var out = document.createElement('pre'); out.id = 'theme-result'; out.textContent = JSON.stringify(result); document.body.appendChild(out);
+  });</script>`;
+  const file = join(dir, 'page.html');
+  writeFileSync(file, html.replace('</body>', probe + '</body>'));
+  try {
+    for (const dark of [false, true]) {
+      const args = ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', `--user-data-dir=${join(dir, dark ? 'dark' : 'light')}`];
+      if (dark) args.push('--force-dark-mode');
+      const result = spawnSync(browser, [...args, '--dump-dom', `file://${file}`], { encoding: 'utf8', timeout: 15000 });
+      assert.equal(result.status, 0, result.stderr);
+      const output = result.stdout.match(/<pre id="theme-result">([^<]+)<\/pre>/);
+      assert.ok(output, 'browser reported computed colors');
+      const colors = JSON.parse(output[1]);
+      assert.equal(colors.systemDark, dark);
+      assert.equal(colors.light, 'rgb(246, 247, 249)');
+      assert.equal(colors.dark, 'rgb(20, 23, 26)');
+      assert.equal(colors.system, dark ? colors.dark : colors.light);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
