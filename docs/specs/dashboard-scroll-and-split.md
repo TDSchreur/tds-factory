@@ -35,7 +35,7 @@ The Dashboard moves into a `dashboard/` folder of four files: `index.html` for t
 - The server serves `/` from `index.html`, as it does for the page today. It serves `/style.css`, `/markdown.js` and `/app.js` from an exact allow-list of names, never from a path taken from the request, with the right content types. Every other path keeps its current meaning. The existing fallback page for a missing install stays.
 - The package lists the `dashboard` folder instead of `dashboard.html` among its published files.
 - The detail panel remembers which Run it is showing. When the Run to render is the one already shown, it builds the new content off screen, waits for every file to load or fail, and swaps it in once. A newer refresh that arrives meanwhile wins. A different Run, or the first open, swaps immediately and shows the placeholders as before.
-- The behavior is documented in the README and the earlier Dashboard Specs only where they name `dashboard.html`; those mentions are updated to the new folder.
+- The README route table lists the three new file routes. Earlier Specs that name `dashboard.html` are history and stay as written.
 
 ## Testing Decisions
 

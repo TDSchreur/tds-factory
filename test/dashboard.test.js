@@ -280,7 +280,7 @@ test('the style, parser and application files are served at fixed names', async 
 test('only the allow-listed Dashboard files are served', async () => {
   for (const path of ['/index.html', '/dashboard/app.js', '/package.json', '/src/dashboard.js', '/..%2fpackage.json', '/%2e%2e/package.json', '/style.css/..']) {
     const res = await get(dash, path);
-    assert.notEqual(res.status, 200, path);
+    assert.equal(res.status, 404, path);
   }
 });
 

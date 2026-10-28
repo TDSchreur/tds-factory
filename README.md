@@ -93,6 +93,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 | Route | Returns |
 |---|---|
 | `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
+| `/style.css`, `/markdown.js`, `/app.js` | The Dashboard's stylesheet and scripts, from the `dashboard/` folder. Only these three names are served. |
 | `/api/views` | Run records interpreted for the Dashboard. |
 | `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
