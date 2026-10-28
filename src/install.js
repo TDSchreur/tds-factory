@@ -26,7 +26,9 @@ export function install({ agent, project, force }) {
     fs.mkdirSync(targetDir, { recursive: true });
     for (const skill of skills) {
       const dest = path.join(targetDir, skill);
-      if (fs.existsSync(dest) && !force && !fs.existsSync(path.join(dest, MARKER))) {
+      // A symlink is another installer's link to the same skill; replace it, not its target.
+      const replaceable = force || fs.lstatSync(dest, { throwIfNoEntry: false })?.isSymbolicLink();
+      if (fs.existsSync(dest) && !replaceable && !fs.existsSync(path.join(dest, MARKER))) {
         console.warn(`skip ${name}/${skill}: exists and was not installed by tds-factory (use --force)`);
         continue;
       }
