@@ -88,6 +88,13 @@ test('file route returns a Markdown file of a Run', async () => {
   assert.equal(res.body, '# Define summary\n');
 });
 
+test('list names the Markdown files of each Run, sorted, without run.json', async () => {
+  const runs = await list();
+  assert.deepEqual(runs.find((r) => r.id === '2026-01-01-good').files, ['define.md']);
+  assert.deepEqual(runs.find((r) => r.id === '2026-01-03-sparse').files, []);
+  assert.deepEqual(runs.find((r) => r.id === '2026-01-02-broken').files, []);
+});
+
 test('file route rejects traversal and anything outside a Run', async () => {
   const bad = [
     '/files/2026-01-01-good/../../../secret.md',
