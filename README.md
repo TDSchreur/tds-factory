@@ -62,11 +62,11 @@ Edit the agent files to change a model. Install keeps files that already exist; 
 You need Node 20 or newer. Install the latest Release with one command, the same on macOS, Linux and Windows:
 
 ```sh
-npm install -g https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
+npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 tds-factory install
 ```
 
-Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself. Every change merged to `master` publishes a new Release (see `docs/adr/0005-release-per-merge-from-latest-url.md`).
+The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself. Every change merged to `master` publishes a new Release (see `docs/adr/0005-release-per-merge-from-latest-url.md`).
 
 ### Working from a checkout
 
