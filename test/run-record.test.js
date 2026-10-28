@@ -57,3 +57,40 @@ test('updates preserve unknown fields on an older record and clear waiting on re
   assert.equal(record.waiting_on_human, false);
   assert.equal(record.waiting_reason, '');
 });
+
+test('incomplete waiting records allow unrelated updates', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const cwd = mkdtempSync(join(tmpdir(), 'factory-incomplete-'));
+  const dir = join(cwd, '.factory', 'runs', 'old'); mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'run.json'), '{"status":"waiting"}');
+  const result = run(cwd, 'update', '--id', 'old', '--data', '{"activity":"continuing"}');
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('new Runs always start with zero Check loops', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'factory-initial-'));
+  const result = run(cwd, 'start', '--data', JSON.stringify({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: [], check_loops: 2 }));
+  assert.notEqual(result.status, 0);
+});
+
+test('Run commands reject linked storage outside the project', async () => {
+  const { mkdirSync, symlinkSync, writeFileSync } = await import('node:fs');
+  const cwd = mkdtempSync(join(tmpdir(), 'factory-link-'));
+  const outside = mkdtempSync(join(tmpdir(), 'factory-outside-'));
+  mkdirSync(join(cwd, '.factory')); symlinkSync(outside, join(cwd, '.factory', 'runs'));
+  mkdirSync(join(outside, 'old')); const file = join(outside, 'old', 'run.json'); writeFileSync(file, '{"status":"running"}');
+  assert.notEqual(run(cwd, 'update', '--id', 'old', '--data', '{"activity":"changed"}').status, 0);
+  assert.notEqual(run(cwd, 'start', '--data', '{"title":"Test","agent":"codex","commands":"test","conventions":[]}').status, 0);
+  assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
+});
+
+test('a failed replacement leaves the existing Run record intact', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const cwd = mkdtempSync(join(tmpdir(), 'factory-failed-'));
+  const dir = join(cwd, '.factory', 'runs', 'old'); mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'run.json'); writeFileSync(file, '{"status":"running"}');
+  const preload = join(cwd, 'fail.cjs'); writeFileSync(preload, "require('node:fs').renameSync = () => { throw new Error('replacement failed'); };\n");
+  const result = spawnSync(process.execPath, ['--require', preload, cli, 'run', 'update', '--id', 'old', '--data', '{"activity":"changed"}'], { cwd, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
+});

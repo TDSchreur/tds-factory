@@ -32,7 +32,7 @@ function write(dir, record) {
 function apply(old, data) {
   validate(data);
   const result = { ...old, ...data };
-  if (result.status === 'waiting') {
+  if (result.status === 'waiting' && ('status' in data || 'waiting_on_human' in data || 'waiting_reason' in data)) {
     if (data.waiting_on_human === false || !result.waiting_reason) throw new Error('waiting requires a reason');
     result.waiting_on_human = true;
   } else if (data.status !== undefined) {
@@ -44,12 +44,25 @@ function apply(old, data) {
   result.updated = new Date().toISOString();
   return result;
 }
+function runRoot(projectDir, create) {
+  const project = fs.realpathSync(projectDir);
+  const factory = path.join(project, '.factory');
+  const root = path.join(factory, 'runs');
+  if (create) {
+    if (!fs.existsSync(factory)) fs.mkdirSync(factory);
+    if (fs.realpathSync(factory) !== factory) throw new Error('Run storage must not be symlinked');
+    if (!fs.existsSync(root)) fs.mkdirSync(root);
+  }
+  if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
+  return root;
+}
 export function startRun(projectDir, data) {
   validate(data);
+  if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
   const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'run';
   const base = `${new Date().toISOString().slice(0, 10)}-${slug}`;
-  const root = path.join(projectDir, '.factory', 'runs'); fs.mkdirSync(root, { recursive: true });
+  const root = runRoot(projectDir, true);
   let id = base, n = 2;
   while (true) { try { fs.mkdirSync(path.join(root, id)); break; } catch (err) { if (err.code !== 'EEXIST') throw err; id = `${base}-${n++}`; } }
   const now = new Date().toISOString();
@@ -59,7 +72,7 @@ export function startRun(projectDir, data) {
 }
 export function updateRun(projectDir, id, data) {
   if (!validId(id)) throw new Error('invalid Run id');
-  const root = fs.realpathSync(path.join(projectDir, '.factory', 'runs'));
+  const root = runRoot(projectDir, false);
   const dir = path.join(root, id);
   if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
   const file = path.join(dir, 'run.json');
