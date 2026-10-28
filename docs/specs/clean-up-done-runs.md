@@ -31,3 +31,7 @@ Test deletion through the existing HTTP server seam with temporary project direc
 ## Out of Scope
 
 Deleting linked issues, Specs or PRs; deleting active or unreadable Runs; restoring deleted Runs; remote Dashboard access.
+
+## Further Notes
+
+The Run update lock is honored by the updated CLI. Older installed CLI versions do not participate; update them before using deletion concurrently with Run updates. An interrupted process can leave a lock file that must be removed manually after confirming no update is running.
