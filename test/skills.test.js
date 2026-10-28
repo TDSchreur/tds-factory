@@ -76,7 +76,7 @@ test('Finish is blocked by an Infrastructure fail or unvalidated file until the 
   assert.match(finish, /`finish\.md`/);
   assert.match(finish, /Infrastructure checklist/);
   assert.match(finish, /other axes/i);
-  assert.match(section('Waiting on the user'), /Infrastructure/);
+  assert.match(section('Waiting on the user'), /infrastructure/);
 });
 
 test('every skill the factory invokes can be called by the model', () => {
