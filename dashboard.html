@@ -98,6 +98,14 @@
   #detail h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; margin: 1rem 0 0; color: var(--muted); }
   #detail pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; margin: .4rem 0 .75rem; font-size: .875rem; }
 
+  dialog { width: min(28rem, calc(100% - 2rem)); padding: 0; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+  dialog::backdrop { background: rgba(10, 15, 25, .6); }
+  .dialog-content { padding: 1.5rem; }
+  .dialog-content h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
+  .dialog-content p { margin: 0; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.5rem; }
+  .dialog-actions .primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 600; }
+  .dialog-actions .danger { background: var(--flag); border-color: var(--flag); color: var(--card); }
   @media (max-width: 48rem) {
     header { padding: .6rem 1rem; }
     header label { margin-left: 0; }
@@ -117,6 +125,16 @@
 </header>
 <main id="board" aria-label="Runs by Stage"></main>
 <section id="detail" aria-label="Run detail" hidden></section>
+<dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-message">
+  <div class="dialog-content">
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-message"></p>
+    <div class="dialog-actions">
+      <button id="dialog-cancel" type="button" autofocus>Cancel</button>
+      <button id="dialog-confirm" type="button" class="primary"></button>
+    </div>
+  </div>
+</dialog>
 <script>
 (function () {
   'use strict';
@@ -282,8 +300,27 @@
     detailEl.replaceChildren.apply(detailEl, kids);
   }
 
+  var dialog = document.getElementById('dialog');
+  var dialogCancel = document.getElementById('dialog-cancel');
+  var dialogConfirm = document.getElementById('dialog-confirm');
+  dialogCancel.addEventListener('click', function () { dialog.close('cancel'); });
+  dialogConfirm.addEventListener('click', function () { dialog.close('confirm'); });
+  function ask(title, message, action, danger, notice) {
+    document.getElementById('dialog-title').textContent = title;
+    document.getElementById('dialog-message').textContent = message;
+    dialogCancel.hidden = !!notice;
+    dialogConfirm.textContent = action;
+    dialogConfirm.className = danger ? 'primary danger' : 'primary';
+    return new Promise(function (resolve) {
+      dialog.addEventListener('close', function () { resolve(dialog.returnValue === 'confirm'); }, { once: true });
+      dialog.returnValue = '';
+      dialog.showModal();
+      if (notice) dialogConfirm.focus(); else dialogCancel.focus();
+    });
+  }
+
   async function removeRuns(runs, message) {
-    if (!window.confirm(message)) return;
+    if (!await ask(runs.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true)) return;
     var failed = [];
     for (var i = 0; i < runs.length; i++) {
       try {
@@ -291,16 +328,16 @@
         if (!response.ok) failed.push(runs[i].title + ' (' + (await response.text()) + ')');
       } catch (err) { failed.push(runs[i].title); }
     }
-    if (failed.length) window.alert('Could not delete: ' + failed.join(', '));
+    if (failed.length) await ask('Could not delete', failed.join(', '), 'Close', false, true);
     poll();
   }
 
   async function mergeRun(run) {
-    if (!window.confirm('Squash and merge the pull request of "' + run.title + '"?\n' + run.pr)) return;
+    if (!await ask('Squash and merge?', 'Merge the pull request for "' + run.title + '"?\n' + run.pr, 'Squash and merge', false)) return;
     try {
       var response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge', { method: 'POST' });
-      if (!response.ok) window.alert('Could not merge: ' + (await response.text()));
-    } catch (err) { window.alert('Could not merge: ' + run.title); }
+      if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
+    } catch (err) { await ask('Could not merge', run.title, 'Close', false, true); }
     poll();
   }
 
@@ -349,7 +386,7 @@
     fetch('/api/views', { cache: 'no-store' })
       .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then(function (data) {
-        render(data);
+        if (!dialog.open) render(data);
         statusEl.className = '';
         statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
       })
