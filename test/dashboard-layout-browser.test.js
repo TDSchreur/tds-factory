@@ -29,3 +29,13 @@ test('on a desktop the ticket links and Show details keep their compact size', a
     }
   } finally { await page.close(); }
 });
+
+test('every Chip stays on one line, even in a narrow column', async (t) => {
+  const page = await openPage(t, { runs: [checking] });
+  if (!page) return;
+  try {
+    const sizes = await page.execute(heights('.chip'));
+    assert.equal(sizes.length, 6);
+    assert.ok(sizes.every((h) => h < 24), `chip heights: ${sizes}`);
+  } finally { await page.close(); }
+});

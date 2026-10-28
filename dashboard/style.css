@@ -48,6 +48,7 @@
   .column h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: .1rem .25rem .75rem; color: var(--muted); }
   .column > button { margin: 0 0 .75rem; }
   .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .625rem; }
+  .column[data-stage="done"] .cards { max-height: calc(100vh - 10rem); overflow-y: auto; overscroll-behavior: contain; padding: 4px; margin: -4px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; overflow-wrap: anywhere; box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
   .card:hover { border-color: var(--primary); }
   .card .title { font-weight: 600; line-height: 1.3; }
@@ -78,7 +79,7 @@
   .ticket.todo { color: var(--muted); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; font-size: .75rem; }
-  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .55rem; color: var(--muted); line-height: 1.5; }
+  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .55rem; color: var(--muted); line-height: 1.5; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip.pass { color: var(--ok); border-color: var(--ok); }
   .chip.fail { color: var(--flag); border-color: var(--flag); }
   .chip.skipped { color: var(--muted); }
@@ -130,6 +131,7 @@
     #project { order: 2; }
     #theme, #older { order: 3; }
     .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; min-height: 44px; }
+    .column[data-stage="done"] .cards { max-height: none; overflow-y: visible; }
     #board { grid-template-columns: 1fr; padding: 1rem; }
     #layout.open { grid-template-columns: minmax(0, 1fr); }
     #detail { position: fixed; inset: 0; z-index: 20; max-height: none; margin: 0; padding: 0 1rem 1rem; border: 0; border-radius: 0; }
