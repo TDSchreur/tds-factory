@@ -10,6 +10,7 @@ export function repo() {
   const main = realpathSync(mkdtempSync(join(tmpdir(), 'git-repo-')));
   git(main, 'init', '-q', '-b', 'main');
   git(main, 'commit', '-q', '--allow-empty', '-m', 'init');
+  git(main, 'remote', 'add', 'origin', main);
   return main;
 }
 

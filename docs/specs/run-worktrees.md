@@ -14,7 +14,7 @@ Every Run gets its own Run worktree: a git worktree on a branch named after the 
 2. As a developer, I want `run start` to create the worktree and branch and print where they are, so that I don't set them up by hand.
 3. As a developer, I want the branch named after the Run id and cut from the default branch, so that I can tell which branch belongs to which Run.
 4. As a developer, I want worktrees under `.factory/worktrees/<run id>`, so that they are already gitignored and sit next to the Run folder.
-5. As a developer, I want `run start` from inside a linked worktree to adopt that worktree, so that I can open my agent in a worktree I made myself.
+5. As a developer, I want `run start` from inside a linked worktree to create a separate Run worktree, so that Runs stay isolated.
 6. As a developer, I want `run update` to work from inside a worktree and write to the same Run store, so that the agent doesn't need to know where the main checkout is.
 7. As a developer, I want one Dashboard in the main checkout to show Runs from every worktree, so that I see all agents at once.
 8. As a developer, I want the Run record to hold the worktree path, so that I can find where a Run works.
@@ -32,7 +32,7 @@ Every Run gets its own Run worktree: a git worktree on a branch named after the 
 
 - The Run store locates the main checkout through git's common directory and keeps `.factory/runs` there, whether it is called from the main checkout or from a linked worktree. The existing symlink and lock protections apply to that location.
 - `start` creates the worktree and a branch named after the Run id, off the default branch, under the main checkout's `.factory/worktrees/<run id>`, and records its path in a new `worktree` field on the Run record. Run ids are unique among Run folders, and a free id is also skipped when a branch of that name exists, since branches outlive Run history. The CLI prints the Run id as today, so the path is read from the record or reported next to it.
-- When `start` runs inside a linked worktree, it adopts that worktree: it creates no new worktree or branch and records the current one.
+- When `start` runs inside a linked worktree, it creates a separate Run worktree based on the freshly fetched current default branch of origin. It fails if origin cannot be fetched or its default branch cannot be determined.
 - `start` fails with a clear error, creating no Run folder, when the project is not a git repository or has no commits. There is no fallback to working in place.
 - `remove` also removes the Run's worktree with a plain `git worktree remove` (never forced). If git refuses (uncommitted changes), `remove` keeps the Run history and returns a distinct result the Dashboard shows as an error. A Run with no recorded worktree (older records) is removed as before. Branches are never deleted.
 - Existing `remove` eligibility rules (terminal status, readable record, no symlinks, no held lock) are unchanged.
@@ -46,7 +46,7 @@ Every Run gets its own Run worktree: a git worktree on a branch named after the 
 
 Good tests check external behaviour only: what the store, CLI and Dashboard do to disk and git, not how they do it.
 
-- **Run store** (existing seam, used with real temporary git repositories with one commit): `start` creates the worktree, branch and `worktree` field and leaves the main checkout's branch untouched; two starts in one repo do not collide; `start` from inside a linked worktree adopts it and writes to the main checkout's store; `update` from inside a worktree updates the shared record; `start` in a non-git directory and in a repo with no commits fails and leaves no Run folder; `remove` deletes a clean worktree but keeps the branch; `remove` refuses a worktree with uncommitted changes and keeps the history; `remove` of an older record with no `worktree` still works.
+- **Run store** (existing seam, used with real temporary git repositories with one commit): `start` creates the worktree, branch and `worktree` field and leaves the main checkout's branch untouched; two starts in one repo do not collide; `start` from inside a linked worktree creates a separate worktree and writes to the main checkout's store; `update` from inside a worktree updates the shared record; `start` in a non-git directory and in a repo with no commits fails and leaves no Run folder; `remove` deletes a clean worktree but keeps the branch; `remove` refuses a worktree with uncommitted changes and keeps the history; `remove` of an older record with no `worktree` still works.
 - **CLI** (existing spawn-based seam): `run start` and `run update` behave the same from the main checkout and from a worktree, and a start failure exits non-zero with the message.
 - **Dashboard HTTP** (existing seam): started from the main checkout it lists Runs created from a worktree, and a refused delete shows an error and keeps the Run.
 - **Skills test** (existing): the committed `factory` skill no longer tells the agent to start a branch at Build and mentions the Run worktree.

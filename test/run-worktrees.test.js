@@ -78,13 +78,41 @@ test('start cuts the branch from the default branch, not the checked-out one', (
   assert.equal(git(clone, 'rev-parse', id), git(origin, 'rev-parse', 'main'));
 });
 
-test('start from a linked worktree adopts it and creates no worktree or branch', () => {
-  const main = repo();
-  const wt = linked(main);
+test('start from a linked worktree creates a separate worktree from the latest origin default branch', () => {
+  const origin = repo();
+  const clone = join(mkdtempSync(join(tmpdir(), 'run-worktrees-clone-')), 'c');
+  git(origin, 'clone', '-q', origin, clone);
+  const wt = linked(clone);
+  git(origin, 'commit', '-q', '--allow-empty', '-m', 'new origin commit');
   const id = openRunStore(wt).start(start);
-  assert.equal(record(main, id).worktree, wt);
-  assert.ok(!existsSync(join(main, '.factory', 'worktrees')));
-  assert.deepEqual(branches(main).sort(), ['main', 'side']);
+  assert.notEqual(record(clone, id).worktree, wt);
+  assert.equal(git(record(clone, id).worktree, 'rev-parse', 'HEAD'), git(origin, 'rev-parse', 'HEAD'));
+});
+
+test('start uses the current origin default branch when it changed after cloning', () => {
+  const origin = repo();
+  const clone = join(mkdtempSync(join(tmpdir(), 'run-worktrees-clone-')), 'c');
+  git(origin, 'clone', '-q', origin, clone);
+  git(origin, 'switch', '-q', '-c', 'new-default');
+  git(origin, 'commit', '-q', '--allow-empty', '-m', 'new default');
+  const id = openRunStore(clone).start(start);
+  assert.equal(git(record(clone, id).worktree, 'rev-parse', 'HEAD'), git(origin, 'rev-parse', 'HEAD'));
+});
+
+test('start fails when origin has no discoverable default branch', () => {
+  const origin = repo();
+  const clone = join(mkdtempSync(join(tmpdir(), 'run-worktrees-clone-')), 'c');
+  git(origin, 'clone', '-q', origin, clone);
+  git(origin, 'symbolic-ref', 'HEAD', 'refs/heads/missing');
+  assert.throws(() => openRunStore(clone).start(start), /origin default branch/);
+  assert.ok(!existsSync(join(clone, '.factory', 'runs')) || readdirSync(join(clone, '.factory', 'runs')).length === 0);
+});
+
+test('start fails without an accessible origin and leaves no Run', () => {
+  const main = repo();
+  git(main, 'remote', 'remove', 'origin');
+  assert.throws(() => openRunStore(main).start(start), /origin/);
+  assert.ok(!existsSync(join(main, '.factory', 'runs')) || readdirSync(join(main, '.factory', 'runs')).length === 0);
 });
 
 test('start fails clearly outside a git repository and in a repository with no commits', () => {
@@ -132,6 +160,9 @@ test('remove leaves an adopted worktree alone', () => {
   const wt = linked(main);
   const store = openRunStore(wt);
   const id = store.start(start);
+  const file = join(main, '.factory', 'runs', id, 'run.json');
+  const old = record(main, id);
+  writeFileSync(file, JSON.stringify({ ...old, worktree: wt }));
   finish(store, id);
   assert.equal(store.remove(id), 'deleted');
   assert.ok(existsSync(wt));
