@@ -1,0 +1,37 @@
+name: release
+
+on:
+  push:
+    branches: [master]
+
+# One run at a time, so two merges never pick the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
+      - name: Pick the version
+        id: version
+        run: echo "version=$(node scripts/next-version.js "$(node -p "require('./package.json').version")" $(git tag --list 'v*'))" >> "$GITHUB_OUTPUT"
+      - name: Pack with that version, without a commit
+        run: |
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm pack
+          mv "tds-factory-${{ steps.version.outputs.version }}.tgz" tds-factory.tgz
+      - name: Publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v${{ steps.version.outputs.version }}" tds-factory.tgz --target "$GITHUB_SHA" --title "v${{ steps.version.outputs.version }}" --generate-notes --latest
