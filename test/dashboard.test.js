@@ -152,6 +152,18 @@ const getAs = (d, path, host) =>
     }).on('error', reject);
   });
 
+test('a non-GET with a foreign Host is still rejected', async () => {
+  const status = await new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port: dash.port, path: '/api/runs', method: 'POST', headers: { host: 'evil.example' } }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  assert.ok([403, 405].includes(status), String(status));
+});
+
 test('a foreign Host header gets 403 on every route; loopback names still work', async () => {
   const routes = ['/', '/api/runs', '/api/info', '/files/2026-01-01-good/define.md'];
   for (const path of routes) {

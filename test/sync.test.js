@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sync } from '../src/sync.js';
@@ -72,7 +72,7 @@ test('sync refuses a shipped name that is not lowercase letters, digits and hyph
   for (const as of ['../x', 'Upper', 'a b', '..', 'a/b']) {
     const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/alpha', as }], { alpha });
     assert.throws(() => quietSync({ root, skillsDir }), (err) => err.message.includes(JSON.stringify(as)), as);
-    assert.ok(!existsSync(join(skillsDir, 'a b')), as);
+    assert.deepEqual(readdirSync(skillsDir), ['factory'], as);
   }
 });
 
@@ -81,7 +81,7 @@ test('sync refuses a source path that leaves the repository, naming the entry', 
   mkdirSync(join(root, '..', 'outside', 'skills', 'alpha'), { recursive: true });
   writeFileSync(join(root, '..', 'outside', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\n---\n');
   assert.throws(() => quietSync({ root, skillsDir }), /"\.\.\/outside\/skills\/alpha".*leaves the repository/);
-  assert.ok(!existsSync(join(skillsDir, 'alpha')));
+  assert.deepEqual(readdirSync(skillsDir), ['factory']);
 });
 
 test('sync validates every entry before it writes any', () => {
@@ -90,7 +90,7 @@ test('sync validates every entry before it writes any', () => {
     { alpha, beta },
   );
   assert.throws(() => quietSync({ root, skillsDir }), /Bad Name/);
-  assert.ok(!existsSync(join(skillsDir, 'beta')));
+  assert.deepEqual(readdirSync(skillsDir), ['factory']);
 });
 
 test('sync refuses a symlink inside a shipped skill, naming the skill and the link, and writes nothing for it', () => {
@@ -105,4 +105,48 @@ test('sync rewrites only the literal old name, so a regex character in it is not
   const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/a.b', as: 'renamed' }], { 'a.b': dot });
   quietSync({ root, skillsDir });
   assert.match(readFileSync(join(skillsDir, 'renamed', 'SKILL.md'), 'utf8'), /Run \/renamed, not \/axb\./);
+});
+
+test('sync names a malformed manifest entry instead of throwing a bare TypeError', () => {
+  for (const entry of [{ as: 'x' }, { path: 5 }, { path: 'vendor/up/skills/alpha', as: 5 }, 42, null]) {
+    const { root, skillsDir } = fakeRepo([entry], { alpha });
+    assert.throws(() => quietSync({ root, skillsDir }), (err) => !(err instanceof TypeError) && err.message.includes(JSON.stringify(entry)), JSON.stringify(entry));
+  }
+});
+
+test('sync accepts an in-repo source whose folder name merely starts with two dots', () => {
+  const { root, skillsDir } = fakeRepo(['..cache/skills/alpha'], {}, '');
+  mkdirSync(join(root, '..cache', 'skills', 'alpha'), { recursive: true });
+  writeFileSync(join(root, '..cache', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\n---\n');
+  quietSync({ root, skillsDir });
+  assert.ok(existsSync(join(skillsDir, 'alpha', 'SKILL.md')));
+});
+
+test('sync refuses a source that is, or sits under, a symlink', () => {
+  for (const link of ['vendor/up/skills/alpha', 'vendor/up']) {
+    const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], {}, '');
+    mkdirSync(join(root, 'real', 'skills', 'alpha'), { recursive: true });
+    writeFileSync(join(root, 'real', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\n---\n');
+    const target = link === 'vendor/up' ? join(root, 'real') : join(root, 'real', 'skills', 'alpha');
+    mkdirSync(join(root, link, '..'), { recursive: true });
+    symlinkSync(target, join(root, link));
+    assert.throws(() => quietSync({ root, skillsDir }), /symlink/, link);
+    assert.deepEqual(readdirSync(skillsDir), ['factory'], link);
+  }
+});
+
+test('sync refuses two entries that ship under the same name', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha', { path: 'vendor/up/skills/beta', as: 'alpha' }], { alpha, beta });
+  assert.throws(() => quietSync({ root, skillsDir }), /alpha/);
+  assert.deepEqual(readdirSync(skillsDir), ['factory']);
+});
+
+test('sync replaces the files of a folder it synced before, dropping stale ones', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  mkdirSync(join(skillsDir, 'alpha'));
+  writeFileSync(join(skillsDir, 'alpha', MARKER), '');
+  writeFileSync(join(skillsDir, 'alpha', 'stale.md'), 'old');
+  quietSync({ root, skillsDir });
+  assert.ok(!existsSync(join(skillsDir, 'alpha', 'stale.md')));
+  assert.ok(existsSync(join(skillsDir, 'alpha', 'SKILL.md')));
 });
