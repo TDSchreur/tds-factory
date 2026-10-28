@@ -132,6 +132,7 @@
   var POLL_MS = 2000;
   var STALE_MS = 10 * 60 * 1000;
   var OLD_MS = 7 * 24 * 60 * 60 * 1000;
+  var expanded = {}; // Done cards the user opened, by Run id; same lifetime as showOlder
   var showOlder = false; // lives here because render() rebuilds the board every poll
   var olderBtn = document.getElementById('older');
   var board = document.getElementById('board');
@@ -181,7 +182,9 @@
     li.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(run.id); });
     if (run.waiting) li.appendChild(el('div', 'reason', 'Needs you' + (run.reason ? ': ' + run.reason : '')));
     li.appendChild(el('div', 'title', (run.unreadable ? 'Unreadable record: ' : '') + run.title));
-    if (run.activity) li.appendChild(el('div', 'activity', run.activity));
+    // Done cards keep their detail in a block that starts hidden, so the Done column stays short.
+    var more = run.column === 'done' ? el('div', 'details') : li;
+    if (run.activity) more.appendChild(el('div', 'activity', run.activity));
     var chips = el('div', 'chips');
     if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets'));
     if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
@@ -189,8 +192,8 @@
     if (run.security) chips.appendChild(el('span', 'chip ' + run.security, 'Security ' + run.security));
     if (run.infrastructure) chips.appendChild(el('span', 'chip ' + run.infrastructure, 'Infrastructure ' + run.infrastructure));
     if (typeof run.loops === 'number') chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
-    if (chips.childNodes.length) li.appendChild(chips);
-    if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
+    if (chips.childNodes.length) more.appendChild(chips);
+    if (run.agent) more.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
     var age = ageMs(run.updated);
     var active = run.column !== 'done' && !run.unreadable;
     li.appendChild(el('div', 'updated' + (age !== null && active && age > STALE_MS ? ' stale' : ''), 'Updated: ' + (age === null ? 'unknown' : ago(age))));
@@ -202,7 +205,7 @@
       var p = el('div', 'pr');
       if (safeUrl(run.pr)) p.appendChild(link('Pull request', run.pr));
       else p.textContent = 'PR: ' + run.pr;
-      li.appendChild(p);
+      more.appendChild(p);
     }
     if (run.column === 'done') {
       var del = el('button', null, 'Delete');
@@ -210,7 +213,17 @@
       del.setAttribute('aria-label', 'Delete ' + run.title);
       del.addEventListener('click', function (e) { e.stopPropagation(); removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record and summaries?'); });
       del.addEventListener('keydown', function (e) { e.stopPropagation(); });
-      li.appendChild(del);
+      more.appendChild(del);
+      var open = !!expanded[run.id];
+      more.hidden = !open;
+      var toggle = el('button', null, open ? 'Hide details' : 'Show details');
+      toggle.type = 'button';
+      toggle.setAttribute('aria-expanded', open);
+      toggle.setAttribute('aria-label', (open ? 'Hide details of ' : 'Show details of ') + run.title);
+      toggle.addEventListener('click', function (e) { e.stopPropagation(); expanded[run.id] = !open; render(lastEntries); });
+      toggle.addEventListener('keydown', function (e) { e.stopPropagation(); });
+      li.appendChild(toggle);
+      li.appendChild(more);
     }
     return li;
   }
