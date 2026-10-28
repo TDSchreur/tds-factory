@@ -36,6 +36,14 @@
   .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .5rem; color: var(--muted); }
   .chip.pass { color: var(--ok); border-color: var(--ok); }
   .chip.fail { color: var(--flag); border-color: var(--flag); }
+
+  .card { cursor: pointer; }
+  .card.selected { outline: 2px solid var(--muted); }
+  #detail { margin: 0 1rem 1rem; padding: .75rem; background: var(--panel); border-radius: 8px; }
+  #detail[hidden] { display: none; }
+  #detail h2 { font-size: 1rem; margin: 0 0 .5rem; }
+  #detail pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .5rem; margin: .25rem 0 .75rem; }
+  #detail h3 { font-size: .85rem; margin: .5rem 0 0; color: var(--muted); }
   .card.waiting { border: 2px solid var(--flag); background: var(--flag-bg); }
   .card .reason { color: var(--flag); font-weight: 600; margin-top: .3rem; }
   .empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
@@ -47,6 +55,7 @@
   <span id="status" role="status" aria-live="polite">Loading...</span>
 </header>
 <main id="board" aria-label="Runs by Stage"></main>
+<section id="detail" aria-label="Run detail" hidden></section>
 <script>
 (function () {
   'use strict';
@@ -66,11 +75,22 @@
   // Lenient reader: any field may be missing or of the wrong type; unknown fields are ignored.
   function str(v) { return typeof v === 'string' ? v.trim() : ''; }
 
+  function strList(v) { return Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string' && x; }) : []; }
+
+  // Spec, Tickets and PR links from the record; each may be a string or (tickets) an array.
+  function readLinks(r) {
+    var out = [];
+    [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]].forEach(function (p) {
+      (Array.isArray(p[1]) ? p[1] : [p[1]]).forEach(function (v) { if (str(v)) out.push({ label: p[0], href: str(v) }); });
+    });
+    return out;
+  }
+
   // Maps a /api/runs entry to the fields the page uses. Never throws.
   function readRun(entry) {
     var id = str(entry && entry.id);
     if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') {
-      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '' };
+      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files: strList(entry && entry.files), links: [] };
     }
     var r = entry.record;
     var status = str(r.status);
@@ -87,7 +107,8 @@
       standards: verdict(r.standards), spec: verdict(r.spec), loops: num(r.check_loops),
       waiting: active && r.waiting_on_human === true, reason: str(r.waiting_reason),
       title: str(r.title) || id || 'Untitled run',
-      activity: str(r.activity), agent: str(r.agent), updated: str(r.updated)
+      activity: str(r.activity), agent: str(r.agent), updated: str(r.updated),
+      files: strList(entry.files), links: readLinks(r)
     };
   }
 
@@ -102,6 +123,10 @@
   function renderCard(run) {
     var li = el('li', 'card' + (run.unreadable ? ' unreadable' : '') + (run.waiting ? ' waiting' : ''));
     li.dataset.id = run.id;
+    if (run.id === selectedId) li.classList.add('selected');
+    li.tabIndex = 0;
+    li.addEventListener('click', function () { select(run.id); });
+    li.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(run.id); });
     if (run.waiting) li.appendChild(el('div', 'reason', 'Needs you' + (run.reason ? ': ' + run.reason : '')));
     li.appendChild(el('div', 'title', (run.unreadable ? 'Unreadable record: ' : '') + run.title));
     if (run.activity) li.appendChild(el('div', 'activity', run.activity));
@@ -117,8 +142,46 @@
     return li;
   }
 
+  var selectedId = null;
+  var lastRuns = [];
+  var detailEl = document.getElementById('detail');
+  var shown = null; // key of what the detail view currently shows, to avoid flicker on each poll
+
+  function select(id) { selectedId = selectedId === id ? null : id; render(lastEntries); }
+
+  function renderDetail() {
+    var run = selectedId && lastRuns.filter(function (r) { return r.id === selectedId; })[0];
+    if (!run) { shown = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
+    var key = JSON.stringify([run.id, run.title, run.updated, run.files, run.links]);
+    if (key === shown) return;
+    shown = key;
+    detailEl.hidden = false;
+    var kids = [el('h2', null, run.title)];
+    run.links.forEach(function (l) {
+      var p = el('div', 'link');
+      var a = el('a', null, l.label + ': ' + l.href);
+      if (/^(https?:)\/\//i.test(l.href)) { a.href = l.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      p.appendChild(a);
+      kids.push(p);
+    });
+    if (!run.files.length) kids.push(el('div', 'empty', 'No summaries yet'));
+    run.files.forEach(function (name) {
+      kids.push(el('h3', null, name));
+      var pre = el('pre', null, 'Loading...');
+      kids.push(pre);
+      fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
+        .then(function (t) { pre.textContent = t; })
+        .catch(function (err) { pre.textContent = 'Cannot load ' + name + ' (' + err.message + ')'; });
+    });
+    detailEl.replaceChildren.apply(detailEl, kids);
+  }
+
+  var lastEntries = [];
   function render(entries) {
+    lastEntries = entries;
     var runs = (Array.isArray(entries) ? entries : []).map(readRun);
+    lastRuns = runs;
     // Newest first within a column; unreadable and undated records sort last.
     runs.sort(function (a, b) { return b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id); });
     var cols = COLUMNS.map(function (c) {
@@ -136,6 +199,7 @@
       return section;
     });
     board.replaceChildren.apply(board, cols);
+    renderDetail();
     var n = runs.filter(function (r) { return r.waiting; }).length;
     document.title = (n ? '(' + n + ') ' : '') + BASE_TITLE;
   }

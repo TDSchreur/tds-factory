@@ -40,6 +40,15 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Raise it by 1 on each return to Build |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
+| `spec_link` | Link to the Spec (path or URL). Optional; set once the Spec exists |
+| `tickets` | Links to the Tickets, an array of strings (issue URLs). Optional; set once they exist |
+| `pr` | Link to the pull request. Optional; set once it exists |
+
+Record the Spec, Tickets and PR as links only; never copy their content into the Run folder.
+
+### Stage summaries
+
+At the end of each Stage, write a short Markdown summary (a few lines: what was done, what was decided, what is open) into the Run folder: `define.md`, `build.md`, `check-N.md` (one per Check pass, `N` counting from 1, so a Check that sends you back to Build and runs again writes `check-2.md`), and `finish.md`. Write plain Markdown only; the Dashboard shows these files as plain text. Never overwrite another Stage's file.
 
 ## Waiting on the user
 
