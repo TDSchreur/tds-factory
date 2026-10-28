@@ -39,3 +39,24 @@ test('every Chip stays on one line, even in a narrow column', async (t) => {
     assert.ok(sizes.every((h) => h < 24), `chip heights: ${sizes}`);
   } finally { await page.close(); }
 });
+
+const manyDone = Array.from({ length: 30 }, (_, i) => finished(i));
+const metrics = "const c = document.querySelector('[data-stage=done] .cards'); return { scrolls: c.scrollHeight > c.clientHeight + 1, page: document.documentElement.scrollHeight }";
+
+test('on a desktop a long Done column scrolls on its own and keeps the page short', async (t) => {
+  const page = await openPage(t, { runs: manyDone });
+  if (!page) return;
+  try {
+    const { scrolls, page: height } = await page.execute(metrics);
+    assert.ok(scrolls, 'the Done cards scroll inside their column');
+    assert.ok(height < 1100, `page height ${height}`);
+  } finally { await page.close(); }
+});
+
+test('on a phone the Done column shows every card without its own scroll', async (t) => {
+  const page = await openPage(t, { runs: manyDone }, { width: 375 });
+  if (!page) return;
+  try {
+    assert.equal((await page.execute(metrics)).scrolls, false);
+  } finally { await page.close(); }
+});
