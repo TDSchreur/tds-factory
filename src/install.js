@@ -59,12 +59,19 @@ export function install({ agent, project, force }) {
     const target = path.join(base, dirs[name]);
     fs.mkdirSync(target, { recursive: true });
     for (const file of fs.readdirSync(source)) {
+      const projectCopilot = name === 'copilot' && project;
+      const targetFile = projectCopilot ? file.replace('factory-', 'factory-project-') : file;
       try {
-        fs.copyFileSync(path.join(source, file), path.join(target, file), fs.constants.COPYFILE_EXCL);
-        console.log(`installed ${name} agent/${file} -> ${target}`);
+        if (projectCopilot) {
+          const content = fs.readFileSync(path.join(source, file), 'utf8').replace('name: factory-', 'name: factory-project-');
+          fs.writeFileSync(path.join(target, targetFile), content, { flag: 'wx' });
+        } else {
+          fs.copyFileSync(path.join(source, file), path.join(target, targetFile), fs.constants.COPYFILE_EXCL);
+        }
+        console.log(`installed ${name} agent/${targetFile} -> ${target}`);
       } catch (error) {
         if (error.code !== 'EEXIST') throw error;
-        console.log(`kept ${name} agent/${file} -> ${target}`);
+        console.log(`kept ${name} agent/${targetFile} -> ${target}`);
       }
     }
   }

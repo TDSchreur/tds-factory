@@ -28,18 +28,18 @@ test('install provides editable Stage agents for each target and preserves exist
   try {
     process.chdir(project);
     for (const agent of ['codex', 'claude', 'copilot']) install({ agent, project: true, force: false });
-    for (const [dir, ext] of [['.codex/agents', 'toml'], ['.claude/agents', 'md'], ['.github/agents', 'agent.md']]) {
+    for (const [dir, ext, prefix] of [['.codex/agents', 'toml', 'factory'], ['.claude/agents', 'md', 'factory'], ['.github/agents', 'agent.md', 'factory-project']]) {
       for (const stage of ['define', 'build', 'check', 'finish']) {
-        assert.ok(existsSync(join(project, dir, `factory-${stage}.${ext}`)));
+        assert.ok(existsSync(join(project, dir, `${prefix}-${stage}.${ext}`)));
       }
-      const file = join(project, dir, `factory-build.${ext}`);
+      const file = join(project, dir, `${prefix}-build.${ext}`);
       writeFileSync(file, 'my model configuration');
     }
     assert.match(readFileSync(join(project, '.claude/agents/factory-check.md'), 'utf8'), /^tools: Read, Grep, Glob$/m);
-    assert.match(readFileSync(join(project, '.github/agents/factory-check.agent.md'), 'utf8'), /^tools: \["view", "grep", "glob"\]$/m);
+    assert.match(readFileSync(join(project, '.github/agents/factory-project-check.agent.md'), 'utf8'), /^tools: \["view", "grep", "glob"\]$/m);
     for (const agent of ['codex', 'claude', 'copilot']) install({ agent, project: true, force: true });
-    for (const [dir, ext] of [['.codex/agents', 'toml'], ['.claude/agents', 'md'], ['.github/agents', 'agent.md']]) {
-      assert.equal(readFileSync(join(project, dir, `factory-build.${ext}`), 'utf8'), 'my model configuration');
+    for (const [dir, ext, prefix] of [['.codex/agents', 'toml', 'factory'], ['.claude/agents', 'md', 'factory'], ['.github/agents', 'agent.md', 'factory-project']]) {
+      assert.equal(readFileSync(join(project, dir, `${prefix}-build.${ext}`), 'utf8'), 'my model configuration');
     }
   } finally {
     process.chdir(cwd);

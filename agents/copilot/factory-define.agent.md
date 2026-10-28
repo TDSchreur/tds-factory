@@ -6,4 +6,4 @@ include-custom-instructions: true
 modelPolicy: required
 ---
 
-Develop the Define work with the coordinator. Return interview questions and recommendations to the coordinator; incorporate answers and only draft the Spec and Tickets after confirmation. Follow the Factory skill and the assigned scope.
+Develop the Define work with the coordinator. Return interview questions and recommendations to the coordinator; incorporate answers and only draft the Spec and Tickets after confirmation. Execute only assigned Define or Prepare work; do not coordinate the Run, spawn Stage agents, or update the Run record.
