@@ -24,11 +24,11 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 
 **Start.** Before the first Stage, run `tds-factory run start --data '<JSON>'` in the project being built. Supply a JSON object containing `title`, `agent`, `commands` and `conventions`. The command prints the new Run id; keep it for every update. It creates a unique dated folder and initializes the record, and a Run worktree: a git worktree on a branch named after the Run id, in `.factory/worktrees/<id>`; its path is the `worktree` field of `run.json`. Do all the work of every Stage, Define included, inside the Run worktree, never in the main checkout, so agents in other tabs do not share your files. Every start creates a new worktree from the freshly fetched current default branch of `origin`, including when started inside a linked worktree. If origin cannot be reached or its default branch cannot be determined, start fails; tell the user. `tds-factory` commands write to the main checkout's Run store from either place. If the project is not a git repository or has no commit, `run start` fails: tell the user. If no verify command is known yet, use an empty `commands` string until the user answers.
 
-**Update.** Use `tds-factory run update --id <id> --data '<JSON>'` for every Run record change; never write `run.json` directly. Supply only changed fields as a JSON object. The command preserves other fields and `created`, refreshes `updated`, validates changes and replaces the record safely. Set `activity` on every update. Update whenever a Stage starts (including when Check sends you back to Build), when work becomes `waiting` or is released, when a Ticket completes, after each review, and when the Run ends. Record `standards`, `spec`, `security`, `infrastructure` and `check_loops` as they change. To wait, set `status` to `waiting` and provide `waiting_reason`; to resume or end, set the new status. The command maintains the waiting flag and clears the reason when leaving `waiting`. Check command errors and resolve them before continuing.
+**Update.** Use `tds-factory run update --id <id> --data '<JSON>'` for every Run record change; never write `run.json` directly. Supply only changed fields as a JSON object. The command preserves other fields and `created`, refreshes `updated`, validates changes and replaces the record safely. Set `activity` on every update. Update whenever a Stage starts (including when Check sends you back to Build), when work becomes `waiting` or is released, when a Ticket completes, after each review, and when the Run ends. Record `standards`, `spec`, `security`, `infrastructure` and `check_loops` as they change. For waiting, see "Waiting on the user". Check command errors and resolve them before continuing.
 
 **Gitignore.** If `.factory/` is not covered by the project's `.gitignore`, tell the user to add it. Do not edit `.gitignore` yourself.
 
-**Stop.** If the user tells you to stop, set `status` to `abandoned`, `waiting_on_human` to `false` and `waiting_reason` to an empty string.
+**Stop.** If the user tells you to stop, set `status` to `abandoned`.
 
 After changing this skill, re-run `tds-factory install` so the installed copy is updated.
 
@@ -69,13 +69,13 @@ At the end of each Stage, write a short Markdown summary (a few lines: what was 
 
 ## Waiting on the user
 
-Set `status` to `waiting`, `waiting_on_human` to `true` and `waiting_reason` to a short line, and write `run.json`, before you ask the user at each of these points:
+Before you ask the user at each of these points, update the Run with `status` `waiting` and a short `waiting_reason`; the command sets `waiting_on_human`:
 
 - Preflight: no verify command was found, before asking for it.
 - Define: a question for the user or confirmation of the shared understanding after grilling.
 - Check: when any axis is `fail`, or the loop cap is reached with problems still open, to ask for permission to continue to Finish.
 
-When the user answers and the Run continues, set `status` back to `running`, `waiting_on_human` to `false` and `waiting_reason` to an empty string, and write `run.json` before doing anything else. Also clear them when the Run ends. If an answer needs no work before your next question, skip that clearing write: set the new `waiting_reason` in the next `waiting` write and write `running` only when real work starts.
+When the user answers and the Run continues, set `status` back to `running` before doing anything else; the command clears the flag and the reason, also when the Run ends. If an answer needs no work before your next question, skip that clearing write: set the new `waiting_reason` in the next `waiting` write and write `running` only when real work starts.
 
 ## Define
 
@@ -103,7 +103,7 @@ The Infrastructure axis runs in a fourth fresh read-only subagent, with no new S
 
 An axis with no verdict in `run.json` after the pass is a problem worth fixing: run that axis again. Other problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security or infrastructure finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times.
 
-Only a clean Check continues to Finish without asking. A Check is clean when every axis verdict is `pass`, with Infrastructure allowed to be `skipped`; an axis with no verdict, or a changed infrastructure file that is not validated, counts as `fail`. When Check would otherwise move on (no problem worth fixing is left, or the loop cap is reached), and not every axis is `pass` (Infrastructure may be `skipped`) or problems worth fixing are still open, report what is still open (including any axis still without a verdict), set the Run to `waiting` with a `waiting_reason` and ask the user for permission to continue to Finish, listing the open axes and findings. Continue only after an explicit yes, and record the decision in `finish.md`. On a no, or if the user tells you to stop, set `status` to `abandoned`.
+Only a clean Check continues to Finish without asking. A Check is clean when every axis verdict is `pass`, with Infrastructure allowed to be `skipped`; an axis with no verdict, or a changed infrastructure file that is not validated, counts as `fail`. When Check would otherwise move on (no problem worth fixing is left, or the loop cap is reached) but the Check is not clean or problems worth fixing are still open, report what is still open, set the Run to `waiting` with a `waiting_reason` and ask the user for permission to continue to Finish, listing the open axes and findings. Continue only after an explicit yes, and record the decision in `finish.md`. On a no, or if the user tells you to stop, set `status` to `abandoned`.
 
 ## Finish
 
