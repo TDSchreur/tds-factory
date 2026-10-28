@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { install } from '../src/install.js';
@@ -45,5 +45,21 @@ test('install keeps an existing agent file you edited, unless forced', () => {
 test('the Check agent of every target is read-only', () => {
   assert.match(readFileSync(join(AGENTS_DIR, 'claude', 'factory-check.md'), 'utf8'), /^tools: Read, Grep, Glob$/m);
   assert.match(readFileSync(join(AGENTS_DIR, 'copilot', 'factory-check.agent.md'), 'utf8'), /^tools: \["view", "grep", "glob"\]$/m);
-  assert.match(readFileSync(join(AGENTS_DIR, 'codex', 'factory-check.toml'), 'utf8'), /read-only/);
+  assert.match(readFileSync(join(AGENTS_DIR, 'codex', 'factory-check.toml'), 'utf8'), /^sandbox_mode = "read-only"$/m);
+});
+
+test('install --agent all also writes the Copilot agents', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-agents-all-'));
+  installIn(project, 'all');
+  assert.equal(readdirSync(join(project, '.github', 'agents')).length, 4);
+});
+
+test('install keeps a dangling agent symlink', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-agents-link-'));
+  const dir = join(project, '.claude', 'agents');
+  mkdirSync(dir, { recursive: true });
+  const link = join(dir, 'factory-build.md');
+  symlinkSync(join(project, 'missing.md'), link);
+  installIn(project, 'claude');
+  assert.ok(lstatSync(link).isSymbolicLink());
 });

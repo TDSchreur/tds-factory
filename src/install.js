@@ -6,7 +6,8 @@ import { targets } from './flow.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
 export function install({ agent, project, force }) {
-  const names = agent === 'all' ? Object.keys(targets).filter((name) => name !== 'copilot') : [agent];
+  const all = Object.keys(targets);
+  const names = agent === 'all' ? all.filter((name) => name !== 'copilot') : [agent];
   for (const name of names) {
     if (!Object.hasOwn(targets, name)) throw new Error(`unknown agent "${name}" (${Object.keys(targets).join(', ')}, all)`);
   }
@@ -40,6 +41,9 @@ export function install({ agent, project, force }) {
         console.log(`removed ${name}/${e.name}`);
       }
     }
+  }
+  // Stage agents carry per-target model choices, so Copilot gets its own even when its skills are shared.
+  for (const name of agent === 'all' ? all : names) {
     installAgents(name, path.join(base, targets[name][project ? 'projectAgents' : 'agents']), force);
   }
 }
@@ -50,7 +54,7 @@ function installAgents(name, targetDir, force) {
   fs.mkdirSync(targetDir, { recursive: true });
   for (const file of fs.readdirSync(sourceDir)) {
     const dest = path.join(targetDir, file);
-    if (fs.existsSync(dest) && !force) {
+    if (fs.lstatSync(dest, { throwIfNoEntry: false }) && !force) {
       console.warn(`skip ${name}/${file}: exists, keeping your configuration (use --force to replace)`);
       continue;
     }
