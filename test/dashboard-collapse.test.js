@@ -21,7 +21,7 @@ async function page(runs, { confirm: answers = [], calls = [] } = {}) {
   elements.dialog.close = function (value) { this.open = false; this.returnValue = value; this.handlers.close(); };
   const fetch = async (url, init) => { if (init?.method) calls.push(`${init.method} ${url}`); return { ok: true, text: async () => '', json: async () => (url === '/api/info' ? { project: 'test' } : runs) }; };
   const script = appScript;
-  runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag) }, window: { confirm: () => answers.shift() ?? false, alert() {} }, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
+  runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag), createDocumentFragment: () => new Element('fragment') }, window: { confirm: () => answers.shift() ?? false, alert() {} }, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
   await flush();
   const card = (title) => descendants(elements.board).find((e) => e.tag === 'li' && descendants(e).some((c) => c.textContent === title));
   return { card, elements };

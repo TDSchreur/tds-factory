@@ -141,6 +141,7 @@
   var selectedId = null;
   var lastEntries = [];
   var detailEl = document.getElementById('detail');
+  var shownId = null;
   var shown = null; // key of what the detail view currently shows, to avoid flicker on each poll
 
   function select(id) { selectedId = selectedId === id ? null : id; render(lastEntries); }
@@ -187,12 +188,13 @@
 
   function renderDetail(runs) {
     var run = selectedId && runs.filter(function (r) { return r.id === selectedId; })[0];
-    if (!run) { shown = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
+    if (!run) { shown = null; shownId = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
     var key = JSON.stringify([run.id, run.title, run.updated, run.files, run.links]);
     if (key === shown) return;
-    shown = key;
+    var refresh = shownId === run.id; // same Run as on screen: keep it until the new files are loaded
+    shown = key; shownId = run.id;
     detailEl.hidden = false;
-    var kids = [el('h2', null, run.title)];
+    var kids = [el('h2', null, run.title)], loads = [];
     run.links.forEach(function (l) {
       var p = el('div', 'link');
       p.appendChild(link(l.label + ': ' + l.href, l.href));
@@ -203,12 +205,16 @@
       kids.push(el('h3', null, name));
       var pre = el('pre', null, 'Loading...');
       kids.push(pre);
-      fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+      loads.push(fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
         .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
         .then(function (t) { pre.replaceWith(renderMarkdown(t)); })
-        .catch(function (err) { pre.textContent = 'Cannot load ' + name + ' (' + err.message + ')'; });
+        .catch(function (err) { pre.textContent = 'Cannot load ' + name + ' (' + err.message + ')'; }));
     });
-    detailEl.replaceChildren.apply(detailEl, kids);
+    var next = document.createDocumentFragment();
+    kids.forEach(function (k) { next.appendChild(k); });
+    // Showing the Loading placeholders again would shrink the page, and the browser would scroll back to the top.
+    if (!refresh) { detailEl.replaceChildren(next); return; }
+    Promise.all(loads).then(function () { if (shown === key) detailEl.replaceChildren(next); });
   }
 
   var dialog = document.getElementById('dialog');
