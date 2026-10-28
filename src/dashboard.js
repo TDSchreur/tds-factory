@@ -15,7 +15,12 @@ const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['p
 const HOST = '127.0.0.1';
 const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
 // The only files served besides the page; a request never picks a path, only one of these names.
-const ASSETS = { '/style.css': 'text/css', '/markdown.js': 'text/javascript', '/app.js': 'text/javascript' };
+const JS = 'text/javascript';
+const ASSETS = {
+  '/style.css': 'text/css',
+  '/app.js': JS, '/components.js': JS, '/model.js': JS, '/markdown.js': JS,
+  '/vendor/preact.js': JS, '/vendor/hooks.js': JS, '/vendor/htm.js': JS,
+};
 const FALLBACK_PAGE = `<!doctype html>
 <meta charset="utf-8">
 <title>tds-factory dashboard</title>

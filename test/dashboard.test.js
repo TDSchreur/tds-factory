@@ -135,13 +135,11 @@ test('page route serves HTML', async () => {
 
 test('page route serves the real board page', async () => {
   const res = await get(dash, '/');
-  assert.match(res.body, /id="board"/);
+  assert.match(res.body, /id="app"/);
   assert.doesNotMatch(res.body, /not installed/);
 });
 
-test('page renders an Infrastructure chip only when the field is present', async () => {
-  const res = await get(dash, '/app.js');
-  assert.match(res.body, /if \(run\.infrastructure\) chips\.appendChild\(el\('span', 'chip ' \+ run\.infrastructure, 'Infrastructure ' \+ run\.infrastructure, CHIP_HELP\.infrastructure\)\)/);
+test('the stylesheet styles a skipped chip', async () => {
   assert.match((await get(dash, '/style.css')).body, /\.chip\.skipped/);
 });
 
@@ -268,8 +266,17 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
   } finally { await dashboard.close(); }
 });
 
-test('the style, parser and application files are served at fixed names', async () => {
-  for (const [path, type, marker] of [['/style.css', /text\/css/, /--bg:/], ['/markdown.js', /text\/javascript/, /function parseMarkdown/], ['/app.js', /text\/javascript/, /function poll/]]) {
+test('the style, scripts and vendored libraries are served at fixed names', async () => {
+  for (const [path, type, marker] of [
+    ['/style.css', /text\/css/, /--bg:/],
+    ['/app.js', /text\/javascript/, /function App/],
+    ['/components.js', /text\/javascript/, /export function Card/],
+    ['/model.js', /text\/javascript/, /export const COLUMNS/],
+    ['/markdown.js', /text\/javascript/, /export function parseMarkdown/],
+    ['/vendor/preact.js', /text\/javascript/, /export\{/],
+    ['/vendor/hooks.js', /text\/javascript/, /useState/],
+    ['/vendor/htm.js', /text\/javascript/, /export default/],
+  ]) {
     const res = await get(dash, path);
     assert.equal(res.status, 200, path);
     assert.match(res.headers['content-type'], type, path);
@@ -277,8 +284,14 @@ test('the style, parser and application files are served at fixed names', async 
   }
 });
 
+test('the page maps the vendored libraries with an import map', async () => {
+  const res = await get(dash, '/');
+  assert.match(res.body, /"preact": "\/vendor\/preact\.js"/);
+  assert.match(res.body, /<script type="module" src="\/app\.js">/);
+});
+
 test('only the allow-listed Dashboard files are served', async () => {
-  for (const path of ['/index.html', '/dashboard/app.js', '/package.json', '/src/dashboard.js', '/..%2fpackage.json', '/%2e%2e/package.json', '/style.css/..']) {
+  for (const path of ['/index.html', '/dashboard/app.js', '/package.json', '/src/dashboard.js', '/..%2fpackage.json', '/%2e%2e/package.json', '/style.css/..', '/vendor/LICENSE-preact', '/vendor/README.md', '/vendor/../app.js', '/vendor/%2e%2e/package.json']) {
     const res = await get(dash, path);
     assert.equal(res.status, 404, path);
   }

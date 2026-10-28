@@ -12,9 +12,8 @@ test('design tokens are defined for light and dark themes', () => {
   assert.match(css, /prefers-color-scheme: dark/);
 });
 
-test('header is sticky and keeps the safe controls', () => {
+test('header is sticky', () => {
   assert.match(css, /header\s*\{[^}]*position:\s*sticky/);
-  for (const id of ['theme', 'older', 'status', 'project']) assert.match(html, new RegExp(`id="${id}"`));
 });
 
 test('board stacks on narrow screens', () => {

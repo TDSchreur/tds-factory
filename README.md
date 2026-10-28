@@ -90,10 +90,12 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 `dashboard` serves the `.factory/` folder of the main checkout of the current repository (from any subfolder or linked worktree) on 127.0.0.1 and can delete completed or abandoned Runs after confirmation. Deleting a Run also removes the Run worktree that `run start` created (not an adopted one) with a plain `git worktree remove`; if the worktree has uncommitted changes the removal is refused and the Run stays. Branches are never deleted. The default port is 4317, and `--port` changes it. It prints the URL when it starts.
 
+The page is built with Preact and htm, committed in `dashboard/vendor/` (see `dashboard/vendor/README.md` for versions and how to update them) and loaded as ES modules, so there is no build step. See `docs/adr/0003-preact-htm-dashboard.md`.
+
 | Route | Returns |
 |---|---|
 | `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
-| `/style.css`, `/markdown.js`, `/app.js` | The Dashboard's stylesheet and scripts, from the `dashboard/` folder. Only these three names are served. |
+| `/style.css`, `/app.js`, `/components.js`, `/model.js`, `/markdown.js`, `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` | The Dashboard's stylesheet, ES modules and vendored libraries, from the `dashboard/` folder. Only these names are served. |
 | `/api/views` | Run records interpreted for the Dashboard. |
 | `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |

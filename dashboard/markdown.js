@@ -1,5 +1,5 @@
 // Turns Markdown text into a plain tree of blocks and inline spans. No DOM access, so a test can run it alone.
-function parseMarkdown(text) {
+export function parseMarkdown(text) {
   function inline(src) {
     var out = [], re = /`([^`]+)`|\*\*(.+?)\*\*|\*([^\s*](?:.*?[^\s*])?)\*|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, last = 0, m;
     function plain(v) { if (v) out.push({ t: 'text', v: v }); }
