@@ -55,6 +55,10 @@ _Avoid_: Job, Pipeline
 The status file a Run keeps up to date as it moves through the Stages, read by the Dashboard.
 _Avoid_: Log, State file
 
+**Run store**:
+The module that owns every Run folder under `.factory/runs`: it starts, updates, lists, reads and deletes Runs and refuses unsafe storage. The CLI and the Dashboard go through it.
+_Avoid_: Run database
+
 **Dashboard**:
 A web page that shows every Run as a card in a column per Stage, flags the Runs that are waiting on a human, and can delete completed or abandoned Run history.
 _Avoid_: Board, Monitor
