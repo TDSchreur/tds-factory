@@ -57,13 +57,18 @@ function runRoot(projectDir, create) {
   if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
   return root;
 }
-function startRun(projectDir, data, adopted) {
+function startRun(projectDir, data) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   if (git('rev-parse', '--git-dir').status !== 0) throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) throw new Error('a Run worktree needs a git repository with at least one commit');
+  const remoteHead = git('ls-remote', '--symref', 'origin', 'HEAD');
+  const branch = remoteHead.status === 0 && remoteHead.stdout.match(/^ref: refs\/heads\/([^\s]+)\s+HEAD$/m)?.[1];
+  if (!branch || git('check-ref-format', '--branch', branch).status !== 0) throw new Error(`cannot determine origin default branch: ${remoteHead.stderr.trim()}`);
+  const fetched = git('fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
+  if (fetched.status !== 0) throw new Error(`cannot fetch origin default branch: ${fetched.stderr.trim()}`);
   const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'run';
   const base = `${new Date().toISOString().slice(0, 10)}-${slug}`;
   const root = runRoot(projectDir, true);
@@ -79,14 +84,9 @@ function startRun(projectDir, data, adopted) {
   }
   const now = new Date().toISOString();
   try {
-    let worktree = adopted;
-    if (!worktree) {
-      worktree = path.join(worktrees, id);
-      // shortcut: without an origin/HEAD the branch is cut from the checked-out commit, upgrade when that surprises someone.
-      const head = git('symbolic-ref', '--short', 'refs/remotes/origin/HEAD');
-      const added = git('worktree', 'add', '-b', id, worktree, head.status === 0 ? head.stdout.trim() : 'HEAD');
-      if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
-    }
+    const worktree = path.join(worktrees, id);
+    const added = git('worktree', 'add', '-b', id, worktree, `refs/remotes/origin/${branch}`);
+    if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree }));
   } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
@@ -203,20 +203,20 @@ function removeRun(projectDir, id) {
   }
 }
 
-// Run records live in the main checkout, so any folder of it or of a linked worktree resolves to it. A linked worktree is also the one a new Run adopts.
+// Run records live in the main checkout, including when called from a linked worktree.
 function mainCheckout(dir) {
   const out = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel'], { cwd: dir, encoding: 'utf8' });
-  const [gitDir, common, top] = out.status === 0 ? out.stdout.trim().split('\n') : [];
-  if (!gitDir || path.basename(common) !== '.git') return { dir, adopted: undefined };
-  return { dir: path.dirname(common), adopted: gitDir !== common ? top : undefined };
+  const [gitDir, common] = out.status === 0 ? out.stdout.trim().split('\n') : [];
+  if (!gitDir || path.basename(common) !== '.git') return { dir };
+  return { dir: path.dirname(common) };
 }
 
 // The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.
 export function openRunStore(callerDir) {
-  const { dir: projectDir, adopted } = mainCheckout(callerDir);
+  const { dir: projectDir } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
   return {
-    start: (data) => startRun(projectDir, data, adopted),
+    start: (data) => startRun(projectDir, data),
     update: (id, data) => updateRun(projectDir, id, data),
     list: () => listRuns(runsDir),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
