@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import { interpretRun, withRunLock } from './run-record.js';
+import { stages } from './flow.js';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,13 +17,12 @@ const FALLBACK_PAGE = `<!doctype html>
 `;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-// Sort key: Stage order (define, build, check-N numerically, finish); unknown names last.
+// Sort Stage summaries in Flow order, with numbered Check passes sorted numerically.
 function stageOrder(name) {
   const base = name.replace(/\.md$/, '');
-  const fixed = { define: [0, 0], build: [1, 0], finish: [3, 0] }[base];
-  if (fixed) return fixed;
   const m = /^check-(\d+)$/.exec(base);
-  return m ? [2, Number(m[1])] : [4, 0];
+  const index = stages.indexOf(m ? 'check' : base);
+  return [index < 0 ? stages.length : index, m ? Number(m[1]) : 0];
 }
 const byStage = (a, b) => {
   const [x, y] = [stageOrder(a), stageOrder(b)];

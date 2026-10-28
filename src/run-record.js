@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
+import { stages, targets } from './flow.js';
 
-const stages = ['define', 'prepare', 'build', 'check', 'finish'];
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
 const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr'];
 const lists = ['conventions', 'tickets'];
@@ -19,7 +19,7 @@ function validate(data) {
       : verdicts.includes(key) ? ['pass', 'fail', ...(key === 'infrastructure' ? ['skipped'] : [])].includes(value)
       : key === 'stage' ? stages.includes(value)
       : key === 'status' ? statuses.includes(value)
-      : key === 'agent' ? ['claude', 'codex', 'copilot'].includes(value)
+      : key === 'agent' ? Object.hasOwn(targets, value)
       : key === 'waiting_on_human' ? typeof value === 'boolean' : false;
     if (!ok) throw new Error(`invalid field or value: ${key}`);
   }

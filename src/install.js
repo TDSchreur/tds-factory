@@ -2,18 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SKILLS_DIR, MARKER } from './paths.js';
+import { targets } from './flow.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
-const TARGETS = {
-  claude: { project: '.claude/skills', global: '.claude/skills' },
-  codex: { project: '.agents/skills', global: '.agents/skills' },
-  copilot: { project: '.github/skills', global: '.copilot/skills' },
-};
-
 export function install({ agent, project, force }) {
-  const names = agent === 'all' ? ['claude', 'codex'] : [agent];
+  const names = agent === 'all' ? Object.keys(targets).filter((name) => name !== 'copilot') : [agent];
   for (const name of names) {
-    if (!TARGETS[name]) throw new Error(`unknown agent "${name}" (claude, codex, copilot, all)`);
+    if (!Object.hasOwn(targets, name)) throw new Error(`unknown agent "${name}" (${Object.keys(targets).join(', ')}, all)`);
   }
   const base = project ? process.cwd() : os.homedir();
   const skills = fs
@@ -22,7 +17,7 @@ export function install({ agent, project, force }) {
     .map((e) => e.name);
 
   for (const name of names) {
-    const targetDir = path.join(base, TARGETS[name][project ? 'project' : 'global']);
+    const targetDir = path.join(base, targets[name][project ? 'project' : 'global']);
     fs.mkdirSync(targetDir, { recursive: true });
     for (const skill of skills) {
       const dest = path.join(targetDir, skill);

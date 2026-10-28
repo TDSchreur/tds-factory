@@ -99,10 +99,10 @@ test('list names the Markdown files of each Run, sorted, without run.json', asyn
 test('list orders Stage summaries by Stage, check passes numerically', async () => {
   run('2026-01-05-ordered', {
     'run.json': JSON.stringify({ title: 'Ordered' }),
-    'finish.md': 'f', 'check-10.md': 'c', 'check-2.md': 'c', 'build.md': 'b', 'check-1.md': 'c', 'define.md': 'd',
+    'notes.md': 'n', 'finish.md': 'f', 'check-10.md': 'c', 'check-2.md': 'c', 'build.md': 'b', 'prepare.md': 'p', 'check-1.md': 'c', 'define.md': 'd',
   });
   const r = (await list()).find((r) => r.id === '2026-01-05-ordered');
-  assert.deepEqual(r.files, ['define.md', 'build.md', 'check-1.md', 'check-2.md', 'check-10.md', 'finish.md']);
+  assert.deepEqual(r.files, ['define.md', 'prepare.md', 'build.md', 'check-1.md', 'check-2.md', 'check-10.md', 'finish.md', 'notes.md']);
 });
 
 test('file route rejects traversal and anything outside a Run', async () => {
