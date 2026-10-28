@@ -10,19 +10,19 @@ A Run is one pass through five Stages. Start it with the `factory` skill (`/fact
 
 ```mermaid
 flowchart LR
-    subgraph Define
+    subgraph Define["Define · Codex: GPT-6.1 Sol · Claude: Sonnet · Copilot: Claude Sonnet 4.6"]
         A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
     end
-    subgraph Prepare
+    subgraph Prepare["Prepare · same as Define"]
         D[ponytail]
     end
-    subgraph Build
+    subgraph Build["Build · Codex: GPT-6.1 Terra · Claude: Sonnet · Copilot: GPT-5.3-Codex"]
         E[implement-spec with tdd]
     end
-    subgraph Check
-        F[code-review]
+    subgraph Check["Check · Codex: GPT-6.1 Sol · Claude: Opus · Copilot: Claude Sonnet 4.6"]
+        F[code-review and security-scan]
     end
-    subgraph Finish
+    subgraph Finish["Finish · Codex: GPT-6 Luna · Claude: Haiku · Copilot: Claude Haiku 4.5"]
         G[pr] --> H[unslop]
     end
 
@@ -41,7 +41,9 @@ flowchart LR
 
 Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
 
-Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and its body closes every Ticket with `Closes #N`.
+Build works on a branch named after the Run, with one commit per Ticket. The main agent coordinates Stage workers and relays Define questions to you. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and its body closes every Ticket with `Closes #N`.
+
+The diagram shows requested defaults, not a guarantee of the model actually used. Edit the installed `factory-*` agent profiles to choose models available to your account. Factory reports the requested model and any substitution or inability to verify the actual model. Copilot CLI Auto mode makes subagents inherit the session model, so select a non-Auto model to use the profiles. Copilot support here targets the CLI; other Copilot clients may behave differently.
 
 Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these.
 
@@ -74,6 +76,8 @@ Run the tests with `npm test`. They use `node:test`.
 | copilot | `.github/skills` | `~/.copilot/skills` |
 
 After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
+
+Install also creates editable Stage agent profiles in `.claude/agents`, `.codex/agents`, or `.github/agents` for project installs, and in the corresponding `~/.claude/agents`, `~/.codex/agents`, or `~/.copilot/agents` directory for global installs. `--agent all` installs profiles for all three targets. Existing profiles are kept, even with `--force`; edit them to change models or remove them before reinstalling defaults.
 
 ## Dashboard
 

@@ -21,6 +21,30 @@ test('every skill the factory invokes can be called by the model', () => {
   }
 });
 
+test('install provides editable Stage agents for each target and preserves existing agents', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
+  const cwd = process.cwd();
+  const log = mock.method(console, 'log', () => {});
+  try {
+    process.chdir(project);
+    for (const agent of ['codex', 'claude', 'copilot']) install({ agent, project: true, force: false });
+    for (const [dir, ext] of [['.codex/agents', 'toml'], ['.claude/agents', 'md'], ['.github/agents', 'agent.md']]) {
+      for (const stage of ['define', 'build', 'check', 'finish']) {
+        assert.ok(existsSync(join(project, dir, `factory-${stage}.${ext}`)));
+      }
+      const file = join(project, dir, `factory-build.${ext}`);
+      writeFileSync(file, 'my model configuration');
+    }
+    for (const agent of ['codex', 'claude', 'copilot']) install({ agent, project: true, force: true });
+    for (const [dir, ext] of [['.codex/agents', 'toml'], ['.claude/agents', 'md'], ['.github/agents', 'agent.md']]) {
+      assert.equal(readFileSync(join(project, dir, `factory-build.${ext}`), 'utf8'), 'my model configuration');
+    }
+  } finally {
+    process.chdir(cwd);
+    log.mock.restore();
+  }
+});
+
 test('install replaces a symlinked skill with a copy', () => {
   const project = mkdtempSync(join(tmpdir(), 'tds-install-'));
   const other = mkdtempSync(join(tmpdir(), 'tds-other-'));

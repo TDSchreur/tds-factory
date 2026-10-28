@@ -46,4 +46,26 @@ export function install({ agent, project, force }) {
       }
     }
   }
+
+  // Agent profiles are user-editable; keep existing files even with --force.
+  const agentTargets = agent === 'all' ? ['claude', 'codex', 'copilot'] : names;
+  for (const name of agentTargets) {
+    const source = path.join(SKILLS_DIR, '..', 'agents', name);
+    const dirs = {
+      claude: '.claude/agents',
+      codex: '.codex/agents',
+      copilot: project ? '.github/agents' : '.copilot/agents',
+    };
+    const target = path.join(base, dirs[name]);
+    fs.mkdirSync(target, { recursive: true });
+    for (const file of fs.readdirSync(source)) {
+      try {
+        fs.copyFileSync(path.join(source, file), path.join(target, file), fs.constants.COPYFILE_EXCL);
+        console.log(`installed ${name} agent/${file} -> ${target}`);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        console.log(`kept ${name} agent/${file} -> ${target}`);
+      }
+    }
+  }
 }

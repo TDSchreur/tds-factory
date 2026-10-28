@@ -10,6 +10,14 @@ disable-model-invocation: true
 
 Walk the work through the Stages below in order. Finish each Stage and tell the user what it produced before starting the next. At each Stage transition, update the Run record. The user can stop or redirect at any Stage.
 
+## Stage models
+
+The main agent coordinates the Run, keeps the Run record, communicates with the user and dispatches the installed `factory-define`, `factory-build`, `factory-check` and `factory-finish` agents for the corresponding Stages. Prepare runs with Define. Use the Agent target's native named-agent dispatch, not a request to change the main agent's model. Give each worker the Run context, relevant skill instructions and its exact task; collect and check its result before advancing. If a target cannot dispatch the named agent, report that model routing is unavailable and continue only with an explicit user decision.
+
+Model choices are in the target's installed agent files. At each dispatch, report the requested model and, if the client exposes it, the actual model. Report substitutions and unverified actual models; never claim a model ran solely because its profile requested it. If dispatch fails or a model cannot be used, report the failure and ask the user how to proceed. Copilot CLI Auto mode inherits the session model for subagents, so report this and use a non-Auto session for configured Stage models.
+
+The coordinator relays Define questions and answers between the user and the Define agent, including confirmation of shared understanding, then dispatches the remaining Define work. The coordinator keeps the existing approval points. Use a fresh `factory-check` agent for each Check axis; they must not write and must not have implemented the change.
+
 ## Run record
 
 Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourself; do not skip it.
@@ -77,7 +85,7 @@ Invoke `ponytail` so the Build stage writes the minimum code that works.
 
 ## Build
 
-Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
+Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. The Build agent works without further subagents and skips the closing `code-review` step of `implement-spec`; Check owns the review.
 
 ## Check
 
