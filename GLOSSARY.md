@@ -22,6 +22,10 @@ The ordered Stages a piece of work moves through, encoded in the `factory` Skill
 One step of the Flow: Define, Prepare, Build, Check or Finish.
 _Avoid_: Phase, step
 
+**Check axis**:
+One of the independent reviews in the Check Stage (Standards, Spec, Security), each reporting its own pass or fail verdict.
+_Avoid_: Reviewer, Gate
+
 **Spec**:
 The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/`.
 

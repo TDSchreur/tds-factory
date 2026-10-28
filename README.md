@@ -36,10 +36,10 @@ flowchart LR
 | Define | `grill-with-docs`, `to-spec`, `to-tickets` | A Spec in `docs/specs/` and a GitHub Issue per Ticket |
 | Prepare | `ponytail` | Build writes the minimum code that works |
 | Build | `implement-spec`, `tdd` | Every Ticket done, test-first |
-| Check | `code-review` | A Standards verdict and a Spec verdict |
+| Check | `code-review`, `security-review` | A Standards, a Spec and a Security verdict |
 | Finish | `pr` | A prepared pull request |
 
-Check sends the Run back to Build at most twice. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
+Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
 
 Each Run keeps a `run.json` record in `.factory/runs/<id>/`, plus a short Markdown summary per Stage. The Dashboard reads these.
 

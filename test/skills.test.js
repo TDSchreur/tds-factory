@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdtempSync, mkdirSync, symlinkSync, existsSync, lstatSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, symlinkSync, existsSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { install } from '../src/install.js';
@@ -32,4 +32,10 @@ test('install replaces a symlinked skill with a copy', () => {
   assert.ok(!lstatSync(link).isSymbolicLink());
   assert.ok(existsSync(join(link, 'SKILL.md')));
   assert.ok(existsSync(other));
+});
+
+test('security-review ships with its reference files', () => {
+  const dir = join(SKILLS_DIR, 'security-review');
+  assert.ok(existsSync(join(dir, 'SKILL.md')));
+  assert.ok(readdirSync(join(dir, 'references')).includes('vuln-categories.md'));
 });

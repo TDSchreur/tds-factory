@@ -79,7 +79,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 - Rendering Markdown as formatted HTML.
 - Authentication, remote access, or serving anything beyond localhost.
 - Deleting or archiving Run folders.
-- Per-reviewer chips beyond Standards and Spec.
+- Per-reviewer chips beyond Standards, Spec and Security.
 
 ## Further Notes
 
