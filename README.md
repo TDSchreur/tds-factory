@@ -38,11 +38,24 @@ flowchart LR
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
-Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare sets Build to build what was asked; Build finishes every Ticket test-first, one commit each; Check gives a Standards, a Spec, a Security and an Infrastructure verdict, each from a fresh read-only subagent; Finish opens the pull request. Default models per Stage are tracked in issue #32.
+Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare sets Build to build what was asked; Build finishes every Ticket test-first, one commit each; Check gives a Standards, a Spec, a Security and an Infrastructure verdict, each from a fresh read-only subagent; Finish opens the pull request.
 
 The rules for each Stage live in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). In short: only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most twice.
 
 Agents need `tds-factory` on PATH to create and update the Run record (`run.json`, in `.factory/runs/<id>/`, plus a Markdown summary per Stage). Every Run works in its own Run worktree in `.factory/worktrees/<run id>`, on a branch named after the Run id, cut from the freshly fetched default branch of `origin`, so agents in separate tabs never share files. Run records always live in the main checkout, so one Dashboard shows every Run. Dependencies are not installed for you: run the project's normal setup in the worktree.
+
+### Default models per Stage
+
+`tds-factory install` writes four Stage agents per target (`factory-define`, `factory-build`, `factory-check`, `factory-finish`) next to the skills: `~/.claude/agents`, `~/.codex/agents` and `~/.copilot/agents` (`.github/agents` with `--project` for Copilot). Define and Prepare share `factory-define`. The main agent stays the coordinator: it talks to you, owns the Run record and approvals, and runs the Check reviews as three or four independent read-only agents. Each cell is model and reasoning effort; "default" means the session setting applies and "not set" means Copilot has no effort setting.
+
+| Stage | Claude | Codex | Copilot |
+|---|---|---|---|
+| Define, Prepare | Sonnet, default | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set |
+| Build | Sonnet, default | `gpt-6.1-terra`, medium | `gpt-5.3-codex`, not set |
+| Check | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-4.6`, not set |
+| Finish | Haiku, default | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set |
+
+Edit the agent files to change a model. Install keeps files that already exist; `--force` replaces them with the defaults. Whether a model is available depends on your client, account and policy, and the client may substitute another or not report which one ran; the Factory reports such cases instead of assuming. The defaults are verified for Copilot CLI only, not for other Copilot environments, and have not been checked against a live client.
 
 ## Setup
 

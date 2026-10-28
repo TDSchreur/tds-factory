@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SKILLS_DIR, MARKER } from './paths.js';
+import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
 import { targets } from './flow.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
@@ -40,5 +40,21 @@ export function install({ agent, project, force }) {
         console.log(`removed ${name}/${e.name}`);
       }
     }
+    installAgents(name, path.join(base, targets[name][project ? 'projectAgents' : 'agents']), force);
+  }
+}
+
+// Stage agent files hold the editable model choices, so an existing file is never overwritten without --force.
+function installAgents(name, targetDir, force) {
+  const sourceDir = path.join(AGENTS_DIR, name);
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const file of fs.readdirSync(sourceDir)) {
+    const dest = path.join(targetDir, file);
+    if (fs.existsSync(dest) && !force) {
+      console.warn(`skip ${name}/${file}: exists, keeping your configuration (use --force to replace)`);
+      continue;
+    }
+    fs.copyFileSync(path.join(sourceDir, file), dest);
+    console.log(`installed ${name}/${file} -> ${dest}`);
   }
 }
