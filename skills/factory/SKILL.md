@@ -50,7 +50,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
 | `spec_link` | Link to the Spec (path or URL). Optional; set once the Spec exists |
-| `tickets` | Links to the Tickets, an array of strings (issue URLs). Optional; set once they exist |
+| `tickets` | Links to the Tickets, an array of strings: issue URLs or repo-relative file paths, whichever the tracker produces. Optional; set once they exist |
 | `pr` | Link to the pull request. Optional; set once it exists |
 
 Record the Spec, Tickets and PR as links only; never copy their content into the Run folder.
@@ -73,7 +73,7 @@ When the user answers and the Run continues, set `status` back to `running`, `wa
 
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
 2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`. Choose the test seams yourself and proceed without asking for seam confirmation or Spec sign-off.
-3. Invoke `to-tickets` to cut the Spec into Tickets, stored as GitHub Issues. Choose the breakdown and publish it without asking the user to review or approve it. If a label the tracker needs does not exist, ask the user before creating it.
+3. Invoke `to-tickets` to cut the Spec into Tickets, published to the Issue tracker named in `docs/agents/issue-tracker.md`, local Markdown when that file names no tracker. Choose the breakdown and publish it without asking the user to review or approve it. If a label the tracker needs does not exist, ask the user before creating it.
 
 ## Prepare
 
@@ -89,4 +89,4 @@ In one pass, review the changes on three axes, each in its own fresh read-only s
 
 ## Finish
 
-Invoke `pr` to prepare the pull request. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
+Invoke `pr` to prepare the pull request. If the project has a PR template at `.github/pull_request_template.md`, `.azuredevops/pull_request_template.md` or `docs/pull_request_template.md`, pass it to `pr` and fill it in; otherwise keep the layout `pr` produces. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. When the tracker is GitHub, the PR body lists `Closes #N` for every Ticket; otherwise it lists the Ticket paths and has no `Closes` lines. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.

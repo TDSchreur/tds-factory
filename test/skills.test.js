@@ -14,6 +14,15 @@ test('the factory invokes exactly the skills we expect', () => {
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
+test('the factory follows the configured tracker and the repo PR template', () => {
+  assert.doesNotMatch(flow, /GitHub Issues/);
+  assert.doesNotMatch(flow, /\. The PR body lists `Closes #N`/);
+  assert.match(flow, /docs\/agents\/issue-tracker\.md/);
+  for (const path of ['.github/pull_request_template.md', '.azuredevops/pull_request_template.md', 'docs/pull_request_template.md']) {
+    assert.ok(flow.includes(path), path);
+  }
+});
+
 test('every skill the factory invokes can be called by the model', () => {
   for (const name of invoked) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
