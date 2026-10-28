@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
@@ -179,8 +180,16 @@ function removeRun(projectDir, id) {
   }
 }
 
+// Run records live in the main checkout, so a linked worktree resolves to it; anything else stays where it is.
+function mainCheckout(dir) {
+  const out = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'], { cwd: dir, encoding: 'utf8' });
+  const [gitDir, common] = out.status === 0 ? out.stdout.trim().split('\n') : [];
+  return gitDir && gitDir !== common && path.basename(common) === '.git' ? path.dirname(common) : dir;
+}
+
 // The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed' or 'invalid'.
-export function openRunStore(projectDir) {
+export function openRunStore(callerDir) {
+  const projectDir = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
   return {
     start: (data) => startRun(projectDir, data),
