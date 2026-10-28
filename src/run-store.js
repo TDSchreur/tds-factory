@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
-const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr'];
+const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr', 'worktree'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
@@ -57,18 +57,32 @@ function runRoot(projectDir, create) {
   if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
   return root;
 }
-function startRun(projectDir, data) {
+function startRun(projectDir, data, adopted) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
+  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  if (git('rev-parse', '--git-dir').status !== 0) throw new Error('a Run worktree needs a git repository: run git init first');
+  if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) throw new Error('a Run worktree needs a git repository with at least one commit');
   const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'run';
   const base = `${new Date().toISOString().slice(0, 10)}-${slug}`;
   const root = runRoot(projectDir, true);
+  const worktrees = path.join(path.dirname(root), 'worktrees');
+  if (fs.existsSync(worktrees) && fs.realpathSync(worktrees) !== worktrees) throw new Error('Run storage must not be symlinked');
   let id = base, n = 2;
   while (true) { try { fs.mkdirSync(path.join(root, id)); break; } catch (err) { if (err.code !== 'EEXIST') throw err; id = `${base}-${n++}`; } }
   const now = new Date().toISOString();
-  try { write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, data)); }
-  catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
+  try {
+    let worktree = adopted;
+    if (!worktree) {
+      worktree = path.join(worktrees, id);
+      // shortcut: without an origin/HEAD the branch is cut from the checked-out commit, upgrade when that surprises someone.
+      const head = git('symbolic-ref', '--short', 'refs/remotes/origin/HEAD');
+      const added = git('worktree', 'add', '-b', id, worktree, head.status === 0 ? head.stdout.trim() : 'HEAD');
+      if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
+    }
+    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree }));
+  } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
 function withRunLock(root, id, action) {
@@ -180,19 +194,19 @@ function removeRun(projectDir, id) {
   }
 }
 
-// Run records live in the main checkout, so a linked worktree resolves to it; anything else stays where it is.
+// Run records live in the main checkout, so a linked worktree resolves to it (and is the worktree a new Run adopts); anything else stays where it is.
 function mainCheckout(dir) {
-  const out = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'], { cwd: dir, encoding: 'utf8' });
-  const [gitDir, common] = out.status === 0 ? out.stdout.trim().split('\n') : [];
-  return gitDir && gitDir !== common && path.basename(common) === '.git' ? path.dirname(common) : dir;
+  const out = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel'], { cwd: dir, encoding: 'utf8' });
+  const [gitDir, common, top] = out.status === 0 ? out.stdout.trim().split('\n') : [];
+  return gitDir && gitDir !== common && path.basename(common) === '.git' ? { dir: path.dirname(common), adopted: top } : { dir, adopted: undefined };
 }
 
 // The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed' or 'invalid'.
 export function openRunStore(callerDir) {
-  const projectDir = mainCheckout(callerDir);
+  const { dir: projectDir, adopted } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
   return {
-    start: (data) => startRun(projectDir, data),
+    start: (data) => startRun(projectDir, data, adopted),
     update: (id, data) => updateRun(projectDir, id, data),
     list: () => listRuns(runsDir),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),

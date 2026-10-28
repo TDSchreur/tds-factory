@@ -5,6 +5,7 @@ import fs, { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, sy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openRunStore } from '../src/run-store.js';
+import { repo } from './git-repo.js';
 
 const project = () => mkdtempSync(join(tmpdir(), 'run-store-'));
 const seed = (cwd, id, files) => {
@@ -15,7 +16,7 @@ const seed = (cwd, id, files) => {
 const start = { title: 'Example', agent: 'codex', commands: 'npm test', conventions: [] };
 
 test('start and update go through the store and list returns the raw record', async () => {
-  const cwd = project();
+  const cwd = repo();
   const store = openRunStore(cwd);
   const id = store.start(start);
   store.update(id, { status: 'waiting', waiting_reason: 'answer' });
@@ -89,7 +90,7 @@ test('update preserves unknown fields and clears waiting on resume', () => {
 });
 
 test('update rejects invalid values and leaves the record as it was', () => {
-  const cwd = project();
+  const cwd = repo();
   const store = openRunStore(cwd);
   const id = store.start(start);
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
@@ -112,7 +113,7 @@ test('start rejects check_loops and missing fields', () => {
 });
 
 test('start and update refuse linked storage outside the project', () => {
-  const cwd = project();
+  const cwd = repo();
   const outside = project();
   mkdirSync(join(cwd, '.factory'));
   symlinkSync(join(outside, '.factory', 'runs'), join(cwd, '.factory', 'runs'));
