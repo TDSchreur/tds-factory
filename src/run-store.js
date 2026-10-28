@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 
-const stages = ['define', 'prepare', 'build', 'check', 'finish'];
+export const stages = ['define', 'prepare', 'build', 'check', 'finish'];
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
 const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr'];
 const lists = ['conventions', 'tickets'];
@@ -88,19 +88,6 @@ export function updateRun(projectDir, id, data) {
   if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
   write(dir, apply(old, data));
   });
-}
-
-const str = (v) => typeof v === 'string' ? v.trim() : '';
-const strList = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
-export function interpretRun(entry) {
-  const id = typeof entry?.id === 'string' ? entry.id : '', files = strList(entry?.files);
-  if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') return { id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files, links: [], status: '', pr: '' };
-  const r = entry.record, status = str(r.status), stage = str(r.stage).toLowerCase();
-  const num = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
-  const verdict = (v, skip) => { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : ''; };
-  const links = [];
-  for (const [label, values] of [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]]) for (const value of Array.isArray(values) ? values : [values]) if (str(value)) links.push({ label, href: str(value) });
-  return { id, unreadable: false, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
 }
 
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
