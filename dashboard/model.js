@@ -54,3 +54,15 @@ export function chipsOf(run) {
   if (typeof run.loops === 'number') chips.push({ key: 'loops', cls: '', text: `loop ${run.loops}/2`, tip: CHIP_HELP.loops });
   return chips;
 }
+
+// Short label of a Ticket link: "#111" for an issue URL, the file name for a path.
+export const ticketLabel = (link) => {
+  const last = str(link).replace(/[?#].*$/, '').split(/[\\/]/).filter(Boolean).pop() || str(link);
+  return /^\d+$/.test(last) ? '#' + last : last;
+};
+
+// The Tickets of a card with their state: Tickets finish in order, so the first ticketsDone are done and the next is active during Build.
+export function ticketsOf(run) {
+  const done = Math.min(run.ticketsDone || 0, (run.tickets || []).length);
+  return (run.tickets || []).map((href, i) => ({ href, label: ticketLabel(href), state: i < done ? 'done' : i === done && run.column === 'build' ? 'active' : 'todo' }));
+}
