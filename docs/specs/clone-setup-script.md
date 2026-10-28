@@ -30,4 +30,4 @@ Test through the script's behavior with `node:test` in `test/setup.test.js`: wit
 
 ## Out of Scope
 
-- Windows support, uninstalling, running `install` automatically, initialising submodules.
+- Windows support (added later: see `powershell-setup-script.md`), uninstalling, running `install` automatically, initialising submodules.
