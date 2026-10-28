@@ -135,7 +135,7 @@ export function Header({ project, status, olderLabel, onOlder }) {
 }
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
-// because showing the Loading placeholders again would shrink the page and the browser would scroll back to the top.
+// because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
 export function Detail({ run, onClose }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);

@@ -188,7 +188,7 @@ test('the Run detail header shows the Run state and stays in view while the summ
     await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
     const head = await page.execute("return document.querySelector('#detail header').textContent");
     for (const part of ['Waiting run', 'Check', 'Needs you: confirm the plan', '1/2 tickets', 'Standards pass', 'claude', 'Updated']) assert.ok(head.includes(part), part + ' in ' + head);
-    assert.equal(await page.execute("return document.querySelector('#detail header button[aria-label=\"Close Run detail\"]') !== null"), true);
+    assert.equal(await page.execute("const b = document.querySelector('#detail header button[aria-label=\"Close Run detail\"]').getBoundingClientRect(); return document.getElementById('detail').getBoundingClientRect().right - b.right < 40"), true); // at the right edge
     await page.execute("document.getElementById('detail').scrollTop = 600");
     const gap = await page.execute("return document.querySelector('#detail header').getBoundingClientRect().top - document.getElementById('detail').getBoundingClientRect().top");
     assert.ok(Math.abs(gap) <= 2, 'the header stays at the top of the Run detail, gap ' + gap);
@@ -211,9 +211,14 @@ test('the Run detail is keyboard friendly: focus moves in, Escape closes it and 
     await page.key(ESCAPE);
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
     assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=r1]')"), true);
-    // Escape with nothing open does nothing, and a confirmation keeps Escape for itself.
+    // Escape with nothing open does nothing.
     await page.key(ESCAPE);
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+    // The close button hands focus back to the card too.
+    await page.execute("document.querySelector('[data-id=r1]').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    await page.execute("document.querySelector('#detail button[aria-label=\"Close Run detail\"]').click()");
+    assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=r1]')"), true);
   } finally { await page.close(); }
 });
 
@@ -240,6 +245,9 @@ test('the Run detail closes when its Run is no longer shown', async (t) => {
     page.state.runs = [run({ id: 'r2', title: 'Staying' })];
     await page.wait(POLL_WAIT);
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+    page.state.runs = [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })];
+    await page.wait(POLL_WAIT);
+    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true); // it does not reopen by itself
   } finally { await page.close(); }
 });
 

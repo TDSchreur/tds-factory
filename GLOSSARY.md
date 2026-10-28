@@ -68,5 +68,5 @@ A local web page that shows every Run as a card in a column per Stage and flags 
 _Avoid_: Board, Monitor
 
 **Run detail**:
-The side panel the Dashboard opens beside the board when a Run's card is selected, showing its status, links and stage summaries.
+The side panel the Dashboard opens beside the board when a Run's card is selected, showing its status, links and Stage summaries.
 _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Modal

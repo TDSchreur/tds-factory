@@ -85,8 +85,8 @@
 
   #layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
   #layout.open { grid-template-columns: minmax(0, 1fr) min(40rem, 45vw); }
-  #detail { position: sticky; top: 3.5rem; max-height: calc(100vh - 3.5rem); overflow-y: auto; margin: 1.25rem 1.25rem 1.25rem 0; padding: 0 1.25rem 1.25rem; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: var(--shadow); }
-  #detail header { position: sticky; top: 0; z-index: 1; padding: 1.25rem 0 .75rem; background: var(--card); border-bottom: 1px solid var(--border); }
+  #detail { position: sticky; top: 3.5rem; max-height: calc(100vh - 3.5rem); overflow-y: auto; overscroll-behavior: contain; margin: 1.25rem 1.25rem 1.25rem 0; padding: 0 1.25rem 1.25rem; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: var(--shadow); }
+  #detail header { display: block; backdrop-filter: none; position: sticky; top: 0; z-index: 1; padding: 1.25rem 0 .75rem; background: var(--card); border-bottom: 1px solid var(--border); }
   #detail .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
   #detail .head-row h2 { margin: 0; overflow-wrap: anywhere; }
   #detail .reason { color: var(--flag); font-weight: 700; font-size: .875rem; margin-top: .3rem; }
