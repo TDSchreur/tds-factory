@@ -28,10 +28,14 @@
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
   header { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .75rem 1.25rem; background: var(--header-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  header .title { display: flex; align-items: baseline; gap: .5rem; }
   h1 { font-size: 1.25rem; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-  #project, #status { color: var(--muted); font-size: .875rem; }
+  .tagline { color: var(--muted); font-size: .875rem; }
+  #project { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: .15rem .65rem; font: .8125rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; }
+  #status { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; color: var(--muted); font-size: .875rem; }
+  #status::before { content: ''; flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: var(--ok); }
   #status.error { color: var(--flag); font-weight: 600; }
-  header label { font-size: .875rem; color: var(--muted); margin-left: auto; }
+  #status.error::before { background: var(--flag); }
   select, button { font: inherit; font-size: .875rem; color: var(--text); background: var(--card); border: 1px solid var(--btn-border); border-radius: var(--radius); padding: .3rem .7rem; cursor: pointer; transition: border-color .15s, background-color .15s; }
   select:hover, button:hover { border-color: var(--primary); }
   button:active { background: var(--panel); }
@@ -110,7 +114,9 @@
   .dialog-actions .danger { background: var(--flag); border-color: var(--flag); color: var(--card); }
   @media (max-width: 48rem) {
     header { padding: .6rem 1rem; }
-    header label { margin-left: 0; }
+    #status { order: 1; }
+    #project { order: 2; }
+    #theme, #older { order: 3; }
     #board { grid-template-columns: 1fr; padding: 1rem; }
     #detail { margin: 0 1rem 1rem; padding: 1rem; }
   }
