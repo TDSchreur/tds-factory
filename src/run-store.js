@@ -70,7 +70,13 @@ function startRun(projectDir, data, adopted) {
   const worktrees = path.join(path.dirname(root), 'worktrees');
   if (fs.existsSync(worktrees) && fs.realpathSync(worktrees) !== worktrees) throw new Error('Run storage must not be symlinked');
   let id = base, n = 2;
-  while (true) { try { fs.mkdirSync(path.join(root, id)); break; } catch (err) { if (err.code !== 'EEXIST') throw err; id = `${base}-${n++}`; } }
+  while (true) {
+    try { fs.mkdirSync(path.join(root, id)); } catch (err) { if (err.code !== 'EEXIST') throw err; id = `${base}-${n++}`; continue; }
+    // Branches outlive Run history, so a free folder name is not enough.
+    if (git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status !== 0) break;
+    fs.rmdirSync(path.join(root, id));
+    id = `${base}-${n++}`;
+  }
   const now = new Date().toISOString();
   try {
     let worktree = adopted;
@@ -197,11 +203,12 @@ function removeRun(projectDir, id) {
   }
 }
 
-// Run records live in the main checkout, so a linked worktree resolves to it (and is the worktree a new Run adopts); anything else stays where it is.
+// Run records live in the main checkout, so any folder of it or of a linked worktree resolves to it. A linked worktree is also the one a new Run adopts.
 function mainCheckout(dir) {
   const out = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel'], { cwd: dir, encoding: 'utf8' });
   const [gitDir, common, top] = out.status === 0 ? out.stdout.trim().split('\n') : [];
-  return gitDir && gitDir !== common && path.basename(common) === '.git' ? { dir: path.dirname(common), adopted: top } : { dir, adopted: undefined };
+  if (!gitDir || path.basename(common) !== '.git') return { dir, adopted: undefined };
+  return { dir: path.dirname(common), adopted: gitDir !== common ? top : undefined };
 }
 
 // The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.

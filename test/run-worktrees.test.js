@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -152,4 +152,34 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
   } finally {
     await dashboard.close();
   }
+});
+
+test('start and update from a subfolder of the main checkout use the main checkout Run store', () => {
+  const main = repo();
+  const sub = join(main, 'sub');
+  mkdirSync(sub);
+  const id = openRunStore(sub).start(start);
+  assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+  assert.equal(record(main, id).worktree, join(main, '.factory', 'worktrees', id));
+  assert.ok(!existsSync(join(sub, '.factory')));
+});
+
+test('a Run restarted after its history was deleted gets a fresh id, because the branch is kept', () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const first = store.start(start);
+  finish(store, first);
+  assert.equal(store.remove(first), 'deleted');
+  const second = store.start(start);
+  assert.notEqual(second, first);
+  assert.ok(branches(main).includes(first) && branches(main).includes(second));
+});
+
+test('a branch the user already made with the Run id does not block start', () => {
+  const main = repo();
+  const taken = `${new Date().toISOString().slice(0, 10)}-example`;
+  git(main, 'branch', taken);
+  const id = openRunStore(main).start(start);
+  assert.notEqual(id, taken);
+  assert.equal(git(record(main, id).worktree, 'branch', '--show-current'), id);
 });
