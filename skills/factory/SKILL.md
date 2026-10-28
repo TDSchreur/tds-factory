@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 # Factory
 
+<!-- sync and the skills test find the skills this Skill invokes by the word Invoke followed by a backticked skill name. Keep that phrasing. -->
+
 Walk the work through the Stages below in order. Finish each Stage and tell the user what it produced before starting the next. At each Stage transition, update the Run record. The user can stop or redirect at any Stage.
 
 ## Run record
