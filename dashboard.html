@@ -79,7 +79,7 @@
   .card .updated { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
   .card .updated.stale { color: var(--amber); font-weight: 600; }
   .card .pr { font-size: .875rem; margin-top: .4rem; }
-  .card > button { margin-top: .6rem; }
+  .card > button, .details > button { margin-top: .6rem; }
   .card.abandoned { opacity: .7; }
   .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; font-size: .75rem; }
   .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .55rem; color: var(--muted); line-height: 1.5; }
@@ -132,7 +132,7 @@
   var POLL_MS = 2000;
   var STALE_MS = 10 * 60 * 1000;
   var OLD_MS = 7 * 24 * 60 * 60 * 1000;
-  var expanded = {}; // Done cards the user opened, by Run id; same lifetime as showOlder
+  var expanded = Object.create(null); // Done cards the user opened, by Run id; same lifetime as showOlder
   var showOlder = false; // lives here because render() rebuilds the board every poll
   var olderBtn = document.getElementById('older');
   var board = document.getElementById('board');
@@ -219,8 +219,15 @@
       var toggle = el('button', null, open ? 'Hide details' : 'Show details');
       toggle.type = 'button';
       toggle.setAttribute('aria-expanded', open);
-      toggle.setAttribute('aria-label', (open ? 'Hide details of ' : 'Show details of ') + run.title);
-      toggle.addEventListener('click', function (e) { e.stopPropagation(); expanded[run.id] = !open; render(lastEntries); });
+      toggle.setAttribute('aria-label', 'Details of ' + run.title);
+      // Flips in place instead of re-rendering the board, so the toggle keeps keyboard focus.
+      toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        expanded[run.id] = !expanded[run.id];
+        more.hidden = !expanded[run.id];
+        toggle.textContent = expanded[run.id] ? 'Hide details' : 'Show details';
+        toggle.setAttribute('aria-expanded', expanded[run.id]);
+      });
       toggle.addEventListener('keydown', function (e) { e.stopPropagation(); });
       li.appendChild(toggle);
       li.appendChild(more);

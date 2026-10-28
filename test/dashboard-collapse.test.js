@@ -39,20 +39,34 @@ test('Done cards start collapsed and other columns do not', async () => {
   assert.equal(details(card('Active run')), undefined);
 });
 
-test('the toggle expands a Done card without selecting it and the state survives a re-render', async () => {
+test('the toggle flips a Done card in place without selecting it', async () => {
   const { card } = await page([done]);
-  let selected = false;
   const li = card('Done run');
+  let selected = false;
   li.handlers.click = () => { selected = true; };
-  let stopped = false;
-  toggle(li).handlers.click({ stopPropagation() { stopped = true; } });
-  assert.ok(stopped);
+  let stopped = 0;
+  const event = { stopPropagation() { stopped++; } };
+  toggle(li).handlers.click(event);
   assert.equal(selected, false);
-  const again = card('Done run');
-  assert.equal(toggle(again).attributes['aria-expanded'], 'true');
-  assert.equal(details(again).hidden, false);
-  assert.ok(descendants(details(again)).some((e) => e.textContent === 'Delete'));
-  toggle(again).handlers.click({ stopPropagation() {} });
+  assert.equal(toggle(li).attributes['aria-expanded'], 'true');
+  assert.equal(details(li).hidden, false);
+  assert.ok(descendants(details(li)).some((e) => e.textContent === 'Delete'));
+  toggle(li).handlers.click(event);
+  assert.equal(details(li).hidden, true);
+  toggle(li).handlers.keydown(event);
+  assert.equal(stopped, 3);
+});
+
+test('an expanded card stays expanded after the board is rebuilt', async () => {
+  const { card } = await page([done]);
+  toggle(card('Done run')).handlers.click({ stopPropagation() {} });
+  card('Done run').handlers.click(); // selecting a card rebuilds the board
+  assert.equal(toggle(card('Done run')).attributes['aria-expanded'], 'true');
+  assert.equal(details(card('Done run')).hidden, false);
+});
+
+test('a Run id like __proto__ starts collapsed', async () => {
+  const { card } = await page([{ ...done, id: '__proto__' }]);
   assert.equal(details(card('Done run')).hidden, true);
 });
 
