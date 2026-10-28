@@ -18,7 +18,9 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 
 **Gitignore.** If `.factory/` is not covered by the project's `.gitignore`, tell the user to add it. Do not edit `.gitignore` yourself.
 
-**Stop.** If the user tells you to stop, set `status` to `abandoned`.
+**Stop.** If the user tells you to stop, set `status` to `abandoned`, `waiting_on_human` to `false` and `waiting_reason` to an empty string.
+
+After changing this skill, re-run `tds-factory install` so the installed copy is updated.
 
 ### Schema
 

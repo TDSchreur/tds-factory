@@ -96,7 +96,6 @@
     return out;
   }
 
-  // Maps a /api/runs entry to the fields the page uses. Never throws.
   // Age in ms of an ISO timestamp, or null when missing/unparseable.
   function ageMs(iso) {
     var t = Date.parse(iso);
@@ -112,6 +111,7 @@
   // Only http(s) links become anchors.
   function safeUrl(v) { var u = str(v); return /^https?:\/\//i.test(u) ? u : ''; }
 
+  // Maps a /api/runs entry to the fields the page uses. Never throws.
   function readRun(entry) {
     var id = str(entry && entry.id);
     if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') {
@@ -128,14 +128,23 @@
     var active = status !== 'done' && status !== 'abandoned';
     return {
       id: id, unreadable: false, column: column, status: status,
-      pr: safeUrl(r.pr),
+      pr: str(r.pr),
       ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total),
       standards: verdict(r.standards), spec: verdict(r.spec), loops: num(r.check_loops),
-      waiting: active && r.waiting_on_human === true, reason: str(r.waiting_reason),
+      waiting: active && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason),
       title: str(r.title) || id || 'Untitled run',
       activity: str(r.activity), agent: str(r.agent), updated: str(r.updated),
       files: strList(entry.files), links: readLinks(r)
     };
+  }
+
+  // An anchor that opens in a new tab when href is an http(s) URL; otherwise plain text in an anchor-less span.
+  function link(text, href) {
+    var url = safeUrl(href);
+    if (!url) return el('span', null, text);
+    var a = el('a', null, text);
+    a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    return a;
   }
 
   function el(tag, cls, text) {
@@ -145,7 +154,7 @@
     return e;
   }
 
-  // One card per Run. Extension point: add fields/chips here (tickets, verdicts, waiting, ...).
+  // One card per Run.
   function renderCard(run) {
     var li = el('li', 'card' + (run.unreadable ? ' unreadable' : '') + (run.waiting ? ' waiting' : ''));
     li.dataset.id = run.id;
@@ -158,41 +167,36 @@
     if (run.activity) li.appendChild(el('div', 'activity', run.activity));
     var chips = el('div', 'chips');
     if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets'));
-    if (run.column === 'check') {
-      if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
-      if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
-    }
+    if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
+    if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
     if (run.loops !== null) chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
     if (chips.childNodes.length) li.appendChild(chips);
     if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
     var age = ageMs(run.updated);
-    if (age !== null) {
-      var active = run.column !== 'done' && !run.unreadable;
-      li.appendChild(el('div', 'updated' + (active && age > STALE_MS ? ' stale' : ''), 'Updated ' + ago(age)));
-    }
+    var active = run.column !== 'done' && !run.unreadable;
+    li.appendChild(el('div', 'updated' + (age !== null && active && age > STALE_MS ? ' stale' : ''), 'Updated: ' + (age === null ? 'unknown' : ago(age))));
     if (run.status === 'abandoned') {
       li.classList.add('abandoned');
       li.appendChild(el('div', 'agent', 'Abandoned'));
     }
     if (run.column === 'done' && run.pr) {
       var p = el('div', 'pr');
-      var a = el('a', null, 'Pull request');
-      a.href = run.pr; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      p.appendChild(a);
+      if (safeUrl(run.pr)) p.appendChild(link('Pull request', run.pr));
+      else p.textContent = 'PR: ' + run.pr;
       li.appendChild(p);
     }
     return li;
   }
 
   var selectedId = null;
-  var lastRuns = [];
+  var lastEntries = [];
   var detailEl = document.getElementById('detail');
   var shown = null; // key of what the detail view currently shows, to avoid flicker on each poll
 
   function select(id) { selectedId = selectedId === id ? null : id; render(lastEntries); }
 
-  function renderDetail() {
-    var run = selectedId && lastRuns.filter(function (r) { return r.id === selectedId; })[0];
+  function renderDetail(runs) {
+    var run = selectedId && runs.filter(function (r) { return r.id === selectedId; })[0];
     if (!run) { shown = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
     var key = JSON.stringify([run.id, run.title, run.updated, run.files, run.links]);
     if (key === shown) return;
@@ -201,9 +205,7 @@
     var kids = [el('h2', null, run.title)];
     run.links.forEach(function (l) {
       var p = el('div', 'link');
-      var a = el('a', null, l.label + ': ' + l.href);
-      if (/^(https?:)\/\//i.test(l.href)) { a.href = l.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; }
-      p.appendChild(a);
+      p.appendChild(link(l.label + ': ' + l.href, l.href));
       kids.push(p);
     });
     if (!run.files.length) kids.push(el('div', 'empty', 'No summaries yet'));
@@ -219,15 +221,15 @@
     detailEl.replaceChildren.apply(detailEl, kids);
   }
 
-  var lastEntries = [];
   function render(entries) {
     lastEntries = entries;
     var runs = (Array.isArray(entries) ? entries : []).map(readRun);
-    var older = runs.filter(function (r) { var a = ageMs(r.updated); return a !== null && a > OLD_MS; });
+    var n = runs.filter(function (r) { return r.waiting; }).length;
+    // Runs waiting on the user are never hidden.
+    var older = runs.filter(function (r) { var a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
     if (!showOlder) runs = runs.filter(function (r) { return older.indexOf(r) < 0; });
     olderBtn.hidden = older.length === 0;
     olderBtn.textContent = showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')';
-    lastRuns = runs;
     // Newest first within a column; unreadable and undated records sort last.
     runs.sort(function (a, b) { return b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id); });
     var cols = COLUMNS.map(function (c) {
@@ -245,8 +247,7 @@
       return section;
     });
     board.replaceChildren.apply(board, cols);
-    renderDetail();
-    var n = runs.filter(function (r) { return r.waiting; }).length;
+    renderDetail(runs);
     document.title = (n ? '(' + n + ') ' : '') + BASE_TITLE;
   }
 

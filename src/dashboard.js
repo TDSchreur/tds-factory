@@ -10,15 +10,28 @@ const FALLBACK_PAGE = `<!doctype html>
 <meta charset="utf-8">
 <title>tds-factory dashboard</title>
 <h1>tds-factory dashboard</h1>
-<p>The board page is not installed. Run records are available at <a href="/api/runs">/api/runs</a>.</p>
+<p>The Dashboard page is not installed. Run records are available at <a href="/api/runs">/api/runs</a>.</p>
 `;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-// Names of the Markdown files directly inside a Run folder, sorted.
+// Sort key: Stage order (define, build, check-N numerically, finish); unknown names last.
+function stageOrder(name) {
+  const base = name.replace(/\.md$/, '');
+  const fixed = { define: [0, 0], build: [1, 0], finish: [3, 0] }[base];
+  if (fixed) return fixed;
+  const m = /^check-(\d+)$/.exec(base);
+  return m ? [2, Number(m[1])] : [4, 0];
+}
+const byStage = (a, b) => {
+  const [x, y] = [stageOrder(a), stageOrder(b)];
+  return x[0] - y[0] || x[1] - y[1] || a.localeCompare(b);
+};
+
+// Names of the Markdown files directly inside a Run folder, in Stage order.
 async function listMarkdown(dir) {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
-    return entries.filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name)).map((e) => e.name).sort();
+    return entries.filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name)).map((e) => e.name).sort(byStage);
   } catch {
     return [];
   }
