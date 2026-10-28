@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
@@ -196,4 +196,29 @@ test('is read-only: non-GET methods are rejected', async () => {
     });
     assert.equal(status, 405, path);
   }
+});
+
+test('deletion removes completed Runs and protects active Runs', async () => {
+  run('2026-02-01-finished', { 'run.json': JSON.stringify({ status: 'done' }), 'finish.md': 'history' });
+  const request = (id) => fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal((await request('2026-02-01-finished')).status, 200);
+  assert.equal((await request('2026-01-01-good')).status, 409);
+  assert.equal((await get(dash, '/files/2026-02-01-finished/finish.md')).status, 404);
+  assert.ok((await list()).some((r) => r.id === '2026-01-01-good'));
+});
+
+
+test('deletion rejects foreign origins, unreadable records, traversal and linked storage', async () => {
+  run('2026-02-02-abandoned', { 'run.json': JSON.stringify({ status: 'abandoned' }) });
+  const request = (path, origin = dash.url) => fetch(`${dash.url}${path}`, { method: 'DELETE', headers: { Origin: origin } });
+  assert.equal((await request('/api/runs/2026-02-02-abandoned', 'http://evil.example')).status, 403);
+  assert.equal((await request('/api/runs/2026-01-02-broken')).status, 409);
+  assert.equal((await request('/api/runs/%2e%2e%2fsecret')).status, 400);
+  const outside = join(tmp, 'outside');
+  mkdirSync(outside);
+  writeFileSync(join(outside, 'run.json'), JSON.stringify({ status: 'done' }));
+  symlinkSync(outside, join(project, '.factory', 'runs', 'linked'));
+  assert.equal((await request('/api/runs/linked')).status, 409);
+  assert.ok(existsSync(join(outside, 'run.json')));
+  assert.equal((await request('/api/runs/2026-02-02-abandoned')).status, 200);
 });

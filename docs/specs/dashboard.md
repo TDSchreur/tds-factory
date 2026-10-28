@@ -6,7 +6,7 @@ When I run the Factory, the Flow lives only inside an agent conversation. I can'
 
 ## Solution
 
-A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up to date as each Run moves through the Stages. A new `tds-factory dashboard` command serves those records on localhost, and a single web page shows every Run as a card on a board with one column per Stage plus Done. Cards show progress, Check verdicts and the loop count, and flag Runs that are waiting on me prominently, including in the browser tab title. Clicking a card shows the Markdown summaries the Run wrote for each Stage.
+A Dashboard in the browser. The `factory` Skill keeps a Run record up to date as each Run moves through the Stages. A new `tds-factory dashboard` command serves those records on localhost, and a single web page shows every Run as a card on a board with one column per Stage plus Done. Cards show progress, Check verdicts and the loop count, and flag Runs that are waiting on me prominently, including in the browser tab title. Clicking a card shows the Markdown summaries the Run wrote for each Stage.
 
 ## User Stories
 
@@ -41,7 +41,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 29. As a developer, I want to click a card to read the Markdown summaries of the Run (define, build, check-N, finish), so that I can follow the details without opening files.
 30. As a developer, I want the Spec and Tickets linked from a Run, not copied, so that there is one source of truth.
 31. As a developer, I want the Dashboard to render a half-written, old or unknown-format record as a card anyway, so that a mid-write or a skill change doesn't blank the board.
-32. As a developer, I want the Dashboard to be strictly read-only, so that it can't interfere with a running agent.
+32. As a developer, I want active Runs protected from deletion, so that the Dashboard cannot interfere with a running agent.
 33. As a developer, I want the Run records to work the same under Claude, Codex and Copilot, so that the Dashboard doesn't care which agent ran the Factory.
 34. As a developer, I want the record to say which agent wrote it, so that I can see it on the card.
 35. As a developer, I want the page to need no build step, framework or CDN, so that it works offline and stays simple to maintain.
@@ -56,10 +56,10 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 - **Storage location:** the Run folders live in a `.factory/runs/` folder in the project being built, which should be gitignored. The Skill tells the user to add that ignore entry if it is missing.
 - **Dashboard command:** a new `dashboard` command on the `tds-factory` CLI, with a `--port` option (default 4317). It serves the `.factory/` folder of the current directory and prints the URL.
 - **Server module:** a deep module that, given a project directory and a port, starts an HTTP server bound to 127.0.0.1 with five routes: the page, a JSON list of raw Run records, a list of interpreted Run records for the page, an info route that returns the project directory, and a file route for the Markdown files of a Run. The file route is confined to `.factory/` and rejects path traversal. Every route answers 403 when the `Host` header is not the server's own `127.0.0.1:<port>` or `localhost:<port>`, so a web page can't read local data through DNS rebinding. The list route skips nothing that parses at all and tolerates unreadable or partial records by returning what it can with a flag, instead of failing the whole list.
-- **Page:** one HTML file with inline CSS and JS, no framework, no build step, no CDN. It polls the interpreted list route every 2 seconds. Columns are the 5 Stages plus Done. Markdown is shown as preformatted plain text. It is read-only, with no buttons that change a Run.
+- **Page:** one HTML file with inline CSS and JS, no framework, no build step, no CDN. It polls the interpreted list route every 2 seconds. Columns are the 5 Stages plus Done. Markdown is shown as preformatted plain text. It can delete individual or all completed and abandoned Runs after confirmation; active and unreadable Runs are protected.
 - **Lenient reader:** shared Run record interpretation treats every field as optional and ignores unknown fields. Missing fields render as blank or a neutral default.
 - **Stale indicator:** the "last updated" label is derived from the update timestamp and turns amber past a threshold (about 10 minutes).
-- **Done column and history:** Runs with status `done` or `abandoned` go to Done. Runs older than 7 days are hidden behind a "show older" toggle.
+- **Done column and history:** Runs with status `done` or `abandoned` go to Done. Runs older than 7 days are hidden behind a "show older" toggle. Users can permanently delete individual Done Runs or all Done Runs, including hidden ones, after confirmation.
 - **Packaging:** the page ships in the package's `files` list so `npm`-style installs include it.
 - **Glossary:** Run, Run record and Dashboard are already in `GLOSSARY.md`. No ADR; the design is easy to change later.
 
@@ -78,7 +78,7 @@ A read-only Dashboard in the browser. The `factory` Skill keeps a Run record up 
 - Reconstructing Runs from git, GitHub Issues or specs for work that didn't write a Run record.
 - Rendering Markdown as formatted HTML.
 - Authentication, remote access, or serving anything beyond localhost.
-- Deleting or archiving Run folders.
+- Archiving Run folders or deleting active Runs.
 - Per-reviewer chips beyond Standards, Spec, Security and Infrastructure.
 
 ## Further Notes
