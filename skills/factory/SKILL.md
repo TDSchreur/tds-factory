@@ -14,6 +14,8 @@ Walk the work through the Stages below in order. Finish each Stage and tell the 
 
 Before creating the Run folder, check that the user has run `/setup-matt-pocock-skills` in this project: `docs/agents/issue-tracker.md` and `docs/agents/domain.md` exist, and `AGENTS.md` or `CLAUDE.md` has an `## Agent skills` section pointing at them. If anything is missing, stop. Do not start the Run and do not create the files yourself. Tell the user which items are missing and that the Factory cannot work without them. Tell them to run `/setup-matt-pocock-skills` (it sets up the issue tracker, triage labels and domain docs layout), then run `/factory` again.
 
+Then read the project's conventions: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists. Find the verify command in its `## Commands` section. If there is none, ask the user once for the command and record the answer; never guess one. Record the command in `commands` and the paths you read in `conventions` when you create `run.json`.
+
 ## Run record
 
 Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourself; do not skip it.
@@ -47,6 +49,8 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `spec` | `pass` or `fail`: the Spec verdict of the latest `code-review`. Set after each review, replacing the old value |
 | `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set after each review, replacing the old value |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Starts at `0`; raise it by 1 on each return to Build |
+| `commands` | The verify command, one string. Set by Preflight; the answer the user gave when the project has none |
+| `conventions` | Paths of the conventions files Preflight read, an array of strings |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
 | `spec_link` | Link to the Spec (path or URL). Optional; set once the Spec exists |
@@ -81,7 +85,7 @@ Invoke `ponytail` so the Build stage writes the minimum code that works.
 
 ## Build
 
-Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
+Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. After each Ticket, run the verify command and fix failures before moving on. List any command that cannot run in this environment (other shell, no container runtime) under "Not run" in `build.md`, and never report it as passed. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
 
 ## Check
 

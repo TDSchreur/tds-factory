@@ -23,6 +23,15 @@ test('the factory follows the configured tracker and the repo PR template', () =
   }
 });
 
+test('Preflight reads project conventions and Build runs the verify command', () => {
+  assert.match(flow, /## Commands/);
+  assert.match(flow, /AGENTS\.md/);
+  assert.match(flow, /ask the user once/i);
+  assert.match(flow, /Not run/);
+  assert.match(flow, /\| `commands` \|/);
+  assert.match(flow, /\| `conventions` \|/);
+});
+
 test('every skill the factory invokes can be called by the model', () => {
   for (const name of invoked) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
