@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -101,4 +101,55 @@ test('the CLI start in a non-git directory exits non-zero with the message', () 
   const result = runCli(mkdtempSync(join(tmpdir(), 'run-worktrees-plain-')), 'start', '--data', JSON.stringify(start));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /git repository/);
+});
+
+const finish = (store, id) => store.update(id, { status: 'done' });
+
+test('remove deletes the Run folder and a clean worktree but keeps the branch', () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  const { worktree } = record(main, id);
+  finish(store, id);
+  assert.equal(store.remove(id), 'deleted');
+  assert.ok(!existsSync(worktree) && !existsSync(join(main, '.factory', 'runs', id)));
+  assert.ok(branches(main).includes(id));
+});
+
+test('remove refuses a worktree with uncommitted changes and keeps the history', () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  const { worktree } = record(main, id);
+  writeFileSync(join(worktree, 'unsaved.txt'), 'work in progress');
+  finish(store, id);
+  assert.equal(store.remove(id), 'worktree-refused');
+  assert.ok(existsSync(join(worktree, 'unsaved.txt')) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+});
+
+test('remove leaves an adopted worktree alone', () => {
+  const main = repo();
+  const wt = linked(main);
+  const store = openRunStore(wt);
+  const id = store.start(start);
+  finish(store, id);
+  assert.equal(store.remove(id), 'deleted');
+  assert.ok(existsSync(wt));
+});
+
+test('the Dashboard reports a refused worktree removal and keeps the Run', async () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  writeFileSync(join(record(main, id).worktree, 'unsaved.txt'), 'work in progress');
+  finish(store, id);
+  const dashboard = await startDashboard({ projectDir: main, port: 0 });
+  try {
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    assert.equal(res.status, 409);
+    assert.match(await res.text(), /uncommitted changes/);
+    assert.deepEqual((await (await fetch(`${dashboard.url}/api/runs`)).json()).map((r) => r.id), [id]);
+  } finally {
+    await dashboard.close();
+  }
 });

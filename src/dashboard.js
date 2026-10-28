@@ -47,8 +47,9 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
         let id;
         try { id = decodeURIComponent(path.slice('/api/runs/'.length)); } catch { return send(400, 'text/plain', 'invalid id'); }
         const outcome = store.remove(id);
-        const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409 }[outcome];
-        return send(status, 'text/plain', outcome === 'deleted' ? 'deleted' : 'cannot delete Run');
+        const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409, 'worktree-refused': 409 }[outcome];
+        const text = { deleted: 'deleted', 'worktree-refused': 'the Run worktree has uncommitted changes or cannot be removed; commit or discard them first' }[outcome] ?? 'cannot delete Run';
+        return send(status, 'text/plain', text);
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {

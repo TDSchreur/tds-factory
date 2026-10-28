@@ -184,6 +184,9 @@ function removeRun(projectDir, id) {
       if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink()) return 'not-allowed';
       const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
       if (!record || !['done', 'abandoned'].includes(record.status)) return 'not-allowed';
+      // Only a worktree this store created is removed; an adopted one belongs to the user. Never forced, so uncommitted work stays.
+      const own = path.join(factory, 'worktrees', id);
+      if (record.worktree === own && fs.existsSync(own) && spawnSync('git', ['worktree', 'remove', own], { cwd: project }).status !== 0) return 'worktree-refused';
       fs.rmSync(dir, { recursive: true });
       return 'deleted';
     });
@@ -201,7 +204,7 @@ function mainCheckout(dir) {
   return gitDir && gitDir !== common && path.basename(common) === '.git' ? { dir: path.dirname(common), adopted: top } : { dir, adopted: undefined };
 }
 
-// The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed' or 'invalid'.
+// The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.
 export function openRunStore(callerDir) {
   const { dir: projectDir, adopted } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
