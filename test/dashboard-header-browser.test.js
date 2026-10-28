@@ -64,6 +64,8 @@ test('an empty or root project path shows no pill', async (t) => {
     const page = await openPage(t, { project, runs: [run()] });
     if (!page) return;
     try {
+      await page.waitFor("return /^Updated/.test(document.getElementById('status').textContent)");
+      await page.wait(300); // /api/info is fetched once at start; give it time to arrive
       assert.equal(await page.execute("return document.getElementById('project')"), null, JSON.stringify(project));
       assert.equal(await page.execute("return !!document.getElementById('status') && !!document.getElementById('theme')"), true);
     } finally { await page.close(); }
