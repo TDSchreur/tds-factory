@@ -144,6 +144,36 @@ test('info route names the project directory the Dashboard serves', async () => 
   assert.deepEqual(JSON.parse(res.body), { project });
 });
 
+const getAs = (d, path, host) =>
+  new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: d.port, path, headers: { host } }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    }).on('error', reject);
+  });
+
+test('a non-GET with a foreign Host is still rejected', async () => {
+  const status = await new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port: dash.port, path: '/api/runs', method: 'POST', headers: { host: 'evil.example' } }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  assert.equal(status, 403);
+});
+
+test('a foreign Host header gets 403 on every route; loopback names still work', async () => {
+  const routes = ['/', '/api/runs', '/api/info', '/files/2026-01-01-good/define.md'];
+  for (const path of routes) {
+    assert.equal(await getAs(dash, path, 'evil.example'), 403, path);
+    assert.equal(await getAs(dash, path, `evil.example:${dash.port}`), 403, path);
+    assert.equal(await getAs(dash, path, `localhost:${dash.port}`), 200, path);
+    assert.equal(await getAs(dash, path, `127.0.0.1:${dash.port}`), 200, path);
+  }
+});
+
 test('server listens on loopback only', () => {
   assert.equal(dash.server.address().address, '127.0.0.1');
   assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/);

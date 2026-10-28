@@ -89,6 +89,9 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
       res.writeHead(status, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store' });
       res.end(body);
     };
+    // Only our own loopback names, so a web page can't reach us through DNS rebinding.
+    const { port: own } = server.address();
+    if (![`127.0.0.1:${own}`, `localhost:${own}`].includes(req.headers.host)) return send(403, 'text/plain', 'forbidden');
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
     const path = (req.url ?? '/').split('?')[0];
     try {
