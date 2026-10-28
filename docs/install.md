@@ -1,6 +1,6 @@
 # Install the Factory
 
-This guide takes you from nothing to a working `/factory` in GitHub Copilot. Claude Code and Codex differ only in the places noted.
+This guide takes you from nothing to a working `/factory` in GitHub Copilot. Claude Code and Codex differ only in the places noted. When you are ready to start a piece of work, read the [usage guide](usage.md).
 
 ## 1. What you need
 
@@ -78,7 +78,7 @@ Do this once per project you want to build with the Factory.
 4. Add `.factory/` to the project's `.gitignore`. That folder holds Run records and Run worktrees, and must not end up in commits.
 5. Make sure the label `ready-for-agent` exists in the repository's GitHub Issues. If it does not, the agent asks before it creates it.
 
-Commit the new files. Now `/factory` can start.
+Commit the new files. Now `/factory` can start; the [usage guide](usage.md) shows how.
 
 ## Troubleshooting
 

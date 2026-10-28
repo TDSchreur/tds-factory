@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // The README and the colleague guides are the first thing a colleague reads; keep their links and commands true.
-const GUIDES = ['README.md', 'docs/install.md'];
+const GUIDES = ['README.md', 'docs/install.md', 'docs/usage.md'];
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
 // Subcommands and flags the CLI knows, taken from its own usage text.
@@ -13,11 +13,13 @@ const usage = spawnSync(process.execPath, [resolve('bin/tds-factory.js')], { enc
 const commands = new Set([...usage.matchAll(/^\s+tds-factory (--?[\w-]+|[\w-]+)/gm)].map((m) => m[1]));
 const AGENTS = new Set(['claude', 'codex', 'copilot', 'all']);
 
-test('the README links to the install guide directly under its opening paragraph', () => {
+test('the README links to both guides directly under its opening paragraph', () => {
   const readme = read('README.md');
-  const link = readme.indexOf('(docs/install.md)');
-  assert.ok(link > -1, 'link to docs/install.md');
-  assert.ok(link < readme.indexOf('## The flow'), 'before the Flow section');
+  for (const guide of ['docs/install.md', 'docs/usage.md']) {
+    const link = readme.indexOf(`(${guide})`);
+    assert.ok(link > -1, 'link to ' + guide);
+    assert.ok(link < readme.indexOf('## The flow'), guide + ' is linked before the Flow section');
+  }
 });
 
 for (const file of GUIDES) {
