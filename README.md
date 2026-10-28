@@ -36,15 +36,15 @@ flowchart LR
     F -.->|infrastructure fail: ask first| G
 ```
 
-| Stage | Skills | Model (Claude) | Result |
-|---|---|---|---|
-| Define | `grill-with-docs`, `to-spec`, `to-tickets` | Sonnet | A Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker |
-| Prepare | `ponytail` | Sonnet | Build writes the minimum code that works |
-| Build | `implement-spec`, `tdd` | Sonnet | Every Ticket done, test-first |
-| Check | `code-review`, `security-scan`, plus the Infrastructure review | Opus, high effort | A Standards, a Spec, a Security and an Infrastructure verdict |
-| Finish | `pr`, `unslop` | Haiku | A prepared pull request |
+| Stage | Skills | Claude | Codex | Copilot | Result |
+|---|---|---|---|---|---|
+| Define | `grill-with-docs`, `to-spec`, `to-tickets` | Sonnet | `gpt-6.1-sol`, medium | `claude-sonnet-4.6` | A Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker |
+| Prepare | `ponytail` | Sonnet | `gpt-6.1-sol`, medium | `claude-sonnet-4.6` | Build writes the minimum code that works |
+| Build | `implement-spec`, `tdd` | Sonnet | `gpt-6.1-terra`, medium | `gpt-5.3-codex` | Every Ticket done, test-first |
+| Check | `code-review`, `security-scan`, plus the Infrastructure review | Opus, high effort | `gpt-6.1-sol`, high | `claude-sonnet-4.6` | A Standards, a Spec, a Security and an Infrastructure verdict |
+| Finish | `pr`, `unslop` | Haiku | `gpt-6-luna`, medium | `claude-haiku-4.5` | A prepared pull request |
 
-The Model column shows the Claude Code defaults set in the `factory-define`, `factory-build`, `factory-check` and `factory-finish` agent definitions (Define and Prepare share `factory-define`). The installer does not ship these definitions yet, and Codex and Copilot defaults are not set; making them configurable per target is tracked in issue #32.
+The model columns show the defaults set in the `factory-define`, `factory-build`, `factory-check` and `factory-finish` agent definitions of each Agent target: `~/.claude/agents`, `~/.codex/agents` and `~/.copilot/agents`. Define and Prepare share `factory-define`. The installer does not ship these definitions yet, so they exist only where someone created them. Making them configurable per target is tracked in issue #32.
 
 Preflight first checks that `/setup-matt-pocock-skills` has been run, then reads the project's conventions (`AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists) and finds the verify command in its `## Commands` section. If there is none, it tells you, asks once and never guesses. Build refuses to start until the Spec exists and the Tickets are published, and sends the Run back to Define if either is missing. Build runs the verify command after each Ticket; a command that cannot run in the environment (another shell, no container runtime) is listed under "Not run" in the Stage summary, never reported as passed. Check gives the Standards review the guides whose `applyTo` globs match the changed files and flags a canonical spec left stale, and gives the Security review the project's "Universal safeguards". Check runs every axis on every Run; an axis with no verdict is run again.
 
