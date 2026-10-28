@@ -85,11 +85,13 @@ Invoke `ponytail` so the Build stage writes the minimum code that works.
 
 ## Build
 
+Build only starts when the Spec file named in `spec_link` exists and `tickets` is not empty. If either is missing, do not build: set `stage` to `define` in `run.json`, say what is missing, and continue Define from there.
+
 Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. After each Ticket, run the verify command and fix failures before moving on. List any command that cannot run in this environment (other shell, no container runtime) under "Not run" in `build.md`, and never report it as passed. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
 
 ## Check
 
-In one pass, review the changes on three axes, each in its own fresh read-only subagent so the reviewer did not write the code. Invoke `code-review` for the Standards and Spec axes; it runs one subagent for each. Invoke `security-scan` for the Security axis, in a third subagent. Report each axis separately and never merge them. Scope `security-scan` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
+In one pass, review the changes on three axes, each in its own fresh read-only subagent so the reviewer did not write the code. Invoke `code-review` for the Standards and Spec axes; it runs one subagent for each. Invoke `security-scan` for the Security axis, in a third subagent. Report each axis separately and never merge them. Run every axis on every Run. An axis with no verdict in `run.json` after the pass is a problem worth fixing: go back to Build and run it again. Scope `security-scan` to the files in the same diff `code-review` uses, and run it on every Run. Problems worth fixing are the `code-review` findings you judge worth fixing, plus every CRITICAL, HIGH or MEDIUM security finding; LOW and INFO findings are only reported. If there are problems worth fixing, go back to Build and fix them (the security report only proposes patches; Build applies them), then review again. All axes share one loop count: go back at most 2 times; after that, report what is still open and continue to Finish.
 
 ## Finish
 

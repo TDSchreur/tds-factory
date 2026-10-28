@@ -32,6 +32,21 @@ test('Preflight reads project conventions and Build runs the verify command', ()
   assert.match(flow, /\| `conventions` \|/);
 });
 
+function section(name) {
+  return flow.split(/^## /m).find((s) => s.startsWith(name));
+}
+
+test('Build refuses to start without a Spec and Tickets, and Check needs every axis verdict', () => {
+  const build = section('Build');
+  assert.match(build, /`spec_link`/);
+  assert.match(build, /`tickets`/);
+  assert.match(build, /`stage` to `define`/);
+  assert.match(build, /continue Define/i);
+  const check = section('Check');
+  assert.match(check, /no verdict in `run\.json`/);
+  assert.match(check, /every axis/i);
+});
+
 test('every skill the factory invokes can be called by the model', () => {
   for (const name of invoked) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
