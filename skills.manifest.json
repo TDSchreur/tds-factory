@@ -7,6 +7,7 @@
     "vendor/mattpocock-skills/skills/engineering/tdd",
     "vendor/mattpocock-skills/skills/engineering/code-review",
     "vendor/mattpocock-skills/skills/engineering/pr",
+    "vendor/mattpocock-skills/skills/engineering/setup-matt-pocock-skills",
     {
       "path": "vendor/awesome-copilot/skills/security-review",
       "as": "security-scan"

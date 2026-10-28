@@ -14,4 +14,4 @@ Single-context layout: `GLOSSARY.md` at repo root, ADRs in `docs/adr/`. See `doc
 
 ## Commands
 
-- Verify: `npm test` (runs `node --test test/`, which checks the skills and the sync and dashboard code).
+- Verify: `npm test` (runs `node --test test/`, which checks the skills, the guides and the sync and dashboard code).
