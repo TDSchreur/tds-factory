@@ -25,7 +25,7 @@ One Run store owns every read and write of the Runs under `.factory/runs`. The C
 
 ## Implementation Decisions
 
-- New module, the Run store, opened for a project directory. Opening resolves and checks the project's Run storage once.
+- New module, the Run store, opened for a project directory. Each call checks the project's Run storage as it runs, because Runs can appear after the store is opened.
 - Interface: start, update, list, read a Stage summary file, and remove a Run.
 - Remove reports one of: deleted, not found, not allowed (including linked storage, a Run not in `done` or `abandoned`, and an unreadable record).
 - List returns each Run with its id, raw record or an unreadable flag, and its Markdown summary names in Stage order.
