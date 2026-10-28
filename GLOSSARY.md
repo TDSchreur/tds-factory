@@ -56,8 +56,12 @@ The status file a Run keeps up to date as it moves through the Stages, read by t
 _Avoid_: Log, State file
 
 **Run store**:
-The module that owns every Run folder under `.factory/runs`: it starts, updates, lists, reads and deletes Runs and refuses unsafe storage. The CLI and the Dashboard go through it.
+The module that owns every Run folder under `.factory/runs` in the main checkout: it starts, updates, lists, reads and deletes Runs and refuses unsafe storage. The CLI and the Dashboard go through it.
 _Avoid_: Run database
+
+**Run worktree**:
+The git worktree and branch a Run works in, so agents running at the same time never share files. One Run has exactly one agent and one Run worktree.
+_Avoid_: Sandbox, Workspace
 
 **Dashboard**:
 A web page that shows every Run as a card in a column per Stage, flags the Runs that are waiting on a human, and can delete completed or abandoned Run history.

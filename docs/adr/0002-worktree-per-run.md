@@ -1,0 +1,3 @@
+# One worktree per Run, one shared Run store in the main checkout
+
+Agents in separate tabs (Claude, Codex, Copilot) used to share one working tree and branch, so a `git switch` in one tab changed the files under another. Each Run now gets its own git worktree and branch, created by `run start` in `.factory/worktrees/<run id>`, while the Run store stays in the main checkout's `.factory/runs` so one Dashboard shows every Run. We chose worktrees over a clone or a container per agent because they share one `.git` and need no extra tooling. The cost is that `.factory` is no longer per checkout: the Run store finds the main checkout through `git rev-parse --git-common-dir`.

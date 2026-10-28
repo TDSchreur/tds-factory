@@ -27,7 +27,7 @@ export function interpretRun(entry) {
   return { id, unreadable: false, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
 }
 
-// Serves the .factory/runs folder of projectDir on 127.0.0.1.
+// Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Pass port 0 for a random free port. Resolves to { server, port, url, close }.
 export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT } = {}) {
   const store = openRunStore(projectDir);
@@ -47,8 +47,9 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
         let id;
         try { id = decodeURIComponent(path.slice('/api/runs/'.length)); } catch { return send(400, 'text/plain', 'invalid id'); }
         const outcome = store.remove(id);
-        const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409 }[outcome];
-        return send(status, 'text/plain', outcome === 'deleted' ? 'deleted' : 'cannot delete Run');
+        const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409, 'worktree-refused': 409 }[outcome];
+        const text = { deleted: 'deleted', 'worktree-refused': 'the Run worktree has uncommitted changes or cannot be removed; commit or discard them first' }[outcome] ?? 'cannot delete Run';
+        return send(status, 'text/plain', text);
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {

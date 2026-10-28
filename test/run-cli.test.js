@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { repo } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
 function run(cwd, ...args) { return spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' }); }
@@ -13,7 +14,7 @@ test('Run rejects non-string Agent targets', () => {
   assert.notEqual(result.status, 0);
 });
 test('Run record command creates and safely updates a record', () => {
-  const cwd = mkdtempSync(join(tmpdir(), 'factory-run-'));
+  const cwd = repo();
   const start = run(cwd, 'start', '--data', JSON.stringify({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: ['AGENTS.md'] }));
   assert.equal(start.status, 0, start.stderr);
   const id = start.stdout.trim();
