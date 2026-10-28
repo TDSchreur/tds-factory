@@ -56,7 +56,7 @@ A Dashboard in the browser. The `factory` Skill keeps a Run record up to date as
 - **Storage location:** the Run folders live in a `.factory/runs/` folder in the project being built, which should be gitignored. The Skill tells the user to add that ignore entry if it is missing.
 - **Dashboard command:** a new `dashboard` command on the `tds-factory` CLI, with a `--port` option (default 4317). It serves the `.factory/` folder of the current directory and prints the URL.
 - **Server module:** a deep module that, given a project directory and a port, starts an HTTP server bound to 127.0.0.1 with routes for the page, raw and interpreted Run lists, project info, Markdown files, and deletion of terminal Runs. Deletion requires a same-origin request and checks eligibility under a shared Run update lock. The file route is confined to `.factory/` and rejects path traversal. Every route answers 403 when the `Host` header is not the server's own `127.0.0.1:<port>` or `localhost:<port>`, so a web page can't read local data through DNS rebinding. The list route skips nothing that parses at all and tolerates unreadable or partial records by returning what it can with a flag, instead of failing the whole list.
-- **Page:** one HTML file with inline CSS and JS, no framework, no build step, no CDN. It polls the interpreted list route every 2 seconds. Columns are the 5 Stages plus Done. Markdown is shown as preformatted plain text. It can delete individual or all completed and abandoned Runs after confirmation; active and unreadable Runs are protected.
+- **Page:** one HTML file with inline CSS and JS, no framework, no build step, no CDN. A labeled theme selector offers Light, Dark and System; it defaults to System and remembers the selection in browser storage. It polls the interpreted list route every 2 seconds. Columns are the 5 Stages plus Done. Markdown is shown as preformatted plain text. It can delete individual or all completed and abandoned Runs after confirmation; active and unreadable Runs are protected.
 - **Lenient reader:** shared Run record interpretation treats every field as optional and ignores unknown fields. Missing fields render as blank or a neutral default.
 - **Stale indicator:** the "last updated" label is derived from the update timestamp and turns amber past a threshold (about 10 minutes).
 - **Done column and history:** Runs with status `done` or `abandoned` go to Done. Runs older than 7 days are hidden behind a "show older" toggle. Users can permanently delete individual Done Runs or all Done Runs, including hidden ones, after confirmation.
@@ -66,9 +66,9 @@ A Dashboard in the browser. The `factory` Skill keeps a Run record up to date as
 ## Testing Decisions
 
 - **What makes a good test:** exercise observable Dashboard behavior without testing private functions.
-- **Test seams:** the HTTP interface of the server module and Dashboard controls in a simulated DOM. Server tests use a random port and a temporary project directory with Run fixtures.
+- **Test seams:** the HTTP interface of the server module, Dashboard controls in a simulated DOM, and computed theme colors in headless Chromium when available. Server tests use a random port and a temporary project directory with Run fixtures.
 - **Cases to cover:** the list route returns all valid Runs; a malformed or half-written record doesn't break the list and is flagged; a record with missing or unknown fields is returned; the file route returns a Run's Markdown file; the file route rejects `..` traversal, encoded traversal, absolute paths and paths outside `.factory/`; a foreign `Host` header gets 403 on every route; the server listens on loopback only; a missing `.factory/` folder gives an empty list, not an error.
-- **Not automatically tested:** the full Dashboard in a browser. Check it by hand when a browser is available.
+- **Not automatically tested:** the full Dashboard workflow in a browser. Check it by hand when a browser is available.
 - **Prior art:** none; the repo has no tests yet. Use Node's built-in `node:test` runner, so no new dependency is added, and add a `test` script to `package.json`.
 
 ## Out of Scope
