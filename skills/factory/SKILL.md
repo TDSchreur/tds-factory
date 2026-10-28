@@ -22,7 +22,7 @@ Then read the project's conventions: `AGENTS.md` or `CLAUDE.md`, the instruction
 
 Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourself; do not skip it.
 
-**Start.** Before the first Stage, run `tds-factory run start --data '<JSON>'` in the project being built. Supply a JSON object containing `title`, `agent`, `commands` and `conventions`. The command prints the new Run id; keep it for every update. It creates a unique dated folder and initializes the record. If no verify command is known yet, use an empty `commands` string until the user answers.
+**Start.** Before the first Stage, run `tds-factory run start --data '<JSON>'` in the project being built. Supply a JSON object containing `title`, `agent`, `commands` and `conventions`. The command prints the new Run id; keep it for every update. It creates a unique dated folder and initializes the record, and a Run worktree: a git worktree on a branch named after the Run id, in `.factory/worktrees/<id>`; its path is the `worktree` field of `run.json`. Do all the work of every Stage, Define included, inside the Run worktree, never in the main checkout, so agents in other tabs do not share your files. If you were started inside a linked worktree, `run start` adopts it instead of creating one. `tds-factory` commands write to the main checkout's Run store from either place. If the project is not a git repository or has no commit, `run start` fails: tell the user. If no verify command is known yet, use an empty `commands` string until the user answers.
 
 **Update.** Use `tds-factory run update --id <id> --data '<JSON>'` for every Run record change; never write `run.json` directly. Supply only changed fields as a JSON object. The command preserves other fields and `created`, refreshes `updated`, validates changes and replaces the record safely. Set `activity` on every update. Update whenever a Stage starts (including when Check sends you back to Build), when work becomes `waiting` or is released, when a Ticket completes, after each review, and when the Run ends. Record `standards`, `spec`, `security`, `infrastructure` and `check_loops` as they change. To wait, set `status` to `waiting` and provide `waiting_reason`; to resume or end, set the new status. The command maintains the waiting flag and clears the reason when leaving `waiting`. Check command errors and resolve them before continuing.
 
@@ -52,6 +52,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set after each review, replacing the old value |
 | `infrastructure` | `pass`, `fail` or `skipped`: the Infrastructure verdict of the latest review. `fail` while any CRITICAL, HIGH or MEDIUM infrastructure finding is open, or a changed infrastructure file is not validated; write `skipped` when no infrastructure file changed. Set after each review, replacing the old value |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `2`. Starts at `0`; raise it by 1 on each return to Build |
+| `worktree` | Path of the Run worktree the Run works in. Set by `run start` |
 | `commands` | The verify command, one string. Set by Preflight; the answer the user gave when the project has none |
 | `conventions` | Paths of the conventions files Preflight read, an array of strings |
 | `created` | ISO 8601 UTC timestamp, set once |
@@ -90,7 +91,7 @@ Invoke `ponytail` so the Build stage writes the minimum code that works.
 
 Build only starts when the Spec file named in `spec_link` exists and `tickets` is not empty. If either is missing, do not build: set `stage` to `define` in `run.json`, say what is missing, and continue Define from there.
 
-Start on a branch named after the Run slug, off the default branch, and commit the Define artifacts first. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. After each Ticket, run the verify command and fix failures before moving on. List any command that cannot run in this environment (other shell, no container runtime) under "Not run" in `build.md` or `check-N.md`, and never report it as passed. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
+Work in the Run worktree, on its branch, and commit the Define artifacts first. If the verify command fails for missing dependencies, run the project's normal setup in the worktree. Invoke `implement-spec`, working test-first with `tdd`, with one commit per Ticket, until every Ticket is done. After each Ticket, run the verify command and fix failures before moving on. List any command that cannot run in this environment (other shell, no container runtime) under "Not run" in `build.md` or `check-N.md`, and never report it as passed. Work inline, with no subagents, and skip the closing `code-review` step of `implement-spec`; Check owns the review.
 
 ## Check
 

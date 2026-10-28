@@ -148,3 +148,18 @@ test('install removes marked skills that are no longer shipped and keeps unmarke
   assert.ok(existsSync(join(skills, 'mine')));
   assert.ok(log.mock.calls.some((c) => /removed claude\/old-skill/.test(c.arguments[0])));
 });
+
+test('the factory works in the Run worktree that run start creates', () => {
+  assert.doesNotMatch(section('Build'), /Start on a branch/);
+  assert.match(section('Run record'), /Run worktree/);
+  assert.match(section('Run record'), /`worktree`/);
+  assert.match(section('Build'), /Run worktree/);
+  assert.match(section('Build'), /missing dependencies/);
+});
+
+test('the README describes the Run worktree, the shared Run store and cleanup', () => {
+  const readme = readFileSync(join(SKILLS_DIR, '..', 'README.md'), 'utf8');
+  assert.match(readme, /\.factory\/worktrees/);
+  assert.match(readme, /main checkout/);
+  assert.match(readme, /uncommitted changes/);
+});
