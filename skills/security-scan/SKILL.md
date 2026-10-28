@@ -22,7 +22,7 @@ Use this skill when the request involves:
 - Detecting insecure cryptography or weak randomness
 - Performing a data flow analysis to trace user input to dangerous sinks
 - Any request phrasing like "is my code secure?", "scan this file", or "check my repo for vulnerabilities"
-- Running `/security-review` or `/security-review <path>`
+- Running `/security-scan` or `/security-scan <path>`
 
 ## How This Skill Works
 
@@ -40,7 +40,7 @@ Follow these steps **in order** every time:
 
 ### Step 1 — Scope Resolution
 Determine what to scan:
-- If a path was provided (`/security-review src/auth/`), scan only that scope
+- If a path was provided (`/security-scan src/auth/`), scan only that scope
 - If no path given, scan the **entire project** starting from the root
 - Identify the language(s) and framework(s) in use (check package.json, requirements.txt,
   go.mod, Cargo.toml, pom.xml, Gemfile, composer.json, etc.)

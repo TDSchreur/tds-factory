@@ -44,6 +44,7 @@ test('the vendored security skill ships as security-scan with its reference file
   assert.match(readFileSync(join(dir, 'SKILL.md'), 'utf8'), /^name: security-scan$/m);
   assert.ok(readdirSync(join(dir, 'references')).includes('vuln-categories.md'));
   assert.ok(!existsSync(join(SKILLS_DIR, 'security-review')));
+  assert.doesNotMatch(readFileSync(join(dir, 'SKILL.md'), 'utf8'), /\/security-review/);
 });
 
 test('install removes marked skills that are no longer shipped and keeps unmarked ones', () => {

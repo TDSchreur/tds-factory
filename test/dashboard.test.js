@@ -150,12 +150,14 @@ test('server listens on loopback only', () => {
 });
 
 test('is read-only: non-GET methods are rejected', async () => {
-  const status = await new Promise((resolve) => {
-    const req = http.request({ host: '127.0.0.1', port: dash.port, path: '/api/runs', method: 'POST' }, (res) => {
-      res.resume();
-      resolve(res.statusCode);
+  for (const path of ['/api/runs', '/api/info']) {
+    const status = await new Promise((resolve) => {
+      const req = http.request({ host: '127.0.0.1', port: dash.port, path, method: 'POST' }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      });
+      req.end();
     });
-    req.end();
-  });
-  assert.equal(status, 405);
+    assert.equal(status, 405, path);
+  }
 });

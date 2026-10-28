@@ -16,8 +16,7 @@ export function sync() {
   const { skills } = JSON.parse(fs.readFileSync(path.join(ROOT, 'skills.manifest.json'), 'utf8'));
   const invoked = invokedByFactory();
   for (const entry of skills) {
-    const rel = typeof entry === 'string' ? entry : entry.path;
-    const name = typeof entry === 'string' ? path.basename(rel) : entry.as;
+    const { path: rel, as: name = path.basename(rel) } = typeof entry === 'string' ? { path: entry } : entry;
     const src = path.join(ROOT, rel);
     if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
       throw new Error(`${rel} has no SKILL.md (run: git submodule update --init)`);
@@ -30,7 +29,8 @@ export function sync() {
     fs.cpSync(src, dest, { recursive: true });
     const file = path.join(dest, 'SKILL.md');
     let text = fs.readFileSync(file, 'utf8');
-    if (name !== path.basename(rel)) text = text.replace(/^name:.*$/m, `name: ${name}`);
+    const upstream = path.basename(rel);
+    if (name !== upstream) text = text.replace(/^name:.*$/m, () => `name: ${name}`).replaceAll(`/${upstream}`, `/${name}`);
     if (invoked.has(name)) text = text.replace(/^disable-model-invocation:.*\n/m, '');
     fs.writeFileSync(file, text);
     fs.writeFileSync(path.join(dest, MARKER), `${rel}\n`);
