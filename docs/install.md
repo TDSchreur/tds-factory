@@ -55,7 +55,7 @@ Add `--project` to install into the current project instead of your home folder.
 ### Check that your agent sees the skills
 
 - **GitHub Copilot in VS Code:** open the chat and type `/`. The list should include `factory`. Type `/skills` to open the skills menu. Restart VS Code if the list is empty.
-- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs; see Troubleshooting if `/factory` is missing. In Copilot in VS Code and in Claude Code, `factory` and `setup-matt-pocock-skills` only run when you start them. Codex ignores that setting, so it may start them on its own.
+- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs; see Troubleshooting if `/factory` is missing. In Copilot in VS Code and in Claude Code, `factory` and `setup-matt-pocock-skills` only run when you start them. For `factory`, Codex ignores that setting, so it may start it on its own.
 
 ## 4. Update
 
@@ -73,7 +73,7 @@ tds-factory install
 Do this once per project you want to build with the Factory.
 
 1. Open the project in your agent. It must be a git repository with an `origin` remote on GitHub, and `gh repo view` must print the repository.
-2. Run `/setup-matt-pocock-skills` in the chat. In Copilot, type `/` and choose it; this skill only runs when you start it yourself. It looks at the repository, asks where issues live (choose GitHub) and shows you a draft before it writes anything. It uses one `GLOSSARY.md` and `docs/adr/` at the root without asking, unless the project looks like a monorepo. It writes `docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `CLAUDE.md` if that file exists, otherwise `AGENTS.md` (it asks which to create if neither exists).
+2. Run `/setup-matt-pocock-skills` in the chat. In Copilot in VS Code, type `/` and choose it; this skill only runs when you start it yourself. It looks at the repository, asks where issues live (choose GitHub) and shows you a draft before it writes anything. It uses one `GLOSSARY.md` and `docs/adr/` at the root without asking, unless the project looks like a monorepo. It writes `docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `CLAUDE.md` if that file exists, otherwise `AGENTS.md` (it asks which to create if neither exists).
 3. Add a `## Commands` section to `AGENTS.md` (or `CLAUDE.md`, whichever the project uses) with the command that checks the project, for example `- Verify: npm test`. If it is missing, `/factory` asks you once.
 4. Add `.factory/` to the project's `.gitignore`. That folder holds Run records and Run worktrees, and must not end up in commits.
 5. Make sure the label `ready-for-agent` exists in the repository's GitHub Issues. If it does not, the agent asks before it creates it.
