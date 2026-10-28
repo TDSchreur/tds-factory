@@ -19,7 +19,7 @@ function validate(data) {
       : verdicts.includes(key) ? ['pass', 'fail', ...(key === 'infrastructure' ? ['skipped'] : [])].includes(value)
       : key === 'stage' ? stages.includes(value)
       : key === 'status' ? statuses.includes(value)
-      : key === 'agent' ? Object.hasOwn(targets, value)
+      : key === 'agent' ? typeof value === 'string' && Object.hasOwn(targets, value)
       : key === 'waiting_on_human' ? typeof value === 'boolean' : false;
     if (!ok) throw new Error(`invalid field or value: ${key}`);
   }
