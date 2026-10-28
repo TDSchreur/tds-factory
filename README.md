@@ -23,7 +23,7 @@ flowchart LR
         F[code-review]
     end
     subgraph Finish
-        G[pr]
+        G[pr] --> H[unslop]
     end
 
     C --> D --> E --> F
