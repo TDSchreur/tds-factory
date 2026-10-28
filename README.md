@@ -39,7 +39,7 @@ flowchart LR
 | Stage | Skills | Claude | Codex | Copilot | Result |
 |---|---|---|---|---|---|
 | Define | `grill-with-docs`, `to-spec`, `to-tickets` | Sonnet, default | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set | A Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker |
-| Prepare | `ponytail` | Sonnet, default | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set | Build writes the minimum code that works |
+| Prepare | `ponytail` (lite) | Sonnet, default | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set | Build builds what was asked and names any smaller option in one line |
 | Build | `implement-spec`, `tdd` | Sonnet, default | `gpt-6.1-terra`, medium | `gpt-5.3-codex`, not set | Every Ticket done, test-first |
 | Check | `code-review`, `security-scan`, plus the Infrastructure review | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-4.6`, not set | A Standards, a Spec, a Security and an Infrastructure verdict |
 | Finish | `pr`, `unslop` | Haiku, default | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set | A prepared pull request |

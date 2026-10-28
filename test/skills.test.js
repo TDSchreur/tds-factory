@@ -22,6 +22,10 @@ test('the factory invokes exactly the skills we expect', () => {
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
+test('Prepare runs ponytail in lite mode', () => {
+  assert.match(section('Prepare'), /Invoke `ponytail` in lite mode \(`lite` as its argument\)/);
+});
+
 test('the factory follows the configured tracker and the repo PR template', () => {
   assert.doesNotMatch(flow, /GitHub Issues/);
   assert.doesNotMatch(flow, /\. The PR body lists `Closes #N`/);

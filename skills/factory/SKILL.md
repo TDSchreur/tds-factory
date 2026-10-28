@@ -85,7 +85,7 @@ When the user answers and the Run continues, set `status` back to `running`, `wa
 
 ## Prepare
 
-Invoke `ponytail` so the Build stage writes the minimum code that works.
+Invoke `ponytail` in lite mode (`lite` as its argument) so the Build stage builds what the Ticket asks and names any smaller option in one line.
 
 ## Build
 
