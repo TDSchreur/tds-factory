@@ -10,6 +10,10 @@ disable-model-invocation: true
 
 Walk the work through the Stages below in order. Finish each Stage and tell the user what it produced before starting the next. At each Stage transition, update the Run record. The user can stop or redirect at any Stage.
 
+## Preflight
+
+Before creating the Run folder, check that the user has run `/setup-matt-pocock-skills` in this project: `docs/agents/issue-tracker.md` and `docs/agents/domain.md` exist, and `AGENTS.md` or `CLAUDE.md` has an `## Agent skills` section pointing at them. If anything is missing, stop. Do not start the Run and do not create the files yourself. Tell the user which items are missing and that the Factory cannot work without them. Tell them to run `/setup-matt-pocock-skills` (it sets up the issue tracker, triage labels and domain docs layout), then run `/factory` again.
+
 ## Run record
 
 Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourself; do not skip it.
