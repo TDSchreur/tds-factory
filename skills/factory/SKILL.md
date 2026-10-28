@@ -29,10 +29,22 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 | `title` | Short human title of the work |
 | `stage` | `define`, `prepare`, `build`, `check` or `finish` |
 | `status` | `running`, `waiting` (blocked on the user), `done` or `abandoned` |
+| `waiting_on_human` | Boolean, `true` while blocked on the user, otherwise `false` |
+| `waiting_reason` | Short line saying what the user must do, e.g. `sign off the Spec`; empty string when not waiting |
 | `activity` | One short line on what is happening now, e.g. `implementing ticket #12` |
 | `agent` | Name of the writing agent: `claude`, `codex` or `copilot` |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
+
+## Waiting on the user
+
+Set `status` to `waiting`, `waiting_on_human` to `true` and `waiting_reason` to a short line, and write `run.json`, before you ask the user at each of these points:
+
+- Define: a question for the user, and the Spec sign-off.
+- Check: after the loop cap, when problems are still open.
+- Finish: before pushing or opening the PR.
+
+When the user answers and the Run continues, set `status` back to `running`, `waiting_on_human` to `false` and `waiting_reason` to an empty string, and write `run.json` before doing anything else. Also clear them when the Run ends.
 
 ## Define
 

@@ -32,6 +32,8 @@
   .card .agent { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
   .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
   .card.unreadable .title { color: var(--flag); }
+  .card.waiting { border: 2px solid var(--flag); background: var(--flag-bg); }
+  .card .reason { color: var(--flag); font-weight: 600; margin-top: .3rem; }
   .empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
 </style>
 </head>
@@ -52,6 +54,7 @@
     { key: 'finish', label: 'Finish' },
     { key: 'done', label: 'Done' }
   ];
+  var BASE_TITLE = document.title;
   var POLL_MS = 2000;
   var board = document.getElementById('board');
   var statusEl = document.getElementById('status');
@@ -63,7 +66,7 @@
   function readRun(entry) {
     var id = str(entry && entry.id);
     if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') {
-      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', column: 'define', updated: '' };
+      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '' };
     }
     var r = entry.record;
     var status = str(r.status);
@@ -71,8 +74,10 @@
     var column = 'define';
     if (status === 'done' || status === 'abandoned') column = 'done';
     else if (COLUMNS.some(function (c) { return c.key === stage && c.key !== 'done'; })) column = stage;
+    var active = status !== 'done' && status !== 'abandoned';
     return {
       id: id, unreadable: false, column: column,
+      waiting: active && r.waiting_on_human === true, reason: str(r.waiting_reason),
       title: str(r.title) || id || 'Untitled run',
       activity: str(r.activity), agent: str(r.agent), updated: str(r.updated)
     };
@@ -87,8 +92,9 @@
 
   // One card per Run. Extension point: add fields/chips here (tickets, verdicts, waiting, ...).
   function renderCard(run) {
-    var li = el('li', 'card' + (run.unreadable ? ' unreadable' : ''));
+    var li = el('li', 'card' + (run.unreadable ? ' unreadable' : '') + (run.waiting ? ' waiting' : ''));
     li.dataset.id = run.id;
+    if (run.waiting) li.appendChild(el('div', 'reason', 'Needs you' + (run.reason ? ': ' + run.reason : '')));
     li.appendChild(el('div', 'title', (run.unreadable ? 'Unreadable record: ' : '') + run.title));
     if (run.activity) li.appendChild(el('div', 'activity', run.activity));
     if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
@@ -114,6 +120,8 @@
       return section;
     });
     board.replaceChildren.apply(board, cols);
+    var n = runs.filter(function (r) { return r.waiting; }).length;
+    document.title = (n ? '(' + n + ') ' : '') + BASE_TITLE;
   }
 
   function poll() {
