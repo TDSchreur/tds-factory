@@ -176,6 +176,27 @@ test('the Run detail opens beside the board, not below the last card', async (t)
   } finally { await page.close(); }
 });
 
+test('the Run detail header shows the Run state and stays in view while the summaries scroll', async (t) => {
+  const page = await openPage(t, {
+    runs: [run({ id: 'w', title: 'Waiting run', column: 'check', waiting: true, reason: 'confirm the plan', agent: 'claude', ticketsTotal: 2, ticketsDone: 1, standards: 'pass', files: ['define.md'], links: [{ label: 'Spec', href: 'docs/specs/x.md' }] }),
+      run({ id: 'x', title: 'Dropped', column: 'done', status: 'abandoned' })],
+    files: { 'w/define.md': '# Long\n\n' + Array.from({ length: 150 }, (_, i) => `- finding ${i}`).join('\n') },
+  });
+  if (!page) return;
+  try {
+    await page.execute("document.querySelector('[data-id=w]').click()");
+    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    const head = await page.execute("return document.querySelector('#detail header').textContent");
+    for (const part of ['Waiting run', 'Check', 'Needs you: confirm the plan', '1/2 tickets', 'Standards pass', 'claude', 'Updated']) assert.ok(head.includes(part), part + ' in ' + head);
+    assert.equal(await page.execute("return document.querySelector('#detail header button[aria-label=\"Close Run detail\"]') !== null"), true);
+    await page.execute("document.getElementById('detail').scrollTop = 600");
+    const gap = await page.execute("return document.querySelector('#detail header').getBoundingClientRect().top - document.getElementById('detail').getBoundingClientRect().top");
+    assert.ok(Math.abs(gap) <= 2, 'the header stays at the top of the Run detail, gap ' + gap);
+    await page.execute("document.querySelector('[data-id=x]').click()");
+    assert.match(await page.execute("return document.querySelector('#detail header').textContent"), /Done.*Abandoned/s);
+  } finally { await page.close(); }
+});
+
 test('the Run detail closes when its Run is no longer shown', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })] });
   if (!page) return;

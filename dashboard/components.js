@@ -151,8 +151,12 @@ export function Detail({ run, onClose }) {
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
   return html`<section id="detail" aria-label="Run detail">
-    <button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button>
-    <h2>${run.title}</h2>
+    <header>
+      <div class="head-row"><h2>${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
+      ${run.waiting && html`<div class="reason">Needs you${run.reason ? ': ' + run.reason : ''}</div>`}
+      <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
+      <${Chips} run=${run} />
+    </header>
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
     ${run.files.length > 0 && files.map((f) => html`<${Fragment} key=${f.name}>

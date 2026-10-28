@@ -85,8 +85,12 @@
 
   #layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
   #layout.open { grid-template-columns: minmax(0, 1fr) min(40rem, 45vw); }
-  #detail { position: sticky; top: 3.5rem; max-height: calc(100vh - 3.5rem); overflow-y: auto; margin: 1.25rem 1.25rem 1.25rem 0; padding: 1.25rem; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: var(--shadow); }
-  #detail .close { float: right; margin-left: .5rem; }
+  #detail { position: sticky; top: 3.5rem; max-height: calc(100vh - 3.5rem); overflow-y: auto; margin: 1.25rem 1.25rem 1.25rem 0; padding: 0 1.25rem 1.25rem; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: var(--shadow); }
+  #detail header { position: sticky; top: 0; z-index: 1; padding: 1.25rem 0 .75rem; background: var(--card); border-bottom: 1px solid var(--border); }
+  #detail .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+  #detail .head-row h2 { margin: 0; overflow-wrap: anywhere; }
+  #detail .reason { color: var(--flag); font-weight: 700; font-size: .875rem; margin-top: .3rem; }
+  #detail .meta { display: flex; flex-wrap: wrap; gap: .1rem .75rem; margin-top: .25rem; font-size: .8rem; color: var(--muted); }
   #detail[hidden] { display: none; }
   #detail h2 { font-size: 1.25rem; margin: 0 0 .75rem; }
   #detail h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; margin: 1rem 0 0; color: var(--muted); }
@@ -122,5 +126,5 @@
     #theme, #older { order: 3; }
     #board { grid-template-columns: 1fr; padding: 1rem; }
     #layout.open { grid-template-columns: minmax(0, 1fr); }
-    #detail { margin: 0 1rem 1rem; padding: 1rem; }
+    #detail { margin: 0 1rem 1rem; padding: 0 1rem 1rem; }
   }
