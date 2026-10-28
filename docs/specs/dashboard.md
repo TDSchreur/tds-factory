@@ -65,10 +65,10 @@ A Dashboard in the browser. The `factory` Skill keeps a Run record up to date as
 
 ## Testing Decisions
 
-- **What makes a good test:** only external behavior through the server's HTTP interface. Tests do not look at internal functions, the page's DOM, or the wording of the Skill.
-- **One seam:** the HTTP interface of the server module. A test starts the server on a random port over a temp project directory that holds fixture Run records, then makes requests.
+- **What makes a good test:** exercise observable Dashboard behavior without testing private functions.
+- **Test seams:** the HTTP interface of the server module and Dashboard controls in a simulated DOM. Server tests use a random port and a temporary project directory with Run fixtures.
 - **Cases to cover:** the list route returns all valid Runs; a malformed or half-written record doesn't break the list and is flagged; a record with missing or unknown fields is returned; the file route returns a Run's Markdown file; the file route rejects `..` traversal, encoded traversal, absolute paths and paths outside `.factory/`; a foreign `Host` header gets 403 on every route; the server listens on loopback only; a missing `.factory/` folder gives an empty list, not an error.
-- **Not automatically tested:** the HTML page and the `factory` Skill's prose. These are checked by hand by running a real Run and watching the board.
+- **Not automatically tested:** the full Dashboard in a browser. Check it by hand when a browser is available.
 - **Prior art:** none; the repo has no tests yet. Use Node's built-in `node:test` runner, so no new dependency is added, and add a `test` script to `package.json`.
 
 ## Out of Scope

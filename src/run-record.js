@@ -93,7 +93,7 @@ export function updateRun(projectDir, id, data) {
 const str = (v) => typeof v === 'string' ? v.trim() : '';
 const strList = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
 export function interpretRun(entry) {
-  const id = str(entry?.id), files = strList(entry?.files);
+  const id = typeof entry?.id === 'string' ? entry.id : '', files = strList(entry?.files);
   if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') return { id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files, links: [], status: '', pr: '' };
   const r = entry.record, status = str(r.status), stage = str(r.stage).toLowerCase();
   const num = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;

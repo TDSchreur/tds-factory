@@ -240,3 +240,15 @@ test('deletion refuses a Run while its update lock is held', async () => {
   assert.ok((await list()).some((r) => r.id === id));
   rmSync(lock);
 });
+
+test('deleting a Run with a whitespace-padded ID preserves the similarly named Run', async () => {
+  run(' padded ', { 'run.json': JSON.stringify({ status: 'done', title: 'Padded' }) });
+  run('padded', { 'run.json': JSON.stringify({ status: 'done', title: 'Unpadded' }) });
+  const views = JSON.parse((await get(dash, '/api/views')).body);
+  const padded = views.find((r) => r.title === 'Padded');
+  assert.equal(padded.id, ' padded ');
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  assert.equal(response.status, 200);
+  assert.ok((await list()).some((r) => r.id === 'padded'));
+  assert.ok(!(await list()).some((r) => r.id === ' padded '));
+});
