@@ -14,6 +14,16 @@ const FALLBACK_PAGE = `<!doctype html>
 `;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
+// Names of the Markdown files directly inside a Run folder, sorted.
+async function listMarkdown(dir) {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name)).map((e) => e.name).sort();
+  } catch {
+    return [];
+  }
+}
+
 async function listRuns(runsDir) {
   let entries;
   try {
@@ -24,12 +34,13 @@ async function listRuns(runsDir) {
   const runs = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
+    const files = await listMarkdown(join(runsDir, entry.name));
     try {
       const record = JSON.parse(await readFile(join(runsDir, entry.name, 'run.json'), 'utf8'));
       if (record === null || typeof record !== 'object' || Array.isArray(record)) throw new Error('not an object');
-      runs.push({ id: entry.name, unreadable: false, record });
+      runs.push({ id: entry.name, unreadable: false, record, files });
     } catch {
-      runs.push({ id: entry.name, unreadable: true, record: null });
+      runs.push({ id: entry.name, unreadable: true, record: null, files });
     }
   }
   return runs.sort((a, b) => a.id.localeCompare(b.id));
