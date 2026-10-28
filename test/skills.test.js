@@ -81,7 +81,7 @@ test('Check continues to Finish only when clean, otherwise it asks the user firs
   assert.match(check, /not validated/i);
   assert.match(check, /loop cap/i);
   assert.match(check, /no problem worth fixing is left/i);
-  assert.match(check, /any axis is still `fail` or problems worth fixing are still open/);
+  assert.match(check, /not every axis is `pass` \(Infrastructure may be `skipped`\) or problems worth fixing are still open/);
   assert.match(check, /no verdict, or .*not validated.*counts as `fail`/);
   assert.match(check, /`waiting`/);
   assert.match(check, /explicit yes/i);
