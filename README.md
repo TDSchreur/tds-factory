@@ -56,7 +56,7 @@ The Factory requires `tds-factory` on PATH: agents use `tds-factory run start --
 
 ## Setup
 
-You need Node 20 or newer. After cloning, run `./setup.sh` to put the CLI on PATH (it runs `npm install -g .` and checks Node 20+), then run `tds-factory install` to install the skills. Clone with `--recurse-submodules`, or run `git submodule update --init` afterwards.
+You need Node 20 or newer. After cloning, run `./setup.sh` (or `powershell -ExecutionPolicy Bypass -File .\setup.ps1` on Windows) to put the CLI on PATH (it runs `npm install -g .` and checks Node 20+), then run `tds-factory install` to install the skills. Clone with `--recurse-submodules`, or run `git submodule update --init` afterwards.
 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/
