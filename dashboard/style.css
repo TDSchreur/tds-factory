@@ -1,6 +1,6 @@
   :root {
     --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
-    --border: #cdd3da; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
+    --border: #cdd3da; --btn-border: #7b8794; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
     --primary: #2457c5; --primary-text: #fff; --header-bg: rgba(246, 247, 249, .88);
     --radius: .5rem; --shadow: 0 1px 2px rgba(16, 24, 40, .08), 0 1px 3px rgba(16, 24, 40, .06);
     --focus: rgba(36, 87, 197, .45);
@@ -9,7 +9,7 @@
   :root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
-    --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
+    --border: #3a4148; --btn-border: #8793a0; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
     --primary: #6e9bff; --primary-text: #0d1117; --header-bg: rgba(20, 23, 26, .88);
     --shadow: 0 1px 2px rgba(0, 0, 0, .4); --focus: rgba(110, 155, 255, .5);
   }
@@ -17,7 +17,7 @@
     :root:not([data-theme="light"]):not([data-theme="dark"]) {
       color-scheme: dark;
       --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
-      --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
+      --border: #3a4148; --btn-border: #8793a0; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
       --primary: #6e9bff; --primary-text: #0d1117; --header-bg: rgba(20, 23, 26, .88);
       --shadow: 0 1px 2px rgba(0, 0, 0, .4); --focus: rgba(110, 155, 255, .5);
     }
@@ -36,7 +36,7 @@
   #status::before { content: ''; flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: var(--ok); }
   #status.error { color: var(--flag); font-weight: 600; }
   #status.error::before { background: var(--flag); }
-  select, button { font: inherit; font-size: .875rem; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .3rem .7rem; cursor: pointer; transition: border-color .15s, background-color .15s; }
+  select, button { font: inherit; font-size: .875rem; color: var(--text); background: var(--card); border: 1px solid var(--btn-border); border-radius: var(--radius); padding: .3rem .7rem; cursor: pointer; transition: border-color .15s, background-color .15s; }
   select:hover, button:hover { border-color: var(--primary); }
   button:active { background: var(--panel); }
 
@@ -52,13 +52,25 @@
   .card:hover { border-color: var(--primary); }
   .card .title { font-weight: 600; line-height: 1.3; }
   .card .activity { color: var(--muted); font-size: .875rem; margin-top: .25rem; }
-  .card .agent { font-size: .8rem; color: var(--muted); margin-top: .5rem; }
+  .card .meta { display: flex; flex-wrap: wrap; gap: .1rem .75rem; margin-top: .25rem; font-size: .8rem; color: var(--muted); }
   .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
   .card.unreadable .title { color: var(--flag); }
-  .card .updated { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
   .card .updated.stale { color: var(--amber); font-weight: 600; }
   .card .pr { font-size: .875rem; margin-top: .4rem; }
-  .card > button, .details > button { margin-top: .6rem; }
+  .card .toggle { margin-top: .5rem; padding: .15rem 0; border-color: transparent; background: none; color: var(--primary); font-weight: 600; }
+  .card .toggle:hover { text-decoration: underline; }
+  .details { margin-top: .25rem; padding-top: .5rem; border-top: 1px solid var(--border); }
+  .details .activity { margin-top: 0; }
+  .badge { border-radius: 999px; padding: 0 .5rem; font-size: .75rem; font-weight: 600; border: 1px solid var(--muted); color: var(--muted); }
+  .badge.open { color: var(--primary); border-color: var(--primary); }
+  .badge.merged { color: var(--ok); border-color: var(--ok); }
+  .badge.closed { color: var(--flag); border-color: var(--flag); }
+  .actions { display: flex; gap: .5rem; margin-top: .75rem; }
+  .actions button { font-weight: 600; padding: .35rem .9rem; }
+  .actions .primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+  .actions .primary:hover { filter: brightness(1.1); }
+  .actions .danger { color: var(--flag); border-color: var(--flag); background: transparent; }
+  .actions .danger:hover { background: var(--flag-bg); }
   .card.abandoned { opacity: .7; }
   .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; font-size: .75rem; }
   .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .55rem; color: var(--muted); line-height: 1.5; }

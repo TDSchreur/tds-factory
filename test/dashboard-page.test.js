@@ -76,7 +76,7 @@ test('a Done card shows the PR state, and only an open PR can be merged after co
   if (!page) return;
   try {
     await page.execute("document.querySelectorAll('[aria-expanded]').forEach(b => b.click())");
-    assert.deepEqual(await page.execute("return [...document.querySelectorAll('.pr')].map(p => p.textContent)"), ['Pull request · Merged', 'Pull request · Open']);
+    assert.deepEqual(await page.execute("return [...document.querySelectorAll('.pr')].map(p => p.textContent)"), ['Pull request Merged', 'Pull request Open']);
     assert.equal(await page.execute("return document.querySelectorAll('[aria-label^=\"Squash and merge\"]').length"), 1);
     assert.equal(await page.execute("return document.querySelector('.pr a').href"), 'https://github.com/a/b/pull/1');
     await page.execute("document.querySelector('[aria-label^=\"Squash and merge\"]').click()");
@@ -164,5 +164,36 @@ test('a failed refresh keeps the last data and says so', async (t) => {
     assert.equal(await page.execute("return document.querySelectorAll('.card').length"), 1);
     page.state.failViews = false;
     await page.waitFor("return document.getElementById('status').className === '' && /^Updated/.test(document.getElementById('status').textContent)");
+  } finally { await page.close(); }
+});
+
+test('card buttons are visibly distinct: filled Merge, warning Delete, link-style toggle', async (t) => {
+  const page = await openPage(t, { runs: [
+    run({ id: 'o', title: 'Open', column: 'done', status: 'done', pr: 'https://github.com/o/r/pull/1', prState: 'open' }),
+  ] });
+  if (!page) return;
+  try {
+    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.waitFor("return !document.querySelector('.details').hidden");
+    const css = (sel, prop) => page.execute(`return getComputedStyle(document.querySelector('${sel}')).${prop}`);
+    const [merge, del, card] = [await css('.actions .primary', 'backgroundColor'), await css('.actions .danger', 'color'), await css('.card', 'backgroundColor')];
+    assert.notEqual(merge, card);
+    assert.notEqual(merge, await css('.actions .danger', 'backgroundColor'));
+    assert.notEqual(del, await css('.card', 'color'));
+    assert.equal(await page.execute("return document.querySelector('.pr .badge.open').textContent"), 'Open');
+    assert.equal(await page.execute("return document.querySelector('.meta .updated') !== null"), true);
+  } finally { await page.close(); }
+});
+
+test('a collapsed Done card with an open pull request shows an Open PR badge', async (t) => {
+  const page = await openPage(t, { runs: [
+    run({ id: 'o', title: 'Open one', column: 'done', status: 'done', pr: 'https://github.com/o/r/pull/1', prState: 'open' }),
+    run({ id: 'm', title: 'Merged one', column: 'done', status: 'done', pr: 'https://github.com/o/r/pull/2', prState: 'merged' }),
+  ] });
+  if (!page) return;
+  try {
+    const badge = (title) => page.execute(`const c = [...document.querySelectorAll('.card')].find(c => c.querySelector('.title').textContent === '${title}'); const b = c.querySelector('.open-pr'); return b ? [b.textContent, c.querySelector('.details').hidden] : null`);
+    assert.deepEqual(await badge('Open one'), ['Open PR', true]);
+    assert.equal(await badge('Merged one'), null);
   } finally { await page.close(); }
 });
