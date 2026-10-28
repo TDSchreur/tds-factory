@@ -23,7 +23,7 @@ Open your prepared project (see part 5 of the [install guide](install.md)) in yo
 /factory Add a CSV export button to the reports page
 ```
 
-In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. In Copilot and Claude Code the agent never starts `factory` on its own; Codex may.
+In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. In Copilot in VS Code and in Claude Code the agent never starts `factory` on its own; Codex may.
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
@@ -49,7 +49,7 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 
 - **Prepare:** the agent switches to building only what each Ticket asks for.
 - **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time.
-- **Check:** four reviewers, each a fresh read-only agent that did not write the code, report separately. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
+- **Check:** the Factory asks for four reviews to run separately, each in a fresh read-only subagent that did not write the code. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
 
 Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md` and the pull request text in `pr.md`. Prepare leaves none. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
