@@ -10,26 +10,12 @@ A Run is one pass through five Stages. Start it with the `factory` skill (`/fact
 
 ```mermaid
 flowchart LR
-    subgraph Define
-        A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
-    end
-    subgraph Prepare
-        D[ponytail]
-    end
-    subgraph Build
-        E[implement-spec with tdd]
-    end
-    subgraph Check
-        F[code-review]
-    end
-    subgraph Finish
-        G[pr] --> H[unslop]
-    end
-
-    C --> D --> E --> F
-    F -->|problems found, fewer than 2 loops so far| E
-    F -->|clean, or loop cap reached| G
+    Define --> Prepare --> Build --> Check
+    Check -->|problems, under 2 loops| Build
+    Check -->|clean, or loop cap reached| Finish
 ```
+
+The table lists the skills each Stage invokes.
 
 | Stage | Skills | Result |
 |---|---|---|
