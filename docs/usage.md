@@ -13,7 +13,7 @@ you describe the work
   Finish    the agent pushes the branch and opens the pull request              (you review and merge)
 ```
 
-Define is where the agent needs you most. After that it works on its own and stops only for a missing verify command, a missing label or a Check that is not clean (see part 4).
+Define is where the agent needs you most. After that it works on its own and stops only for a missing label or a Check that is not clean (see part 4).
 
 ## 1. Start a Run
 
@@ -23,7 +23,7 @@ Open your prepared project (see part 5 of the [install guide](install.md)) in yo
 /factory Add a CSV export button to the reports page
 ```
 
-In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In other agents, or if your chat does not take text after the skill name, write it as a normal request: "Use the factory skill to add a CSV export button to the reports page."
+In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. You have to start `factory` yourself; the agent does not start it on its own.
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
@@ -34,8 +34,8 @@ The agent first checks that the project is ready: the setup files exist, `tds-fa
 The agent interviews you to settle what has to be done. It asks in rounds. Each question is numbered and comes with the answer the agent recommends, written so that "yes" accepts it. An example:
 
 ```text
-Q1 - Which format: plain CSV or Excel? 
--> Plain CSV. It opens in Excel and needs no library.
+Q1 - Format: export plain CSV, not Excel?
+-> Yes, plain CSV. It opens in Excel and needs no library.
 ```
 
 - Answer a question by number. "Yes to all" accepts every recommendation in the round.
@@ -59,12 +59,12 @@ Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `bu
 A Run stops and asks you in these cases:
 
 1. **During Define,** with questions or to confirm the shared understanding.
-2. **Before Build,** if the project has no verify command or a label the Tickets need does not exist. The agent asks before it creates the label.
+2. **At the start,** if the project has no verify command (see below). **Before Build,** if a label the Tickets need does not exist: the agent asks before it creates the label.
 3. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in `finish.md`), or no to abandon the Run.
 
 The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
 
-If the project does not have a verify command in `AGENTS.md` under `## Commands`, the agent asks for it once and records it.
+If the project does not have a verify command in `AGENTS.md` under `## Commands`, the agent asks for it once, before the Run starts, and records it.
 
 ## 5. Follow Runs on the Dashboard
 

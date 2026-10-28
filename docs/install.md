@@ -55,7 +55,7 @@ Add `--project` to install into the current project instead of your home folder.
 ### Check that your agent sees the skills
 
 - **GitHub Copilot in VS Code:** open the chat and type `/`. The list should include `factory`. Type `/skills` to open the skills menu. Restart VS Code if the list is empty.
-- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs, so if `/factory` does not work, write the request in words: "Use the factory skill to ...".
+- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs; see Troubleshooting if `/factory` is missing. `factory` and `setup-matt-pocock-skills` can only be started by you, not by the agent on its own.
 
 ## 4. Update
 
