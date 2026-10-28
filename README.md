@@ -37,7 +37,7 @@ flowchart LR
 | Prepare | `ponytail` | Build writes the minimum code that works |
 | Build | `implement-spec`, `tdd` | Every Ticket done, test-first |
 | Check | `code-review`, `security-scan` | A Standards, a Spec and a Security verdict |
-| Finish | `pr` | A prepared pull request |
+| Finish | `pr`, `unslop` | A prepared pull request |
 
 Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
 
