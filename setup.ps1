@@ -12,7 +12,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command 
   Fail 'Node 20 or newer and npm are required'
 }
 
-$major = [int](node -p 'process.versions.node.split(".")[0]')
+$major = [int](node -p "process.versions.node.split('.')[0]")
 if ($major -lt 20) {
   Fail "Node 20 or newer is required (found $major)"
 }
