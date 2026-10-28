@@ -1,9 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { index, css } from './dashboard-files.js';
 
-const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
-const css = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+const html = index;
 
 test('design tokens are defined for light and dark themes', () => {
   for (const token of ['--bg', '--card', '--text', '--muted', '--border', '--primary', '--radius', '--shadow']) {

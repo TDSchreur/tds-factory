@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { appScript } from './dashboard-files.js';
 import { runInNewContext } from 'node:vm';
 
 class Element {
@@ -28,8 +28,7 @@ test('bulk confirmation includes hidden Done Runs and reports partial failures',
     if (options.method === 'DELETE') { requests.push(url); return { ok: !url.endsWith('/old'), text: async () => 'refused' }; }
     return { ok: true, json: async () => url === '/api/info' ? { project: 'test' } : runs };
   };
-  const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const script = appScript;
   runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag) }, window: {}, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
   await flush();
   const button = descendants(elements.board).find((e) => e.tag === 'button' && e.textContent === 'Delete all');

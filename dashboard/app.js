@@ -1,233 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>tds-factory dashboard</title>
-<script id="theme-init">
-(function () {
-  var key = 'dashboard-theme';
-  var choice = 'system';
-  try {
-    var saved = localStorage.getItem(key);
-    if (saved === 'light' || saved === 'dark' || saved === 'system') choice = saved;
-  } catch (err) {}
-  document.documentElement.dataset.theme = choice;
-  document.addEventListener('DOMContentLoaded', function () {
-    var selector = document.getElementById('theme');
-    selector.value = choice;
-    selector.addEventListener('change', function () {
-      choice = selector.value;
-      document.documentElement.dataset.theme = choice;
-      try { localStorage.setItem(key, choice); } catch (err) {}
-    });
-  });
-})();
-</script>
-<style>
-  :root {
-    --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
-    --border: #cdd3da; --ok: #1a7f37; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
-    --primary: #2457c5; --primary-text: #fff; --header-bg: rgba(246, 247, 249, .88);
-    --radius: .5rem; --shadow: 0 1px 2px rgba(16, 24, 40, .08), 0 1px 3px rgba(16, 24, 40, .06);
-    --focus: rgba(36, 87, 197, .45);
-  }
-  :root[data-theme="light"] { color-scheme: light; }
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
-    --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
-    --primary: #6e9bff; --primary-text: #0d1117; --header-bg: rgba(20, 23, 26, .88);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .4); --focus: rgba(110, 155, 255, .5);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]):not([data-theme="dark"]) {
-      color-scheme: dark;
-      --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
-      --border: #3a4148; --ok: #56d364; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
-      --primary: #6e9bff; --primary-text: #0d1117; --header-bg: rgba(20, 23, 26, .88);
-      --shadow: 0 1px 2px rgba(0, 0, 0, .4); --focus: rgba(110, 155, 255, .5);
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
-  a { color: var(--primary); text-underline-offset: .15em; }
-  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-
-  header { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .75rem 1.25rem; background: var(--header-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-  h1 { font-size: 1.25rem; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-  #project, #status { color: var(--muted); font-size: .875rem; }
-  #status.error { color: var(--flag); font-weight: 600; }
-  header label { font-size: .875rem; color: var(--muted); margin-left: auto; }
-  select, button { font: inherit; font-size: .875rem; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .3rem .7rem; cursor: pointer; transition: border-color .15s, background-color .15s; }
-  select:hover, button:hover { border-color: var(--primary); }
-  button:active { background: var(--panel); }
-
-  #intro { margin: 1rem 1.25rem 0; padding: .5rem .75rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); font-size: .875rem; }
-  #intro summary { cursor: pointer; font-weight: 600; }
-  #intro p, #intro ol { margin: .5rem 0; color: var(--muted); }
-  #board { display: grid; grid-template-columns: repeat(6, minmax(12rem, 1fr)); gap: 1rem; padding: 1.25rem; overflow-x: auto; align-items: start; }
-  .column { background: var(--panel); border-radius: calc(var(--radius) * 1.5); padding: .75rem; min-width: 0; }
-  .column h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: .1rem .25rem .75rem; color: var(--muted); }
-  .column > button { margin: 0 0 .75rem; }
-  .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .625rem; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; overflow-wrap: anywhere; box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-  .card:hover { border-color: var(--primary); }
-  .card .title { font-weight: 600; line-height: 1.3; }
-  .card .activity { color: var(--muted); font-size: .875rem; margin-top: .25rem; }
-  .card .agent { font-size: .8rem; color: var(--muted); margin-top: .5rem; }
-  .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
-  .card.unreadable .title { color: var(--flag); }
-  .card .updated { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
-  .card .updated.stale { color: var(--amber); font-weight: 600; }
-  .card .pr { font-size: .875rem; margin-top: .4rem; }
-  .card > button, .details > button { margin-top: .6rem; }
-  .card.abandoned { opacity: .7; }
-  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; font-size: .75rem; }
-  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 0 .55rem; color: var(--muted); line-height: 1.5; }
-  .chip.pass { color: var(--ok); border-color: var(--ok); }
-  .chip.fail { color: var(--flag); border-color: var(--flag); }
-  .chip.skipped { color: var(--muted); }
-
-  .card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
-  .card.waiting { border: 2px solid var(--flag); background: var(--flag-bg); }
-  .card .reason { color: var(--flag); font-weight: 700; font-size: .875rem; margin-bottom: .3rem; }
-  .empty { color: var(--muted); font-size: .875rem; padding: .25rem; }
-
-  #detail { max-width: 60rem; margin: 0 1.25rem 1.5rem; padding: 1.25rem; background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: var(--shadow); }
-  #detail[hidden] { display: none; }
-  #detail h2 { font-size: 1.25rem; margin: 0 0 .75rem; }
-  #detail h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; margin: 1rem 0 0; color: var(--muted); }
-  #detail pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; margin: .4rem 0 .75rem; font-size: .875rem; }
-
-  #detail .md > :first-child { margin-top: 0; }
-  #detail .md h4, #detail .md h5, #detail .md h6 { margin: 1rem 0 .4rem; }
-  #detail .md h4 { font-size: 1.05rem; }
-  #detail .md h5 { font-size: .95rem; }
-  #detail .md h6 { font-size: .875rem; color: var(--muted); }
-  #detail .md li > ul, #detail .md li > ol { margin: .2rem 0; }
-  #detail .md p, #detail .md ul, #detail .md ol, #detail .md blockquote, #detail .md table, #detail .md pre { margin: .4rem 0 .75rem; }
-  #detail .md code { font-size: .85em; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 .25em; }
-  #detail .md pre code { border: 0; padding: 0; background: none; font-size: inherit; }
-  #detail .md blockquote { padding-left: .75rem; border-left: 3px solid var(--border); color: var(--muted); }
-  #detail .md hr { border: 0; border-top: 1px solid var(--border); }
-  #detail .md .scroll { overflow-x: auto; }
-  #detail .md table { border-collapse: collapse; font-size: .875rem; }
-  #detail .md th, #detail .md td { border: 1px solid var(--border); padding: .25rem .5rem; text-align: left; }
-
-  dialog { width: min(28rem, calc(100% - 2rem)); padding: 0; color: var(--text); background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5); box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
-  dialog::backdrop { background: rgba(10, 15, 25, .6); }
-  .dialog-content { padding: 1.5rem; }
-  .dialog-content h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
-  .dialog-content p { margin: 0; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
-  .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.5rem; }
-  .dialog-actions .primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 600; }
-  .dialog-actions .danger { background: var(--flag); border-color: var(--flag); color: var(--card); }
-  @media (max-width: 48rem) {
-    header { padding: .6rem 1rem; }
-    header label { margin-left: 0; }
-    #board { grid-template-columns: 1fr; padding: 1rem; }
-    #detail { margin: 0 1rem 1rem; padding: 1rem; }
-  }
-</style>
-</head>
-<body>
-<header>
-  <h1>tds-factory dashboard</h1>
-  <span id="project"></span>
-  <span id="status" role="status" aria-live="polite">Loading...</span>
-  <label for="theme">Theme</label>
-  <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-  <button id="older" type="button" hidden></button>
-</header>
-<details id="intro">
-  <summary>What is this?</summary>
-  <p>The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Hover or focus a Stage heading or a chip for details.</p>
-  <ol>
-    <li><strong>Define</strong>: settle what to build, write a Spec and cut it into Tickets.</li>
-    <li><strong>Prepare</strong>: switch to the minimal-code working style.</li>
-    <li><strong>Build</strong>: implement the Tickets test-first.</li>
-    <li><strong>Check</strong>: independent reviews of Standards, Spec, Security and Infrastructure.</li>
-    <li><strong>Finish</strong>: open the pull request.</li>
-  </ol>
-  <p>A red card marked "Needs you" is waiting for your answer in the agent session. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
-</details>
-<main id="board" aria-label="Runs by Stage" tabindex="-1"></main>
-<section id="detail" aria-label="Run detail" hidden></section>
-<dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-message">
-  <div class="dialog-content">
-    <h2 id="dialog-title"></h2>
-    <p id="dialog-message"></p>
-    <div class="dialog-actions">
-      <button id="dialog-cancel" type="button" autofocus>Cancel</button>
-      <button id="dialog-confirm" type="button" class="primary"></button>
-    </div>
-  </div>
-</dialog>
-<script id="markdown">
-// Turns Markdown text into a plain tree of blocks and inline spans. No DOM access, so a test can run it alone.
-function parseMarkdown(text) {
-  function inline(src) {
-    var out = [], re = /`([^`]+)`|\*\*(.+?)\*\*|\*([^\s*](?:.*?[^\s*])?)\*|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, last = 0, m;
-    function plain(v) { if (v) out.push({ t: 'text', v: v }); }
-    while ((m = re.exec(src))) {
-      plain(src.slice(last, m.index));
-      last = re.lastIndex;
-      if (m[1]) out.push({ t: 'code', v: m[1] });
-      else if (m[2]) out.push({ t: 'strong', c: inline(m[2]) });
-      else if (m[3]) out.push({ t: 'em', c: inline(m[3]) });
-      else if (/^https?:\/\//i.test(m[5])) out.push({ t: 'link', href: m[5], c: inline(m[4]) });
-      else plain(m[4]);
-    }
-    plain(src.slice(last));
-    return out;
-  }
-  function cells(line) { return line.trim().replace(/^\||\|$/g, '').split('|').map(function (c) { return inline(c.trim()); }); }
-  var blocks = [], lines = String(text).split(/\r?\n/), i = 0, m;
-  while (i < lines.length) {
-    var line = lines[i];
-    if (!line.trim()) { i++; continue; }
-    if (/^\s*```/.test(line)) {
-      var code = [];
-      for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
-      i++;
-      blocks.push({ type: 'code', text: code.join('\n') });
-    } else if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) {
-      blocks.push({ type: 'heading', level: m[1].length, inline: inline(m[2].trim()) });
-      i++;
-    } else if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
-      blocks.push({ type: 'rule' });
-      i++;
-    } else if (line.indexOf('|') >= 0 && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1] || '')) {
-      var head = cells(line), rows = [];
-      for (i += 2; i < lines.length && lines[i].indexOf('|') >= 0; i++) rows.push(cells(lines[i]));
-      blocks.push({ type: 'table', head: head, rows: rows });
-    } else if (/^\s*>/.test(line)) {
-      var quote = [];
-      for (; i < lines.length && /^\s*>/.test(lines[i]); i++) quote.push(lines[i].replace(/^\s*>\s?/, ''));
-      blocks.push({ type: 'quote', inline: inline(quote.join(' ')) });
-    } else if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
-      var items = [], ordered = /^\s*\d+\./.test(line), base = /^\s*/.exec(line)[0].length;
-      for (; i < lines.length && (m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i])); i++) {
-        var item = { inline: inline(m[3].trim()) };
-        if (m[1].length > base && items.length) {
-          var parent = items[items.length - 1];
-          parent.sub = parent.sub || { ordered: /\d/.test(m[2]), items: [] };
-          parent.sub.items.push(item);
-        } else items.push(item);
-      }
-      blocks.push({ type: 'list', ordered: ordered, items: items });
-    } else {
-      var para = [];
-      for (; i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|>|([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(lines[i]); i++) para.push(lines[i].trim());
-      blocks.push({ type: 'paragraph', inline: inline(para.join(' ')) });
-    }
-  }
-  return blocks;
-}
-</script>
-<script>
 (function () {
   'use strict';
   var COLUMNS = [
@@ -371,6 +141,7 @@ function parseMarkdown(text) {
   var selectedId = null;
   var lastEntries = [];
   var detailEl = document.getElementById('detail');
+  var shownId = null;
   var shown = null; // key of what the detail view currently shows, to avoid flicker on each poll
 
   function select(id) { selectedId = selectedId === id ? null : id; render(lastEntries); }
@@ -417,12 +188,13 @@ function parseMarkdown(text) {
 
   function renderDetail(runs) {
     var run = selectedId && runs.filter(function (r) { return r.id === selectedId; })[0];
-    if (!run) { shown = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
+    if (!run) { shown = null; shownId = null; detailEl.hidden = true; detailEl.replaceChildren(); return; }
     var key = JSON.stringify([run.id, run.title, run.updated, run.files, run.links]);
     if (key === shown) return;
-    shown = key;
+    var refresh = shownId === run.id; // same Run as on screen: keep it until the new files are loaded
+    shown = key; shownId = run.id;
     detailEl.hidden = false;
-    var kids = [el('h2', null, run.title)];
+    var kids = [el('h2', null, run.title)], loads = [];
     run.links.forEach(function (l) {
       var p = el('div', 'link');
       p.appendChild(link(l.label + ': ' + l.href, l.href));
@@ -433,12 +205,16 @@ function parseMarkdown(text) {
       kids.push(el('h3', null, name));
       var pre = el('pre', null, 'Loading...');
       kids.push(pre);
-      fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+      loads.push(fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
         .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
         .then(function (t) { pre.replaceWith(renderMarkdown(t)); })
-        .catch(function (err) { pre.textContent = 'Cannot load ' + name + ' (' + err.message + ')'; });
+        .catch(function (err) { pre.textContent = 'Cannot load ' + name + ' (' + err.message + ')'; }));
     });
-    detailEl.replaceChildren.apply(detailEl, kids);
+    var next = document.createDocumentFragment();
+    kids.forEach(function (k) { next.appendChild(k); });
+    // Showing the Loading placeholders again would shrink the page, and the browser would scroll back to the top.
+    if (!refresh) { detailEl.replaceChildren(next); return; }
+    Promise.all(loads).then(function () { if (shown === key) detailEl.replaceChildren(next); });
   }
 
   var dialog = document.getElementById('dialog');
@@ -565,6 +341,3 @@ function parseMarkdown(text) {
   poll();
   setInterval(poll, POLL_MS);
 })();
-</script>
-</body>
-</html>

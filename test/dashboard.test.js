@@ -140,9 +140,9 @@ test('page route serves the real board page', async () => {
 });
 
 test('page renders an Infrastructure chip only when the field is present', async () => {
-  const res = await get(dash, '/');
+  const res = await get(dash, '/app.js');
   assert.match(res.body, /if \(run\.infrastructure\) chips\.appendChild\(el\('span', 'chip ' \+ run\.infrastructure, 'Infrastructure ' \+ run\.infrastructure, CHIP_HELP\.infrastructure\)\)/);
-  assert.match(res.body, /\.chip\.skipped/);
+  assert.match((await get(dash, '/style.css')).body, /\.chip\.skipped/);
 });
 
 test('info route names the project directory the Dashboard serves', async () => {
@@ -266,4 +266,30 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
     assert.equal(old.waiting, true);
     assert.equal(records.find((r) => r.id === 'broken').unreadable, true);
   } finally { await dashboard.close(); }
+});
+
+test('the style, parser and application files are served at fixed names', async () => {
+  for (const [path, type, marker] of [['/style.css', /text\/css/, /--bg:/], ['/markdown.js', /text\/javascript/, /function parseMarkdown/], ['/app.js', /text\/javascript/, /function poll/]]) {
+    const res = await get(dash, path);
+    assert.equal(res.status, 200, path);
+    assert.match(res.headers['content-type'], type, path);
+    assert.match(res.body, marker, path);
+  }
+});
+
+test('only the allow-listed Dashboard files are served', async () => {
+  for (const path of ['/index.html', '/dashboard/app.js', '/package.json', '/src/dashboard.js', '/..%2fpackage.json', '/%2e%2e/package.json', '/style.css/..']) {
+    const res = await get(dash, path);
+    assert.equal(res.status, 404, path);
+  }
+});
+
+test('a missing Dashboard folder shows the fallback page', async () => {
+  const d = await startDashboard({ projectDir: empty, port: 0, dashboardDir: join(tmp, 'no-such-folder') });
+  try {
+    const res = await get(d, '/');
+    assert.equal(res.status, 200);
+    assert.match(res.body, /not installed/);
+    assert.equal((await get(d, '/app.js')).status, 404);
+  } finally { await d.close(); }
 });

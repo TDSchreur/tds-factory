@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { index, css, markdownScript, appScript } from './dashboard-files.js';
 import { createServer } from 'node:http';
 import { createServer as createPortServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
@@ -8,12 +8,15 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 test('dialog Escape cancels and refresh preserves keyboard focus', async (t) => {
   if (spawnSync('sh', ['-c', 'command -v chromedriver && command -v chromium']).status !== 0) return t.skip('Chromium and ChromeDriver are required');
-  const html = readFileSync(new URL('../dashboard.html', import.meta.url));
+  const html = Buffer.from(index);
   let mutations = 0;
   const runs = [{ id: 'r', title: 'Example', column: 'done', status: 'done', updated: new Date().toISOString(), files: [], links: [], pr: 'https://github.com/a/b/pull/1', prState: 'open' }];
   const server = createServer((req, res) => {
     if (req.method === 'POST' || req.method === 'DELETE') mutations++;
     if (req.url === '/') return res.end(html);
+    if (req.url === '/style.css') return res.setHeader('Content-Type', 'text/css'), res.end(css);
+    if (req.url === '/markdown.js') return res.setHeader('Content-Type', 'text/javascript'), res.end(markdownScript);
+    if (req.url === '/app.js') return res.setHeader('Content-Type', 'text/javascript'), res.end(appScript);
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify(req.url === '/api/info' ? { project: 'test' } : runs));
   });

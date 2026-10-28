@@ -4,7 +4,7 @@ import { stages } from './flow.js';
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_PORT = 4317;
@@ -13,7 +13,9 @@ const ghPrMerge = (url) => promisify(execFile)('gh', ['pr', 'merge', url, '--squ
 const PR_CACHE_MS = 60_000;
 const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
 const HOST = '127.0.0.1';
-const PAGE = fileURLToPath(new URL('../dashboard.html', import.meta.url));
+const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
+// The only files served besides the page; a request never picks a path, only one of these names.
+const ASSETS = { '/style.css': 'text/css', '/markdown.js': 'text/javascript', '/app.js': 'text/javascript' };
 const FALLBACK_PAGE = `<!doctype html>
 <meta charset="utf-8">
 <title>tds-factory dashboard</title>
@@ -36,7 +38,7 @@ export function interpretRun(entry) {
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Pass port 0 for a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED and prMerge(url) squash-merges; both default to the `gh` CLI.
-export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT, prState = ghPrState, prMerge = ghPrMerge } = {}) {
+export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT, prState = ghPrState, prMerge = ghPrMerge, dashboardDir = DASHBOARD_DIR } = {}) {
   const store = openRunStore(projectDir);
   const prCache = new Map();
   const lookup = (url) => {
@@ -85,7 +87,11 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {
-        return send(200, 'text/html', await readFile(PAGE, 'utf8').catch(() => FALLBACK_PAGE));
+        return send(200, 'text/html', await readFile(join(dashboardDir, 'index.html'), 'utf8').catch(() => FALLBACK_PAGE));
+      }
+      if (Object.hasOwn(ASSETS, path)) {
+        const body = await readFile(join(dashboardDir, path.slice(1)), 'utf8').catch(() => null);
+        return body === null ? send(404, 'text/plain', 'not found') : send(200, ASSETS[path], body);
       }
       if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir) }));
       if (path === '/api/views') return send(200, 'application/json', JSON.stringify(await Promise.all((await store.list()).map(view))));
