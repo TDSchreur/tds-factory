@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { interpretRun } from './run-record.js';
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +100,7 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
         return send(200, 'text/html', await readFile(PAGE, 'utf8').catch(() => FALLBACK_PAGE));
       }
       if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir) }));
+      if (path === '/api/views') return send(200, 'application/json', JSON.stringify((await listRuns(runsDir)).map(interpretRun)));
       if (path === '/api/runs') return send(200, 'application/json', JSON.stringify(await listRuns(runsDir)));
       if (path.startsWith('/files/')) {
         const body = await readRunFile(runsDir, path.slice('/files/'.length));

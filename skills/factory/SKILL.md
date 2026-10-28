@@ -14,15 +14,17 @@ Walk the work through the Stages below in order. Finish each Stage and tell the 
 
 Before creating the Run folder, check that the user has run `/setup-matt-pocock-skills` in this project: `docs/agents/issue-tracker.md` and `docs/agents/domain.md` exist, and `AGENTS.md` or `CLAUDE.md` has an `## Agent skills` section pointing at them. If anything is missing, stop. Do not start the Run and do not create the files yourself. Tell the user which items are missing and that the Factory cannot work without them. Tell them to run `/setup-matt-pocock-skills` (it sets up the issue tracker, triage labels and domain docs layout), then run `/factory` again.
 
+Check that `tds-factory` is on PATH by running `tds-factory` and checking it exits successfully. If it is unavailable, stop before creating a Run and tell the user to install the Factory CLI globally (for a checkout, run `npm install -g .` there) and make it available on PATH.
+
 Then read the project's conventions: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists. Find the verify command in its `## Commands` section. If there is none, tell the user and ask once for the command, set the Run to `waiting` while you ask, and record the answer; never guess one. Record the command in `commands` and the paths you read in `conventions` when you create `run.json`.
 
 ## Run record
 
 Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourself; do not skip it.
 
-**Start.** Before the first Stage, create the Run folder `.factory/runs/YYYY-MM-DD-<slug-of-title>/` in the project being built, using today's date and a lowercase, hyphenated slug of the work title. If that folder already exists, append `-2`, `-3`, and so on until the name is free. Never reuse or overwrite another Run's folder. Write `run.json` in it, with `check_loops` set to `0`.
+**Start.** Before the first Stage, run `tds-factory run start --data '<JSON>'` in the project being built. Supply a JSON object containing `title`, `agent`, `commands` and `conventions`. The command prints the new Run id; keep it for every update. It creates a unique dated folder and initializes the record. If no verify command is known yet, use an empty `commands` string until the user answers.
 
-**Update.** Rewrite `run.json` whenever a Stage starts (including when Check sends you back to Build), when the work becomes `waiting` on the user or is released again, and when the Run ends. Also rewrite it each time a Ticket is completed (`tickets_done`) and after each review (`standards`, `spec`, `security`, `infrastructure`, `check_loops`). Always refresh `activity` and `updated`. Keep the `created` value and any fields you do not change.
+**Update.** Use `tds-factory run update --id <id> --data '<JSON>'` for every Run record change; never write `run.json` directly. Supply only changed fields as a JSON object. The command preserves other fields and `created`, refreshes `updated`, validates changes and replaces the record safely. Set `activity` on every update. Update whenever a Stage starts (including when Check sends you back to Build), when work becomes `waiting` or is released, when a Ticket completes, after each review, and when the Run ends. Record `standards`, `spec`, `security`, `infrastructure` and `check_loops` as they change. To wait, set `status` to `waiting` and provide `waiting_reason`; to resume or end, set the new status. The command maintains the waiting flag and clears the reason when leaving `waiting`. Check command errors and resolve them before continuing.
 
 **Gitignore.** If `.factory/` is not covered by the project's `.gitignore`, tell the user to add it. Do not edit `.gitignore` yourself.
 
@@ -32,7 +34,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 
 ### Schema
 
-`run.json` is one JSON object. Every agent writes exactly this shape, whichever Agent target it is. Add new fields only when this section says so.
+`run.json` is one JSON object. The command maintains this shape for every Agent target. Add new fields only when this section says so.
 
 | Field | Value |
 | --- | --- |
