@@ -85,4 +85,4 @@ In one pass, review the changes on three axes, each in its own fresh read-only s
 
 ## Finish
 
-Invoke `pr` to prepare the pull request, and save the draft as plain Markdown in `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
+Invoke `pr` to prepare the pull request. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
