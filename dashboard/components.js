@@ -126,7 +126,7 @@ const folderName = (path) => String(path ?? '').split(/[\\/]/).filter(Boolean).p
 export function Header({ project, status, olderLabel, onOlder }) {
   return html`<header>
     <div class="title"><h1>tds-factory</h1><span class="tagline">dashboard</span></div>
-    <span id="project" title=${project}>${folderName(project)}</span>
+    ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
     <${ThemeSelect} />
     <button id="older" type="button" hidden=${!olderLabel} onClick=${onOlder}>${olderLabel}</button>

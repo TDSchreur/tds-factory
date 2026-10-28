@@ -58,3 +58,14 @@ test('a long project name and a narrow screen do not make the page scroll sidewa
     assert.equal(await page.execute("return document.getElementById('project').getBoundingClientRect().right <= window.innerWidth"), true);
   } finally { await page.close(); }
 });
+
+test('an empty or root project path shows no pill', async (t) => {
+  for (const project of ['', '/']) {
+    const page = await openPage(t, { project, runs: [run()] });
+    if (!page) return;
+    try {
+      assert.equal(await page.execute("return document.getElementById('project')"), null, JSON.stringify(project));
+      assert.equal(await page.execute("return !!document.getElementById('status') && !!document.getElementById('theme')"), true);
+    } finally { await page.close(); }
+  }
+});
