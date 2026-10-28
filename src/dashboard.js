@@ -2,10 +2,15 @@ import http from 'node:http';
 import { openRunStore } from './run-store.js';
 import { stages } from './flow.js';
 import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_PORT = 4317;
+const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
+const PR_CACHE_MS = 60_000;
+const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
 const HOST = '127.0.0.1';
 const PAGE = fileURLToPath(new URL('../dashboard.html', import.meta.url));
 const FALLBACK_PAGE = `<!doctype html>
@@ -29,8 +34,21 @@ export function interpretRun(entry) {
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Pass port 0 for a random free port. Resolves to { server, port, url, close }.
-export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT } = {}) {
+// prState(url) resolves to OPEN, MERGED or CLOSED; it defaults to asking GitHub through `gh`.
+export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT, prState = ghPrState } = {}) {
   const store = openRunStore(projectDir);
+  const prCache = new Map();
+  const lookup = (url) => {
+    const hit = prCache.get(url);
+    if (hit && Date.now() - hit.at < PR_CACHE_MS) return hit.state;
+    const state = Promise.resolve().then(() => prState(url)).then((v) => String(v).toLowerCase()).then((v) => ['open', 'merged', 'closed'].includes(v) ? v : '', () => '');
+    prCache.set(url, { at: Date.now(), state });
+    return state;
+  };
+  const view = async (entry) => {
+    const v = interpretRun(entry);
+    return { ...v, prState: v.column === 'done' && PR_URL.test(v.pr) ? await lookup(v.pr) : '' };
+  };
 
   const server = http.createServer(async (req, res) => {
     const send = (status, type, body) => {
@@ -56,7 +74,7 @@ export async function startDashboard({ projectDir = process.cwd(), port = DEFAUL
         return send(200, 'text/html', await readFile(PAGE, 'utf8').catch(() => FALLBACK_PAGE));
       }
       if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir) }));
-      if (path === '/api/views') return send(200, 'application/json', JSON.stringify((await store.list()).map(interpretRun)));
+      if (path === '/api/views') return send(200, 'application/json', JSON.stringify(await Promise.all((await store.list()).map(view))));
       if (path === '/api/runs') return send(200, 'application/json', JSON.stringify(await store.list()));
       if (path.startsWith('/files/')) {
         const body = await store.readFile(path.slice('/files/'.length));
