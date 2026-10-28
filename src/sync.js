@@ -9,22 +9,32 @@ function invokedByFactory(skillsDir) {
   return new Set([...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]));
 }
 
+const leaves = (base, target) => path.relative(base, target).startsWith('..') || path.isAbsolute(path.relative(base, target));
+
 // Copies the skills listed in the manifest from the vendor submodules into skills/.
 // An entry is a path, or { path, as } to ship the skill under another name.
 // Our own skills (no marker) are never touched.
 export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
   const { skills } = JSON.parse(fs.readFileSync(path.join(root, 'skills.manifest.json'), 'utf8'));
   const invoked = invokedByFactory(skillsDir);
-  for (const entry of skills) {
+  // Validate every entry first, so a bad one leaves the skills folder untouched.
+  const plan = skills.map((entry) => {
     const { path: rel, as: name = path.basename(rel) } = typeof entry === 'string' ? { path: entry } : entry;
     const src = path.join(root, rel);
+    const dest = path.join(skillsDir, name);
+    const bad = (why) => new Error(`manifest entry ${JSON.stringify(entry)} ${why}`);
+    if (!/^[a-z0-9-]+$/.test(name)) throw bad('has an invalid shipped name (lowercase letters, digits and hyphens only)');
+    if (leaves(root, src)) throw bad('leaves the repository');
+    if (leaves(skillsDir, dest)) throw bad('leaves the skills folder');
     if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
       throw new Error(`${rel} has no SKILL.md (run: git submodule update --init)`);
     }
-    const dest = path.join(skillsDir, name);
     if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, MARKER))) {
       throw new Error(`skills/${name} is not synced from upstream; refusing to overwrite`);
     }
+    return { rel, name, src, dest };
+  });
+  for (const { rel, name, src, dest } of plan) {
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
     const upstream = path.basename(rel);

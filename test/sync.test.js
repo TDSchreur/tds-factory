@@ -65,3 +65,30 @@ test('sync marks what it ships and refuses to overwrite a folder it did not sync
   quietSync({ root, skillsDir });
   assert.ok(existsSync(join(skillsDir, 'alpha', 'references', 'notes.md')));
 });
+
+const beta = { 'SKILL.md': '---\nname: beta\n---\n' };
+
+test('sync refuses a shipped name that is not lowercase letters, digits and hyphens, naming the entry', () => {
+  for (const as of ['../x', 'Upper', 'a b', '..', 'a/b']) {
+    const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/alpha', as }], { alpha });
+    assert.throws(() => quietSync({ root, skillsDir }), (err) => err.message.includes(JSON.stringify(as)), as);
+    assert.ok(!existsSync(join(skillsDir, 'a b')), as);
+  }
+});
+
+test('sync refuses a source path that leaves the repository, naming the entry', () => {
+  const { root, skillsDir } = fakeRepo(['../outside/skills/alpha'], { alpha });
+  mkdirSync(join(root, '..', 'outside', 'skills', 'alpha'), { recursive: true });
+  writeFileSync(join(root, '..', 'outside', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\n---\n');
+  assert.throws(() => quietSync({ root, skillsDir }), /"\.\.\/outside\/skills\/alpha".*leaves the repository/);
+  assert.ok(!existsSync(join(skillsDir, 'alpha')));
+});
+
+test('sync validates every entry before it writes any', () => {
+  const { root, skillsDir } = fakeRepo(
+    ['vendor/up/skills/beta', { path: 'vendor/up/skills/alpha', as: 'Bad Name' }],
+    { alpha, beta },
+  );
+  assert.throws(() => quietSync({ root, skillsDir }), /Bad Name/);
+  assert.ok(!existsSync(join(skillsDir, 'beta')));
+});
