@@ -197,6 +197,26 @@ test('the Run detail header shows the Run state and stays in view while the summ
   } finally { await page.close(); }
 });
 
+test('the Run detail is keyboard friendly: focus moves in, Escape closes it and focus returns to the card', async (t) => {
+  const page = await openPage(t, { runs: [run({ id: 'r1', title: 'One', files: ['define.md'] }), run({ id: 'r2', title: 'Two' })], files: { 'r1/define.md': 'text' } });
+  if (!page) return;
+  try {
+    assert.equal(await page.execute("return document.getElementById('detail').getAttribute('aria-label')"), 'Run detail');
+    await page.execute("document.querySelector('[data-id=r1]').focus(); document.querySelector('[data-id=r1]').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    await page.wait(POLL_WAIT); // a poll must not take focus away again
+    await page.execute("document.querySelector('#detail a, #detail button').focus()");
+    await page.wait(POLL_WAIT);
+    assert.equal(await page.execute("return document.activeElement.closest('#detail') !== null"), true);
+    await page.key(ESCAPE);
+    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+    assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=r1]')"), true);
+    // Escape with nothing open does nothing, and a confirmation keeps Escape for itself.
+    await page.key(ESCAPE);
+    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+  } finally { await page.close(); }
+});
+
 test('the Run detail closes when its Run is no longer shown', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })] });
   if (!page) return;

@@ -33,6 +33,18 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Closing the Run detail hands focus back to its card.
+  const closeDetail = () => {
+    const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
+    setSelectedId(null);
+    if (card) card.focus();
+  };
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDetail(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selectedId]);
+
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
   const ask = (title, message, action, danger, notice) => {
     const result = queue.current.then(() => new Promise((resolve) => setRequest({ title, message, action, danger, notice, resolve })));
@@ -89,7 +101,7 @@ function App() {
     <${Intro} />
     <div id="layout" class=${open ? 'open' : ''}>
       <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-      <${Detail} run=${open} onClose=${() => setSelectedId(null)} />
+      <${Detail} run=${open} onClose=${closeDetail} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }

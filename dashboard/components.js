@@ -139,6 +139,8 @@ export function Header({ project, status, olderLabel, onOlder }) {
 export function Detail({ run, onClose }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
+  const heading = useRef(null);
+  useEffect(() => { if (run) heading.current?.focus(); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
@@ -152,7 +154,7 @@ export function Detail({ run, onClose }) {
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
   return html`<section id="detail" aria-label="Run detail">
     <header>
-      <div class="head-row"><h2>${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
+      <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${run.waiting && html`<div class="reason">Needs you${run.reason ? ': ' + run.reason : ''}</div>`}
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
