@@ -61,7 +61,7 @@ A Dashboard in the browser. The `factory` Skill keeps a Run record up to date as
 - **Stale indicator:** the "last updated" label is derived from the update timestamp and turns amber past a threshold (about 10 minutes).
 - **Done column and history:** Runs with status `done` or `abandoned` go to Done. Runs older than 7 days are hidden behind a "show older" toggle. Users can permanently delete individual Done Runs or all Done Runs, including hidden ones, after confirmation.
 - **Packaging:** the page ships in the package's `files` list so `npm`-style installs include it.
-- **Glossary:** Run, Run record and Dashboard are already in `GLOSSARY.md`. No ADR; the design is easy to change later.
+- **Glossary:** Run, Run record, Run store and Dashboard are already in `GLOSSARY.md`. No ADR; the design is easy to change later.
 
 ## Testing Decisions
 

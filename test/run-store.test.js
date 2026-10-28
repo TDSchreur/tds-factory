@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, symlinkSync, rmSync } from 'node:fs';
+import fs, { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openRunStore } from '../src/run-store.js';
@@ -75,4 +75,63 @@ test('remove refuses linked storage and a Run whose update lock is held', () => 
   assert.equal(store.remove('y'), 'not-allowed');
   rmSync(lock);
   assert.equal(store.remove('y'), 'deleted');
+});
+
+test('update preserves unknown fields and clears waiting on resume', () => {
+  const cwd = project();
+  seed(cwd, 'old', { 'run.json': JSON.stringify({ created: 'original', status: 'waiting', waiting_reason: 'answer', waiting_on_human: true, future: { value: 42 } }) });
+  openRunStore(cwd).update('old', { status: 'running', activity: 'continuing' });
+  const record = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json')));
+  assert.deepEqual(record.future, { value: 42 });
+  assert.equal(record.created, 'original');
+  assert.equal(record.waiting_on_human, false);
+  assert.equal(record.waiting_reason, '');
+});
+
+test('update rejects invalid values and leaves the record as it was', () => {
+  const cwd = project();
+  const store = openRunStore(cwd);
+  const id = store.start(start);
+  const file = join(cwd, '.factory', 'runs', id, 'run.json');
+  const before = readFileSync(file, 'utf8');
+  assert.throws(() => store.update(id, { stage: 'wrong' }), /invalid field or value: stage/);
+  assert.throws(() => store.update(id, { status: 'waiting' }), /waiting requires a reason/);
+  assert.equal(readFileSync(file, 'utf8'), before);
+});
+
+test('incomplete waiting records allow unrelated updates', () => {
+  const cwd = project();
+  seed(cwd, 'old', { 'run.json': '{"status":"waiting"}' });
+  openRunStore(cwd).update('old', { activity: 'continuing' });
+});
+
+test('start rejects check_loops and missing fields', () => {
+  const store = openRunStore(project());
+  assert.throws(() => store.start({ ...start, check_loops: 2 }), /start accepts only/);
+  assert.throws(() => store.start({ title: 'x' }), /required/);
+});
+
+test('start and update refuse linked storage outside the project', () => {
+  const cwd = project();
+  const outside = project();
+  mkdirSync(join(cwd, '.factory'));
+  symlinkSync(join(outside, '.factory', 'runs'), join(cwd, '.factory', 'runs'));
+  mkdirSync(join(outside, '.factory', 'runs', 'old'), { recursive: true });
+  const file = join(outside, '.factory', 'runs', 'old', 'run.json');
+  writeFileSync(file, '{"status":"running"}');
+  const store = openRunStore(cwd);
+  assert.throws(() => store.update('old', { activity: 'changed' }), /symlink/);
+  assert.throws(() => store.start(start), /symlink/);
+  assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
+});
+
+test('a failed replacement leaves the existing record intact', () => {
+  const cwd = project();
+  seed(cwd, 'old', { 'run.json': '{"status":"running"}' });
+  const file = join(cwd, '.factory', 'runs', 'old', 'run.json');
+  const rename = fs.renameSync;
+  fs.renameSync = () => { throw new Error('replacement failed'); };
+  try { assert.throws(() => openRunStore(cwd).update('old', { activity: 'changed' }), /replacement failed/); }
+  finally { fs.renameSync = rename; }
+  assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
 });

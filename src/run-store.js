@@ -56,7 +56,7 @@ function runRoot(projectDir, create) {
   if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
   return root;
 }
-export function startRun(projectDir, data) {
+function startRun(projectDir, data) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
@@ -70,13 +70,13 @@ export function startRun(projectDir, data) {
   catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
-export function withRunLock(root, id, action) {
+function withRunLock(root, id, action) {
   const lock = path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
   const fd = fs.openSync(lock, 'wx');
   try { return action(); }
   finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
-export function updateRun(projectDir, id, data) {
+function updateRun(projectDir, id, data) {
   if (!validId(id)) throw new Error('invalid Run id');
   const root = runRoot(projectDir, false);
   return withRunLock(root, id, () => {
