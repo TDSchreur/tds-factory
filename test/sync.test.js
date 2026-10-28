@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sync } from '../src/sync.js';
@@ -91,4 +91,11 @@ test('sync validates every entry before it writes any', () => {
   );
   assert.throws(() => quietSync({ root, skillsDir }), /Bad Name/);
   assert.ok(!existsSync(join(skillsDir, 'beta')));
+});
+
+test('sync refuses a symlink inside a shipped skill, naming the skill and the link, and writes nothing for it', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  symlinkSync('/etc/hostname', join(root, 'vendor/up/skills/alpha', 'link.md'));
+  assert.throws(() => quietSync({ root, skillsDir }), /alpha.*link\.md|link\.md.*alpha/);
+  assert.ok(!existsSync(join(skillsDir, 'alpha')));
 });

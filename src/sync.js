@@ -32,6 +32,10 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
     if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, MARKER))) {
       throw new Error(`skills/${name} is not synced from upstream; refusing to overwrite`);
     }
+    // Shipped skills are plain files: a link could make the rewrite below touch files outside the skill.
+    for (const e of fs.readdirSync(src, { recursive: true, withFileTypes: true })) {
+      if (e.isSymbolicLink()) throw new Error(`skill ${name} contains a symlink: ${path.relative(src, path.join(e.parentPath ?? e.path, e.name))}`);
+    }
     return { rel, name, src, dest };
   });
   for (const { rel, name, src, dest } of plan) {
