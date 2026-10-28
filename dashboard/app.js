@@ -33,6 +33,18 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // Closing the Run detail hands focus back to its card.
+  const closeDetail = () => {
+    const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
+    setSelectedId(null);
+    if (card) card.focus();
+  };
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDetail(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selectedId]);
+
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
   const ask = (title, message, action, danger, notice) => {
     const result = queue.current.then(() => new Promise((resolve) => setRequest({ title, message, action, danger, notice, resolve })));
@@ -72,6 +84,8 @@ function App() {
   const older = entries.filter((r) => { const a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
   // Newest first within a column; unreadable and undated records sort last.
   const runs = entries.filter((r) => showOlder || !older.includes(r)).sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id));
+  const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
+  useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
   const waiting = entries.filter((r) => r.waiting).length;
   useEffect(() => { document.title = (waiting ? '(' + waiting + ') ' : '') + BASE_TITLE; }, [waiting]);
 
@@ -86,8 +100,10 @@ function App() {
 
   return html`<${Header} project=${project} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} />
     <${Intro} />
-    <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-    <${Detail} run=${runs.find((r) => r.id === selectedId) || null} />
+    <div id="layout" class=${openRun ? 'open' : ''}>
+      <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
+      <${Detail} run=${openRun} onClose=${closeDetail} />
+    </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }
 

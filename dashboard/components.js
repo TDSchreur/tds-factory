@@ -135,10 +135,12 @@ export function Header({ project, status, olderLabel, onOlder }) {
 }
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
-// because showing the Loading placeholders again would shrink the page and the browser would scroll back to the top.
-export function Detail({ run }) {
+// because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
+export function Detail({ run, onClose }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
+  const heading = useRef(null);
+  useEffect(() => { if (run) heading.current?.focus(); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
@@ -151,7 +153,12 @@ export function Detail({ run }) {
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
   return html`<section id="detail" aria-label="Run detail">
-    <h2>${run.title}</h2>
+    <header>
+      <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
+      ${run.waiting && html`<div class="reason">Needs you${run.reason ? ': ' + run.reason : ''}</div>`}
+      <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
+      <${Chips} run=${run} />
+    </header>
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
     ${run.files.length > 0 && files.map((f) => html`<${Fragment} key=${f.name}>
