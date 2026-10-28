@@ -49,6 +49,7 @@ test('the toggle flips a Done card in place without selecting it', async () => {
   toggle(li).handlers.click(event);
   assert.equal(selected, false);
   assert.equal(toggle(li).attributes['aria-expanded'], 'true');
+  assert.equal(toggle(li).attributes['aria-label'], 'Hide details: Done run');
   assert.equal(details(li).hidden, false);
   assert.ok(descendants(details(li)).some((e) => e.textContent === 'Delete'));
   toggle(li).handlers.click(event);

@@ -216,17 +216,21 @@
       more.appendChild(del);
       var open = !!expanded[run.id];
       more.hidden = !open;
-      var toggle = el('button', null, open ? 'Hide details' : 'Show details');
+      var toggle = el('button', null);
       toggle.type = 'button';
-      toggle.setAttribute('aria-expanded', open);
-      toggle.setAttribute('aria-label', 'Details of ' + run.title);
+      // The name starts with the visible text so voice control can match it.
+      function label() {
+        toggle.textContent = expanded[run.id] ? 'Hide details' : 'Show details';
+        toggle.setAttribute('aria-label', toggle.textContent + ': ' + run.title);
+        toggle.setAttribute('aria-expanded', !!expanded[run.id]);
+      }
+      label();
       // Flips in place instead of re-rendering the board, so the toggle keeps keyboard focus.
       toggle.addEventListener('click', function (e) {
         e.stopPropagation();
         expanded[run.id] = !expanded[run.id];
         more.hidden = !expanded[run.id];
-        toggle.textContent = expanded[run.id] ? 'Hide details' : 'Show details';
-        toggle.setAttribute('aria-expanded', expanded[run.id]);
+        label();
       });
       toggle.addEventListener('keydown', function (e) { e.stopPropagation(); });
       li.appendChild(toggle);
