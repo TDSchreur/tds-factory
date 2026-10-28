@@ -23,7 +23,7 @@ Open your prepared project (see part 5 of the [install guide](install.md)) in yo
 /factory Add a CSV export button to the reports page
 ```
 
-In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. You have to start `factory` yourself; the agent does not start it on its own.
+In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. In Copilot and Claude Code the agent never starts `factory` on its own; Codex may.
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
@@ -80,7 +80,7 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 - The **chips** show the Ticket progress, the four Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer.
 - Click a card to open the **Run detail** on the right: its links, Tickets and the Stage summaries. Click the card again, press Esc or use the close button to close it.
-- Done cards start collapsed. Press **Show details** on a Done card to see its pull request link, **Merge** and **Delete**. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** removes the Run record and its worktree. Branches are never deleted.
+- Done cards start collapsed. Press **Show details** on a Done card to see its pull request link, **Merge** and **Delete**. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** removes the Run record and its worktree, and refuses if the worktree has uncommitted changes. Branches are never deleted.
 - Older Runs are folded away; "Show older" brings them back.
 
 Leave the Dashboard open while you work. It refreshes every two seconds.
