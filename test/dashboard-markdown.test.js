@@ -21,8 +21,25 @@ test('headings, paragraphs and rules become blocks', () => {
 });
 
 test('bullet and numbered lists keep their kind', () => {
-  assert.deepEqual(parse('- a\n- b'), [{ type: 'list', ordered: false, items: [[t('a')], [t('b')]] }]);
-  assert.deepEqual(parse('1. a\n2. b'), [{ type: 'list', ordered: true, items: [[t('a')], [t('b')]] }]);
+  assert.deepEqual(parse('- a\n- b'), [{ type: 'list', ordered: false, items: [{ inline: [t('a')] }, { inline: [t('b')] }] }]);
+  assert.deepEqual(parse('1. a\n2. b'), [{ type: 'list', ordered: true, items: [{ inline: [t('a')] }, { inline: [t('b')] }] }]);
+});
+
+test('an indented list item nests one level under the item above it', () => {
+  assert.deepEqual(parse('- a\n  1. x\n  2. y\n- b'), [{
+    type: 'list', ordered: false, items: [
+      { inline: [t('a')], sub: { ordered: true, items: [{ inline: [t('x')] }, { inline: [t('y')] }] } },
+      { inline: [t('b')] },
+    ],
+  }]);
+});
+
+test('a rule right after a text line is still a rule', () => {
+  assert.deepEqual(parse('text\n---').map((b) => b.type), ['paragraph', 'rule']);
+});
+
+test('asterisks around spaces are not emphasis', () => {
+  assert.deepEqual(parse('2 * 3 * 4')[0].inline, [t('2 * 3 * 4')]);
 });
 
 test('inline bold, italic, code and http links', () => {
