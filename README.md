@@ -86,7 +86,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 ## Dashboard
 
-`dashboard` serves the `.factory/` folder of the current directory, read-only, on 127.0.0.1. The default port is 4317, and `--port` changes it. It prints the URL when it starts.
+`dashboard` serves the `.factory/` folder of the current directory on 127.0.0.1 and can delete completed or abandoned Runs after confirmation. The default port is 4317, and `--port` changes it. It prints the URL when it starts.
 
 | Route | Returns |
 |---|---|
