@@ -2,6 +2,8 @@
 
 TDS Factory is a small software factory. It installs a set of skills into Claude, Codex and Copilot, and one of those skills, `factory`, walks a piece of work from idea to pull request.
 
+**New here?** Read the [install guide](docs/install.md) to set the Factory up.
+
 It is inspired by [zazencodes software-factory-claude-code](https://github.com/zazencodes/zazencodes-season-3/tree/main/src/software-factory-claude-code) and [super-board](https://github.com/EricTechPro/super-board).
 
 ## The flow
