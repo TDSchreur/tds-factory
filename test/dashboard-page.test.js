@@ -154,6 +154,40 @@ test('selecting a Run shows its Markdown files as text, never as markup', async 
   } finally { await page.close(); }
 });
 
+test('the Run detail opens beside the board, not below the last card', async (t) => {
+  const many = Array.from({ length: 12 }, (_, i) => run({ id: 'b' + i, title: 'Run ' + i, column: 'build', updated: new Date(Date.now() - i * 1000).toISOString(), files: ['define.md'] }));
+  const page = await openPage(t, { runs: many, files: { 'b11/define.md': '# Last\n\ntext', 'b0/define.md': '# First\n\ntext' } });
+  if (!page) return;
+  try {
+    await page.execute("document.querySelector('[data-id=b11]').scrollIntoView(); document.querySelector('[data-id=b11]').click()");
+    await page.waitFor("return document.querySelector('#detail h4') !== null");
+    const box = await page.execute("const d = document.getElementById('detail').getBoundingClientRect(); const b = document.getElementById('board').getBoundingClientRect(); return { dLeft: d.left, bRight: b.right, dTop: d.top, dBottom: d.bottom, h: innerHeight }");
+    assert.ok(box.dLeft >= box.bRight - 1, 'the Run detail sits right of the board');
+    assert.ok(box.dTop >= 0 && box.dTop < box.h && box.dBottom <= box.h + 1, 'the Run detail is in view');
+    assert.equal(await page.execute("return document.querySelector('[data-id=b11]').classList.contains('selected')"), true);
+    // The board stays clickable: another card switches the Run detail.
+    await page.execute("document.querySelector('[data-id=b0]').click()");
+    await page.waitFor("return document.querySelector('#detail h4')?.textContent === 'First'");
+    assert.equal(await page.execute("return document.querySelector('#detail h2').textContent"), 'Run 0');
+    // The close button closes it and leaves only the board.
+    await page.execute("document.querySelector('#detail button[aria-label=\"Close Run detail\"]').click()");
+    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+    assert.equal(await page.execute("return document.querySelector('.card.selected')"), null);
+  } finally { await page.close(); }
+});
+
+test('the Run detail closes when its Run is no longer shown', async (t) => {
+  const page = await openPage(t, { runs: [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })] });
+  if (!page) return;
+  try {
+    await page.execute("document.querySelector('[data-id=r1]').click()");
+    assert.equal(await page.execute("return document.getElementById('detail').hidden"), false);
+    page.state.runs = [run({ id: 'r2', title: 'Staying' })];
+    await page.wait(POLL_WAIT);
+    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+  } finally { await page.close(); }
+});
+
 test('a failed refresh keeps the last data and says so', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r', title: 'Kept' })] });
   if (!page) return;

@@ -72,6 +72,7 @@ function App() {
   const older = entries.filter((r) => { const a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
   // Newest first within a column; unreadable and undated records sort last.
   const runs = entries.filter((r) => showOlder || !older.includes(r)).sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id));
+  const open = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
   const waiting = entries.filter((r) => r.waiting).length;
   useEffect(() => { document.title = (waiting ? '(' + waiting + ') ' : '') + BASE_TITLE; }, [waiting]);
 
@@ -86,8 +87,10 @@ function App() {
 
   return html`<${Header} project=${project} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} />
     <${Intro} />
-    <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-    <${Detail} run=${runs.find((r) => r.id === selectedId) || null} />
+    <div id="layout" class=${open ? 'open' : ''}>
+      <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
+      <${Detail} run=${open} onClose=${() => setSelectedId(null)} />
+    </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }
 

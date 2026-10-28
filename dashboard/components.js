@@ -136,7 +136,7 @@ export function Header({ project, status, olderLabel, onOlder }) {
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the page and the browser would scroll back to the top.
-export function Detail({ run }) {
+export function Detail({ run, onClose }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
   useEffect(() => {
@@ -151,6 +151,7 @@ export function Detail({ run }) {
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
   return html`<section id="detail" aria-label="Run detail">
+    <button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button>
     <h2>${run.title}</h2>
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
