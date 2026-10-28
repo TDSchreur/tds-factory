@@ -73,7 +73,6 @@ Set `status` to `waiting`, `waiting_on_human` to `true` and `waiting_reason` to 
 - Preflight: no verify command was found, before asking for it.
 - Define: a question for the user or confirmation of the shared understanding after grilling.
 - Check: when any axis is `fail`, or the loop cap is reached with problems still open, to ask for permission to continue to Finish.
-- Finish: before pushing or opening the PR.
 
 When the user answers and the Run continues, set `status` back to `running`, `waiting_on_human` to `false` and `waiting_reason` to an empty string, and write `run.json` before doing anything else. Also clear them when the Run ends. If an answer needs no work before your next question, skip that clearing write: set the new `waiting_reason` in the next `waiting` write and write `running` only when real work starts.
 
@@ -107,4 +106,4 @@ Only a clean Check continues to Finish without asking. A Check is clean when eve
 
 ## Finish
 
-Invoke `pr` to prepare the pull request. If the project has a PR template at `.github/pull_request_template.md`, `.azuredevops/pull_request_template.md` or `docs/pull_request_template.md`, pass it to `pr` and fill it in, including its Infrastructure checklist from the `infrastructure` verdict and its Documentation checklist from the stale-spec check; otherwise keep the layout `pr` produces. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. When the tracker is GitHub, the PR body lists `Closes #N` for every Ticket; otherwise it lists the Ticket paths and has no `Closes` lines. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
+Invoke `pr` to prepare the pull request. If the project has a PR template at `.github/pull_request_template.md`, `.azuredevops/pull_request_template.md` or `docs/pull_request_template.md`, pass it to `pr` and fill it in, including its Infrastructure checklist from the `infrastructure` verdict and its Documentation checklist from the stale-spec check; otherwise keep the layout `pr` produces. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. When the tracker is GitHub, the PR body lists `Closes #N` for every Ticket; otherwise it lists the Ticket paths and has no `Closes` lines. Push the branch and open the PR. When the PR is handled, set `status` to `done`.
