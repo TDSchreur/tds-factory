@@ -1,5 +1,6 @@
 import http from 'node:http';
-import { openRunStore, stages } from './run-store.js';
+import { openRunStore } from './run-store.js';
+import { stages } from './flow.js';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

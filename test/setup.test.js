@@ -16,7 +16,8 @@ function run({ nodeMajor = 20, npm = true, cli = true } = {}) {
     chmodSync(join(dir, name), 0o755);
   };
   stub('node', `echo ${nodeMajor}`);
-  if (npm) stub('npm', `echo "$PWD $*" >> ${log}`);
+  mkdirSync(join(dir, 'lib', 'node_modules'), { recursive: true });
+  if (npm) stub('npm', `if [ "$1" = prefix ]; then echo ${dir}; else echo "$PWD $*" >> ${log}; fi`);
   if (cli) stub('tds-factory', 'exit 0');
   for (const tool of ['dirname', 'cd', 'pwd']) {
     const real = spawnSync('sh', ['-c', `command -v ${tool}`]).stdout.toString().trim();

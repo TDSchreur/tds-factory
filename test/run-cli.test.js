@@ -7,6 +7,11 @@ import { spawnSync } from 'node:child_process';
 
 const cli = resolve('bin/tds-factory.js');
 function run(cwd, ...args) { return spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' }); }
+test('Run rejects non-string Agent targets', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'factory-run-'));
+  const result = run(cwd, 'start', '--data', JSON.stringify({ title: 'Example', agent: ['codex'], commands: 'npm test', conventions: [] }));
+  assert.notEqual(result.status, 0);
+});
 test('Run record command creates and safely updates a record', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'factory-run-'));
   const start = run(cwd, 'start', '--data', JSON.stringify({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: ['AGENTS.md'] }));
