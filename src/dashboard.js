@@ -27,7 +27,7 @@ export function interpretRun(entry) {
   return { id, unreadable: false, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
 }
 
-// Serves the .factory/runs folder of projectDir (the main checkout, when projectDir is in a linked worktree) on 127.0.0.1.
+// Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Pass port 0 for a random free port. Resolves to { server, port, url, close }.
 export async function startDashboard({ projectDir = process.cwd(), port = DEFAULT_PORT } = {}) {
   const store = openRunStore(projectDir);

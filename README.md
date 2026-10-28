@@ -88,7 +88,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 ## Dashboard
 
-`dashboard` serves the `.factory/` folder of the current directory (or of the main checkout, when run in a linked worktree) on 127.0.0.1 and can delete completed or abandoned Runs after confirmation. Deleting a Run also removes the Run worktree that `run start` created (not an adopted one) with a plain `git worktree remove`; if the worktree has uncommitted changes the removal is refused and the Run stays. Branches are never deleted. The default port is 4317, and `--port` changes it. It prints the URL when it starts.
+`dashboard` serves the `.factory/` folder of the main checkout of the current repository (from any subfolder or linked worktree) on 127.0.0.1 and can delete completed or abandoned Runs after confirmation. Deleting a Run also removes the Run worktree that `run start` created (not an adopted one) with a plain `git worktree remove`; if the worktree has uncommitted changes the removal is refused and the Run stays. Branches are never deleted. The default port is 4317, and `--port` changes it. It prints the URL when it starts.
 
 | Route | Returns |
 |---|---|
