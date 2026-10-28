@@ -65,7 +65,7 @@ Set `status` to `waiting`, `waiting_on_human` to `true` and `waiting_reason` to 
 
 - Define: a question for the user or confirmation of the shared understanding after grilling.
 - Check: after the loop cap, when problems are still open.
-- Finish: before pushing or opening the PR.
+- Finish: before pushing or opening the PR, only when Check ended with problems still open.
 
 When the user answers and the Run continues, set `status` back to `running`, `waiting_on_human` to `false` and `waiting_reason` to an empty string, and write `run.json` before doing anything else. Also clear them when the Run ends. If an answer needs no work before your next question, skip that clearing write: set the new `waiting_reason` in the next `waiting` write and write `running` only when real work starts.
 
@@ -89,4 +89,4 @@ In one pass, review the changes on three axes, each in its own fresh read-only s
 
 ## Finish
 
-Invoke `pr` to prepare the pull request. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. Do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.
+Invoke `pr` to prepare the pull request. Then Invoke `unslop` on the PR title and the prose of the body, and leave diagrams, diffs, code blocks, Evidence output and the template's bold labels as they are. Save the cleaned draft as plain Markdown in `pr.md` in the Run folder. The PR body lists `Closes #N` for every Ticket. When every Check axis passed, push the branch and open the PR without asking. When Check ended with problems still open, do not push or open it without the user's go-ahead. When the PR is handled, set `status` to `done`.

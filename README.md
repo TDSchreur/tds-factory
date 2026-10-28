@@ -39,7 +39,7 @@ flowchart LR
 | Check | `code-review`, `security-scan` | A Standards, a Spec and a Security verdict |
 | Finish | `pr`, `unslop` | A prepared pull request |
 
-Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
+Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. When every Check axis passes, the skill pushes and opens the PR itself. If problems are still open, it waits for your go-ahead first.
 
 Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and its body closes every Ticket with `Closes #N`.
 
