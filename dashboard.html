@@ -64,6 +64,9 @@
   select:hover, button:hover { border-color: var(--primary); }
   button:active { background: var(--panel); }
 
+  #intro { margin: 1rem 1.25rem 0; padding: .5rem .75rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); font-size: .875rem; }
+  #intro summary { cursor: pointer; font-weight: 600; }
+  #intro p, #intro ol { margin: .5rem 0; color: var(--muted); }
   #board { display: grid; grid-template-columns: repeat(6, minmax(12rem, 1fr)); gap: 1rem; padding: 1.25rem; overflow-x: auto; align-items: start; }
   .column { background: var(--panel); border-radius: calc(var(--radius) * 1.5); padding: .75rem; min-width: 0; }
   .column h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: .1rem .25rem .75rem; color: var(--muted); }
@@ -138,6 +141,18 @@
   <select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
   <button id="older" type="button" hidden></button>
 </header>
+<details id="intro">
+  <summary>What is this?</summary>
+  <p>The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Hover or focus a Stage heading or a chip for details.</p>
+  <ol>
+    <li><strong>Define</strong>: settle what to build, write a Spec and cut it into Tickets.</li>
+    <li><strong>Prepare</strong>: switch to the minimal-code working style.</li>
+    <li><strong>Build</strong>: implement the Tickets test-first.</li>
+    <li><strong>Check</strong>: independent reviews of Standards, Spec, Security and Infrastructure.</li>
+    <li><strong>Finish</strong>: open the pull request.</li>
+  </ol>
+  <p>A red card marked "Needs you" is waiting for your answer in the agent session. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
+</details>
 <main id="board" aria-label="Runs by Stage" tabindex="-1"></main>
 <section id="detail" aria-label="Run detail" hidden></section>
 <dialog id="dialog" aria-labelledby="dialog-title" aria-describedby="dialog-message">
@@ -216,13 +231,21 @@ function parseMarkdown(text) {
 (function () {
   'use strict';
   var COLUMNS = [
-    { key: 'define', label: 'Define' },
-    { key: 'prepare', label: 'Prepare' },
-    { key: 'build', label: 'Build' },
-    { key: 'check', label: 'Check' },
-    { key: 'finish', label: 'Finish' },
-    { key: 'done', label: 'Done' }
+    { key: 'define', label: 'Define', help: 'Settle what has to be done: the agent interviews you, writes a Spec and cuts it into Tickets.' },
+    { key: 'prepare', label: 'Prepare', help: 'Get ready to build: the agent switches to the minimal-code working style.' },
+    { key: 'build', label: 'Build', help: 'Implement the Tickets test-first, one commit per Ticket, running the verify command after each.' },
+    { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Problems send the Run back to Build, at most twice.' },
+    { key: 'finish', label: 'Finish', help: 'Write the pull request description, push the branch and open the pull request.' },
+    { key: 'done', label: 'Done', help: 'The Run is finished: its pull request is open, merged or closed, or the Run was abandoned.' }
   ];
+  var CHIP_HELP = {
+    tickets: 'Tickets finished out of the Tickets cut from the Spec.',
+    standards: 'Check verdict: does the code follow the project conventions?',
+    spec: 'Check verdict: does the code match what the Spec asked for?',
+    security: 'Check verdict: no open critical, high or medium security findings.',
+    infrastructure: 'Check verdict for Bicep and pipeline changes; skipped when none changed.',
+    loops: 'Times Check sent the Run back to Build to fix problems. The maximum is 2.'
+  };
   var BASE_TITLE = document.title;
   var POLL_MS = 2000;
   var STALE_MS = 10 * 60 * 1000;
@@ -260,10 +283,11 @@ function parseMarkdown(text) {
     return a;
   }
 
-  function el(tag, cls, text) {
+  function el(tag, cls, text, tip) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     if (text) e.textContent = text;
+    if (tip) e.title = tip;
     return e;
   }
 
@@ -281,12 +305,12 @@ function parseMarkdown(text) {
     var more = run.column === 'done' ? el('div', 'details') : li;
     if (run.activity) more.appendChild(el('div', 'activity', run.activity));
     var chips = el('div', 'chips');
-    if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets'));
-    if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards));
-    if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec));
-    if (run.security) chips.appendChild(el('span', 'chip ' + run.security, 'Security ' + run.security));
-    if (run.infrastructure) chips.appendChild(el('span', 'chip ' + run.infrastructure, 'Infrastructure ' + run.infrastructure));
-    if (typeof run.loops === 'number') chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2'));
+    if (run.ticketsTotal) chips.appendChild(el('span', 'chip', Math.min(run.ticketsDone || 0, run.ticketsTotal) + '/' + run.ticketsTotal + ' tickets', CHIP_HELP.tickets));
+    if (run.standards) chips.appendChild(el('span', 'chip ' + run.standards, 'Standards ' + run.standards, CHIP_HELP.standards));
+    if (run.spec) chips.appendChild(el('span', 'chip ' + run.spec, 'Spec ' + run.spec, CHIP_HELP.spec));
+    if (run.security) chips.appendChild(el('span', 'chip ' + run.security, 'Security ' + run.security, CHIP_HELP.security));
+    if (run.infrastructure) chips.appendChild(el('span', 'chip ' + run.infrastructure, 'Infrastructure ' + run.infrastructure, CHIP_HELP.infrastructure));
+    if (typeof run.loops === 'number') chips.appendChild(el('span', 'chip', 'loop ' + run.loops + '/2', CHIP_HELP.loops));
     if (chips.childNodes.length) more.appendChild(chips);
     if (run.agent) more.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
     var age = ageMs(run.updated);
@@ -481,7 +505,9 @@ function parseMarkdown(text) {
     var cols = COLUMNS.map(function (c) {
       var section = el('section', 'column');
       section.dataset.stage = c.key;
-      var h = el('h2', null, c.label);
+      var h = el('h2', null, c.label, c.help);
+      h.tabIndex = 0;
+      h.setAttribute('tabindex', '0');
       h.id = 'col-' + c.key;
       section.setAttribute('aria-labelledby', h.id);
       section.appendChild(h);
