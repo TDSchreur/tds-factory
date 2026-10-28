@@ -40,18 +40,13 @@ test('a subfolder and a linked worktree get the port of the main checkout', asyn
 });
 
 test('different repos get different ports', async () => {
-  const ports = [];
-  const open = [];
-  try {
-    for (let i = 0; i < 5; i++) {
-      const d = await startDashboard({ projectDir: repo() });
-      open.push(d);
-      ports.push(d.port);
-    }
-    assert.ok(new Set(ports).size > 1);
-  } finally {
-    await Promise.all(open.map((d) => d.close()));
+  const ports = new Set();
+  for (let i = 0; i < 5; i++) {
+    const d = await startDashboard({ projectDir: repo() });
+    ports.add(d.port);
+    await d.close();
   }
+  assert.ok(ports.size > 1);
 });
 
 test('a busy default port falls back to a free port and still answers', async () => {
@@ -74,9 +69,12 @@ test('an explicit busy port is an error and port 0 gives a free port', async () 
   try {
     await assert.rejects(startDashboard({ projectDir: repo(), port }), { code: 'EADDRINUSE' });
     const d = await startDashboard({ projectDir: repo(), port: 0 });
-    assert.ok(d.port > 0 && d.port !== port);
-    await d.close();
+    try {
+      assert.ok(d.port > 0 && d.port !== port);
+    } finally {
+      await d.close();
+    }
   } finally {
-    blocker.close();
+    await new Promise((ok) => blocker.close(ok));
   }
 });

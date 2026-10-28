@@ -49,7 +49,7 @@ You need Node 20 or newer. After cloning, run `./setup.sh` (or `powershell -Exec
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/
 node bin/tds-factory.js install    # install skills/ into ~/.claude/skills and ~/.agents/skills
-node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on http://127.0.0.1:4317
+node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo port (printed at start)
 ```
 
 `sync` validates every manifest entry (name, paths inside the repository, no symlinks, no duplicate names) before it writes any.
