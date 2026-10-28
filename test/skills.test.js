@@ -72,20 +72,30 @@ test('Check runs an Infrastructure axis without a new Skill', () => {
   assert.match(flow, /^\| `infrastructure` \|/m);
 });
 
-test('Finish is blocked by an Infrastructure fail or unvalidated file until the user accepts', () => {
+test('Check continues to Finish only when clean, otherwise it asks the user first', () => {
+  assert.match(check, /clean/i);
+  assert.match(check, /`pass`/);
+  assert.match(check, /`skipped`/);
+  assert.match(check, /LOW and INFO/);
+  assert.match(check, /no verdict/i);
+  assert.match(check, /not validated/i);
+  assert.match(check, /loop cap/i);
+  assert.match(check, /`waiting`/);
+  assert.match(check, /explicit yes/i);
+  assert.match(check, /`finish\.md`/);
+  assert.match(check, /`abandoned`/);
+  assert.match(flow, /`fail`, never `pass`/);
+  assert.match(section('Waiting on the user'), /Check: .*`fail`.*loop cap/);
+});
+
+test('Finish has no gate of its own and still fills in the PR checklists', () => {
   const finish = section('Finish');
-  assert.ok(finish.indexOf('`infrastructure`') < finish.indexOf('Invoke `pr`'));
-  assert.match(finish, /`fail`/);
-  assert.match(finish, /not validated/i);
-  assert.match(finish, /`waiting`/);
-  assert.match(finish, /explicit yes/i);
-  assert.match(finish, /`finish\.md`/);
+  assert.doesNotMatch(finish, /`waiting`/);
+  assert.doesNotMatch(finish, /explicit yes/i);
+  assert.doesNotMatch(finish, /accept the risk/i);
   assert.match(finish, /Infrastructure checklist/);
   assert.match(finish, /Documentation checklist/);
-  assert.match(finish, /`skipped`/);
-  assert.match(flow, /`fail`, never `pass`/);
-  assert.match(finish, /other axes/i);
-  assert.match(section('Waiting on the user'), /infrastructure/);
+  assert.doesNotMatch(section('Waiting on the user'), /Finish: when the `infrastructure`/);
 });
 
 test('every skill the factory invokes can be called by the model', () => {

@@ -32,8 +32,8 @@ flowchart LR
     P --> A
     C --> D --> E --> F
     F -->|problems found, fewer than 2 loops so far| E
-    F -->|clean, or loop cap reached| G
-    F -.->|infrastructure fail: ask first| G
+    F -->|clean| G
+    F -.->|not clean, or loop cap reached: ask first| G
 ```
 
 | Stage | Skills | Claude | Codex | Copilot | Result |
@@ -48,7 +48,7 @@ Each cell is the model and its reasoning effort. "Default" means the agent defin
 
 Preflight first checks that `/setup-matt-pocock-skills` has been run, then reads the project's conventions (`AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists) and finds the verify command in its `## Commands` section. If there is none, it tells you, asks once and never guesses. Build refuses to start until the Spec exists and the Tickets are published, and sends the Run back to Define if either is missing. Build runs the verify command after each Ticket; a command that cannot run in the environment (another shell, no container runtime) is listed under "Not run" in the Stage summary, never reported as passed. Check gives the Standards review the guides whose `applyTo` globs match the changed files and flags a canonical spec left stale, and gives the Security review the project's "Universal safeguards". Check runs every axis on every Run; an axis with no verdict is run again.
 
-Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security or infrastructure finding. After that it reports what is still open and moves on to Finish. The Infrastructure axis runs only when the diff changes Bicep, Azure Pipelines or `bicepconfig.json` files, otherwise it is `skipped`. It runs `bicep build` and `bicep lint`, checks pipeline YAML for plaintext secrets, unpinned versions and missing approval gates on production stages, and never deploys. A what-if runs only when Azure credentials and a target exist, and is reported as not run otherwise. If it cannot validate a file it says "not validated" and records `fail`, never `pass`. Infrastructure is the one axis that blocks Finish: on `fail` the skill asks whether to accept the risk and prepares the PR only after a yes. The skill never pushes or opens the PR without your go-ahead.
+Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security or infrastructure finding. The Infrastructure axis runs only when the diff changes Bicep, Azure Pipelines or `bicepconfig.json` files, otherwise it is `skipped`. It runs `bicep build` and `bicep lint`, checks pipeline YAML for plaintext secrets, unpinned versions and missing approval gates on production stages, and never deploys. A what-if runs only when Azure credentials and a target exist, and is reported as not run otherwise. If it cannot validate a file it says "not validated" and records `fail`, never `pass`. Only a clean Check (every axis `pass`, Infrastructure possibly `skipped`) continues to Finish without asking. If any axis is `fail`, or the loop cap is reached with problems open, the skill reports what is still open and asks for permission to continue to Finish; a yes is recorded in `finish.md`, and a no ends the Run as `abandoned`. The skill never pushes or opens the PR without your go-ahead.
 
 Build works on a branch named after the Run, one commit per Ticket, and runs inline. Check runs each review in a fresh read-only subagent, so the reviewer did not write the code. Finish saves the PR draft as `pr.md` in the Run folder, and fills in the project's PR template (`.github/`, `.azuredevops/` or `docs/pull_request_template.md`) when there is one, including its Infrastructure checklist (from the Infrastructure verdict) and its Documentation checklist (from the stale-spec check). When the tracker is GitHub the body closes every Ticket with `Closes #N`; otherwise it lists the Ticket paths and has no `Closes` lines.
 
