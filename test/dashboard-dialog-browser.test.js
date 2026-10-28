@@ -36,7 +36,10 @@ test('dialog Escape cancels and refresh preserves keyboard focus', async (t) => 
     const base = '/session/' + session;
     const execute = (script) => request('POST', base + '/execute/sync', { script, args: [] });
     await request('POST', base + '/url', { url: `http://127.0.0.1:${server.address().port}/` });
-    await delay(300);
+    for (let i = 0; i < 50; i++) {
+      if (await execute("return !!document.querySelector('[aria-expanded]')")) break;
+      await delay(100);
+    }
     await execute(`document.querySelector('[aria-expanded]').click(); document.querySelector('[aria-label^="Squash and merge"]').focus(); document.activeElement.click();`);
     assert.equal(await execute("return document.querySelector('dialog').open && document.activeElement.textContent === 'Cancel'"), true);
     await request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE00C' }, { type: 'keyUp', value: '\uE00C' }] }] });

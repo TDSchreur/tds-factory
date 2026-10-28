@@ -100,13 +100,31 @@ test('only an open PR gets a Merge button, which confirms and posts to the merge
   const { card, elements } = await page([withState('open')], { calls });
   const button = mergeButton(card('Done run'));
   button.handlers.click({ stopPropagation() {} });
+  await flush();
   assert.equal(elements.dialog.open, true);
   assert.match(elements['dialog-message'].textContent, /Done run/);
   elements['dialog-cancel'].handlers.click();
   await flush();
   assert.deepEqual(calls, []);
   button.handlers.click({ stopPropagation() {} });
+  await flush();
   elements['dialog-confirm'].handlers.click();
   await flush();
   assert.deepEqual(calls, ['POST /api/runs/d/merge']);
+});
+
+test('overlapping confirmations are handled separately', async () => {
+  const calls = [];
+  const { card, elements } = await page([withState('open')], { calls });
+  const button = mergeButton(card('Done run'));
+  button.handlers.click({ stopPropagation() {} });
+  button.handlers.click({ stopPropagation() {} });
+  await flush();
+  elements['dialog-cancel'].handlers.click();
+  await flush();
+  assert.equal(elements.dialog.open, true);
+  assert.deepEqual(calls, []);
+  elements['dialog-cancel'].handlers.click();
+  await flush();
+  assert.deepEqual(calls, []);
 });

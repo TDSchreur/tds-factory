@@ -35,11 +35,13 @@ test('bulk confirmation includes hidden Done Runs and reports partial failures',
   const button = descendants(elements.board).find((e) => e.tag === 'button' && e.textContent === 'Delete all');
   assert.ok(button);
   button.handlers.click();
+  await flush();
   assert.match(elements['dialog-message'].textContent, /2 Done Runs.*hidden older Runs/);
   elements['dialog-cancel'].handlers.click();
   await flush();
   assert.deepEqual(requests, []);
   button.handlers.click();
+  await flush();
   elements['dialog-confirm'].handlers.click();
   await flush();
   assert.deepEqual(requests, ['/api/runs/new', '/api/runs/old']);

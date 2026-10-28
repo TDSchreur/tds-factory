@@ -305,18 +305,21 @@
   var dialogConfirm = document.getElementById('dialog-confirm');
   dialogCancel.addEventListener('click', function () { dialog.close('cancel'); });
   dialogConfirm.addEventListener('click', function () { dialog.close('confirm'); });
+  var dialogQueue = Promise.resolve();
   function ask(title, message, action, danger, notice) {
+    var result = dialogQueue.then(function () { return new Promise(function (resolve) {
     document.getElementById('dialog-title').textContent = title;
     document.getElementById('dialog-message').textContent = message;
     dialogCancel.hidden = !!notice;
     dialogConfirm.textContent = action;
     dialogConfirm.className = danger ? 'primary danger' : 'primary';
-    return new Promise(function (resolve) {
       dialog.addEventListener('close', function () { resolve(dialog.returnValue === 'confirm'); }, { once: true });
       dialog.returnValue = '';
       dialog.showModal();
       if (notice) dialogConfirm.focus(); else dialogCancel.focus();
-    });
+    }); });
+    dialogQueue = result.then(function () {});
+    return result;
   }
 
   async function removeRuns(runs, message) {
@@ -383,7 +386,7 @@
     });
     board.replaceChildren.apply(board, cols);
     if (hadBoardFocus) {
-      var target = Array.from(board.querySelectorAll('button, .card')).find(function (candidate) {
+      var target = Array.from(board.querySelectorAll('button, a, .card')).find(function (candidate) {
         var card = candidate.closest('.card');
         return (card ? card.dataset.id : null) === (focusId || null) &&
           (focusLabel ? candidate.getAttribute('aria-label') === focusLabel : candidate.textContent === focusText);
