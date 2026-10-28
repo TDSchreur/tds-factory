@@ -69,7 +69,7 @@ Run the tests with `npm test`. They use `node:test`.
 | codex | `.agents/skills` | `~/.agents/skills` |
 | copilot | `.github/skills` | `~/.copilot/skills` |
 
-After you change a skill in `skills/`, run `install` again so the installed copy matches.
+After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
 
 ## Dashboard
 
