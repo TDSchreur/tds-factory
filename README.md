@@ -15,15 +15,17 @@ flowchart LR
     Check -->|clean, or loop cap reached| Finish
 ```
 
-The table lists the skills each Stage invokes.
+The table lists the skills and models of each Stage.
 
-| Stage | Skills | Result |
-|---|---|---|
-| Define | `grill-with-docs`, `to-spec`, `to-tickets` | A Spec in `docs/specs/` and a GitHub Issue per Ticket |
-| Prepare | `ponytail` | Build writes the minimum code that works |
-| Build | `implement-spec`, `tdd` | Every Ticket done, test-first |
-| Check | `code-review`, `security-scan` | A Standards, a Spec and a Security verdict |
-| Finish | `pr`, `unslop` | A prepared pull request |
+| Stage | Skills | Models | Result |
+|---|---|---|---|
+| Define | `grill-with-docs`, `to-spec`, `to-tickets` | Claude: sonnet<br>Codex: gpt-6.1-sol (medium)<br>Copilot: claude-sonnet-4.6 | A Spec in `docs/specs/` and a GitHub Issue per Ticket |
+| Prepare | `ponytail` | Same as Define | Build writes the minimum code that works |
+| Build | `implement-spec`, `tdd` | Claude: sonnet<br>Codex: gpt-6.1-terra (medium)<br>Copilot: gpt-5.3-codex | Every Ticket done, test-first |
+| Check | `code-review`, `security-scan` | Claude: opus (high)<br>Codex: gpt-6.1-sol (high)<br>Copilot: claude-sonnet-4.6 | A Standards, a Spec and a Security verdict |
+| Finish | `pr`, `unslop` | Claude: haiku<br>Codex: gpt-6-luna (medium)<br>Copilot: claude-haiku-4.5 | A prepared pull request |
+
+The models are the ones in each Agent target's installed `factory-*` agent files; yours may differ.
 
 Check sends the Run back to Build at most twice, for `code-review` problems worth fixing or any CRITICAL, HIGH or MEDIUM security finding. After that it reports what is still open and moves on to Finish. The skill never pushes or opens the PR without your go-ahead.
 
