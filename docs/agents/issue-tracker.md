@@ -12,6 +12,10 @@ Issues for this repo live in **GitHub Issues**.
 
 The `gh` CLI must be installed and authenticated. Verify with `gh auth status`.
 
+## Labels
+
+Tickets cut by `to-tickets` carry the `ready-for-agent` label.
+
 ## PRs as a request surface
 
 PRs are **not** used for requesting work—only for reviewing code changes. Use GitHub Issues to request features or report bugs.
