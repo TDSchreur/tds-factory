@@ -9,20 +9,23 @@ class Element {
   replaceChildren(...children) { this.childNodes = children; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   addEventListener(name, fn) { this.handlers[name] = fn; }
+  focus() {}
 }
 const descendants = (node) => [node, ...node.childNodes.flatMap(descendants)];
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const now = () => new Date().toISOString();
 
 async function page(runs, { confirm: answers = [], calls = [] } = {}) {
-  const elements = Object.fromEntries(['older', 'board', 'status', 'detail', 'project'].map((id) => [id, new Element(id)]));
+  const elements = Object.fromEntries(['older', 'board', 'status', 'detail', 'project', 'dialog', 'dialog-title', 'dialog-message', 'dialog-cancel', 'dialog-confirm'].map((id) => [id, new Element(id)]));
+  elements.dialog.showModal = function () { this.open = true; };
+  elements.dialog.close = function (value) { this.open = false; this.returnValue = value; this.handlers.close(); };
   const fetch = async (url, init) => { if (init?.method) calls.push(`${init.method} ${url}`); return { ok: true, text: async () => '', json: async () => (url === '/api/info' ? { project: 'test' } : runs) }; };
   const html = readFileSync(new URL('../dashboard.html', import.meta.url), 'utf8');
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   runInNewContext(script, { document: { title: 'Dashboard', getElementById: (id) => elements[id], createElement: (tag) => new Element(tag) }, window: { confirm: () => answers.shift() ?? false, alert() {} }, fetch, setInterval() {}, Date, encodeURIComponent, isNaN });
   await flush();
   const card = (title) => descendants(elements.board).find((e) => e.tag === 'li' && descendants(e).some((c) => c.textContent === title));
-  return { card };
+  return { card, elements };
 }
 const done = { id: 'd', title: 'Done run', column: 'done', status: 'done', updated: now(), agent: 'claude', standards: 'pass', pr: 'https://example.com/pr/1', files: [], links: [] };
 const active = { id: 'a', title: 'Active run', column: 'build', status: 'running', updated: now(), agent: 'codex', standards: 'pass', files: [], links: [] };
@@ -94,10 +97,34 @@ test('only an open PR gets a Merge button, which confirms and posts to the merge
   assert.equal(mergeButton((await page([withState('merged')])).card('Done run')), undefined);
   assert.equal(mergeButton((await page([withState('')])).card('Done run')), undefined);
   const calls = [];
-  const { card } = await page([withState('open')], { confirm: [false, true], calls });
+  const { card, elements } = await page([withState('open')], { calls });
   const button = mergeButton(card('Done run'));
-  await button.handlers.click({ stopPropagation() {} });
+  button.handlers.click({ stopPropagation() {} });
+  await flush();
+  assert.equal(elements.dialog.open, true);
+  assert.match(elements['dialog-message'].textContent, /Done run/);
+  elements['dialog-cancel'].handlers.click();
+  await flush();
   assert.deepEqual(calls, []);
-  await button.handlers.click({ stopPropagation() {} });
+  button.handlers.click({ stopPropagation() {} });
+  await flush();
+  elements['dialog-confirm'].handlers.click();
+  await flush();
   assert.deepEqual(calls, ['POST /api/runs/d/merge']);
+});
+
+test('overlapping confirmations are handled separately', async () => {
+  const calls = [];
+  const { card, elements } = await page([withState('open')], { calls });
+  const button = mergeButton(card('Done run'));
+  button.handlers.click({ stopPropagation() {} });
+  button.handlers.click({ stopPropagation() {} });
+  await flush();
+  elements['dialog-cancel'].handlers.click();
+  await flush();
+  assert.equal(elements.dialog.open, true);
+  assert.deepEqual(calls, []);
+  elements['dialog-cancel'].handlers.click();
+  await flush();
+  assert.deepEqual(calls, []);
 });
