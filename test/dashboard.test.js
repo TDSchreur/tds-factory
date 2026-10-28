@@ -116,6 +116,12 @@ test('page route serves HTML', async () => {
   assert.match(res.headers['content-type'], /text\/html/);
 });
 
+test('page route serves the real board page', async () => {
+  const res = await get(dash, '/');
+  assert.match(res.body, /id="board"/);
+  assert.doesNotMatch(res.body, /not installed/);
+});
+
 test('server listens on loopback only', () => {
   assert.equal(dash.server.address().address, '127.0.0.1');
   assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/);
