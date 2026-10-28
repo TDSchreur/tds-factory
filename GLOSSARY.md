@@ -30,7 +30,7 @@ One of the independent reviews in the Check Stage (Standards, Spec, Security, In
 _Avoid_: Reviewer, Gate
 
 **Clean**:
-The state of a Check that ends with every Check axis `pass`, where only Infrastructure may be `skipped`. An axis with no verdict, or an infrastructure file that is not validated, is not clean. Only a clean Check continues to Finish without asking the user.
+A Check whose every Check axis is `pass`, with Infrastructure allowed to be `skipped`. Only a clean Check continues to Finish without asking the user.
 
 **Verify command**:
 The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
@@ -41,7 +41,7 @@ The project's own rules: `AGENTS.md` or `CLAUDE.md`, the instruction guides it r
 _Avoid_: Standards
 
 **Spec**:
-The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/`.
+The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/` while the work is in flight, and moved to `docs/specs/archive/` once it has shipped.
 
 **Ticket**:
 One unit of work cut from a Spec, stored in the project's Issue tracker.
@@ -56,7 +56,7 @@ The status file a Run keeps up to date as it moves through the Stages, read by t
 _Avoid_: Log, State file
 
 **Run store**:
-The module that owns every Run folder under `.factory/runs` in the main checkout: it starts, updates, lists, reads and deletes Runs and refuses unsafe storage. The CLI and the Dashboard go through it.
+The single owner of every Run record and Run folder; the CLI and the Dashboard go through it.
 _Avoid_: Run database
 
 **Run worktree**:
@@ -64,5 +64,5 @@ The git worktree and branch a Run works in, so agents running at the same time n
 _Avoid_: Sandbox, Workspace
 
 **Dashboard**:
-A web page that shows every Run as a card in a column per Stage, flags the Runs that are waiting on a human, shows the state of a finished Run's pull request, can squash-merge an open one, and can delete completed or abandoned Run history.
+A local web page that shows every Run as a card in a column per Stage and flags the Runs waiting on a human.
 _Avoid_: Board, Monitor
