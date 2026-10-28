@@ -117,15 +117,17 @@ function ThemeSelect() {
     document.documentElement.dataset.theme = choice;
     try { localStorage.setItem(THEME_KEY, choice); } catch (err) { /* storage unavailable: the choice still applies to this page */ }
   };
-  return html`<select id="theme" value=${theme} onChange=${change}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>`;
+  return html`<select id="theme" aria-label="Theme" value=${theme} onChange=${change}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>`;
 }
+
+// The pill shows the last segment of the project path (either separator); the full path is its tooltip.
+const folderName = (path) => String(path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '';
 
 export function Header({ project, status, olderLabel, onOlder }) {
   return html`<header>
-    <h1>tds-factory dashboard</h1>
-    <span id="project">${project}</span>
+    <div class="title"><h1>tds-factory</h1><span class="tagline">dashboard</span></div>
+    <span id="project" title=${project}>${folderName(project)}</span>
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
-    <label for="theme">Theme</label>
     <${ThemeSelect} />
     <button id="older" type="button" hidden=${!olderLabel} onClick=${onOlder}>${olderLabel}</button>
   </header>`;

@@ -6,7 +6,7 @@ The Dashboard header is a plain row of text. The title, the full project path an
 
 ## Solution
 
-The header has a left side and a right side. The left shows the title `tds-factory` in bold with a smaller muted "dashboard" label, then the project as a pill. The pill shows the folder name in monospace, and the full path appears on hover. A long name is cut with an ellipsis instead of wrapping. The right side holds the update status, the theme select and the older-Runs button. The status has a small dot: green while the data is live, red when the server cannot be reached. The separate "Theme" text label goes away, and the select keeps an accessible name. On a narrow screen the header wraps into two rows: title and status on the first, the project pill and the controls on the second. Only the look and arrangement change. No new information is added.
+The header has a left side and a right side. The left shows the title `tds-factory` in bold with a smaller muted "dashboard" label, then the project as a pill. The pill shows the folder name in monospace, and the full path appears on hover. A long name is cut with an ellipsis instead of wrapping. The right side holds the update status, the theme select and the older-Runs button. The status has a small dot: green while the data is live, red when the server cannot be reached. The separate "Theme" text label goes away, and the select keeps an accessible name. On a narrow screen the items wrap in this order: title, status, project pill, then the controls, and nothing overflows sideways. Only the look and arrangement change. No new information is added.
 
 ## User Stories
 
@@ -18,7 +18,7 @@ The header has a left side and a right side. The left shows the title `tds-facto
 6. As a developer, I want the "Updated" time and the existing error message kept, so that I lose no information
 7. As a developer, I want the theme select and the older-Runs button grouped on the right, so that the controls are in one place
 8. As a screen reader user, I want the theme select to keep an accessible name, so that removing the visible label does not hide its purpose
-9. As a developer on a narrow screen, I want the header to wrap into two tidy rows, so that nothing overflows
+9. As a developer on a narrow screen, I want the header to wrap in a sensible order, so that nothing overflows
 10. As a developer, I want the header to stay sticky and keep working in light and dark themes, so that it behaves as before
 11. As a maintainer, I want the element ids `project`, `status`, `theme` and `older` kept, so that the existing tests and code keep working
 
