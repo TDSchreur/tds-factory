@@ -27,12 +27,17 @@ export function sync() {
     }
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
-    const file = path.join(dest, 'SKILL.md');
-    let text = fs.readFileSync(file, 'utf8');
     const upstream = path.basename(rel);
-    if (name !== upstream) text = text.replace(/^name:.*$/m, () => `name: ${name}`).replaceAll(`/${upstream}`, `/${name}`);
-    if (invoked.has(name)) text = text.replace(/^disable-model-invocation:.*\n/m, '');
-    fs.writeFileSync(file, text);
+    for (const f of fs.readdirSync(dest, { recursive: true }).filter((f) => f.endsWith('.md'))) {
+      const file = path.join(dest, f);
+      let text = fs.readFileSync(file, 'utf8');
+      if (name !== upstream) {
+        if (f === 'SKILL.md') text = text.replace(/^name:.*$/m, () => `name: ${name}`);
+        text = text.replaceAll(new RegExp(`/${upstream}(?![\\w-])`, 'g'), `/${name}`);
+      }
+      if (f === 'SKILL.md' && invoked.has(name)) text = text.replace(/^disable-model-invocation:.*\n/m, '');
+      fs.writeFileSync(file, text);
+    }
     fs.writeFileSync(path.join(dest, MARKER), `${rel}\n`);
     console.log(`synced ${name}`);
   }
