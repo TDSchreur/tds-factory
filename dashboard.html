@@ -8,12 +8,12 @@
 <style>
   :root {
     --bg: #f6f7f9; --panel: #e9ecf0; --card: #fff; --text: #1b1f24; --muted: #5b6570;
-    --border: #cdd3da; --flag: #b42318; --flag-bg: #fdecea;
+    --border: #cdd3da; --flag: #b42318; --flag-bg: #fdecea; --amber: #9a5b00;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #14171a; --panel: #1d2125; --card: #262b30; --text: #e6e9ec; --muted: #9aa5b0;
-      --border: #3a4148; --flag: #ff8a80; --flag-bg: #3b1f1d;
+      --border: #3a4148; --flag: #ff8a80; --flag-bg: #3b1f1d; --amber: #f5b942;
     }
   }
   * { box-sizing: border-box; }
@@ -32,6 +32,11 @@
   .card .agent { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
   .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
   .card.unreadable .title { color: var(--flag); }
+  .card .updated { font-size: .8rem; color: var(--muted); margin-top: .2rem; }
+  .card .updated.stale { color: var(--amber); font-weight: 600; }
+  .card .pr { font-size: .85rem; margin-top: .3rem; }
+  .card.abandoned { opacity: .7; }
+  #older { font: inherit; font-size: .85rem; margin-left: auto; }
   .empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
 </style>
 </head>
@@ -39,6 +44,7 @@
 <header>
   <h1>tds-factory dashboard</h1>
   <span id="status" role="status" aria-live="polite">Loading...</span>
+  <button id="older" type="button" hidden></button>
 </header>
 <main id="board" aria-label="Runs by Stage"></main>
 <script>
@@ -53,6 +59,11 @@
     { key: 'done', label: 'Done' }
   ];
   var POLL_MS = 2000;
+  var STALE_MS = 10 * 60 * 1000;
+  var OLD_MS = 7 * 24 * 60 * 60 * 1000;
+  var showOlder = false; // lives here because render() rebuilds the board every poll
+  var lastEntries = [];
+  var olderBtn = document.getElementById('older');
   var board = document.getElementById('board');
   var statusEl = document.getElementById('status');
 
@@ -60,10 +71,25 @@
   function str(v) { return typeof v === 'string' ? v.trim() : ''; }
 
   // Maps a /api/runs entry to the fields the page uses. Never throws.
+  // Age in ms of an ISO timestamp, or null when missing/unparseable.
+  function ageMs(iso) {
+    var t = Date.parse(iso);
+    return isNaN(t) ? null : Date.now() - t;
+  }
+  function ago(ms) {
+    var m = Math.floor(ms / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 1440) return Math.floor(m / 60) + ' h ago';
+    return Math.floor(m / 1440) + ' d ago';
+  }
+  // Only http(s) links become anchors.
+  function safeUrl(v) { var u = str(v); return /^https?:\/\//i.test(u) ? u : ''; }
+
   function readRun(entry) {
     var id = str(entry && entry.id);
     if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') {
-      return { id: id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', column: 'define', updated: '' };
+      return { id: id, unreadable: true, status: '', pr: '', title: id || 'Unknown run', activity: '', agent: '', column: 'define', updated: '' };
     }
     var r = entry.record;
     var status = str(r.status);
@@ -72,7 +98,8 @@
     if (status === 'done' || status === 'abandoned') column = 'done';
     else if (COLUMNS.some(function (c) { return c.key === stage && c.key !== 'done'; })) column = stage;
     return {
-      id: id, unreadable: false, column: column,
+      id: id, unreadable: false, column: column, status: status,
+      pr: safeUrl(r.pr || (r.links && r.links.pr)),
       title: str(r.title) || id || 'Untitled run',
       activity: str(r.activity), agent: str(r.agent), updated: str(r.updated)
     };
@@ -92,11 +119,32 @@
     li.appendChild(el('div', 'title', (run.unreadable ? 'Unreadable record: ' : '') + run.title));
     if (run.activity) li.appendChild(el('div', 'activity', run.activity));
     if (run.agent) li.appendChild(el('div', 'agent', 'Agent: ' + run.agent));
+    var age = ageMs(run.updated);
+    if (age !== null) {
+      var active = run.column !== 'done' && !run.unreadable;
+      li.appendChild(el('div', 'updated' + (active && age > STALE_MS ? ' stale' : ''), 'Updated ' + ago(age)));
+    }
+    if (run.status === 'abandoned') {
+      li.classList.add('abandoned');
+      li.appendChild(el('div', 'agent', 'Abandoned'));
+    }
+    if (run.column === 'done' && run.pr) {
+      var p = el('div', 'pr');
+      var a = el('a', null, 'Pull request');
+      a.href = run.pr; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      p.appendChild(a);
+      li.appendChild(p);
+    }
     return li;
   }
 
   function render(entries) {
+    lastEntries = entries;
     var runs = (Array.isArray(entries) ? entries : []).map(readRun);
+    var older = runs.filter(function (r) { var a = ageMs(r.updated); return a !== null && a > OLD_MS; });
+    if (!showOlder) runs = runs.filter(function (r) { return older.indexOf(r) < 0; });
+    olderBtn.hidden = older.length === 0;
+    olderBtn.textContent = showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')';
     // Newest first within a column; unreadable and undated records sort last.
     runs.sort(function (a, b) { return b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id); });
     var cols = COLUMNS.map(function (c) {
@@ -115,6 +163,8 @@
     });
     board.replaceChildren.apply(board, cols);
   }
+
+  olderBtn.addEventListener('click', function () { showOlder = !showOlder; render(lastEntries); });
 
   function poll() {
     fetch('/api/runs', { cache: 'no-store' })
