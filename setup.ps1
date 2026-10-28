@@ -18,13 +18,14 @@ if ($major -lt 20) {
 }
 
 $prefix = (npm prefix -g | Out-String).Trim()
-$writable = $false
-try {
+# A prefix that does not exist yet (fresh Windows machine) is created by npm.
+$writable = -not (Test-Path -LiteralPath $prefix)
+if (-not $writable) { try {
   $probe = Join-Path $prefix ".tds-factory-write-test-$PID"
   New-Item -ItemType File -Path $probe -ErrorAction Stop | Out-Null
   $writable = $true
   Remove-Item -LiteralPath $probe -ErrorAction SilentlyContinue
-} catch {}
+} catch {} }
 
 if ($writable) {
   npm install -g .
