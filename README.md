@@ -70,7 +70,7 @@ The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by 
 
 ### Working from a checkout
 
-To work on the Factory itself, clone with `--recurse-submodules` (or run `git submodule update --init` afterwards) and run `./setup.sh` (or `powershell -ExecutionPolicy Bypass -File .\setup.ps1` on Windows). It puts the CLI on PATH from the checkout (it runs `npm install -g .` and checks Node 20+). Then run `tds-factory install`.
+To work on the Factory itself, clone with `--recurse-submodules` (or run `git submodule update --init` afterwards). After a PR is merged, run `node scripts/dev-install.js`. It fetches `origin`, packs its default branch and installs that globally, so you use what is on `master` instead of the last Release. Your checkout and working tree are not touched. Then run `tds-factory install` to refresh the skills.
 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/
