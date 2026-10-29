@@ -168,3 +168,25 @@ test('sync refuses a source that is the repository root or sits inside the skill
     assert.ok(existsSync(join(skillsDir, 'factory', 'SKILL.md')), JSON.stringify(entry));
   }
 });
+
+test('sync removes a marked folder that left the manifest and keeps skills it did not sync', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha });
+  mkdirSync(join(skillsDir, 'obsolete'));
+  writeFileSync(join(skillsDir, 'obsolete', 'SKILL.md'), 'old');
+  writeFileSync(join(skillsDir, 'obsolete', MARKER), 'vendor/up/skills/obsolete\n');
+  mkdirSync(join(skillsDir, 'mine'));
+  writeFileSync(join(skillsDir, 'mine', 'SKILL.md'), 'ours');
+  quietSync({ root, skillsDir });
+  assert.ok(!existsSync(join(skillsDir, 'obsolete')));
+  assert.ok(existsSync(join(skillsDir, 'mine', 'SKILL.md')));
+  assert.ok(existsSync(join(skillsDir, 'factory', 'SKILL.md')));
+  assert.ok(existsSync(join(skillsDir, 'alpha', 'SKILL.md')));
+});
+
+test('a manifest that fails validation removes nothing', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/missing'], {});
+  mkdirSync(join(skillsDir, 'obsolete'));
+  writeFileSync(join(skillsDir, 'obsolete', MARKER), 'x\n');
+  assert.throws(() => quietSync({ root, skillsDir }));
+  assert.ok(existsSync(join(skillsDir, 'obsolete')));
+});

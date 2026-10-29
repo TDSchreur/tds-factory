@@ -61,6 +61,13 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
     }
     return { rel, name, src, dest };
   });
+  // A skill that left the manifest is no longer shipped; folders without the marker are ours and stay.
+  for (const e of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+    if (e.isDirectory() && !seen.has(e.name) && fs.existsSync(path.join(skillsDir, e.name, MARKER))) {
+      fs.rmSync(path.join(skillsDir, e.name), { recursive: true });
+      console.log(`removed ${e.name}`);
+    }
+  }
   for (const { rel, name, src, dest } of plan) {
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
