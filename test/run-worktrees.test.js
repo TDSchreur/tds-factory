@@ -131,7 +131,11 @@ test('the CLI start in a non-git directory exits non-zero with the message', () 
   assert.match(result.stderr, /git repository/);
 });
 
-const finish = (store, id) => store.update(id, { status: 'done' });
+// Fixture: only run complete ends a Run, and it needs a PR, so write the finished record directly.
+const finish = (store, id) => {
+  const file = join(store.projectDir, '.factory', 'runs', id, 'run.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), status: 'done' }));
+};
 
 test('remove deletes the Run folder and a clean worktree but keeps the branch', () => {
   const main = repo();

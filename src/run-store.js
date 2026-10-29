@@ -5,10 +5,12 @@ import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
-const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr', 'worktree'];
+const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
+// Only the store's own operations (start, transitions) may change these; plain update rejects them.
+const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha'];
 const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
 function validate(data) {
@@ -91,7 +93,7 @@ function startRun(projectDir, data) {
     const worktree = path.join(worktrees, id);
     const added = git('worktree', 'add', '-b', id, worktree, commit.stdout.trim());
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
-    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree }));
+    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit.stdout.trim() }));
   } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
@@ -111,6 +113,11 @@ function updateRun(projectDir, id, data) {
   if (fs.lstatSync(file).isSymbolicLink()) throw new Error('Run record must not be a symlink');
   const old = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
+  validate(data);
+  const locked = gated.find((key) => key in data);
+  if (locked) throw new Error(`${locked} can only change through a Run transition`);
+  if (data.status === 'done') throw new Error('a Run is completed with run complete');
+  if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
   write(dir, apply(old, data));
   });
 }
