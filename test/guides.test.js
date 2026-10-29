@@ -57,3 +57,7 @@ test('the README lists the guides in a Documentation section', () => {
   assert.ok(section.length < readme.length, 'has a Documentation section');
   for (const doc of ['docs/install.md', 'docs/usage.md', 'docs/dashboard.md', 'docs/capabilities.md', 'docs/evaluation.md', 'docs/releasing.md']) assert.ok(section.includes(`(${doc})`), doc);
 });
+
+test('the install and usage guides send the reader to tds-factory doctor', () => {
+  for (const file of ['docs/install.md', 'docs/usage.md']) assert.match(read(file), /^\s*tds-factory doctor$/m, file);
+});
