@@ -9,7 +9,7 @@ import { startDashboard } from '../src/dashboard.js';
 const USAGE = `Usage:
   tds-factory --version
   tds-factory sync [--force]
-  tds-factory install [--agent claude|codex|copilot|all] [--project] [--force]
+  tds-factory install [--agent claude|codex|copilot|all] [--project] [--force] [--dry-run]
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
@@ -22,7 +22,8 @@ const USAGE = `Usage:
   tds-factory run repair --id ID [--apply]
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
 
-install defaults to the user-global directory; --project installs into the current directory.`;
+install defaults to the user-global directory; --project installs into the current directory.
+--dry-run prints what install would do and changes nothing.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -30,6 +31,7 @@ const { values, positionals } = parseArgs({
     agent: { type: 'string', default: 'all' },
     project: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
+    'dry-run': { type: 'boolean', default: false },
     data: { type: 'string' },
     id: { type: 'string' },
     to: { type: 'string' },
@@ -77,7 +79,7 @@ try {
     else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect or repair');
   }
   else if (command === 'sync') sync({ force: values.force });
-  else if (command === 'install') install(values);
+  else if (command === 'install') install({ ...values, dryRun: values['dry-run'] });
   else if (command === 'dashboard') {
     const port = values.port === undefined ? undefined : Number(values.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) throw new Error(`invalid port: ${values.port}`);
