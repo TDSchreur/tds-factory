@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
 import { targets } from './flow.js';
+import { replaceDir } from './replace-dir.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
 export function install({ agent, project, force }) {
@@ -28,9 +29,10 @@ export function install({ agent, project, force }) {
         console.warn(`skip ${name}/${skill}: exists and was not installed by tds-factory (use --force)`);
         continue;
       }
-      fs.rmSync(dest, { recursive: true, force: true });
-      fs.cpSync(path.join(SKILLS_DIR, skill), dest, { recursive: true });
-      fs.writeFileSync(path.join(dest, MARKER), '');
+      replaceDir(dest, (staging) => {
+        fs.cpSync(path.join(SKILLS_DIR, skill), staging, { recursive: true });
+        fs.writeFileSync(path.join(staging, MARKER), '');
+      });
       console.log(`installed ${name}/${skill} -> ${dest}`);
     }
     // Marked folders that are no longer shipped are ours to remove; unmarked ones never are.

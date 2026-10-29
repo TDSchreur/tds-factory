@@ -190,3 +190,20 @@ test('a manifest that fails validation removes nothing', () => {
   assert.throws(() => quietSync({ root, skillsDir }));
   assert.ok(existsSync(join(skillsDir, 'obsolete')));
 });
+
+test('replaceDir keeps the previous folder and leaves no staging folder when filling the new one fails', async () => {
+  const { replaceDir } = await import('../src/replace-dir.js');
+  const dir = mkdtempSync(join(tmpdir(), 'tds-replace-'));
+  const dest = join(dir, 'skill');
+  mkdirSync(dest);
+  writeFileSync(join(dest, 'SKILL.md'), 'old');
+  assert.throws(() => replaceDir(dest, (staging) => {
+    writeFileSync(join(staging, 'SKILL.md'), 'new');
+    throw new Error('disk full');
+  }), /disk full/);
+  assert.equal(readFileSync(join(dest, 'SKILL.md'), 'utf8'), 'old');
+  assert.deepEqual(readdirSync(dir), ['skill']);
+  replaceDir(dest, (staging) => writeFileSync(join(staging, 'SKILL.md'), 'new'));
+  assert.equal(readFileSync(join(dest, 'SKILL.md'), 'utf8'), 'new');
+  assert.deepEqual(readdirSync(dir), ['skill']);
+});

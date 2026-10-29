@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, SKILLS_DIR, MARKER } from './paths.js';
+import { replaceDir } from './replace-dir.js';
 
 // Skills the factory flow invokes; the model must be able to call them, so upstream's
 // disable-model-invocation flag is removed from their copies.
@@ -69,16 +70,17 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
     }
   }
   for (const { rel, name, src, dest } of plan) {
-    fs.rmSync(dest, { recursive: true, force: true });
-    fs.cpSync(src, dest, { recursive: true });
-    const markdown = fs.readdirSync(dest, { recursive: true, withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.md'));
-    for (const e of markdown) {
-      const f = path.relative(dest, path.join(e.parentPath ?? e.path, e.name));
-      const file = path.join(dest, f);
-      const skillFile = f === 'SKILL.md';
-      fs.writeFileSync(file, rewrite(fs.readFileSync(file, 'utf8'), { skillFile, from: path.basename(rel), to: name, unflag: skillFile && invoked.has(name) }));
-    }
-    fs.writeFileSync(path.join(dest, MARKER), `${rel}\n`);
+    replaceDir(dest, (staging) => {
+      fs.cpSync(src, staging, { recursive: true });
+      const markdown = fs.readdirSync(staging, { recursive: true, withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.md'));
+      for (const e of markdown) {
+        const f = path.relative(staging, path.join(e.parentPath ?? e.path, e.name));
+        const file = path.join(staging, f);
+        const skillFile = f === 'SKILL.md';
+        fs.writeFileSync(file, rewrite(fs.readFileSync(file, 'utf8'), { skillFile, from: path.basename(rel), to: name, unflag: skillFile && invoked.has(name) }));
+      }
+      fs.writeFileSync(path.join(staging, MARKER), `${rel}\n`);
+    });
     console.log(`synced ${name}`);
   }
 }
