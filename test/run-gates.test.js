@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
@@ -327,4 +329,63 @@ test('accept needs findings and a decision, Check, and a clean worktree', () => 
   assert.notEqual(accept(cwd, id, { findings: 'x', decision: 'y' }).status, 0, 'dirty');
   assert.equal('accepted' in read(cwd, id), false);
   assert.notEqual(update(cwd, id, { accepted: { head: 'forged' } }).status, 0, 'not through update');
+});
+
+const inspect = (cwd, ...args) => run(cwd, 'inspect', '--json', ...args);
+const problems = (cwd, id) => {
+  const result = inspect(cwd);
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout).find((r) => r.id === id).problems.map((p) => p.code);
+};
+
+test('inspect reports nothing for a healthy Run', () => {
+  const cwd = repo();
+  const id = cleanCheck(cwd);
+  assert.deepEqual(problems(cwd, id), []);
+});
+
+test('inspect reports an unreadable record and a lock left behind', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  mkdirSync(join(cwd, '.factory', 'runs', 'broken'));
+  writeFileSync(join(cwd, '.factory', 'runs', 'broken', 'run.json'), '{');
+  writeFileSync(join(cwd, '.factory', 'runs', `.lock-${createHash('sha256').update(id).digest('hex')}`), '');
+  assert.deepEqual(problems(cwd, 'broken'), ['unreadable']);
+  assert.deepEqual(problems(cwd, id), ['lock']);
+});
+
+test('inspect reports a missing worktree, one git does not know, and uncommitted changes', () => {
+  const cwd = repo();
+  const gone = startRun(cwd);
+  rmSync(read(cwd, gone).worktree, { recursive: true });
+  assert.deepEqual(problems(cwd, gone), ['worktree-missing']);
+  const stranger = startRun(cwd);
+  force(cwd, stranger, { worktree: mkdtempSync(join(tmpdir(), 'not-a-worktree-')) });
+  assert.deepEqual(problems(cwd, stranger), ['worktree-unknown']);
+  const dirty = startRun(cwd);
+  writeFileSync(join(read(cwd, dirty).worktree, 'scratch.txt'), 'x');
+  assert.deepEqual(problems(cwd, dirty), ['worktree-dirty']);
+});
+
+test('inspect reports Evidence that no longer matches the head', () => {
+  const cwd = repo();
+  const id = cleanCheck(cwd);
+  commit(cwd, id);
+  assert.deepEqual(problems(cwd, id), ['stale-evidence']);
+});
+
+test('inspect leaves finished Runs without a worktree alone and changes nothing on disk', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  const finished = startRun(cwd);
+  rmSync(read(cwd, finished).worktree, { recursive: true });
+  force(cwd, finished, { status: 'done' });
+  const snapshot = () => execFileSync('find', ['.factory/runs', '-type', 'f', '-exec', 'sha1sum', '{}', '+'], { cwd, encoding: 'utf8' });
+  const before = snapshot();
+  assert.deepEqual(problems(cwd, finished), []);
+  assert.equal(snapshot(), before);
+  const text = run(cwd, 'inspect', '--id', id);
+  assert.equal(text.status, 0);
+  assert.match(text.stdout, /no problems/i);
+  assert.notEqual(run(cwd, 'inspect', '--id', 'missing').status, 0);
 });

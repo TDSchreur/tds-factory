@@ -18,6 +18,7 @@ const USAGE = `Usage:
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID
+  tds-factory run inspect [--id ID] [--json]
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
 
 install defaults to the user-global directory; --project installs into the current directory.`;
@@ -33,6 +34,7 @@ const { values, positionals } = parseArgs({
     to: { type: 'string' },
     axis: { type: 'string' },
     value: { type: 'string' },
+    json: { type: 'boolean', default: false },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
   },
@@ -51,13 +53,21 @@ try {
     else if (op === 'rework') store.rework(values.id, data);
     else if (op === 'complete') store.complete(values.id, data);
     else if (op === 'accept') store.accept(values.id, data);
+    else if (op === 'inspect') {
+      const report = await store.inspect(values.id);
+      if (values.json) console.log(JSON.stringify(report, null, 2));
+      else {
+        for (const { id, problems } of report.filter((r) => r.problems.length)) console.log([id, ...problems.map((p) => `  - ${p.message}`)].join('\n'));
+        if (report.every((r) => !r.problems.length)) console.log('no problems found');
+      }
+    }
     else if (op === 'verify') {
       const result = store.verify(values.id);
       console.log(`verify ${result.exit_code === 0 ? 'passed' : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
-    else throw new Error('expected run start, update, transition, rework, complete, accept, verify or verdict');
+    else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict or inspect');
   }
   else if (command === 'sync') sync();
   else if (command === 'install') install(values);

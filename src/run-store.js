@@ -97,8 +97,9 @@ function startRun(projectDir, data) {
   } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
+const lockFile = (root, id) => path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
 function withRunLock(root, id, action) {
-  const lock = path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
+  const lock = lockFile(root, id);
   const fd = fs.openSync(lock, 'wx');
   try { return action(); }
   finally { fs.closeSync(fd); fs.unlinkSync(lock); }
@@ -239,6 +240,33 @@ function verdictRun(projectDir, id, axis, value) {
   });
 }
 
+// Read-only health report: what would stop each Run from carrying on. Finished Runs only report records and locks.
+async function inspectRuns(projectDir, runsDir, only) {
+  const runs = (await listRuns(runsDir)).filter((run) => only === undefined || run.id === only);
+  if (only !== undefined && !runs.length) throw new Error(`no such Run: ${only}`);
+  const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: projectDir, encoding: 'utf8' }).stdout ?? '';
+  const known = new Set([...listed.matchAll(/^worktree (.+)$/gm)].map((m) => fs.existsSync(m[1]) ? fs.realpathSync(m[1]) : m[1]));
+  return runs.map(({ id, unreadable, record }) => {
+    const found = [];
+    const add = (code, message) => found.push({ code, message });
+    if (fs.existsSync(lockFile(runsDir, id))) add('lock', 'a lock file is left behind; another process may be updating this Run, or one died mid-update');
+    if (unreadable) add('unreadable', 'run.json is missing or cannot be parsed');
+    else if (['running', 'waiting'].includes(record.status) && record.worktree) {
+      if (!fs.existsSync(record.worktree)) add('worktree-missing', `the Run worktree ${record.worktree} does not exist`);
+      else if (!known.has(fs.realpathSync(record.worktree))) add('worktree-unknown', `git does not list ${record.worktree} as a worktree`);
+      else {
+        try {
+          const { head, dirty } = worktreeState(record);
+          if (dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
+          const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head)].filter(Boolean);
+          if (['check', 'finish'].includes(record.stage) && seen.some((h) => h !== head)) add('stale-evidence', 'Evidence was recorded for an earlier head than the current one');
+        } catch (err) { add('worktree-unreadable', err.message); }
+      }
+    }
+    return { id, problems: found };
+  });
+}
+
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 // Sort Stage summaries in Flow order, with numbered Check passes sorted numerically.
@@ -354,6 +382,7 @@ export function openRunStore(callerDir) {
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
     list: () => listRuns(runsDir),
+    inspect: (id) => inspectRuns(projectDir, runsDir, id),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     remove: (id) => removeRun(projectDir, id),
   };
