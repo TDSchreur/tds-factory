@@ -226,3 +226,11 @@ test('upstream implement-spec steps that spawn subagents, branches, PRs or revie
     assert.ok(covered.some((f) => line.includes(f)), `implement-spec step not overridden: ${line}`);
   }
 });
+
+test('Preflight runs the read-only doctor and stops on anything but a missing Verify command', () => {
+  const preflight = section('Preflight');
+  assert.match(preflight, /tds-factory doctor --json --agent/);
+  assert.ok(preflight.indexOf('tds-factory doctor') < preflight.indexOf('empty `commands`'), 'doctor runs before the Run is created');
+  assert.match(preflight, /other than `verify-command`/);
+  assert.doesNotMatch(preflight, /\/setup-matt-pocock-skills/);
+});

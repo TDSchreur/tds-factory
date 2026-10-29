@@ -113,10 +113,15 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Ticket | One small unit of work cut from the Spec, an issue in GitHub. |
 | Check axis | One of the independent reviews in Check: Standards, Spec, Security, Infrastructure. |
 | Clean | A Check where every axis passes (Infrastructure may be skipped) and the verify command passed, all for the current code with nothing uncommitted. Only a clean Check goes on without asking you. |
+| Doctor | The read-only `tds-factory doctor` command that checks whether a project is ready for a Run. |
 | Run worktree | The git worktree and branch a Run works in, so Runs never share files. |
 | Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
 
 The full list is in [GLOSSARY.md](../GLOSSARY.md). What each Agent target guarantees, such as how read-only the Check agents are, is in the [capability matrix](capabilities.md). To test an agent against the Flow, see the [agent evaluation](evaluation.md).
+
+## Check readiness without starting a Run
+
+Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the Verify command. It exits with 1 until every check passes. `/factory` runs it first; a missing Verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish.
 
 ## Recover a Run
 
