@@ -117,3 +117,7 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
 
 The full list is in [GLOSSARY.md](../GLOSSARY.md).
+
+## Recover a Run
+
+Run `tds-factory run inspect --id ID` to diagnose its lock, worktree and stale Evidence. `tds-factory run repair --id ID` prints a proposal without changing anything. Review it, then add `--apply` to apply the safe changes. Repair checks the Run branch and GitHub PR before suggesting changes, keeps dirty worktrees, and reconstructs a missing record as interrupted. It clears only a lock whose local owner is known to have exited; age never expires a lock. An unknown or foreign owner must be investigated manually. A leftover repair coordination lock is also reported for manual investigation.

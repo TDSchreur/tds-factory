@@ -19,6 +19,7 @@ const USAGE = `Usage:
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID
   tds-factory run inspect [--id ID] [--json]
+  tds-factory run repair --id ID [--apply]
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
 
 install defaults to the user-global directory; --project installs into the current directory.`;
@@ -35,6 +36,7 @@ const { values, positionals } = parseArgs({
     axis: { type: 'string' },
     value: { type: 'string' },
     json: { type: 'boolean', default: false },
+    apply: { type: 'boolean', default: false },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
   },
@@ -61,13 +63,18 @@ try {
         if (report.every((r) => !r.problems.length)) console.log('no problems found');
       }
     }
+    else if (op === 'repair') {
+      const plan = store.repairPlan(values.id);
+      console.log([`Proposed repair for ${plan.id}:`, ...plan.notes.map((n) => `  - ${n}`), ...plan.actions.map((a) => `  - Would ${a}`), ...plan.blockers.map((b) => `  - Blocked: ${b}`)].join('\n'));
+      if (values.apply) { store.repairApply(values.id, plan); console.log('Repair applied.'); }
+    }
     else if (op === 'verify') {
       const result = store.verify(values.id);
       console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
-    else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict or inspect');
+    else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect or repair');
   }
   else if (command === 'sync') sync();
   else if (command === 'install') install(values);

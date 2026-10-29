@@ -145,3 +145,21 @@ test('a failed replacement leaves the existing record intact', () => {
   finally { fs.renameSync = rename; }
   assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
 });
+
+test('Run locks identify their process and inspection diagnoses the owner', async () => {
+  const cwd = repo();
+  const store = openRunStore(cwd);
+  const id = store.start(start);
+  const lock = join(cwd, '.factory', 'runs', `.lock-${createHash('sha256').update(id).digest('hex')}`);
+  const rename = fs.renameSync;
+  let owner;
+  fs.renameSync = (...args) => { owner = JSON.parse(readFileSync(lock, 'utf8')); return rename(...args); };
+  try { store.update(id, { activity: 'working' }); } finally { fs.renameSync = rename; }
+  assert.equal(owner.pid, process.pid);
+  assert.ok(owner.host);
+  assert.ok(Date.parse(owner.started));
+  writeFileSync(lock, JSON.stringify(owner));
+  const report = (await store.inspect(id))[0];
+  assert.match(report.problems.find((p) => p.code === 'lock').message, /live/);
+  assert.match(report.problems.find((p) => p.code === 'lock').message, new RegExp(String(process.pid)));
+});
