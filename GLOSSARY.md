@@ -36,6 +36,20 @@ A Check whose every Check axis is `pass`, with Infrastructure allowed to be `ski
 The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
 _Avoid_: Test command
 
+**Verify result**:
+The recorded outcome of running the Verify command in a Run worktree: which code revision it ran on, whether it passed, and when. It only counts as evidence while the Run worktree is still at that revision and had no uncommitted changes.
+
+**Evidence**:
+The Verify result and the Check axis verdicts of a Run, each tied to the code revision it was produced for. Evidence goes stale when new commits land after it was recorded.
+_Avoid_: Proof
+
+**Accepted Check**:
+A Check that is not clean but that the user has explicitly allowed to continue to Finish, together with the open findings and the decision. It applies to one code revision only.
+
+**Rework**:
+Sending a Run back from Check to Build to fix problems. Each Rework counts against the loop limit and makes the earlier Evidence stale.
+_Avoid_: Retry, Loop back
+
 **Conventions**:
 The project's own rules: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists, read at Preflight and given to the Standards and Security axes.
 _Avoid_: Standards
