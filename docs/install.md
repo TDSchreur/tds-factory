@@ -66,7 +66,7 @@ npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/rele
 tds-factory install
 ```
 
-`tds-factory --version` shows what you now have. A new version is published for every change merged to the Factory, so updating now and then is enough. Skills are never updated by `npm install` alone; `tds-factory install` does that.
+`tds-factory --version` shows what you now have. Maintainers publish new versions when a group of changes is ready, so updating now and then is enough. Skills are never updated by `npm install` alone; `tds-factory install` does that.
 
 ## 5. Prepare a project
 
