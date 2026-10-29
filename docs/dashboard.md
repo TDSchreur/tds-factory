@@ -7,7 +7,7 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 | Route | Returns |
 |---|---|
 | `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
-| `/style.css`, `/app.js`, `/components.js`, `/model.js`, `/markdown.js`, `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` | The Dashboard's stylesheet, ES modules and vendored libraries, from the `dashboard/` folder. Only these names are served. |
+| `/style.css`, `/favicon.svg`, `/app.js`, `/components.js`, `/model.js`, `/markdown.js`, `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` | The Dashboard's stylesheet, icon, ES modules and vendored libraries, from the `dashboard/` folder. Only these names are served. |
 | `/api/views` | Run records interpreted for the Dashboard. |
 | `/api/info` | The project folder the Dashboard serves. |
 | `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
@@ -36,3 +36,5 @@ flowchart TB
 If GitHub cannot be reached, returns no usable PR head, or `gh` cannot merge, the server answers 502 and merges nothing. An unknown Run gets 404, and a request from another origin gets 403.
 
 For how to read the cards, see the [usage guide](usage.md#5-follow-runs-on-the-dashboard).
+
+The browser tab is titled `<project folder> · TDS Factory`, with `(N) ` in front while N Runs wait on you, so several Dashboards are easy to tell apart. The Dashboard serves `/favicon.svg` as the tab icon.

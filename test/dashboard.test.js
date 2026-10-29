@@ -228,6 +228,7 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
 test('the style, scripts and vendored libraries are served at fixed names', async () => {
   for (const [path, type, marker] of [
     ['/style.css', /text\/css/, /--bg:/],
+    ['/favicon.svg', /image\/svg\+xml/, /<svg/],
     ['/app.js', /text\/javascript/, /function App/],
     ['/components.js', /text\/javascript/, /export function Card/],
     ['/model.js', /text\/javascript/, /export const COLUMNS/],
@@ -264,4 +265,10 @@ test('a missing Dashboard folder shows the fallback page', async () => {
     assert.match(res.body, /not installed/);
     assert.equal((await get(d, '/app.js')).status, 404);
   } finally { await d.close(); }
+});
+
+test('the page links the SVG favicon and a plain title', async () => {
+  const res = await get(dash, '/');
+  assert.match(res.body, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml">/);
+  assert.match(res.body, /<title>TDS Factory<\/title>/);
 });

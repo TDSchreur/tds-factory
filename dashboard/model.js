@@ -66,3 +66,6 @@ export function ticketsOf(run) {
   const done = Math.min(run.ticketsDone || 0, (run.tickets || []).length);
   return (run.tickets || []).map((href, i) => ({ href, label: ticketLabel(href), state: i < done ? 'done' : i === done && run.column === 'build' ? 'active' : 'todo' }));
 }
+
+// The last segment of a project path, with either kind of separator; empty when there is none.
+export const folderName = (path) => String(path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '';
