@@ -219,3 +219,10 @@ test('upstream approval steps that the Factory already resolved are all overridd
     }
   }
 });
+
+test('upstream implement-spec steps that spawn subagents, branches, PRs or reviews are all overridden', () => {
+  const covered = overrides('implement-spec');
+  for (const line of upstream['implement-spec'].split('\n').filter((l) => /^\d+\./.test(l) && /subagent|branch|worktree|draft PR|code-review/i.test(l))) {
+    assert.ok(covered.some((f) => line.includes(f)), `implement-spec step not overridden: ${line}`);
+  }
+});

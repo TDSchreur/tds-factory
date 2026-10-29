@@ -31,7 +31,7 @@ export function fixture({ agent, verify = 'exit 0' } = {}) {
   git(dir, 'commit', '-q', '-m', 'fixture');
   git(dir, 'push', '-q', 'origin', 'main');
   const actionLog = join(root, 'actions.jsonl');
-  write(dir, '.git/hooks/pre-push', `#!/bin/sh\nprintf '{"tool":"git","argv":["push","%s","%s"],"write":true}\\n' "$1" "$2" >> "${actionLog}"\n`);
+  write(dir, '.git/hooks/pre-push', `#!/bin/sh\nprintf '{"tool":"git","argv":["push","%s","%s"],"write":true}\\n' "$1" "$2" >> "${actionLog}"\n[ "$2" = "${origin}" ] || { echo "eval: pushes may only go to the local origin" >&2; exit 1; }\n`);
   chmodSync(join(dir, '.git/hooks/pre-push'), 0o755);
   const env = { ...process.env, PATH: `${EVAL_BIN}:${process.env.PATH}`, EVAL_ACTION_LOG: actionLog, EVAL_GH_STATE: join(root, 'gh-state.json') };
   const factory = (...args) => execFileSync(CLI, args, { cwd: dir, env, encoding: 'utf8' }).trim();

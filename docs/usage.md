@@ -116,7 +116,7 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Run worktree | The git worktree and branch a Run works in, so Runs never share files. |
 | Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
 
-The full list is in [GLOSSARY.md](../GLOSSARY.md).
+The full list is in [GLOSSARY.md](../GLOSSARY.md). What each Agent target guarantees, such as how read-only the Check agents are, is in the [capability matrix](capabilities.md). To test an agent against the Flow, see the [agent evaluation](evaluation.md).
 
 ## Recover a Run
 
