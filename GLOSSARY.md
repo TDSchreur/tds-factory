@@ -73,6 +73,10 @@ _Avoid_: Log, State file
 The single owner of every Run record and Run folder; the CLI and the Dashboard go through it.
 _Avoid_: Run database
 
+**Run repair**:
+An explicit, reviewed reconciliation of a Run with its existing git and GitHub work, preserving unfinished changes and restoring only facts that can be established.
+_Avoid_: Restart, Automatic recovery
+
 **Run worktree**:
 The git worktree and branch a Run works in, so agents running at the same time never share files. One Run has exactly one agent and one Run worktree.
 _Avoid_: Sandbox, Workspace
