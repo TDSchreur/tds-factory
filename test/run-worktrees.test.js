@@ -192,13 +192,14 @@ test('remove does not let ignored files block the deletion', () => {
 });
 
 for (const [name, dirty, file] of [
-  ['an uncommitted tracked change', (w) => appendFileSync(join(w, '.gitmodules'), '\n'), null],
+  ['an uncommitted tracked change', (w) => appendFileSync(join(w, '.gitmodules'), '\n'), '.gitmodules'],
   ['an untracked file', (w) => writeFileSync(join(w, 'new.txt'), 'x'), 'new.txt'],
   ['a dirty submodule', (w) => writeFileSync(join(w, 'vendor', 'new.txt'), 'x'), 'vendor/new.txt'],
-  ['a submodule at another commit', (w) => git(join(w, 'vendor'), 'checkout', '-q', 'HEAD~1'), null],
+  ['a submodule at another commit', (w) => git(join(w, 'vendor'), 'checkout', '-q', 'HEAD~1'), 'vendor'],
 ]) {
   test(`remove refuses a worktree with a submodule and ${name}`, () => {
     const { main, store, id, worktree } = withSubmodule();
+    git(main, 'config', 'status.showUntrackedFiles', 'no');
     dirty(worktree);
     assert.equal(store.remove(id), 'worktree-refused');
     assert.ok(existsSync(worktree) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
