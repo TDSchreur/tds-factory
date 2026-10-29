@@ -28,7 +28,7 @@
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
   header { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .75rem 1.25rem; background: var(--header-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-  header .title { display: flex; align-items: baseline; gap: .5rem; }
+  header .title { display: flex; align-items: center; gap: .5rem; }
   h1 { font-size: 1.25rem; font-weight: 700; margin: 0; letter-spacing: -.01em; }
   .logo { display: block; height: 2.25rem; width: auto; }
   .logo .ink { fill: var(--logo-ink); }
