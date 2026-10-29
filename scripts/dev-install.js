@@ -17,7 +17,8 @@ try {
   tmp = mkdtempSync(join(tmpdir(), 'tds-factory-'));
   const archive = join(tmp, 'tds-factory.tgz');
   git('archive', '--format=tgz', '--prefix=package/', '-o', archive, ref);
-  execFileSync('npm', ['install', '-g', archive], { stdio: 'inherit', shell: process.platform === 'win32' });
+  // Relative name from inside tmp: a shell on Windows would split a temp path with spaces.
+  execFileSync('npm', ['install', '-g', 'tds-factory.tgz'], { cwd: tmp, stdio: 'inherit', shell: process.platform === 'win32' });
   console.log(`\nInstalled ${ref} at ${git('rev-parse', '--short', ref)}. Next, refresh the skills: tds-factory install`);
 } catch (err) {
   console.error(`error: ${err.message.split('\n')[0]}`);
