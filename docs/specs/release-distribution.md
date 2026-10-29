@@ -26,7 +26,7 @@ Every change merged to `master` publishes a Release on GitHub. A colleague insta
 12. As the maintainer, I want the Release workflow not to commit to `master`, so that it cannot trigger itself or clash with merges
 13. As the maintainer, I want two merges in quick succession to get different versions, so that a Release never overwrites another
 14. As the maintainer, I want the README to start with the one-line install, so that colleagues find it first
-15. As a contributor, I want `setup.sh` and `setup.ps1` kept for working from a checkout, so that I can develop the Factory
+15. As a contributor, I want `setup.sh` and `setup.ps1` replaced by `scripts/dev-install.js` (see `dev-install.md`), so that I can develop the Factory
 16. As the maintainer, I want the repository and its history checked for secrets and company-specific data before it goes public, so that I do not publish something I cannot take back
 17. As the maintainer, I want to switch the repository to public myself after reading that check, so that the one-way step stays my decision
 
@@ -39,7 +39,7 @@ Every change merged to `master` publishes a Release on GitHub. A colleague insta
 - The tarball holds what `npm pack` already ships: the CLI, the sources, the committed skill copies and the Dashboard. It does not need the `vendor/` submodules, as ADR 0001 describes.
 - The CLI gains `--version`, which prints the version from its own `package.json`, and the usage text mentions it.
 - The version-choosing logic is a small separate script with tests, so it can be checked without GitHub.
-- The README opens its Setup section with the install and update command, and then `tds-factory install`. The setup scripts stay and are described as the route for working from a checkout.
+- The README opens its Setup section with the install and update command, and then `tds-factory install`. `scripts/dev-install.js` is described as the route for developers who want the latest `master`.
 - A one-off check of the working tree and the full git history looks for secrets and company-specific data. The result is a written report. The repository's visibility is changed by the maintainer, never by an agent.
 - No `postinstall` hook, no update check in the CLI, no GitHub Packages.
 - ADR 0005 and the glossary term Release record the decision.
