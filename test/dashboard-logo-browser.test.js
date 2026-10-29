@@ -35,3 +35,13 @@ test('on a phone the logo and tagline sit inside the viewport and the page does 
     assert.equal(await page.execute("return document.documentElement.scrollWidth <= document.documentElement.clientWidth"), true);
   } finally { await page.close(); }
 });
+
+test('the tagline reads Factory and is vertically centred on the logo', async (t) => {
+  const page = await openPage(t, { runs: [run()] });
+  if (!page) return;
+  try {
+    assert.equal(await page.execute("return document.querySelector('header .tagline').textContent"), 'Factory');
+    const offset = await page.execute("const mid = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return r.top + r.height / 2; }; return Math.abs(mid('header .tagline') - mid('header h1 svg'))");
+    assert.ok(offset <= 2, `tagline is ${offset}px off the logo centre`);
+  } finally { await page.close(); }
+});

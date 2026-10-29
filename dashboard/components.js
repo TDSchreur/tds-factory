@@ -149,7 +149,7 @@ function Logo() {
 
 export function Header({ project, status, olderLabel, onOlder }) {
   return html`<header>
-    <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">dashboard</span></div>
+    <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span></div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
     <${ThemeSelect} />
