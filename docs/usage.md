@@ -64,7 +64,7 @@ A Run stops and asks you in these cases:
 
 The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
 
-If the project does not have a verify command in `AGENTS.md` (or `CLAUDE.md`) under `## Commands`, the agent asks for it once, at the very start of the Run, and records it. The Run shows as "Needs you" while it waits.
+If the project does not have a verify command in `AGENTS.md` (or `CLAUDE.md`) under `## Commands`, the agent asks for it once, at the very start of the Run, and records it. The command cannot be changed later; start a new Run for that. The Run shows as "Needs you" while it waits.
 
 ## 5. Follow Runs on the Dashboard
 

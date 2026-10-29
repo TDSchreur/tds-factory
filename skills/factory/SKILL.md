@@ -69,7 +69,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `verify` | The latest Verify result, an object. Set by `run verify` |
 | `reviewed` | For each axis with a verdict, the head and Check attempt it was recorded for. Set by `run verdict` |
 | `accepted` | The user's decision to continue with a Check that is not clean: findings, decision, head and time. Set by `run accept` |
-| `commands` | The verify command, one string. Set by Preflight; the answer the user gave when the project has none |
+| `commands` | The verify command, one string. Set by Preflight; the answer the user gave when the project has none. It can be set once; changing it means starting a new Run |
 | `conventions` | Paths of the conventions files Preflight read, an array of strings |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |

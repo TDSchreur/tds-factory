@@ -198,6 +198,8 @@ test('verify refuses a Run with no Verify command, and verify results cannot be 
   assert.notEqual(verify(cwd, id).status, 0);
   assert.equal('verify' in read(cwd, id), false);
   assert.notEqual(update(cwd, id, { verify: { exit_code: 0 } }).status, 0);
+  const blank = startRun(cwd, '   ');
+  assert.notEqual(verify(cwd, blank).status, 0, 'a blank command is no command');
 });
 
 test('a verdict is stamped with the head and the Check attempt', () => {

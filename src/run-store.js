@@ -144,7 +144,7 @@ function updateRun(projectDir, id, data) {
 // Changes a running Run for a named operation, which takes only an optional activity line besides its own arguments.
 function changeRunning(projectDir, id, data, move) {
   validate(data);
-  if (Object.keys(data).some((key) => key !== 'activity')) throw new Error('a transition accepts only activity');
+  if (Object.keys(data).some((key) => key !== 'activity')) throw new Error('this operation accepts only activity');
   changeRun(projectDir, id, (old) => {
     if (old.status !== 'running') throw new Error(`a ${old.status} Run cannot be changed this way, only a running one`);
     const { record, activity } = move(old);
@@ -227,7 +227,7 @@ function worktreeState(record) {
 function verifyRun(projectDir, id) {
   const { dir, record } = readRun(projectDir, id);
   if (record.status !== 'running') throw new Error(`a ${record.status} Run cannot be verified, only a running one`);
-  if (!record.commands) throw new Error('the Run has no Verify command');
+  if (!record.commands?.trim()) throw new Error('the Run has no Verify command');
   const { head, dirty } = worktreeState(record);
   const started = new Date().toISOString();
   // Replace rather than reuse the log, so a planted link is never written through.
@@ -255,7 +255,7 @@ function verdictRun(projectDir, id, axis, value) {
   });
 }
 
-// Read-only health report: what would stop each Run from carrying on. Finished Runs only report records and locks.
+// Read-only health report: what would stop each Run from carrying on. Finished Runs only report records, locks and uncommitted work.
 async function inspectRuns(projectDir, runsDir, only) {
   const runs = (await listRuns(runsDir)).filter((run) => only === undefined || run.id === only);
   if (only !== undefined && !runs.length) throw new Error(`no such Run: ${only}`);
@@ -351,7 +351,7 @@ async function readRunFile(runsDir, rawPath) {
 }
 
 // Deletes only a terminal Run in the project's own, unlinked storage.
-function rechangeRunning(projectDir, id) {
+function removeRun(projectDir, id) {
   if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
   const project = fs.realpathSync(projectDir);
   const factory = path.join(project, '.factory');
@@ -401,6 +401,6 @@ export function openRunStore(callerDir) {
     list: () => listRuns(runsDir),
     inspect: (id) => inspectRuns(projectDir, runsDir, id),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
-    remove: (id) => rechangeRunning(projectDir, id),
+    remove: (id) => removeRun(projectDir, id),
   };
 }
