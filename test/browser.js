@@ -8,12 +8,17 @@ const ASSET = /^\/(?:style\.css|[\w-]+\.js|vendor\/[\w-]+\.js)$/;
 const TYPES = { css: 'text/css', js: 'text/javascript' };
 const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
-export const hasBrowser = () => spawnSync('sh', ['-c', 'command -v chromedriver && command -v chromium']).status === 0;
+export const hasBrowser = () => spawnSync('sh', ['-c', 'command -v chromedriver && (command -v chromium || command -v google-chrome)']).status === 0;
 
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
 export async function openPage(t, state, { args = [], width = 1200 } = {}) {
-  if (!hasBrowser()) { t.skip('Chromium and ChromeDriver are required'); return null; }
+  if (!hasBrowser()) {
+    // CI sets REQUIRE_BROWSER so that a runner without a browser fails instead of silently skipping these tests.
+    if (process.env.REQUIRE_BROWSER) throw new Error('Chromium and ChromeDriver are required (REQUIRE_BROWSER is set)');
+    t.skip('Chromium and ChromeDriver are required');
+    return null;
+  }
   const calls = [];
   state.runs ??= [];
   state.files ??= {};
