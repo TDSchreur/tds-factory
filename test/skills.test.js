@@ -192,5 +192,6 @@ test('the docs tell users to refresh the installed Skill and call Agent targets 
   assert.match(readFileSync(join(SKILLS_DIR, '..', 'README.md'), 'utf8'), /tds-factory install.* after every update/);
   const domain = readFileSync(join(SKILLS_DIR, '..', 'docs', 'agents', 'domain.md'), 'utf8');
   assert.doesNotMatch(domain, /backend/i);
+  for (const doc of ['GLOSSARY.md', join('docs', 'usage.md')]) assert.match(readFileSync(join(SKILLS_DIR, '..', doc), 'utf8'), /Clean[\s\S]{0,300}(Evidence|verify command passed)/, doc);
   assert.match(domain, /Agent target/);
 });

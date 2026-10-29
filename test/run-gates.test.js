@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -388,4 +388,54 @@ test('inspect leaves finished Runs without a worktree alone and changes nothing 
   assert.equal(text.status, 0);
   assert.match(text.stdout, /no problems/i);
   assert.notEqual(run(cwd, 'inspect', '--id', 'missing').status, 0);
+});
+
+test('the Verify command is set once, and Finish needs a Verify result from that command', () => {
+  const cwd = repo();
+  const id = cleanCheck(cwd);
+  assert.notEqual(update(cwd, id, { commands: 'true' }).status, 0);
+  force(cwd, id, { verify: { ...read(cwd, id).verify, command: 'something else' } });
+  refusesFinish(cwd, id, 'Verify result from another command');
+  const unanswered = startRun(cwd, '');
+  assert.equal(update(cwd, unanswered, { commands: 'npm test' }).status, 0, "the user's answer fills an empty command");
+  assert.notEqual(update(cwd, unanswered, { commands: 'true' }).status, 0);
+});
+
+test('Check needs at least one counted Ticket', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1'] });
+  transition(cwd, id, 'prepare');
+  assert.equal(transition(cwd, id, 'build').status, 0);
+  assert.notEqual(transition(cwd, id, 'check').status, 0);
+});
+
+test('inspect reports a running Run with no worktree and a finished Run with uncommitted changes', () => {
+  const cwd = repo();
+  const old = startRun(cwd);
+  writeFileSync(file(cwd, old), json({ stage: 'build', status: 'running', title: 'Old' }));
+  assert.deepEqual(problems(cwd, old), ['worktree-missing']);
+  const finished = startRun(cwd);
+  writeFileSync(join(read(cwd, finished).worktree, 'scratch.txt'), 'x');
+  force(cwd, finished, { status: 'done' });
+  assert.deepEqual(problems(cwd, finished), ['worktree-dirty']);
+});
+
+test('a Verify result is not recorded for a Run that was stopped while the command ran', () => {
+  const cwd = repo();
+  const id = startRun(cwd, '');
+  update(cwd, id, { commands: `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} run update --id ${id} --data '{"status":"abandoned"}'` });
+  assert.notEqual(verify(cwd, id).status, 0);
+  assert.equal('verify' in read(cwd, id), false);
+  assert.equal(read(cwd, id).status, 'abandoned');
+});
+
+test('verify does not write through a symlink planted as verify.log', () => {
+  const cwd = repo();
+  const id = startRun(cwd, 'echo hi');
+  const target = join(cwd, 'precious.txt');
+  writeFileSync(target, 'keep');
+  symlinkSync(target, join(cwd, '.factory', 'runs', id, 'verify.log'));
+  assert.equal(verify(cwd, id).status, 0);
+  assert.equal(readFileSync(target, 'utf8'), 'keep');
 });

@@ -60,7 +60,7 @@ A Run stops and asks you in these cases:
 
 1. **During Define,** with questions or to confirm the shared understanding.
 2. **At the start,** if the project has no verify command (see below). **Before Build,** if a label the Tickets need does not exist: the agent asks before it creates the label.
-3. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in `finish.md`), or no to abandon the Run.
+3. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in the Run and in `finish.md`, and only holds for the code as it is then; new commits void it), or no to abandon the Run.
 
 The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
 
@@ -112,7 +112,7 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Spec | The written definition of what to build, a Markdown file in `docs/specs/`. |
 | Ticket | One small unit of work cut from the Spec, an issue in GitHub. |
 | Check axis | One of the independent reviews in Check: Standards, Spec, Security, Infrastructure. |
-| Clean | A Check where every axis passes (Infrastructure may be skipped). Only a clean Check goes on without asking you. |
+| Clean | A Check where every axis passes (Infrastructure may be skipped) and the verify command passed, all for the current code with nothing uncommitted. Only a clean Check goes on without asking you. |
 | Run worktree | The git worktree and branch a Run works in, so Runs never share files. |
 | Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
 

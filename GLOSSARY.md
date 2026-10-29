@@ -30,7 +30,7 @@ One of the independent reviews in the Check Stage (Standards, Spec, Security, In
 _Avoid_: Reviewer, Gate
 
 **Clean**:
-A Check whose every Check axis is `pass`, with Infrastructure allowed to be `skipped`. Only a clean Check continues to Finish without asking the user.
+A Check whose every Check axis is `pass`, with Infrastructure allowed to be `skipped`, backed by current Evidence: a passing Verify result and every verdict recorded for the code as it is now, with nothing uncommitted. Only a clean Check continues to Finish without asking the user.
 
 **Verify command**:
 The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
