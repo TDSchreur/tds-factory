@@ -85,7 +85,7 @@ try {
   else if (command === 'doctor') {
     const report = doctor({ projectDir: process.cwd(), agent: values.agent });
     if (values.json) console.log(JSON.stringify(report, null, 2));
-    else for (const { id, status, message } of report.checks) console.log(`${status.padEnd(7)} ${id}: ${message}`);
+    else for (const { id, status, message } of report.checks) console.log(`${status.padEnd(7)} ${id}: ${message.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?')}`);
     if (!report.ok) process.exitCode = 1;
   }
   else if (command === 'dashboard') {

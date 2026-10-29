@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -67,7 +67,10 @@ test('doctor tells a missing Verify command from a malformed or unusable one', (
   assert.match(check(doctor(project('## Commands\n\n- Verify: `npm\0 test`\n')).report, 'verify-command').message, /NUL/);
   const absent = check(doctor(project('## Commands\n\n- Verify: `no-such-tool-xyz test`\n')).report, 'verify-command');
   assert.equal(absent.status, 'fail');
-  assert.match(absent.message, /not on PATH/);
+  assert.match(absent.message, /was not found/);
+  // The guide's plain form is accepted too.
+  assert.match(check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').message, /npm test/);
+  assert.equal(check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').status, 'pass');
   // Shell syntax is not probed.
   assert.equal(check(doctor(project('## Commands\n\n- Verify: `cd app && no-such-tool-xyz`\n')).report, 'verify-command').status, 'pass');
 });
@@ -124,4 +127,21 @@ test('doctor reports review as unavailable without the review Skills or the fact
   const review = check(doctorAt(agent, project()).report, 'review');
   assert.equal(review.status, 'fail');
   assert.match(review.message, /factory-check\.md/);
+});
+
+test('doctor does not read a conventions file that is not a regular file, or is huge', () => {
+  const linked = project();
+  rmSync(join(linked, 'AGENTS.md'));
+  symlinkSync('/dev/zero', join(linked, 'AGENTS.md'));
+  assert.equal(check(doctor(linked).report, 'tracker').status, 'missing');
+  const huge = project('x'.repeat((1 << 20) + 1));
+  const { status, stderr } = doctor(huge);
+  assert.equal(status, 1);
+  assert.match(stderr, /larger than 1 MiB/);
+});
+
+test('doctor text output does not pass terminal escapes through', () => {
+  const dir = project('## Commands\n\n- Verify: `no-such-tool\u001b[2J`\n');
+  const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
+  assert.doesNotMatch(result.stdout, /\u001b/);
 });

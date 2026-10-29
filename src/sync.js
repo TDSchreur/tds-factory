@@ -7,7 +7,7 @@ import { hashLine, modifiedLocally } from './tree-hash.js';
 
 // Skills the factory flow invokes; the model must be able to call them, so upstream's
 // disable-model-invocation flag is removed from their copies.
-function invokedByFactory(skillsDir) {
+export function invokedByFactory(skillsDir) {
   const flow = fs.readFileSync(path.join(skillsDir, 'factory', 'SKILL.md'), 'utf8');
   return new Set([...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]));
 }

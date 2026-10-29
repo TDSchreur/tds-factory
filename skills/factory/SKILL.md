@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Factory
 
-<!-- sync and the skills test find the skills this Skill invokes by the word Invoke followed by a backticked skill name. Keep that phrasing. -->
+<!-- sync, doctor and the skills test find the skills this Skill invokes by the word Invoke followed by a backticked skill name. Keep that phrasing. -->
 
 Walk the work through the Stages below in order. Finish each Stage and tell the user what it produced before starting the next. Move the Run to each next Stage with `tds-factory run transition`. The user can stop or redirect at any Stage.
 
@@ -14,7 +14,7 @@ Walk the work through the Stages below in order. Finish each Stage and tell the 
 
 Check that `tds-factory` is on PATH by running `tds-factory` and checking it exits successfully. If it is unavailable, stop before creating a Run and tell the user to install the Factory CLI globally (for a checkout, run `npm install -g .` there) and make it available on PATH.
 
-Then run `tds-factory doctor --json --agent <your agent>`, which changes nothing, before creating the Run folder. It checks the CLI version, the required Skills, the tracker setup (`docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `AGENTS.md` or `CLAUDE.md`), the Git `origin` and its default branch, the review capabilities and the Verify command. Each check is `pass`, `missing` or `fail`. If any check other than `verify-command` is not `pass`, stop. Do not start the Run and do not create files yourself. Tell the user each failing check and its message, and that the Factory cannot work until they are fixed, then run `/factory` again. Do not suggest a setup command the message does not name. A `fail` of `verify-command` means the command exists but cannot be used (empty, a NUL byte, or a first word that is not on PATH): stop and tell the user, never replace it with a guess. A `missing` Verify command is handled below.
+Then run `tds-factory doctor --json --agent <your agent>`, which changes nothing, before creating the Run folder. It checks the CLI version, the required Skills, the tracker setup (`docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `AGENTS.md` or `CLAUDE.md`), the Git `origin` and its default branch, the review capabilities and the Verify command. Each check is `pass`, `missing` or `fail`. If any check other than `verify-command` is not `pass`, stop. Do not start the Run and do not create files yourself. Tell the user each failing check and its message, and that the Factory cannot work until they are fixed, then run `/factory` again. Do not suggest a setup command the message does not name. A `fail` of `verify-command` means the command exists but cannot be used (empty, a NUL byte, or a first word that cannot be found): stop and tell the user, never replace it with a guess. A `missing` Verify command is handled below.
 
 Then read the project's conventions: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists. Find the verify command in its `## Commands` section (the same line `doctor` read). Record the command in `commands` and the paths you read in `conventions` when you create the Run. If there is no verify command, tell the user, create the Run now with an empty `commands`, set it to `waiting` while you ask once for the command, and record the answer with `run update`; never guess one.
 
@@ -28,7 +28,7 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 
 **Progress commands.** Each checks its prerequisites and refuses with a message saying what is missing; fix that, never work around it.
 
-- `tds-factory run transition --id <id> --to prepare|build|check|finish` moves to the next Stage, in order. Add `--data '{"activity":"..."}'` to set the activity line. Build needs the Spec link and Tickets, Check needs every Ticket done, Finish needs a clean or accepted Check (see Check).
+- `tds-factory run transition --id <id> --to prepare|build|check|finish` moves to the next Stage, in order. Add `--data '{"activity":"..."}'` to set the activity line. Build needs the Spec link and Tickets, Check needs every Ticket done, Finish needs a clean or accepted Check (see Check). Build, Check and Finish also need a usable Verify command, and `run verify` refuses without one.
 - `tds-factory run verify --id <id>` runs the verify command in the Run worktree and records the Verify result: command, head commit, whether the worktree had uncommitted changes, exit code, times and `verify.log` in the Run folder.
 - `tds-factory run verdict --id <id> --axis standards|spec|security|infrastructure --value pass|fail|skipped` records one Check axis verdict for the current head. Only Infrastructure may be `skipped`, and a `pass` or `skipped` on a worktree with uncommitted changes is refused.
 - `tds-factory run rework --id <id>` sends a Run in Check back to Build: it counts the loop (at most 2) and clears the verdicts, the Verify result and any accepted decision.

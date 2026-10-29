@@ -27,7 +27,7 @@ In Copilot in VS Code, type `/`, choose `factory`, and write the description aft
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
-The agent first checks that the project is ready: the setup files exist and `tds-factory` runs. If something is missing it stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
+The agent first checks that the project is ready: the project is ready, as `tds-factory doctor` reports (see "Check readiness without starting a Run" below). If something is missing it stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
 
 ## 2. Define: answer the questions
 
@@ -121,7 +121,7 @@ The full list is in [GLOSSARY.md](../GLOSSARY.md). What each Agent target guaran
 
 ## Check readiness without starting a Run
 
-Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the Verify command. It exits with 1 until every check passes. `/factory` runs it first; a missing Verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish.
+Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the verify command. It exits with 1 until every check passes. `/factory` runs it first; a missing verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish.
 
 ## Recover a Run
 

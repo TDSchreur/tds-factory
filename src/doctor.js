@@ -5,15 +5,15 @@ import { spawnSync } from 'node:child_process';
 import { ROOT, SKILLS_DIR, AGENTS_DIR } from './paths.js';
 import { targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
+import { invokedByFactory } from './sync.js';
+import { verifyCommandProblem } from './run-store.js';
 
-const read = (file) => fs.readFileSync(file, 'utf8');
-const conventionsFile = (projectDir) => ['AGENTS.md', 'CLAUDE.md'].find((f) => fs.existsSync(path.join(projectDir, f)));
-
-// Why a Verify command cannot be run at all; undefined when it is usable. The Run store enforces the same rule.
-export function verifyCommandProblem(commands) {
-  if (typeof commands !== 'string' || !commands.trim()) return 'the Verify command is empty';
-  if (commands.includes('\0')) return 'the Verify command contains a NUL byte';
-}
+// The project is not trusted: read only regular files of sane size, never a link to a device or a pipe.
+const read = (file) => {
+  if (fs.statSync(file).size > 1 << 20) throw new Error(`${path.basename(file)} is larger than 1 MiB`);
+  return fs.readFileSync(file, 'utf8');
+};
+const conventionsFile = (projectDir) => ['AGENTS.md', 'CLAUDE.md'].find((f) => fs.lstatSync(path.join(projectDir, f), { throwIfNoEntry: false })?.isFile());
 
 function cliCheck() {
   const { version, engines } = JSON.parse(read(path.join(ROOT, 'package.json')));
@@ -42,19 +42,20 @@ function gitCheck(projectDir) {
 function verifyCommandCheck(projectDir) {
   const file = conventionsFile(projectDir);
   const commands = file && read(path.join(projectDir, file)).match(/^## Commands[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1];
-  const command = commands?.match(/^\s*[-*]\s*Verify:\s*`([^`\n]*)`/mi)?.[1];
+  const found = commands?.match(/^[ \t]*[-*][ \t]*Verify:[ \t]*(?:`([^`\n]*)`|(\S[^\n]*))/mi);
+  const command = found && (found[1] ?? found[2].trim());
   if (command === undefined) return ['missing', 'no Verify command found under "## Commands" in AGENTS.md or CLAUDE.md'];
   const problem = verifyCommandProblem(command);
   if (problem) return ['fail', problem];
   const words = command.trim().split(/\s+/);
   // Only a plain command is probed: anything with shell syntax may be a builtin, a function or an assignment.
-  if (words.every((w) => /^[\w.@+\/-]+$/.test(w)) && !which(words[0], projectDir)) return ['fail', `the Verify command "${command.trim()}" starts with "${words[0]}", which is not on PATH`];
+  if (words.every((w) => /^[\w.@+\/-]+$/.test(w)) && !which(words[0], projectDir)) return ['fail', `the Verify command "${command.trim()}" starts with "${words[0]}", which was not found`];
   return ['pass', `Verify command: ${command.trim()}`];
 }
 
 // Every Skill the factory Skill invokes, found by the phrasing sync and the skills test rely on.
-const requiredSkills = () => ['factory', ...new Set([...read(path.join(SKILLS_DIR, 'factory', 'SKILL.md')).matchAll(/\bInvoke `([a-z-]+)`/g)].map((m) => m[1]))];
-const installedSkills = (agent, projectDir, homeDir) => (name) => [path.join(projectDir, targets[agent].project), path.join(homeDir, targets[agent].global)]
+const requiredSkills = () => ['factory', ...invokedByFactory(SKILLS_DIR)];
+const isInstalled = (agent, projectDir, homeDir) => (name) => [path.join(projectDir, targets[agent].project), path.join(homeDir, targets[agent].global)]
   .some((dir) => fs.existsSync(path.join(dir, name, 'SKILL.md')));
 
 function skillsCheck(has) {
@@ -78,7 +79,7 @@ function which(name, cwd) {
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
 export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir() }) {
   if (!Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
-  const has = installedSkills(agent, projectDir, homeDir);
+  const has = isInstalled(agent, projectDir, homeDir);
   const checks = [['cli', cliCheck()], ['skills', skillsCheck(has)], ['tracker', trackerCheck(projectDir)], ['git', gitCheck(projectDir)], ['review', reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', verifyCommandCheck(projectDir)]]
     .map(([id, [status, message]]) => ({ id, status, message }));
   return { ok: checks.every((c) => c.status === 'pass'), checks };

@@ -100,6 +100,6 @@ npm install -g --allow-remote=root --prefix ~/.local https://github.com/TDSchreu
 
 **`/factory` does not appear in the chat.** Run `tds-factory install` again, then start a new chat session or restart the editor. In Copilot, `/skills` shows what it loaded.
 
-**`/factory` stops at Preflight.** The project is not prepared. Do part 5.
+**`/factory` stops at Preflight.** Run `tds-factory doctor` in the project: it lists what is missing or unusable (Skills, tracker setup, `origin`, review agent, Verify command). For the project setup, do part 5.
 
 **`tds-factory run start` fails.** The error says what is missing: the folder is not a git repository (run `git init`), the repository has no commit yet (make a first commit), or the `origin` default branch cannot be determined (check `git remote -v` and that you can reach the remote).
