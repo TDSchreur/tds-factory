@@ -2,9 +2,9 @@
 import { render } from 'preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, Intro, html } from './components.js';
-import { OLD_MS, POLL_MS, ageMs } from './model.js';
+import { OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
 
-const BASE_TITLE = document.title;
+const BRAND = 'TDS Factory';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -92,7 +92,7 @@ function App() {
   const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
   useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
   const waiting = entries.filter((r) => r.waiting).length;
-  useEffect(() => { document.title = (waiting ? '(' + waiting + ') ' : '') + BASE_TITLE; }, [waiting]);
+  useEffect(() => { document.title = (waiting ? '(' + waiting + ') ' : '') + (folderName(project) ? folderName(project) + ' · ' : '') + BRAND; }, [waiting, project]);
 
   const actions = {
     select: (id) => setSelectedId((now) => (now === id ? null : id)),

@@ -36,14 +36,14 @@ const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
 // The only files served besides the page; a request never picks a path, only one of these names.
 const JS = 'text/javascript';
 const ASSETS = {
-  '/style.css': 'text/css',
+  '/style.css': 'text/css', '/favicon.svg': 'image/svg+xml',
   '/app.js': JS, '/components.js': JS, '/model.js': JS, '/markdown.js': JS,
   '/vendor/preact.js': JS, '/vendor/hooks.js': JS, '/vendor/htm.js': JS,
 };
 const FALLBACK_PAGE = `<!doctype html>
 <meta charset="utf-8">
-<title>tds-factory dashboard</title>
-<h1>tds-factory dashboard</h1>
+<title>TDS Factory</title>
+<h1>TDS Factory</h1>
 <p>The Dashboard page is not installed. Run records are available at <a href="/api/runs">/api/runs</a>.</p>
 `;
 const str = (v) => typeof v === 'string' ? v.trim() : '';

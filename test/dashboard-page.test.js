@@ -21,7 +21,7 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
       ['Security fail', 'chip fail', true], ['Infrastructure skipped', 'chip skipped', true], ['loop 1/2', 'chip ', true],
     ]);
     assert.equal(await page.execute("return document.querySelector('.card.waiting .reason').textContent"), 'Needs you: confirm the plan');
-    assert.equal(await page.execute('return document.title'), '(1) tds-factory dashboard');
+    assert.equal(await page.execute('return document.title'), '(1) test · TDS Factory');
     assert.equal(await page.execute("return document.querySelector('[data-stage=prepare] .empty').textContent"), 'No runs');
     assert.equal(await page.execute("return ['project', 'status', 'theme', 'older'].every(id => document.getElementById(id))"), true);
     assert.equal(await page.execute("return document.getElementById('project').textContent"), 'test');
@@ -157,7 +157,7 @@ test('selecting a Run shows its Markdown files as text, never as markup', async 
     await page.waitFor("return document.querySelectorAll('#detail table td').length === 2");
     assert.equal(await page.execute("return document.querySelector('#detail h4').textContent"), 'Plan');
     assert.equal(await page.execute("return document.querySelectorAll('#detail li').length"), 2);
-    assert.equal(await page.execute("return document.querySelector('#detail img') === null && document.title === 'tds-factory dashboard'"), true);
+    assert.equal(await page.execute("return document.querySelector('#detail img') === null && document.title === 'test · TDS Factory'"), true);
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('#detail a')].map(a => a.href)"), ['https://example.com/pr/1', 'https://example.com/']);
     assert.match(await page.execute("return document.querySelector('#detail').textContent"), /Spec: docs\/specs\/x\.md/);
     await page.execute("document.querySelector('[data-id=r2]').click()");

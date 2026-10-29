@@ -3,7 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
-import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, safeUrl, ticketsOf } from './model.js';
+import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, safeUrl, ticketsOf } from './model.js';
 
 export const html = htm.bind(h);
 
@@ -131,7 +131,6 @@ function ThemeSelect() {
 }
 
 // The pill shows the last segment of the project path (either separator); the full path is its tooltip.
-const folderName = (path) => String(path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '';
 
 // The TDS mark, traced by hand from the logo PNG. The dark parts use the theme's logo colour, the blue parts keep theirs.
 function Logo() {
