@@ -15,14 +15,14 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
     assert.equal(await page.execute("return document.querySelector('#intro').open"), false);
     assert.match(await page.execute("return document.querySelector('#intro summary').textContent"), /What is this\?/);
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('#board h2')].map(h => [h.textContent, h.tabIndex, h.title.length > 20])"),
-      ['Define', 'Prepare', 'Build', 'Check', 'Finish', 'Done'].map((label) => [label, 0, true]));
+      ['Define', 'Build', 'Check', 'Finish', 'Done'].map((label) => [label, 0, true]));
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('[data-stage=check] .chip')].map(c => [c.textContent, c.className, c.title.length > 10])"), [
       ['1/2 tickets', 'chip ', true], ['Standards pass', 'chip pass', true], ['Spec pass', 'chip pass', true],
       ['Security fail', 'chip fail', true], ['Infrastructure skipped', 'chip skipped', true], ['loop 1/2', 'chip ', true],
     ]);
     assert.equal(await page.execute("return document.querySelector('.card.waiting .reason').textContent"), 'Needs you: confirm the plan');
     assert.equal(await page.execute('return document.title'), '(1) test · TDS Factory');
-    assert.equal(await page.execute("return document.querySelector('[data-stage=prepare] .empty').textContent"), 'No runs');
+    assert.equal(await page.execute("return document.querySelector('[data-stage=prepare]')"), null);
     assert.equal(await page.execute("return ['project', 'status', 'theme', 'older'].every(id => document.getElementById(id))"), true);
     assert.equal(await page.execute("return document.getElementById('project').textContent"), 'test');
   } finally { await page.close(); }

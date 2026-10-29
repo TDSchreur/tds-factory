@@ -1,4 +1,4 @@
-export const stages = ['define', 'prepare', 'build', 'check', 'finish'];
+export const stages = ['define', 'build', 'check', 'finish'];
 
 export const targets = {
   claude: { project: '.claude/skills', global: '.claude/skills', agents: '.claude/agents', projectAgents: '.claude/agents' },

@@ -106,7 +106,6 @@ export function Intro() {
     <p>The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Hover or focus a Stage heading or a chip for details.</p>
     <ol>
       <li><strong>Define</strong>: settle what to build, write a Spec and cut it into Tickets.</li>
-      <li><strong>Prepare</strong>: switch to the minimal-code working style.</li>
       <li><strong>Build</strong>: implement the Tickets test-first.</li>
       <li><strong>Check</strong>: independent reviews of Standards, Spec, Security and Infrastructure.</li>
       <li><strong>Finish</strong>: open the pull request.</li>

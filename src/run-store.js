@@ -212,8 +212,10 @@ function changeRunning(projectDir, id, data, move) {
 }
 function transitionRun(projectDir, id, to, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
-    const next = stages[stages.indexOf(old.stage) + 1];
-    if (!stages.includes(to) || to !== next) throw new Error(`a Run in ${old.stage} can only move to ${next ?? 'nowhere'}, not ${to}`);
+    // Runs recorded before the Prepare Stage was removed still say `prepare`; they are in Define.
+    const from = old.stage === 'prepare' ? 'define' : old.stage;
+    const next = stages[stages.indexOf(from) + 1];
+    if (!stages.includes(to) || to !== next) throw new Error(`a Run in ${from} can only move to ${next ?? 'nowhere'}, not ${to}`);
     // Everything from Build on depends on verification, so an unusable command stops the Run here.
     const commandProblem = ['build', 'check', 'finish'].includes(to) && verifyCommandProblem(old.commands);
     if (commandProblem) throw new Error(`${to[0].toUpperCase()}${to.slice(1)} needs a usable Verify command: ${commandProblem}`);
