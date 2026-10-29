@@ -168,8 +168,7 @@ function transitionRun(projectDir, id, to, data = {}) {
   });
 }
 // Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
-function finishProblems(record) {
-  const { head, dirty } = worktreeState(record);
+function finishProblems(record, { head, dirty } = worktreeState(record)) {
   if (dirty) return ['the Run worktree has uncommitted changes'];
   if (record.accepted?.head === head) return [];
   const problems = [];
@@ -398,6 +397,11 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
+    mergeEligibility: (id) => {
+      const { record } = readRun(projectDir, id);
+      const state = worktreeState(record);
+      return { ...state, problems: finishProblems(record, state), worktree: record.worktree };
+    },
     list: () => listRuns(runsDir),
     inspect: (id) => inspectRuns(projectDir, runsDir, id),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
