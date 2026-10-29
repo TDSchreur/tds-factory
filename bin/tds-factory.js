@@ -16,6 +16,7 @@ const USAGE = `Usage:
   tds-factory run transition --id ID --to prepare|build|check|finish [--data JSON]
   tds-factory run rework --id ID [--data JSON]
   tds-factory run complete --id ID [--data JSON]
+  tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
 
@@ -49,13 +50,14 @@ try {
     else if (op === 'transition') store.transition(values.id, values.to, data);
     else if (op === 'rework') store.rework(values.id, data);
     else if (op === 'complete') store.complete(values.id, data);
+    else if (op === 'accept') store.accept(values.id, data);
     else if (op === 'verify') {
       const result = store.verify(values.id);
       console.log(`verify ${result.exit_code === 0 ? 'passed' : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
-    else throw new Error('expected run start, update, transition, rework, complete, verify or verdict');
+    else throw new Error('expected run start, update, transition, rework, complete, accept, verify or verdict');
   }
   else if (command === 'sync') sync();
   else if (command === 'install') install(values);

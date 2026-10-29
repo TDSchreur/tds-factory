@@ -147,8 +147,41 @@ function transitionRun(projectDir, id, to, data = {}) {
       if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
     }
     if (to === 'check' && old.tickets_done !== old.tickets_total) throw new Error(`Check needs every Ticket done (${old.tickets_done} of ${old.tickets_total})`);
-    if (to === 'finish') throw new Error('Finish needs a clean or Accepted Check');
+    if (to === 'finish') {
+      const problems = finishProblems(old);
+      if (problems.length) throw new Error(`Finish needs a clean or Accepted Check: ${problems.join('; ')}`);
+    }
     return { record: { ...old, stage: to }, activity: `Starting ${to}` };
+  });
+}
+// Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
+function finishProblems(record) {
+  const { head, dirty } = worktreeState(record);
+  if (dirty) return ['the Run worktree has uncommitted changes'];
+  if (record.accepted?.head === head) return [];
+  const attempt = (record.check_loops ?? 0) + 1;
+  const problems = [];
+  for (const axis of verdicts) {
+    const seen = record.reviewed?.[axis];
+    if (record[axis] === undefined) problems.push(`${axis} has no verdict`);
+    else if (seen?.head !== head || seen?.attempt !== attempt) problems.push(`${axis} was not reviewed at the current head in this Check attempt`);
+    else if (record[axis] === 'fail') problems.push(`${axis} failed`);
+  }
+  const verify = record.verify;
+  if (!verify) problems.push('there is no Verify result');
+  else if (verify.head !== head || verify.dirty) problems.push('the Verify result is not for the current committed head');
+  else if (verify.exit_code !== 0) problems.push(`the Verify command failed (exit ${verify.exit_code})`);
+  return problems;
+}
+function acceptRun(projectDir, id, data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
+  if (Object.keys(data).some((key) => !['findings', 'decision'].includes(key))) throw new Error('accept takes only findings and decision');
+  for (const key of ['findings', 'decision']) if (typeof data[key] !== 'string' || !data[key].trim()) throw new Error(`accept needs ${key}`);
+  moveRun(projectDir, id, {}, (old) => {
+    if (old.stage !== 'check') throw new Error('only a Run in Check can accept its Check');
+    const { head, dirty } = worktreeState(old);
+    if (dirty) throw new Error('cannot accept a Check while the Run worktree has uncommitted changes');
+    return { record: { ...old, accepted: { findings: data.findings, decision: data.decision, head, at: new Date().toISOString() } }, activity: 'Check accepted by the user' };
   });
 }
 function reworkRun(projectDir, id, data = {}) {
@@ -317,6 +350,7 @@ export function openRunStore(callerDir) {
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     rework: (id, data) => reworkRun(projectDir, id, data),
     complete: (id, data) => completeRun(projectDir, id, data),
+    accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
     list: () => listRuns(runsDir),

@@ -231,3 +231,100 @@ test('a passing verdict on an uncommitted tree is refused, a failing one is reco
   assert.equal(verdict(cwd, id, 'security', 'fail').status, 0);
   assert.equal(read(cwd, id).security, 'fail');
 });
+
+const accept = (cwd, id, data) => run(cwd, 'accept', '--id', id, '--data', json(data));
+const commit = (cwd, id) => git(read(cwd, id).worktree, 'commit', '-q', '--allow-empty', '-m', 'more work');
+// A Run in Check whose Verify result and verdicts are all current and passing.
+const cleanCheck = (cwd, commands = 'true') => {
+  const id = startRun(cwd, commands);
+  force(cwd, id, { stage: 'check', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
+  verify(cwd, id);
+  for (const [axis, value] of [['standards', 'pass'], ['spec', 'pass'], ['security', 'pass'], ['infrastructure', 'skipped']]) assert.equal(verdict(cwd, id, axis, value).status, 0);
+  return id;
+};
+const refusesFinish = (cwd, id, why) => {
+  const before = read(cwd, id);
+  assert.notEqual(transition(cwd, id, 'finish').status, 0, why);
+  assert.deepEqual(read(cwd, id), before, why);
+};
+
+test('a clean Check with current Evidence reaches Finish, and the Run can be completed', () => {
+  const cwd = repo();
+  const id = cleanCheck(cwd);
+  assert.equal(transition(cwd, id, 'finish').status, 0);
+  assert.equal(read(cwd, id).stage, 'finish');
+  update(cwd, id, { pr: 'https://github.com/o/r/pull/1' });
+  assert.equal(run(cwd, 'complete', '--id', id).status, 0);
+  assert.equal(read(cwd, id).status, 'done');
+});
+
+test('Finish is refused with a failed axis, a missing verdict or a failed Verify result', () => {
+  const cwd = repo();
+  let id = cleanCheck(cwd);
+  assert.equal(verdict(cwd, id, 'security', 'fail').status, 0);
+  refusesFinish(cwd, id, 'failed axis');
+  id = startRun(cwd);
+  force(cwd, id, { stage: 'check' });
+  verify(cwd, id);
+  verdict(cwd, id, 'standards', 'pass');
+  refusesFinish(cwd, id, 'missing verdicts');
+  id = cleanCheck(cwd, 'exit 1');
+  refusesFinish(cwd, id, 'failed Verify');
+  id = cleanCheck(cwd);
+  force(cwd, id, { verify: undefined });
+  refusesFinish(cwd, id, 'no Verify result');
+});
+
+test('Evidence goes stale when the head changes or the worktree is dirty', () => {
+  const cwd = repo();
+  let id = cleanCheck(cwd);
+  commit(cwd, id);
+  refusesFinish(cwd, id, 'new commit after review');
+  id = cleanCheck(cwd);
+  writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
+  refusesFinish(cwd, id, 'dirty worktree');
+  id = startRun(cwd);
+  writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
+  force(cwd, id, { stage: 'check' });
+  verify(cwd, id);
+  force(cwd, id, { standards: 'pass', spec: 'pass', security: 'pass', infrastructure: 'skipped', reviewed: Object.fromEntries(['standards', 'spec', 'security', 'infrastructure'].map((a) => [a, { head: head(cwd, id), attempt: 1 }])) });
+  refusesFinish(cwd, id, 'Verify result from a dirty tree');
+});
+
+test('Evidence from an earlier Check attempt does not count', () => {
+  const cwd = repo();
+  const id = cleanCheck(cwd);
+  force(cwd, id, { check_loops: 1 });
+  refusesFinish(cwd, id, 'attempt 1 evidence in attempt 2');
+});
+
+test('an Accepted Check allows Finish at its head and stops counting once the head changes', () => {
+  const cwd = repo();
+  const id = cleanCheck(cwd);
+  verdict(cwd, id, 'security', 'fail');
+  refusesFinish(cwd, id, 'not yet accepted');
+  assert.equal(accept(cwd, id, { findings: 'MEDIUM: x', decision: 'ship it, tracked in #9' }).status, 0);
+  const { accepted } = read(cwd, id);
+  assert.equal(accepted.head, head(cwd, id));
+  assert.equal(accepted.decision, 'ship it, tracked in #9');
+  assert.equal(accepted.findings, 'MEDIUM: x');
+  assert.ok(Date.parse(accepted.at) > 0);
+  commit(cwd, id);
+  refusesFinish(cwd, id, 'accepted for another head');
+  assert.equal(accept(cwd, id, { findings: 'MEDIUM: x', decision: 'still fine' }).status, 0);
+  assert.equal(transition(cwd, id, 'finish').status, 0);
+});
+
+test('accept needs findings and a decision, Check, and a clean worktree', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  assert.notEqual(accept(cwd, id, { findings: 'x', decision: 'y' }).status, 0, 'not in Check');
+  force(cwd, id, { stage: 'check' });
+  assert.notEqual(accept(cwd, id, { findings: 'x' }).status, 0, 'no decision');
+  assert.notEqual(accept(cwd, id, { decision: 'y' }).status, 0, 'no findings');
+  assert.notEqual(accept(cwd, id, { findings: 'x', decision: 'y', head: 'forged' }).status, 0, 'extra field');
+  writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
+  assert.notEqual(accept(cwd, id, { findings: 'x', decision: 'y' }).status, 0, 'dirty');
+  assert.equal('accepted' in read(cwd, id), false);
+  assert.notEqual(update(cwd, id, { accepted: { head: 'forged' } }).status, 0, 'not through update');
+});
