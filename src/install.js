@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
 import { targets } from './flow.js';
@@ -57,17 +58,32 @@ export function install({ agent, project, force, dryRun = false }) {
   }
 }
 
-// Stage agent files hold the editable model choices, so an existing file is never overwritten without --force.
+// Stage agent files hold the editable model choices. Each installed file's hash is recorded, so a file you did not edit is updated
+// and one you edited is kept; --force replaces it anyway. A file without a record (an older install) counts as edited.
+const AGENT_RECORD = '.tds-factory-agents.json';
+const sha = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
 function installAgents(name, targetDir, force, dryRun) {
   const sourceDir = path.join(AGENTS_DIR, name);
   if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
+  const recordFile = path.join(targetDir, AGENT_RECORD);
+  let record = {};
+  try { record = JSON.parse(fs.readFileSync(recordFile, 'utf8')); } catch { /* no record yet */ }
   for (const file of fs.readdirSync(sourceDir)) {
     const dest = path.join(targetDir, file);
-    if (fs.lstatSync(dest, { throwIfNoEntry: false }) && !force) {
-      console.warn(`skip ${name}/${file}: exists, keeping your configuration (use --force to replace)`);
+    const src = path.join(sourceDir, file);
+    const existing = fs.lstatSync(dest, { throwIfNoEntry: false });
+    const pristine = existing?.isFile() && (sha(dest) === record[file] || sha(dest) === sha(src));
+    if (existing && !force && !pristine) {
+      console.warn(`skip ${name}/${file}: edited locally, keeping your configuration (use --force to replace)`);
       continue;
     }
-    if (!dryRun) fs.copyFileSync(path.join(sourceDir, file), dest);
+    if (!dryRun) {
+      if (existing) fs.rmSync(dest);
+      fs.copyFileSync(src, dest);
+      record[file] = sha(dest);
+    }
     console.log(`${dryRun ? 'would install' : 'installed'} ${name}/${file} -> ${dest}`);
   }
+  if (!dryRun) fs.writeFileSync(recordFile, JSON.stringify(record, null, 2) + '\n');
 }

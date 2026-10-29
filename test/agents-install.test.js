@@ -2,6 +2,7 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { install } from '../src/install.js';
 import { AGENTS_DIR } from '../src/paths.js';
@@ -26,7 +27,7 @@ test('install writes the four Stage agents for each target', () => {
   for (const [agent, dir] of Object.entries(dirs)) {
     const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
     installIn(project, agent);
-    const names = readdirSync(join(project, dir)).map((f) => f.split('.')[0]).sort();
+    const names = readdirSync(join(project, dir)).filter((f) => !f.startsWith('.')).map((f) => f.split('.')[0]).sort();
     assert.deepEqual(names, ['factory-build', 'factory-check', 'factory-define', 'factory-finish'], agent);
   }
 });
@@ -51,7 +52,7 @@ test('the Check agent of every target is read-only', () => {
 test('install --agent all also writes the Copilot agents', () => {
   const project = mkdtempSync(join(tmpdir(), 'tds-agents-all-'));
   installIn(project, 'all');
-  assert.equal(readdirSync(join(project, '.github', 'agents')).length, 4);
+  assert.equal(readdirSync(join(project, '.github', 'agents')).filter((f) => !f.startsWith('.')).length, 4);
 });
 
 test('install keeps a dangling agent symlink', () => {
@@ -93,4 +94,23 @@ test('install --dry-run reports what it would do and writes nothing', () => {
   assert.ok(lines.some((l) => l.startsWith('would install claude/tdd')));
   assert.ok(lines.some((l) => l.startsWith('would install claude/factory-build')));
   assert.deepEqual(readdirSync(project), []);
+});
+
+test('install updates an unedited agent file but keeps an edited one', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-agents-update-'));
+  installIn(project, 'claude');
+  const dir = join(project, '.claude', 'agents');
+  const record = join(dir, '.tds-factory-agents.json');
+  const build = join(dir, 'factory-build.md');
+  const define = join(dir, 'factory-define.md');
+  // Simulate an older default for build, and a user edit for define.
+  const old = readFileSync(build, 'utf8').replace('model: sonnet', 'model: old');
+  writeFileSync(build, old);
+  const rec = JSON.parse(readFileSync(record, 'utf8'));
+  rec['factory-build.md'] = createHash('sha256').update(old).digest('hex');
+  writeFileSync(record, JSON.stringify(rec));
+  writeFileSync(define, 'model: mine\n');
+  installIn(project, 'claude');
+  assert.equal(readFileSync(build, 'utf8'), readFileSync(join(AGENTS_DIR, 'claude', 'factory-build.md'), 'utf8'));
+  assert.equal(readFileSync(define, 'utf8'), 'model: mine\n');
 });
