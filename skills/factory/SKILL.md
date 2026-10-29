@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Run the TDS software factory flow (Define, Prepare, Build, Check, Finish) to take a piece of work from idea to pull request. Use when the user says "factory" or wants to build a feature end to end.
+description: Run the TDS software factory flow (Define, Build, Check, Finish) to take a piece of work from idea to pull request. Use when the user says "factory" or wants to build a feature end to end.
 disable-model-invocation: true
 ---
 
@@ -28,7 +28,7 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 
 **Progress commands.** Each checks its prerequisites and refuses with a message saying what is missing; fix that, never work around it.
 
-- `tds-factory run transition --id <id> --to prepare|build|check|finish` moves to the next Stage, in order. Add `--data '{"activity":"..."}'` to set the activity line. Build needs the Spec link and Tickets, Check needs every Ticket done, Finish needs a clean or accepted Check (see Check). Build, Check and Finish also need a usable Verify command, and `run verify` refuses without one.
+- `tds-factory run transition --id <id> --to build|check|finish` moves to the next Stage, in order. Add `--data '{"activity":"..."}'` to set the activity line. Build needs the Spec link and Tickets, Check needs every Ticket done, Finish needs a clean or accepted Check (see Check). Build, Check and Finish also need a usable Verify command, and `run verify` refuses without one.
 - `tds-factory run verify --id <id>` runs the verify command in the Run worktree and records the Verify result: command, head commit, whether the worktree had uncommitted changes, exit code, times and `verify.log` in the Run folder.
 - `tds-factory run verdict --id <id> --axis standards|spec|security|infrastructure --value pass|fail|skipped` records one Check axis verdict for the current head. Only Infrastructure may be `skipped`, and a `pass` or `skipped` on a worktree with uncommitted changes is refused.
 - `tds-factory run rework --id <id>` sends a Run in Check back to Build: it counts the loop (at most 2) and clears the verdicts, the Verify result and any accepted decision.
@@ -52,7 +52,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | Field | Value |
 | --- | --- |
 | `title` | Short human title of the work |
-| `stage` | `define`, `prepare`, `build`, `check` or `finish` |
+| `stage` | `define`, `build`, `check` or `finish` |
 | `status` | `running`, `waiting` (blocked on the user), `verification-unavailable`, `interrupted`, `done` or `abandoned` |
 | `waiting_on_human` | Boolean, `true` while blocked on the user, otherwise `false` |
 | `waiting_reason` | Short line saying what the user must do, e.g. `confirm the shared understanding`; empty string when not waiting |
@@ -99,7 +99,7 @@ When the user answers and the Run continues, set `status` back to `running` befo
 
 ## Stage agents
 
-`tds-factory install` also installs four Stage agents per Agent target: `factory-define` (Define and Prepare), `factory-build`, `factory-check` (read-only) and `factory-finish`. Their model choices are the user's to edit; install never overwrites an existing agent file. When the client can dispatch to a named agent, hand the Stage's work to it with the instructions of that Stage; otherwise do the work yourself. You stay the coordinator: you talk to the user (relay Define questions and answers), own the Run record, approvals, Check loops and the push. After a handoff, say which agent ran, and report plainly when the requested model was unavailable, substituted or cannot be verified; never claim a model was used that you cannot confirm. The Check agents are read-only and may not run commands: collect the diff and run any validation (such as `bicep build` and `bicep lint`) yourself, and pass the output with the assignment.
+`tds-factory install` also installs four Stage agents per Agent target: `factory-define` (Define), `factory-build`, `factory-check` (read-only) and `factory-finish`. Their model choices are the user's to edit; install never overwrites an existing agent file. When the client can dispatch to a named agent, hand the Stage's work to it with the instructions of that Stage; otherwise do the work yourself. You stay the coordinator: you talk to the user (relay Define questions and answers), own the Run record, approvals, Check loops and the push. After a handoff, say which agent ran, and report plainly when the requested model was unavailable, substituted or cannot be verified; never claim a model was used that you cannot confirm. The Check agents are read-only and may not run commands: collect the diff and run any validation (such as `bicep build` and `bicep lint`) yourself, and pass the output with the assignment.
 
 ## Invoked Skills
 
@@ -114,10 +114,6 @@ The Skills named in Define and Build have upstream defaults that conflict with t
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
 2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`. Choose the test seams yourself and proceed without asking for seam confirmation or Spec sign-off.
 3. Invoke `to-tickets` to cut the Spec into Tickets, published to the Issue tracker named in `docs/agents/issue-tracker.md`, local Markdown when that file names no tracker. Choose the breakdown and publish it without asking the user to review or approve it. If a label the tracker needs does not exist, ask the user before creating it.
-
-## Prepare
-
-Prepare has no work of its own yet. Move on to Build.
 
 ## Build
 

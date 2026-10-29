@@ -6,7 +6,7 @@ TDS Factory is a small software factory. It installs a set of skills into Claude
 
 ## The flow
 
-A Run is one pass through five Stages, after a Preflight (`tds-factory doctor` runs its checks). Start it with the `factory` skill (`/factory`).
+A Run is one pass through four Stages, after a Preflight (`tds-factory doctor` runs its checks). Start it with the `factory` skill (`/factory`).
 
 ```mermaid
 flowchart TB
@@ -15,9 +15,6 @@ flowchart TB
     end
     subgraph Define
         A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
-    end
-    subgraph Prepare
-        D[no work of its own yet]
     end
     subgraph Build
         E[implement-spec with tdd]
@@ -30,13 +27,13 @@ flowchart TB
     end
 
     P --> A
-    C --> D --> E --> F
+    C --> E --> F
     F -->|problems found, fewer than 2 loops so far| E
     F -->|clean| G
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
-Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare has no work of its own yet; Build finishes every Ticket test-first, one commit each, building what the Ticket asks and naming any smaller option in one line in `build.md`; Check gives a Standards, a Spec, a Security and an Infrastructure verdict (Infrastructure is skipped when no infrastructure file changed), each from a fresh read-only subagent; Finish opens the pull request.
+Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Build finishes every Ticket test-first, one commit each, building what the Ticket asks and naming any smaller option in one line in `build.md`; Check gives a Standards, a Spec, a Security and an Infrastructure verdict (Infrastructure is skipped when no infrastructure file changed), each from a fresh read-only subagent; Finish opens the pull request.
 
 The rules for each Stage live in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). In short: only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most twice.
 
@@ -44,11 +41,11 @@ Agents need `tds-factory` on PATH to create and update the Run record (`run.json
 
 ### Default models per Stage
 
-`tds-factory install` writes four Stage agents per target (`factory-define`, `factory-build`, `factory-check`, `factory-finish`) next to the skills: `~/.claude/agents`, `~/.codex/agents` and `~/.copilot/agents` (`.github/agents` with `--project` for Copilot). Define and Prepare share `factory-define`. The main agent stays the coordinator: it talks to you, owns the Run record and approvals, and runs the Check reviews as three or four independent read-only agents. Each cell is model and reasoning effort; "default" means the session setting applies and "not set" means Copilot has no effort setting.
+`tds-factory install` writes four Stage agents per target (`factory-define`, `factory-build`, `factory-check`, `factory-finish`) next to the skills: `~/.claude/agents`, `~/.codex/agents` and `~/.copilot/agents` (`.github/agents` with `--project` for Copilot). `factory-define` does the Define Stage. The main agent stays the coordinator: it talks to you, owns the Run record and approvals, and runs the Check reviews as three or four independent read-only agents. Each cell is model and reasoning effort; "default" means the session setting applies and "not set" means Copilot has no effort setting.
 
 | Stage | Claude | Codex | Copilot |
 |---|---|---|---|
-| Define, Prepare | Sonnet, high | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set |
+| Define | Sonnet, high | `gpt-6.1-sol`, medium | `claude-sonnet-4.6`, not set |
 | Build | Sonnet, medium | `gpt-6.1-terra`, medium | `gpt-5.3-codex`, not set |
 | Check | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-4.6`, not set |
 | Finish | Haiku, low | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set |
