@@ -236,6 +236,25 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
   }
 });
 
+test('the Dashboard shows git\'s error when it cannot remove a clean worktree', async () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  git(main, 'worktree', 'lock', record(main, id).worktree);
+  finish(store, id);
+  const dashboard = await startDashboard({ projectDir: main, port: 0 });
+  try {
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    assert.equal(res.status, 409);
+    const body = await res.text();
+    assert.match(body, /git could not remove the Run worktree: .*locked/);
+    assert.doesNotMatch(body, /uncommitted changes/);
+    assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+  } finally {
+    await dashboard.close();
+  }
+});
+
 test('start and update from a subfolder of the main checkout use the main checkout Run store', () => {
   const main = repo();
   const sub = join(main, 'sub');

@@ -547,7 +547,7 @@ async function readRunFile(runsDir, rawPath) {
 }
 
 // Deletes only a terminal Run in the project's own, unlinked storage.
-function removeRun(projectDir, id) {
+function removeRun(projectDir, id, why = () => {}) {
   if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
   const project = fs.realpathSync(projectDir);
   const factory = path.join(project, '.factory');
@@ -564,8 +564,9 @@ function removeRun(projectDir, id) {
       const own = path.join(factory, 'worktrees', id);
       if (record.worktree === own && fs.existsSync(own)) {
         const status = spawnSync('git', ['status', '--porcelain', '--ignore-submodules=none'], { cwd: own, encoding: 'utf8' });
-        if (status.status !== 0 || status.stdout.trim()) return 'worktree-refused';
-        if (spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project }).status !== 0) return 'worktree-refused';
+        if (status.status === 0 && status.stdout.trim()) { why('the Run worktree has uncommitted changes; commit or discard them first'); return 'worktree-refused'; }
+        const removal = status.status === 0 ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' }) : status;
+        if (removal.status !== 0) { why('git could not remove the Run worktree: ' + removal.stderr.trim()); return 'worktree-refused'; }
       }
       fs.rmSync(dir, { recursive: true });
       return 'deleted';
@@ -585,7 +586,7 @@ function mainCheckout(dir) {
   return { dir: path.dirname(common) };
 }
 
-// The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.
+// The one module that touches .factory/runs. remove(id, why) calls why with the reason for a worktree-refused; it returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.
 export function openRunStore(callerDir) {
   const { dir: projectDir } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
@@ -609,6 +610,6 @@ export function openRunStore(callerDir) {
     repairPlan: (id) => repairPlan(projectDir, runsDir, id),
     repairApply: (id, plan) => repairApply(projectDir, runsDir, id, plan),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
-    remove: (id) => removeRun(projectDir, id),
+    remove: (id, why) => removeRun(projectDir, id, why),
   };
 }
