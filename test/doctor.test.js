@@ -135,9 +135,16 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   symlinkSync('/dev/zero', join(linked, 'AGENTS.md'));
   assert.equal(check(doctor(linked).report, 'tracker').status, 'missing');
   const huge = project('x'.repeat((1 << 20) + 1));
-  const { status, stderr } = doctor(huge);
+  const { status, report } = doctor(huge);
   assert.equal(status, 1);
-  assert.match(stderr, /larger than 1 MiB/);
+  assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
+  assert.equal(report.checks.length, 6);
+  // A link to a regular file is fine.
+  const shared = project();
+  rmSync(join(shared, 'AGENTS.md'));
+  writeFileSync(join(shared, 'real.md'), AGENTS);
+  symlinkSync('real.md', join(shared, 'AGENTS.md'));
+  assert.equal(check(doctor(shared).report, 'verify-command').status, 'pass');
 });
 
 test('doctor text output does not pass terminal escapes through', () => {

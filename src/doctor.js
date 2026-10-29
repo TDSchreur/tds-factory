@@ -8,12 +8,14 @@ import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
 import { verifyCommandProblem } from './run-store.js';
 
-// The project is not trusted: read only regular files of sane size, never a link to a device or a pipe.
+// The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
 const read = (file) => {
-  if (fs.statSync(file).size > 1 << 20) throw new Error(`${path.basename(file)} is larger than 1 MiB`);
+  const stat = fs.statSync(file);
+  if (!stat.isFile()) throw new Error(`${path.basename(file)} is not a regular file`);
+  if (stat.size > 1 << 20) throw new Error(`${path.basename(file)} is larger than 1 MiB`);
   return fs.readFileSync(file, 'utf8');
 };
-const conventionsFile = (projectDir) => ['AGENTS.md', 'CLAUDE.md'].find((f) => fs.lstatSync(path.join(projectDir, f), { throwIfNoEntry: false })?.isFile());
+const conventionsFile = (projectDir) => ['AGENTS.md', 'CLAUDE.md'].find((f) => fs.statSync(path.join(projectDir, f), { throwIfNoEntry: false })?.isFile());
 
 function cliCheck() {
   const { version, engines } = JSON.parse(read(path.join(ROOT, 'package.json')));
@@ -80,7 +82,10 @@ function which(name, cwd) {
 export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir() }) {
   if (!Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
   const has = isInstalled(agent, projectDir, homeDir);
-  const checks = [['cli', cliCheck()], ['skills', skillsCheck(has)], ['tracker', trackerCheck(projectDir)], ['git', gitCheck(projectDir)], ['review', reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', verifyCommandCheck(projectDir)]]
+  // An unreadable project file is a failed check, not a crash, so the report always has every check.
+  const attempt = (check) => { try { return check(); } catch (err) { return ['fail', err.message]; } };
+  const checks = [['cli', cliCheck], ['skills', () => skillsCheck(has)], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['review', () => reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', () => verifyCommandCheck(projectDir)]]
+    .map(([id, check]) => [id, attempt(check)])
     .map(([id, [status, message]]) => ({ id, status, message }));
   return { ok: checks.every((c) => c.status === 'pass'), checks };
 }
