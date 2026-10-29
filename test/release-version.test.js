@@ -29,8 +29,10 @@ test('the script prints the next version for the workflow', () => {
 
 // The workflow cannot run here, so check the points that break installs when they change.
 const workflow = readFileSync(resolve('.github/workflows/release.yml'), 'utf8');
-test('the release workflow runs on pushes to master and tests before it publishes', () => {
-  assert.match(workflow, /on:\s+push:\s+branches:\s*\[master\]/);
+test('the release workflow runs manually on master and tests before it publishes', () => {
+  assert.match(workflow, /on:\s+workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /\n\s+push:/);
+  assert.match(workflow, /if: github\.ref == 'refs\/heads\/master'/);
   assert.ok(workflow.indexOf('npm test') < workflow.indexOf('gh release create'), 'npm test comes before gh release create');
 });
 test('the release workflow publishes tds-factory.tgz as the latest Release, serialized and without committing', () => {

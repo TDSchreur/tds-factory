@@ -66,7 +66,7 @@ npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/rele
 tds-factory install
 ```
 
-The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself. Every change merged to `master` publishes a new Release (see `docs/adr/0005-release-per-merge-from-latest-url.md`).
+The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
 
 ### Working from a checkout
 
