@@ -227,3 +227,22 @@ test('sync still replaces a folder whose marker has no hash (older sync)', () =>
   quietSync({ root, skillsDir });
   assert.match(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), /^name: alpha/m);
 });
+
+test('sync records provenance per skill: source, upstream, transformations, licence and attribution', () => {
+  const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/alpha', as: 'renamed' }], { alpha });
+  const manifest = JSON.parse(readFileSync(join(root, 'skills.manifest.json'), 'utf8'));
+  manifest.upstreams = { 'vendor/up': { url: 'https://example.com/up', license: 'MIT', attribution: 'Copyright (c) Up' } };
+  writeFileSync(join(root, 'skills.manifest.json'), JSON.stringify(manifest));
+  quietSync({ root, skillsDir });
+  const { skills } = JSON.parse(readFileSync(join(skillsDir, 'PROVENANCE.json'), 'utf8'));
+  assert.deepEqual(Object.keys(skills), ['renamed']);
+  const entry = skills.renamed;
+  assert.equal(entry.source, 'vendor/up/skills/alpha');
+  assert.equal(entry.upstream, 'https://example.com/up');
+  assert.equal(entry.license, 'MIT');
+  assert.equal(entry.attribution, 'Copyright (c) Up');
+  assert.equal(entry.commit, null);
+  assert.equal(entry.transformations.length, 2);
+  assert.match(entry.transformations[0], /^renamed from alpha/);
+  assert.equal(entry.transformations[1], 'disable-model-invocation flag removed');
+});
