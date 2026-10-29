@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+import { handle } from '../lib/gh.js';
+
+const { EVAL_ACTION_LOG: log, EVAL_GH_STATE: state } = process.env;
+if (!log) {
+  console.error('gh shim: EVAL_ACTION_LOG is not set; refusing to run');
+  process.exit(2);
+}
+process.stdout.write(handle(process.argv.slice(2), { log, state }));

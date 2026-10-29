@@ -55,7 +55,11 @@ Agents need `tds-factory` on PATH to create and update the Run record (`run.json
 | Check | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-4.6`, not set |
 | Finish | Haiku, default | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set |
 
+What each Agent target can guarantee, such as how read-only the Check agents are, is in the [capability matrix](docs/capabilities.md).
+
 Edit the agent files to change a model. Install keeps files that already exist; `--force` replaces them with the defaults. Whether a model is available depends on your client, account and policy, and the client may substitute another or not report which one ran; the Factory reports such cases instead of assuming. The defaults are verified for Copilot CLI only, not for other Copilot environments, and have not been checked against a live client.
+
+To see whether an agent follows the Flow, run the on-demand [agent evaluation](docs/evaluation.md).
 
 ## Setup
 

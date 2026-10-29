@@ -101,6 +101,14 @@ When the user answers and the Run continues, set `status` back to `running` befo
 
 `tds-factory install` also installs four Stage agents per Agent target: `factory-define` (Define and Prepare), `factory-build`, `factory-check` (read-only) and `factory-finish`. Their model choices are the user's to edit; install never overwrites an existing agent file. When the client can dispatch to a named agent, hand the Stage's work to it with the instructions of that Stage; otherwise do the work yourself. You stay the coordinator: you talk to the user (relay Define questions and answers), own the Run record, approvals, Check loops and the push. After a handoff, say which agent ran, and report plainly when the requested model was unavailable, substituted or cannot be verified; never claim a model was used that you cannot confirm. The Check agents are read-only and may not run commands: collect the diff and run any validation (such as `bicep build` and `bicep lint`) yourself, and pass the output with the assignment.
 
+## Invoked Skills
+
+The Skills named in Define and Build have upstream defaults that conflict with the Flow. This section is the invocation contract: where it and an upstream step disagree, follow this section. Do not ask the user for an approval, confirmation or review that this section or a Stage below already resolved. Each `Overrides "..."` quotes the upstream sentence it replaces.
+
+- **to-spec.** Overrides "Check with the user that these seams match their expectations." Choose the seams yourself. Overrides "then publish it to the project issue tracker." The Spec is a Markdown file in `docs/specs/`; do not publish it as an issue and apply no triage label to it.
+- **to-tickets.** Overrides "Ask the user:" and "Iterate until the user approves the breakdown." Publish the breakdown without the quiz; the tracker comes from `docs/agents/issue-tracker.md`.
+- **implement-spec.** Build runs inline in the Run worktree, on its branch, one commit per Ticket, in dependency order. Overrides "Use an **exploration subagent**" and "Use **implementer subagents**" and "with a **merger subagent**" and "kick off more **implementer subagents**": create no subagents and merge nothing. Overrides "Create the integration branch.": the Run branch is the integration branch, and no Ticket worktrees or extra branches are made. Overrides "open a draft PR": Finish opens the only PR. Overrides "call the Skill tool with `code-review` on the integration branch": no closing review, Check owns it. Overrides "Clean up all **implementer subagent** worktrees.": nothing to clean up. Overrides "If a draft PR exists, mark it ready for review.": Finish owns the PR, and Ticket resolution is left to it through `Closes #N`.
+
 ## Define
 
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
@@ -119,7 +127,7 @@ Work in the Run worktree, on its branch, and commit the Define artifacts first. 
 
 ## Check
 
-Commit everything, then run `tds-factory run verify --id <id>`. In one pass, review those committed changes on four axes, each in its own fresh read-only subagent so the reviewer did not write the code. Report each axis separately and never merge them. Run every axis on every Run; Infrastructure is the one that may be `skipped`.
+Commit everything, then run `tds-factory run verify --id <id>`. In one pass, review those committed changes on four axes, each in its own fresh read-only subagent so the reviewer did not write the code. Report each axis separately and never merge them. If a fresh read-only reviewer for an axis cannot be started, do not review that axis yourself and record no verdict for it: set the Run to `verification-unavailable` with a `status_reason` naming the axis, and tell the user. Resume with `status` `running` only once a reviewer is available. Run every axis on every Run; Infrastructure is the one that may be `skipped`.
 
 Invoke `code-review` for the Standards and Spec axes; it runs one subagent for each. Invoke `security-scan` for the Security axis, in a third subagent. Scope `security-scan` to the files in the same diff `code-review` uses. Give the Standards subagent every instruction guide from `conventions` whose `applyTo` globs match the changed files, and have it flag a change that leaves the canonical spec for that area stale when the changed behavior is documented there: a stale canonical spec is a Standards finding worth fixing. Give the Security subagent the project's "Universal safeguards" text from the conventions file, to check explicitly next to the generic patterns. A project with no guides or safeguards is reviewed as before.
 
