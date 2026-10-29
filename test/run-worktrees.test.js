@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import childProcess, { spawnSync } from 'node:child_process';
@@ -161,6 +161,52 @@ test('remove refuses a worktree with uncommitted changes and keeps the history',
   assert.ok(existsSync(join(worktree, 'unsaved.txt')) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
 });
 
+// A repo whose Run worktree has an initialised submodule, as in this project's vendor/ folder.
+const withSubmodule = () => {
+  const sub = repo();
+  git(sub, 'commit', '-q', '--allow-empty', '-m', 'second');
+  const main = repo();
+  git(main, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'vendor');
+  git(main, 'commit', '-q', '-m', 'add submodule');
+  const store = openRunStore(main);
+  const id = store.start(start);
+  const { worktree } = record(main, id);
+  git(worktree, '-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '-q');
+  finish(store, id);
+  return { main, store, id, worktree };
+};
+
+test('remove deletes a clean worktree that has an initialised submodule', () => {
+  const { main, store, id, worktree } = withSubmodule();
+  assert.equal(store.remove(id), 'deleted');
+  assert.ok(!existsSync(worktree) && !existsSync(join(main, '.factory', 'runs', id)));
+});
+
+test('remove does not let ignored files block the deletion', () => {
+  const { store, id, worktree } = withSubmodule();
+  writeFileSync(join(worktree, '.gitignore'), 'ignored.txt\n');
+  git(worktree, 'add', '.gitignore');
+  git(worktree, 'commit', '-q', '-m', 'ignore');
+  writeFileSync(join(worktree, 'ignored.txt'), 'x');
+  assert.equal(store.remove(id), 'deleted');
+});
+
+for (const [name, dirty, file] of [
+  ['an uncommitted tracked change', (w) => appendFileSync(join(w, '.gitmodules'), '\n'), '.gitmodules'],
+  ['an untracked file', (w) => writeFileSync(join(w, 'new.txt'), 'x'), 'new.txt'],
+  ['a dirty submodule', (w) => writeFileSync(join(w, 'vendor', 'new.txt'), 'x'), 'vendor/new.txt'],
+  ['a submodule at another commit', (w) => git(join(w, 'vendor'), 'checkout', '-q', 'HEAD~1'), 'vendor'],
+]) {
+  test(`remove refuses a worktree with a submodule and ${name}`, () => {
+    const { main, store, id, worktree } = withSubmodule();
+    git(main, 'config', 'status.showUntrackedFiles', 'no');
+    dirty(worktree);
+    assert.equal(store.remove(id), 'worktree-refused');
+    assert.ok(existsSync(worktree) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+    if (file) assert.ok(existsSync(join(worktree, file)));
+  });
+}
+
 test('remove leaves an adopted worktree alone', () => {
   const main = repo();
   const wt = linked(main);
@@ -186,6 +232,25 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
     assert.equal(res.status, 409);
     assert.match(await res.text(), /uncommitted changes/);
     assert.deepEqual((await (await fetch(`${dashboard.url}/api/runs`)).json()).map((r) => r.id), [id]);
+  } finally {
+    await dashboard.close();
+  }
+});
+
+test('the Dashboard shows git\'s error when it cannot remove a clean worktree', async () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  git(main, 'worktree', 'lock', record(main, id).worktree);
+  finish(store, id);
+  const dashboard = await startDashboard({ projectDir: main, port: 0 });
+  try {
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    assert.equal(res.status, 409);
+    const body = await res.text();
+    assert.match(body, /git could not remove the Run worktree: .*locked/);
+    assert.doesNotMatch(body, /uncommitted changes/);
+    assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
   } finally {
     await dashboard.close();
   }

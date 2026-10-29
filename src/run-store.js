@@ -547,7 +547,7 @@ async function readRunFile(runsDir, rawPath) {
 }
 
 // Deletes only a terminal Run in the project's own, unlinked storage.
-function removeRun(projectDir, id) {
+function removeRun(projectDir, id, why = () => {}) {
   if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
   const project = fs.realpathSync(projectDir);
   const factory = path.join(project, '.factory');
@@ -559,9 +559,15 @@ function removeRun(projectDir, id) {
       if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink()) return 'not-allowed';
       const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
       if (!record || !['done', 'abandoned'].includes(record.status)) return 'not-allowed';
-      // Only a worktree this store created is removed; an adopted one belongs to the user. Never forced, so uncommitted work stays.
+      // Only a worktree this store created is removed; an adopted one belongs to the user.
+      // Pin showUntrackedFiles so a user config cannot hide files from the check. Git will not remove a worktree with initialised submodules without --force, so check for work that would be lost first and force only a clean one.
       const own = path.join(factory, 'worktrees', id);
-      if (record.worktree === own && fs.existsSync(own) && spawnSync('git', ['worktree', 'remove', own], { cwd: project }).status !== 0) return 'worktree-refused';
+      if (record.worktree === own && fs.existsSync(own)) {
+        const status = spawnSync('git', ['-c', 'status.showUntrackedFiles=normal', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '--ignore-submodules=none'], { cwd: own, encoding: 'utf8' });
+        if (status.status === 0 && status.stdout.trim()) { why('the Run worktree has uncommitted changes; commit or discard them first'); return 'worktree-refused'; }
+        const removal = status.status === 0 ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' }) : status;
+        if (removal.status !== 0) { why('git could not remove the Run worktree: ' + (removal.stderr || removal.error?.message || '').trim()); return 'worktree-refused'; }
+      }
       fs.rmSync(dir, { recursive: true });
       return 'deleted';
     });
@@ -580,7 +586,7 @@ function mainCheckout(dir) {
   return { dir: path.dirname(common) };
 }
 
-// The one module that touches .factory/runs. remove returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.
+// The one module that touches .factory/runs. remove(id, why) calls why with the reason for a worktree-refused; it returns 'deleted', 'not-found', 'not-allowed', 'worktree-refused' or 'invalid'.
 export function openRunStore(callerDir) {
   const { dir: projectDir } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
@@ -604,6 +610,6 @@ export function openRunStore(callerDir) {
     repairPlan: (id) => repairPlan(projectDir, runsDir, id),
     repairApply: (id, plan) => repairApply(projectDir, runsDir, id, plan),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
-    remove: (id) => removeRun(projectDir, id),
+    remove: (id, why) => removeRun(projectDir, id, why),
   };
 }

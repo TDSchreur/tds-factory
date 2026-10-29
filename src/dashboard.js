@@ -91,9 +91,10 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         if (req.headers.origin !== `http://${req.headers.host}`) return send(403, 'text/plain', 'forbidden');
         let id;
         try { id = decodeURIComponent(path.slice('/api/runs/'.length)); } catch { return send(400, 'text/plain', 'invalid id'); }
-        const outcome = store.remove(id);
+        let reason;
+        const outcome = store.remove(id, (text) => { reason = text; });
         const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409, 'worktree-refused': 409 }[outcome];
-        const text = { deleted: 'deleted', 'worktree-refused': 'the Run worktree has uncommitted changes or cannot be removed; commit or discard them first' }[outcome] ?? 'cannot delete Run';
+        const text = { deleted: 'deleted', 'worktree-refused': reason }[outcome] ?? 'cannot delete Run';
         return send(status, 'text/plain', text);
       }
       const merge = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/merge$/);
