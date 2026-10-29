@@ -6,7 +6,7 @@ This guide walks through one piece of work, from the first message to the merged
 
 ```mermaid
 flowchart TB
-    start(["You: /factory and a description"]) --> pre["Preflight: the doctor checks, conventions and verify command"]
+    start(["You: /factory and a description"]) --> pre["Preflight: the Doctor checks, conventions and Verify command (asks you if it is missing)"]
     pre --> define["Define: interview (you answer and confirm), Spec, Tickets"]
     define --> prepare["Prepare: build only what each Ticket asks"]
     prepare --> build["Build: each Ticket test-first, one commit each"]
@@ -17,7 +17,7 @@ flowchart TB
     finish --> review(["You: review and merge"])
 ```
 
-Define and the dotted line from Check are where the Run waits for you.
+The Run waits for you in Define, in Preflight when the Verify command is missing, and at the dotted line from Check.
 
 Define is where the agent needs you most. After that it works on its own and stops only for a missing label or a Check that is not clean (see part 4).
 
@@ -41,7 +41,7 @@ In Copilot in VS Code, type `/`, choose `factory`, and write the description aft
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
-The agent first checks that the project is ready, by running `tds-factory doctor` (see "Check readiness without starting a Run" below). If something is missing it stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
+The agent first runs `tds-factory doctor` and, if something is missing, stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
 
 ```mermaid
 flowchart TB
@@ -75,7 +75,7 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 
 - **Prepare:** the agent switches to building only what each Ticket asks for.
 - **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time.
-- **Check:** the Factory asks for four reviews to run separately, each in a fresh read-only subagent that did not write the code. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
+- **Check:** the Factory asks for up to four reviews to run separately (three when no infrastructure file changed), each in a fresh read-only subagent that did not write the code. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
 
 Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md` and the pull request text in `pr.md`. Prepare leaves none. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
@@ -102,6 +102,8 @@ stateDiagram-v2
     running --> done: pull request handled
     running --> abandoned: you stop it
     waiting --> abandoned: you say no
+    verification_unavailable --> abandoned: you stop it
+    interrupted --> abandoned: you stop it
     done --> [*]
     abandoned --> [*]
 ```

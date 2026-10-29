@@ -23,7 +23,7 @@ The **Merge** button asks the server to merge the Run's pull request, and the se
 ```mermaid
 flowchart TB
     click(["Merge"]) --> done{"Run is done and has a PR link?"}
-    done -->|no| refuse["409: refused"]
+    done -->|no| refuse["refused (409)"]
     done -->|yes| clean{"Check clean or accepted, for the current head?"}
     clean -->|no| refuse
     clean -->|yes| repo{"PR belongs to the Run repository?"}
@@ -33,6 +33,6 @@ flowchart TB
     open -->|yes| merge["Squash-merge with gh"]
 ```
 
-If GitHub cannot be reached, the server answers 502 and merges nothing.
+If GitHub cannot be reached, returns no usable PR head, or `gh` cannot merge, the server answers 502 and merges nothing. An unknown Run gets 404, and a request from another origin gets 403.
 
 For how to read the cards, see the [usage guide](usage.md#5-follow-runs-on-the-dashboard).

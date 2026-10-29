@@ -76,9 +76,9 @@ Do this once per project you want to build with the Factory.
 2. Run `/setup-matt-pocock-skills` in the chat. In Copilot in VS Code, type `/` and choose it; this skill only runs when you start it yourself. It looks at the repository, asks where issues live (choose GitHub) and shows you a draft before it writes anything. It uses one `GLOSSARY.md` and `docs/adr/` at the root without asking, unless the project looks like a monorepo. It writes `docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `CLAUDE.md` if that file exists, otherwise `AGENTS.md` (it asks which to create if neither exists).
 3. Add a `## Commands` section to `AGENTS.md` (or `CLAUDE.md`, whichever the project uses) with the command that checks the project, for example `- Verify: npm test`. If it is missing, `/factory` asks you once.
 4. Add `.factory/` to the project's `.gitignore`. That folder holds Run records and Run worktrees, and must not end up in commits.
-5. Make sure the label `ready-for-agent` exists in the repository's GitHub Issues. If it does not, the agent asks before it creates it.
+5. Every Ticket the Factory creates carries the label `ready-for-agent`. If the repository's GitHub Issues do not have it yet, the agent asks before it creates it; you can also create it now with `gh label create ready-for-agent`.
 
-6. Check the project with the doctor. From the project folder run:
+6. Check the project with the Doctor. From the project folder run:
 
    ```sh
    tds-factory doctor

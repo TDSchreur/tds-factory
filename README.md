@@ -11,7 +11,7 @@ A Run is one pass through five Stages, after a Preflight (`tds-factory doctor` r
 ```mermaid
 flowchart TB
     subgraph Preflight
-        P[conventions and verify command]
+        P[conventions and Verify command, asks you if it is missing]
     end
     subgraph Define
         A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
@@ -36,7 +36,7 @@ flowchart TB
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
-Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare sets Build to build what was asked; Build finishes every Ticket test-first, one commit each; Check gives a Standards, a Spec, a Security and an Infrastructure verdict, each from a fresh read-only subagent; Finish opens the pull request.
+Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare sets Build to build what was asked; Build finishes every Ticket test-first, one commit each; Check gives a Standards, a Spec, a Security and an Infrastructure verdict (Infrastructure is skipped when no infrastructure file changed), each from a fresh read-only subagent; Finish opens the pull request.
 
 The rules for each Stage live in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). In short: only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most twice.
 
@@ -103,7 +103,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 ## Dashboard
 
-`tds-factory dashboard` serves every Run of the repository on 127.0.0.1, one card per Run in a column per Stage. See the [Dashboard guide](docs/dashboard.md) for what it shows, which routes it serves and how deleting a Run works: it also removes the Run worktree, and refuses when that has uncommitted changes.
+`tds-factory dashboard` serves every Run of the repository on 127.0.0.1, one card per Run in a column per Stage. See the [Dashboard guide](docs/dashboard.md) for what it shows, which routes it serves and how a Run is deleted.
 
 Add `.factory/` to the `.gitignore` of any project you run the factory in.
 

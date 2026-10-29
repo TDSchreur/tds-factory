@@ -23,8 +23,8 @@ Keep the README as a short overview with a top-to-bottom flow diagram and a map 
 
 ## Implementation Decisions
 
-- The README's flow diagram becomes `flowchart TB`. It keeps the Preflight and the five Stages, the loop back from Check to Build, and the ask-first path. The two diagrams in the README and the usage guide stay consistent with each other.
-- The README drops the "inspired by" sentence (a change the user already made in the working tree).
+- The README's flow diagram becomes `flowchart TB`. It keeps the Preflight and the five Stages, the Rework loop from Check to Build, and the ask-first path. The two diagrams in the README and the usage guide stay consistent with each other.
+- The README drops the "inspired by" sentence.
 - A new `docs/dashboard.md` takes the README's Dashboard section: what it shows, deletion rules, ports, routes and the Preact/htm note. The README keeps two lines and a link. The README's Setup section stays in place, because a test requires it to start with the install command.
 - The README gets a "Documentation" list linking the install, usage, Dashboard, capability, evaluation and release guides, the glossary and the ADRs.
 - The usage guide replaces its plain-text "Flow in one picture" with a Mermaid diagram that marks where the user is asked. It gains a Run status diagram and a "where things live" diagram, and a "Check readiness" step before the first Run that names `tds-factory doctor`.
