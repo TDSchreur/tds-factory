@@ -117,13 +117,13 @@ The Skills named in Define and Build have upstream defaults that conflict with t
 
 ## Prepare
 
-Invoke `ponytail` in lite mode (`lite` as its argument) so the Build stage builds what the Ticket asks and names any smaller option in one line.
+Prepare has no work of its own yet. Move on to Build.
 
 ## Build
 
 Build only starts when `tds-factory run transition --id <id> --to build` succeeds, which needs the Spec file named in `spec_link` and a non-empty `tickets`. If it refuses, do not build: say what is missing and continue Define from there.
 
-Work in the Run worktree, on its branch, and commit the Define artifacts first. If the verify command fails for missing dependencies, run the project's normal setup in the worktree. Invoke `implement-spec`, working test-first (Invoke `tdd`), with one commit per Ticket, until every Ticket is done. After each Ticket, raise `tickets_done`, run `tds-factory run verify --id <id>` and fix failures before moving on. List any command that cannot run in this environment (other shell, no container runtime) under "Not run" in `build.md` or `check-N.md`, and never report it as passed. The Build agent works inline and creates no subagents. Skip the closing `code-review` step of `implement-spec`; Check owns the review. When every Ticket is done, move on with `run transition --to check`.
+Work in the Run worktree, on its branch, and commit the Define artifacts first. If the verify command fails for missing dependencies, run the project's normal setup in the worktree. Invoke `implement-spec`, working test-first (Invoke `tdd`), with one commit per Ticket, until every Ticket is done. Build what the Ticket asks; if a smaller option exists, name it in one line in `build.md`. After each Ticket, raise `tickets_done`, run `tds-factory run verify --id <id>` and fix failures before moving on. List any command that cannot run in this environment (other shell, no container runtime) under "Not run" in `build.md` or `check-N.md`, and never report it as passed. The Build agent works inline and creates no subagents. Skip the closing `code-review` step of `implement-spec`; Check owns the review. When every Ticket is done, move on with `run transition --to check`.
 
 ## Check
 

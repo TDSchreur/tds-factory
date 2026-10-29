@@ -52,14 +52,6 @@
       "license": "MIT",
       "attribution": "Copyright (c) 2026 Matt Pocock"
     },
-    "ponytail": {
-      "source": "vendor/ponytail/skills/ponytail",
-      "upstream": "https://github.com/DietrichGebert/ponytail",
-      "commit": "09c434ab73ca43761c5d8b0c5d341926c2fba710",
-      "transformations": [],
-      "license": "MIT",
-      "attribution": "Copyright (c) 2026 DietrichGebert"
-    },
     "pr": {
       "source": "vendor/mattpocock-skills/skills/engineering/pr",
       "upstream": "https://github.com/mattpocock/skills",

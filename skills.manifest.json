@@ -15,7 +15,6 @@
     "vendor/mattpocock-skills/skills/engineering/domain-modeling",
     "vendor/mattpocock-skills/skills/engineering/codebase-design",
     "vendor/mattpocock-skills/skills/productivity/grilling",
-    "vendor/ponytail/skills/ponytail",
     "vendor/pstack/skills/unslop"
   ],
   "upstreams": {
@@ -23,11 +22,6 @@
       "url": "https://github.com/mattpocock/skills",
       "license": "MIT",
       "attribution": "Copyright (c) 2026 Matt Pocock"
-    },
-    "vendor/ponytail": {
-      "url": "https://github.com/DietrichGebert/ponytail",
-      "license": "MIT",
-      "attribution": "Copyright (c) 2026 DietrichGebert"
     },
     "vendor/pstack": {
       "url": "https://github.com/backnotprop/pstack",

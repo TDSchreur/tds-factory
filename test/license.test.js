@@ -14,7 +14,7 @@ test('the repository has an MIT LICENSE, as package.json says', () => {
 test('THIRD-PARTY-NOTICES.md names every upstream source and carries its MIT notice', () => {
   const notices = read('THIRD-PARTY-NOTICES.md');
   const urls = [...read('.gitmodules').matchAll(/url = (\S+)/g)].map((m) => m[1]);
-  assert.equal(urls.length, 4);
+  assert.equal(urls.length, 3);
   for (const url of urls) assert.ok(notices.includes(url), url);
   assert.equal(notices.split('Permission is hereby granted, free of charge').length - 1, urls.length, 'one notice text per upstream');
 });
