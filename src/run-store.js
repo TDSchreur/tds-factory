@@ -133,7 +133,7 @@ function moveRun(projectDir, id, data, move) {
   validate(data);
   if (Object.keys(data).some((key) => key !== 'activity')) throw new Error('a transition accepts only activity');
   changeRun(projectDir, id, (old) => {
-    if (old.status !== 'running') throw new Error(`only a running Run can change Stage or finish (this one is ${old.status})`);
+    if (old.status !== 'running') throw new Error(`a ${old.status} Run cannot be changed this way, only a running one`);
     const { record, activity } = move(old);
     return { ...record, activity: data.activity ?? activity, updated: new Date().toISOString() };
   });
@@ -156,7 +156,7 @@ function reworkRun(projectDir, id, data = {}) {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
     if ((old.check_loops ?? 0) >= 2) throw new Error('the Check loop limit of 2 is reached');
     const record = { ...old, stage: 'build', check_loops: (old.check_loops ?? 0) + 1 };
-    for (const key of [...verdicts, 'verify', 'accepted']) delete record[key];
+    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
     return { record, activity: 'Rework: back to Build' };
   });
 }
@@ -166,6 +166,43 @@ function completeRun(projectDir, id, data = {}) {
     if (!old.pr) throw new Error('completing a Run needs a PR link');
     if (old.tickets_done > old.tickets_total) throw new Error(`more Tickets done (${old.tickets_done}) than counted (${old.tickets_total})`);
     return { record: { ...old, status: 'done', waiting_on_human: false, waiting_reason: '' }, activity: 'Done' };
+  });
+}
+
+// The code revision a Run's Evidence is about: the worktree's head, and whether it has uncommitted changes.
+function worktreeState(record) {
+  if (!record.worktree || !fs.existsSync(record.worktree)) throw new Error('the Run worktree is missing');
+  const git = (...args) => spawnSync('git', args, { cwd: record.worktree, encoding: 'utf8' });
+  const head = git('rev-parse', 'HEAD'), status = git('status', '--porcelain');
+  if (head.status !== 0 || status.status !== 0) throw new Error(`cannot read the Run worktree: ${(head.stderr || status.stderr).trim()}`);
+  return { head: head.stdout.trim(), dirty: status.stdout.trim() !== '' };
+}
+// Runs the Verify command outside the Run lock, since it can take minutes, and records the result under it.
+function verifyRun(projectDir, id) {
+  if (!validId(id)) throw new Error('invalid Run id');
+  const dir = path.join(runRoot(projectDir, false), id);
+  if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
+  const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
+  if (record.status !== 'running') throw new Error(`a ${record.status} Run cannot be verified, only a running one`);
+  if (!record.commands) throw new Error('the Run has no Verify command');
+  const { head, dirty } = worktreeState(record);
+  const started = new Date().toISOString();
+  const fd = fs.openSync(path.join(dir, 'verify.log'), 'w');
+  let ran;
+  try { ran = spawnSync(record.commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] }); }
+  finally { fs.closeSync(fd); }
+  const result = { command: record.commands, cwd: record.worktree, head, dirty, exit_code: ran.status ?? 1, started, ended: new Date().toISOString(), log: 'verify.log' };
+  changeRun(projectDir, id, (old) => ({ ...old, verify: result, updated: new Date().toISOString() }));
+  return result;
+}
+function verdictRun(projectDir, id, axis, value) {
+  if (!verdicts.includes(axis)) throw new Error(`unknown Check axis: ${axis}`);
+  validate({ [axis]: value });
+  moveRun(projectDir, id, {}, (old) => {
+    if (old.stage !== 'check') throw new Error('verdicts are recorded in Check');
+    const { head, dirty } = worktreeState(old);
+    if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
+    return { record: { ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: (old.check_loops ?? 0) + 1 } } }, activity: `${axis} verdict: ${value}` };
   });
 }
 
@@ -280,6 +317,8 @@ export function openRunStore(callerDir) {
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     rework: (id, data) => reworkRun(projectDir, id, data),
     complete: (id, data) => completeRun(projectDir, id, data),
+    verify: (id) => verifyRun(projectDir, id),
+    verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
     list: () => listRuns(runsDir),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     remove: (id) => removeRun(projectDir, id),

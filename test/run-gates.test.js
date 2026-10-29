@@ -10,8 +10,8 @@ const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args],
 const json = (value) => JSON.stringify(value);
 const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
-const startRun = (cwd) => {
-  const result = run(cwd, 'start', '--data', json({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: [] }));
+const startRun = (cwd, commands = 'npm test') => {
+  const result = run(cwd, 'start', '--data', json({ title: 'Example', agent: 'codex', commands, conventions: [] }));
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
@@ -125,12 +125,12 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   const cwd = repo();
   const id = defined(cwd);
   assert.notEqual(run(cwd, 'rework', '--id', id).status, 0, 'not in Check');
-  force(cwd, id, { stage: 'check', tickets_done: 2, standards: 'fail', spec: 'pass', security: 'pass', infrastructure: 'skipped', verify: { exit_code: 0 }, accepted: { decision: 'ok' } });
+  force(cwd, id, { stage: 'check', tickets_done: 2, standards: 'fail', spec: 'pass', security: 'pass', infrastructure: 'skipped', verify: { exit_code: 0 }, reviewed: { standards: { head: 'a', attempt: 1 } }, accepted: { decision: 'ok' } });
   assert.equal(run(cwd, 'rework', '--id', id).status, 0);
   const after = read(cwd, id);
   assert.equal(after.stage, 'build');
   assert.equal(after.check_loops, 1);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'accepted']) assert.equal(key in after, false, key);
+  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted']) assert.equal(key in after, false, key);
   force(cwd, id, { stage: 'check', check_loops: 2 });
   assert.notEqual(run(cwd, 'rework', '--id', id).status, 0);
   assert.equal(read(cwd, id).stage, 'check');
@@ -149,4 +149,85 @@ test('complete ends a Run only at Finish with a PR link and sane Ticket counts',
   assert.equal(run(cwd, 'complete', '--id', id).status, 0);
   assert.equal(read(cwd, id).status, 'done');
   assert.notEqual(run(cwd, 'complete', '--id', id).status, 0, 'already done');
+});
+
+const head = (cwd, id) => git(read(cwd, id).worktree, 'rev-parse', 'HEAD');
+const verify = (cwd, id) => run(cwd, 'verify', '--id', id);
+const verdict = (cwd, id, axis, value) => run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value);
+
+test('verify runs the Verify command in the Run worktree and records what happened', () => {
+  const cwd = repo();
+  const id = startRun(cwd, 'echo from-verify && pwd');
+  const result = verify(cwd, id);
+  assert.equal(result.status, 0, result.stderr);
+  const { verify: recorded, worktree } = read(cwd, id);
+  assert.equal(recorded.command, 'echo from-verify && pwd');
+  assert.equal(recorded.cwd, worktree);
+  assert.equal(recorded.head, head(cwd, id));
+  assert.equal(recorded.dirty, false);
+  assert.equal(recorded.exit_code, 0);
+  assert.ok(Date.parse(recorded.started) <= Date.parse(recorded.ended));
+  const log = readFileSync(join(cwd, '.factory', 'runs', id, recorded.log), 'utf8');
+  assert.match(log, /from-verify/);
+  assert.ok(log.includes(worktree));
+});
+
+test('a failing Verify command is recorded with its exit code and fails the CLI', () => {
+  const cwd = repo();
+  const id = startRun(cwd, 'echo oops >&2; exit 3');
+  const result = verify(cwd, id);
+  assert.notEqual(result.status, 0);
+  const { verify: recorded } = read(cwd, id);
+  assert.equal(recorded.exit_code, 3);
+  assert.match(readFileSync(join(cwd, '.factory', 'runs', id, recorded.log), 'utf8'), /oops/);
+});
+
+test('a Verify result from an uncommitted tree is marked dirty', () => {
+  const cwd = repo();
+  const id = startRun(cwd, 'true');
+  writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
+  assert.equal(verify(cwd, id).status, 0);
+  assert.equal(read(cwd, id).verify.dirty, true);
+});
+
+test('verify refuses a Run with no Verify command, and verify results cannot be written by update', () => {
+  const cwd = repo();
+  const id = startRun(cwd, '');
+  assert.notEqual(verify(cwd, id).status, 0);
+  assert.equal('verify' in read(cwd, id), false);
+  assert.notEqual(update(cwd, id, { verify: { exit_code: 0 } }).status, 0);
+});
+
+test('a verdict is stamped with the head and the Check attempt', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  force(cwd, id, { stage: 'check' });
+  assert.equal(verdict(cwd, id, 'standards', 'pass').status, 0);
+  assert.equal(read(cwd, id).standards, 'pass');
+  assert.deepEqual(read(cwd, id).reviewed.standards, { head: head(cwd, id), attempt: 1 });
+  force(cwd, id, { check_loops: 1 });
+  assert.equal(verdict(cwd, id, 'infrastructure', 'skipped').status, 0);
+  assert.equal(read(cwd, id).reviewed.infrastructure.attempt, 2);
+});
+
+test('verdicts are refused outside Check, for unknown axes and impossible values', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  assert.notEqual(verdict(cwd, id, 'standards', 'pass').status, 0, 'not in Check');
+  force(cwd, id, { stage: 'check' });
+  assert.notEqual(verdict(cwd, id, 'style', 'pass').status, 0, 'unknown axis');
+  assert.notEqual(verdict(cwd, id, 'standards', 'skipped').status, 0, 'only Infrastructure may be skipped');
+  assert.notEqual(verdict(cwd, id, 'standards', 'maybe').status, 0, 'unknown value');
+  assert.equal('standards' in read(cwd, id), false);
+});
+
+test('a passing verdict on an uncommitted tree is refused, a failing one is recorded', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  force(cwd, id, { stage: 'check' });
+  writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
+  assert.notEqual(verdict(cwd, id, 'security', 'pass').status, 0);
+  assert.equal('security' in read(cwd, id), false);
+  assert.equal(verdict(cwd, id, 'security', 'fail').status, 0);
+  assert.equal(read(cwd, id).security, 'fail');
 });
