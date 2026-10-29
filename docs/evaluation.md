@@ -2,7 +2,7 @@
 
 `npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` and CI never run it.
 
-```
+```sh
 npm run eval -- <claude|codex|copilot> [scenario...]
 ```
 
