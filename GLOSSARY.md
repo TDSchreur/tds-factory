@@ -19,7 +19,7 @@ _Avoid_: Backend, platform
 The ordered Stages a piece of work moves through, encoded in the `factory` Skill.
 
 **Stage**:
-One step of the Flow: Define, Prepare, Build, Check or Finish.
+One step of the Flow: Define, Build, Check or Finish.
 _Avoid_: Phase, step
 
 **Preflight**:
