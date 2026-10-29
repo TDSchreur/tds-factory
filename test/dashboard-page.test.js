@@ -92,6 +92,19 @@ test('a Done card shows the PR state, and only an open PR can be merged after co
   } finally { await page.close(); }
 });
 
+test('merge confirmation shows failing and pending GitHub checks', async (t) => {
+  const page = await openPage(t, { runs: [run({ id: 'r', title: 'Example', column: 'done', status: 'done', pr: 'https://github.com/a/b/pull/1', prState: 'open' })], checks: 'GitHub checks: CI: failing; Lint: pending' });
+  if (!page) return;
+  try {
+    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('[aria-label^=\"Squash and merge\"]').click()");
+    await page.waitFor("return document.getElementById('dialog').open");
+    assert.match(await page.execute("return document.getElementById('dialog-message').textContent"), /CI: failing; Lint: pending/);
+    await page.execute("document.getElementById('dialog-cancel').click()");
+    assert.deepEqual(page.calls, []);
+  } finally { await page.close(); }
+});
+
 test('Escape cancels a confirmation, and the Merge button keeps keyboard focus across refreshes', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r', title: 'Example', column: 'done', status: 'done', pr: 'https://github.com/a/b/pull/1', prState: 'open' })] });
   if (!page) return;

@@ -71,7 +71,12 @@ function App() {
   };
 
   const mergeRun = async (run) => {
-    if (!await ask('Squash and merge?', 'Merge the pull request for "' + run.title + '"?\n' + run.pr, 'Squash and merge', false)) return;
+    let checks = 'GitHub checks: unavailable';
+    try {
+      const response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge-checks', { cache: 'no-store' });
+      if (response.ok) checks = await response.text();
+    } catch {}
+    if (!await ask('Squash and merge?', 'Merge the pull request for "' + run.title + '"?\n' + run.pr + '\n\n' + checks, 'Squash and merge', false)) return;
     try {
       const response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge', { method: 'POST' });
       if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);

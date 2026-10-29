@@ -9,7 +9,24 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
-const ghPrMerge = (url) => promisify(execFile)('gh', ['pr', 'merge', url, '--squash'], { timeout: 30_000 });
+const exec = promisify(execFile);
+const ghPrMerge = (url, head) => exec('gh', ['pr', 'merge', url, '--squash', '--match-head-commit', head], { timeout: 30_000 });
+const ghPrDetails = async (url) => JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { timeout: 10_000 })).stdout);
+const ghChecks = async (url) => {
+  let stdout;
+  try { ({ stdout } = await exec('gh', ['pr', 'checks', url, '--json', 'name,bucket,state'], { timeout: 10_000 })); }
+  catch (err) { if (!err.stdout) throw err; stdout = err.stdout; }
+  const checks = JSON.parse(stdout);
+  if (!Array.isArray(checks) || checks.some((c) => !c || typeof c.name !== 'string' || !['pass', 'fail', 'pending', 'skipping', 'cancel'].includes(c.bucket))) throw new Error('invalid check data');
+  const problems = checks.filter((c) => ['fail', 'pending', 'cancel'].includes(c.bucket)).map((c) => `${c.name}: ${c.bucket === 'fail' ? 'failing' : c.bucket === 'cancel' ? 'cancelled' : 'pending'}`);
+  return problems.length ? `GitHub checks: ${problems.join('; ')}` : checks.length ? 'GitHub checks: passing' : 'GitHub checks: none reported';
+};
+const expectedRepo = async (worktree) => {
+  const origin = (await exec('git', ['remote', 'get-url', 'origin'], { cwd: worktree, timeout: 10_000 })).stdout.trim();
+  const match = origin.match(/^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?$/i);
+  if (!match) throw new Error('cannot resolve the Run repository from origin');
+  return `${match[1]}/${match[2]}`.toLowerCase();
+};
 const PR_CACHE_MS = 60_000;
 const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
 const HOST = '127.0.0.1';
@@ -44,7 +61,7 @@ export function interpretRun(entry) {
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
-// prState(url) resolves to OPEN, MERGED or CLOSED and prMerge(url) squash-merges; both default to the `gh` CLI.
+// prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
 export async function startDashboard({ projectDir = process.cwd(), port, prState = ghPrState, prMerge = ghPrMerge, dashboardDir = DASHBOARD_DIR } = {}) {
   const store = openRunStore(projectDir);
   const prCache = new Map();
@@ -88,9 +105,33 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
         if (v.status !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
-        if (String(await Promise.resolve().then(() => prState(v.pr)).catch(() => '')).toLowerCase() !== 'open') return send(409, 'text/plain', 'the PR is not open');
-        try { await prMerge(v.pr); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); } finally { prCache.delete(v.pr); }
+        let eligibility;
+        try { eligibility = store.mergeEligibility(id); } catch (err) { return send(409, 'text/plain', `cannot check Run Evidence: ${err.message}`); }
+        if (eligibility.problems.length) return send(409, 'text/plain', `Run needs a clean or Accepted Check: ${eligibility.problems.join('; ')}`);
+        let repo;
+        try { repo = await expectedRepo(eligibility.worktree); } catch (err) { return send(409, 'text/plain', err.message); }
+        const prRepo = new URL(v.pr).pathname.split('/').slice(1, 3).join('/').toLowerCase();
+        if (repo !== prRepo) return send(409, 'text/plain', 'the PR does not belong to the Run repository');
+        let details;
+        try { details = await ghPrDetails(v.pr); } catch { return send(502, 'text/plain', 'GitHub PR state and head are unavailable'); }
+        if (!details || typeof details !== 'object' || typeof details.state !== 'string') return send(502, 'text/plain', 'GitHub PR state and head are unavailable');
+        if (String(details.state).toLowerCase() !== 'open') return send(409, 'text/plain', 'the PR is not open');
+        if (typeof details.headRefOid !== 'string' || !/^[a-f0-9]{40,64}$/i.test(details.headRefOid)) return send(502, 'text/plain', 'GitHub PR head is unavailable');
+        if (details.headRefOid.toLowerCase() !== eligibility.head.toLowerCase()) return send(409, 'text/plain', 'the PR head does not match the Run Evidence');
+        try { await prMerge(v.pr, eligibility.head); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); } finally { prCache.delete(v.pr); }
         return send(200, 'text/plain', 'merged');
+      }
+      const checks = req.method === 'GET' && path.match(/^\/api\/runs\/([^/]+)\/merge-checks$/);
+      if (checks) {
+        let id;
+        try { id = decodeURIComponent(checks[1]); } catch { return send(400, 'text/plain', 'invalid id'); }
+        const entry = (await store.list()).find((e) => e.id === id);
+        if (!entry) return send(404, 'text/plain', 'not found');
+        const v = interpretRun(entry);
+        if (v.status !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot check this Run');
+        let status;
+        try { status = await ghChecks(v.pr); } catch { status = 'GitHub checks: unavailable'; }
+        return send(200, 'text/plain', status);
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {

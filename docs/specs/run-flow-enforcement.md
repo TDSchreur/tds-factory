@@ -83,7 +83,7 @@ Moving a Run forward becomes a set of named Run store operations that check thei
 
 ## Out of Scope
 
-- The Dashboard merge action (see the follow-up list).
+- The Dashboard merge action was handled separately in the Dashboard merge Evidence Spec.
 - Repair and recovery, lock ownership and cleanup when start fails midway.
 - Changes to how composed Skills behave, the agent capability matrix and agent evaluations.
 - Transactional install and sync, local edit detection and the provenance inventory.
