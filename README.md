@@ -82,7 +82,7 @@ node bin/tds-factory.js install    # install skills/ into ~/.claude/skills and ~
 node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo port (printed at start)
 ```
 
-`sync` validates every manifest entry (name, paths inside the repository, no symlinks, no duplicate names) before it writes any.
+`sync` validates every manifest entry (name, paths inside the repository, no symlinks, no duplicate names) before it writes any. It replaces each skill folder through a staging folder and a rename, so a failure leaves the old folder intact, and it refuses to replace a synced skill you edited by hand (`--force` overrides). It also writes `skills/PROVENANCE.json`: per skill the source path, upstream URL and commit, transformations, licence and attribution.
 
 Run the tests with `npm test`. They use `node:test`.
 
@@ -92,7 +92,8 @@ Run the tests with `npm test`. They use `node:test`.
 |---|---|
 | `--agent claude\|codex\|copilot\|all` | Pick the Agent target. `all` is the default and means Claude plus Codex, because Copilot reads both directories. |
 | `--project` | Install into the current directory instead of the user-global directory. |
-| `--force` | Overwrite skill folders that tds-factory did not install. |
+| `--force` | Overwrite skill folders that tds-factory did not install or that you edited. |
+| `--dry-run` | Print what install would do and change nothing. |
 
 | Agent | Project directory | Global directory |
 |---|---|---|

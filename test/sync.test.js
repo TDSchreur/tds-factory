@@ -190,3 +190,59 @@ test('a manifest that fails validation removes nothing', () => {
   assert.throws(() => quietSync({ root, skillsDir }));
   assert.ok(existsSync(join(skillsDir, 'obsolete')));
 });
+
+test('replaceDir keeps the previous folder and leaves no staging folder when filling the new one fails', async () => {
+  const { replaceDir } = await import('../src/replace-dir.js');
+  const dir = mkdtempSync(join(tmpdir(), 'tds-replace-'));
+  const dest = join(dir, 'skill');
+  mkdirSync(dest);
+  writeFileSync(join(dest, 'SKILL.md'), 'old');
+  assert.throws(() => replaceDir(dest, (staging) => {
+    writeFileSync(join(staging, 'SKILL.md'), 'new');
+    throw new Error('disk full');
+  }), /disk full/);
+  assert.equal(readFileSync(join(dest, 'SKILL.md'), 'utf8'), 'old');
+  assert.deepEqual(readdirSync(dir), ['skill']);
+  replaceDir(dest, (staging) => writeFileSync(join(staging, 'SKILL.md'), 'new'));
+  assert.equal(readFileSync(join(dest, 'SKILL.md'), 'utf8'), 'new');
+  assert.deepEqual(readdirSync(dir), ['skill']);
+});
+
+test('sync refuses to replace a synced skill edited by hand, unless forced', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  quietSync({ root, skillsDir });
+  writeFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'my edit');
+  assert.throws(() => quietSync({ root, skillsDir }), /edited locally.*--force/);
+  assert.equal(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), 'my edit');
+  quietSync({ root, skillsDir, force: true });
+  assert.match(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), /^name: alpha/m);
+  quietSync({ root, skillsDir });
+});
+
+test('sync still replaces a folder whose marker has no hash (older sync)', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  mkdirSync(join(skillsDir, 'alpha'));
+  writeFileSync(join(skillsDir, 'alpha', MARKER), 'vendor/up/skills/alpha\n');
+  writeFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'old');
+  quietSync({ root, skillsDir });
+  assert.match(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), /^name: alpha/m);
+});
+
+test('sync records provenance per skill: source, upstream, transformations, licence and attribution', () => {
+  const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/alpha', as: 'renamed' }], { alpha });
+  const manifest = JSON.parse(readFileSync(join(root, 'skills.manifest.json'), 'utf8'));
+  manifest.upstreams = { 'vendor/up': { url: 'https://example.com/up', license: 'MIT', attribution: 'Copyright (c) Up' } };
+  writeFileSync(join(root, 'skills.manifest.json'), JSON.stringify(manifest));
+  quietSync({ root, skillsDir });
+  const { skills } = JSON.parse(readFileSync(join(skillsDir, 'PROVENANCE.json'), 'utf8'));
+  assert.deepEqual(Object.keys(skills), ['renamed']);
+  const entry = skills.renamed;
+  assert.equal(entry.source, 'vendor/up/skills/alpha');
+  assert.equal(entry.upstream, 'https://example.com/up');
+  assert.equal(entry.license, 'MIT');
+  assert.equal(entry.attribution, 'Copyright (c) Up');
+  assert.equal(entry.commit, null);
+  assert.equal(entry.transformations.length, 2);
+  assert.match(entry.transformations[0], /^renamed from alpha/);
+  assert.equal(entry.transformations[1], 'disable-model-invocation flag removed');
+});

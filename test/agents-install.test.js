@@ -63,3 +63,34 @@ test('install keeps a dangling agent symlink', () => {
   installIn(project, 'claude');
   assert.ok(lstatSync(link).isSymbolicLink());
 });
+
+test('install skips an installed skill edited by hand, unless forced', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-skill-edit-'));
+  installIn(project, 'claude');
+  const file = join(project, '.claude/skills/tdd/SKILL.md');
+  const shipped = readFileSync(file, 'utf8');
+  writeFileSync(file, 'my edit');
+  installIn(project, 'claude');
+  assert.equal(readFileSync(file, 'utf8'), 'my edit');
+  installIn(project, 'claude', true);
+  assert.equal(readFileSync(file, 'utf8'), shipped);
+  installIn(project, 'claude');
+  assert.equal(readFileSync(file, 'utf8'), shipped);
+});
+
+test('install --dry-run reports what it would do and writes nothing', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-dry-'));
+  const log = mock.method(console, 'log', () => {});
+  const cwd = process.cwd();
+  process.chdir(project);
+  try {
+    install({ agent: 'claude', project: true, force: false, dryRun: true });
+  } finally {
+    process.chdir(cwd);
+    log.mock.restore();
+  }
+  const lines = log.mock.calls.map((c) => c.arguments[0]);
+  assert.ok(lines.some((l) => l.startsWith('would install claude/tdd')));
+  assert.ok(lines.some((l) => l.startsWith('would install claude/factory-build')));
+  assert.deepEqual(readdirSync(project), []);
+});

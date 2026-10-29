@@ -50,7 +50,7 @@ tds-factory install --agent copilot
 | `codex` | `~/.agents/skills` |
 | `all` (the default) | Claude and Codex folders, which Copilot also reads |
 
-Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create. `--force` does overwrite it, so a skill of your own with the same name would be lost.
+Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create. `--force` does overwrite it, so a skill of your own with the same name would be lost. An installed skill you edited is skipped as well, until you use `--force`. Add `--dry-run` to see what install would do without changing anything.
 
 ### Check that your agent sees the skills
 

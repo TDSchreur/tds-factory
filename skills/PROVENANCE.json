@@ -1,0 +1,128 @@
+{
+  "skills": {
+    "code-review": {
+      "source": "vendor/mattpocock-skills/skills/engineering/code-review",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "codebase-design": {
+      "source": "vendor/mattpocock-skills/skills/engineering/codebase-design",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "domain-modeling": {
+      "source": "vendor/mattpocock-skills/skills/engineering/domain-modeling",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "grill-with-docs": {
+      "source": "vendor/mattpocock-skills/skills/engineering/grill-with-docs",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [
+        "disable-model-invocation flag removed"
+      ],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "grilling": {
+      "source": "vendor/mattpocock-skills/skills/productivity/grilling",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "implement-spec": {
+      "source": "vendor/mattpocock-skills/skills/engineering/implement-spec",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [
+        "disable-model-invocation flag removed"
+      ],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "ponytail": {
+      "source": "vendor/ponytail/skills/ponytail",
+      "upstream": "https://github.com/DietrichGebert/ponytail",
+      "commit": "09c434ab73ca43761c5d8b0c5d341926c2fba710",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 DietrichGebert"
+    },
+    "pr": {
+      "source": "vendor/mattpocock-skills/skills/engineering/pr",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "security-scan": {
+      "source": "vendor/awesome-copilot/skills/security-review",
+      "upstream": "https://github.com/github/awesome-copilot",
+      "commit": "0fe6545b950671641b2b14b44eb56678fea6c6b4",
+      "transformations": [
+        "renamed from security-review (name and /security-review mentions rewritten)"
+      ],
+      "license": "MIT",
+      "attribution": "Copyright GitHub, Inc."
+    },
+    "setup-matt-pocock-skills": {
+      "source": "vendor/mattpocock-skills/skills/engineering/setup-matt-pocock-skills",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "tdd": {
+      "source": "vendor/mattpocock-skills/skills/engineering/tdd",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "to-spec": {
+      "source": "vendor/mattpocock-skills/skills/engineering/to-spec",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [
+        "disable-model-invocation flag removed"
+      ],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "to-tickets": {
+      "source": "vendor/mattpocock-skills/skills/engineering/to-tickets",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [
+        "disable-model-invocation flag removed"
+      ],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
+    "unslop": {
+      "source": "vendor/pstack/skills/unslop",
+      "upstream": "https://github.com/backnotprop/pstack",
+      "commit": "37d989cabf310ea2d7631f1d006117ca4cc8a799",
+      "transformations": [
+        "disable-model-invocation flag removed"
+      ],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Lauren Tan"
+    }
+  }
+}
