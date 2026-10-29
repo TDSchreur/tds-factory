@@ -130,8 +130,6 @@ function ThemeSelect() {
   return html`<select id="theme" aria-label="Theme" value=${theme} onChange=${change}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>`;
 }
 
-// The pill shows the last segment of the project path (either separator); the full path is its tooltip.
-
 // The TDS mark, traced by hand from the logo PNG. The dark parts use the theme's logo colour, the blue parts keep theirs.
 function Logo() {
   return html`<svg class="logo" viewBox="285 70 1205 570" aria-hidden="true" focusable="false">
@@ -146,6 +144,7 @@ function Logo() {
   </svg>`;
 }
 
+// The pill shows the last segment of the project path; the full path is its tooltip.
 export function Header({ project, status, olderLabel, onOlder }) {
   return html`<header>
     <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span></div>

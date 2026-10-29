@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ticketsOf } from '../dashboard/model.js';
+import { folderName, ticketsOf } from '../dashboard/model.js';
 import { interpretRun } from '../src/dashboard.js';
 
 test('the card lists Tickets with done, active and todo states', () => {
@@ -20,4 +20,10 @@ test('interpretRun exposes pause reasons without treating them as human waiting'
     assert.equal(view.reason, 'blocked');
     assert.equal(view.waiting, false);
   }
+});
+
+test('folderName keeps the last path segment for either separator and tolerates a trailing one', () => {
+  assert.equal(folderName('/work/tds-factory/'), 'tds-factory');
+  assert.equal(folderName('C:\\work\\tds-factory'), 'tds-factory');
+  assert.equal(folderName(''), '');
 });

@@ -92,7 +92,7 @@ function App() {
   const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
   useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
   const waiting = entries.filter((r) => r.waiting).length;
-  useEffect(() => { document.title = (waiting ? '(' + waiting + ') ' : '') + (folderName(project) ? folderName(project) + ' · ' : '') + BRAND; }, [waiting, project]);
+  useEffect(() => { const name = folderName(project); document.title = (waiting ? '(' + waiting + ') ' : '') + (name ? name + ' · ' : '') + BRAND; }, [waiting, project]);
 
   const actions = {
     select: (id) => setSelectedId((now) => (now === id ? null : id)),
