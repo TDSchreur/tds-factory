@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { ROOT, SKILLS_DIR } from './paths.js';
+import { ROOT, SKILLS_DIR, AGENTS_DIR } from './paths.js';
 import { targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 
@@ -52,6 +52,24 @@ function verifyCommandCheck(projectDir) {
   return ['pass', `Verify command: ${command.trim()}`];
 }
 
+// Every Skill the factory Skill invokes, found by the phrasing sync and the skills test rely on.
+const requiredSkills = () => ['factory', ...new Set([...read(path.join(SKILLS_DIR, 'factory', 'SKILL.md')).matchAll(/\bInvoke `([a-z-]+)`/g)].map((m) => m[1]))];
+const installedSkills = (agent, projectDir, homeDir) => (name) => [path.join(projectDir, targets[agent].project), path.join(homeDir, targets[agent].global)]
+  .some((dir) => fs.existsSync(path.join(dir, name, 'SKILL.md')));
+
+function skillsCheck(has) {
+  const missing = requiredSkills().filter((name) => !has(name));
+  return missing.length ? ['fail', `required Skills not installed: ${missing.join(', ')}`] : ['pass', 'all required Skills are installed'];
+}
+
+// Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.
+function reviewCheck(agent, projectDir, homeDir, has) {
+  const missing = ['code-review', 'security-scan'].filter((name) => !has(name));
+  const file = fs.readdirSync(path.join(AGENTS_DIR, agent)).find((f) => f.startsWith('factory-check.'));
+  if (![path.join(projectDir, targets[agent].projectAgents), path.join(homeDir, targets[agent].agents)].some((dir) => fs.existsSync(path.join(dir, file)))) missing.push(`the factory-check Stage agent (${file})`);
+  return missing.length ? ['fail', `review is not available, missing: ${missing.join(', ')}`] : ['pass', 'review Skills and the read-only factory-check agent are installed'];
+}
+
 function which(name, cwd) {
   if (name.includes('/')) return fs.existsSync(path.resolve(cwd, name));
   return (process.env.PATH ?? '').split(path.delimiter).some((dir) => dir && fs.existsSync(path.join(dir, name)));
@@ -60,7 +78,8 @@ function which(name, cwd) {
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
 export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir() }) {
   if (!Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
-  const checks = [['cli', cliCheck()], ['tracker', trackerCheck(projectDir)], ['git', gitCheck(projectDir)], ['verify-command', verifyCommandCheck(projectDir)]]
+  const has = installedSkills(agent, projectDir, homeDir);
+  const checks = [['cli', cliCheck()], ['skills', skillsCheck(has)], ['tracker', trackerCheck(projectDir)], ['git', gitCheck(projectDir)], ['review', reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', verifyCommandCheck(projectDir)]]
     .map(([id, [status, message]]) => ({ id, status, message }));
   return { ok: checks.every((c) => c.status === 'pass'), checks };
 }

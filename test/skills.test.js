@@ -18,7 +18,7 @@ const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
 
 test('the factory invokes exactly the skills we expect', () => {
-  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'to-spec', 'to-tickets', 'unslop'];
+  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'tdd', 'to-spec', 'to-tickets', 'unslop'];
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 

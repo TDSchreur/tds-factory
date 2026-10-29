@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
+import { SKILLS_DIR, AGENTS_DIR } from '../src/paths.js';
+import { targets } from '../src/flow.js';
 
 const cli = resolve('bin/tds-factory.js');
 const AGENTS = '# Agents\n\n## Agent skills\n\nsee docs\n\n## Commands\n\n- Verify: `npm test`\n';
@@ -17,8 +19,8 @@ function project(agents = AGENTS) {
   writeFileSync(join(dir, 'AGENTS.md'), agents);
   return dir;
 }
-function doctor(dir, ...args) {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+const doctor = (dir, ...args) => doctorAt(mkdtempSync(join(tmpdir(), 'doctor-home-')), dir, ...args);
+function doctorAt(home, dir, ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: home } });
   return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stderr: result.stderr };
 }
@@ -80,4 +82,46 @@ test('doctor prints one line per check and exits non-zero while a check is not p
 
 test('doctor rejects an unknown Agent target', () => {
   assert.equal(doctor(project(), '--agent', 'nope').status, 1);
+});
+
+// Installs the shipped Skills and Stage agents the way `install` lays them out, minus the ones named in `skip`.
+function install(home, agent, skip = []) {
+  const skills = join(home, targets[agent].global), agents = join(home, targets[agent].agents);
+  mkdirSync(skills, { recursive: true });
+  mkdirSync(agents, { recursive: true });
+  for (const name of readdirSync(SKILLS_DIR, { withFileTypes: true }).filter((e) => e.isDirectory() && !skip.includes(e.name)).map((e) => e.name)) cpSync(join(SKILLS_DIR, name), join(skills, name), { recursive: true });
+  for (const file of readdirSync(join(AGENTS_DIR, agent)).filter((f) => !skip.includes(f.split('.')[0]))) cpSync(join(AGENTS_DIR, agent, file), join(agents, file));
+}
+
+test('doctor lists every required Skill that is not installed', () => {
+  const none = check(doctor(project()).report, 'skills');
+  assert.equal(none.status, 'fail');
+  for (const name of ['factory', 'grill-with-docs', 'to-spec', 'to-tickets', 'implement-spec', 'tdd', 'code-review', 'security-scan', 'ponytail', 'pr', 'unslop']) assert.ok(none.message.includes(name), name);
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'claude', ['tdd']);
+  assert.match(check(doctorAt(home, project()).report, 'skills').message, /: tdd$/);
+});
+
+test('doctor passes skills and review for every Agent target once the Factory is installed, globally or in the project', () => {
+  for (const agent of Object.keys(targets)) {
+    const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+    install(home, agent);
+    const { report } = doctorAt(home, project(), '--agent', agent);
+    assert.equal(check(report, 'skills').status, 'pass', agent);
+    assert.equal(check(report, 'review').status, 'pass', agent);
+  }
+  const dir = project();
+  install(dir, 'codex');
+  assert.equal(check(doctor(dir, '--agent', 'codex').report, 'skills').status, 'pass');
+});
+
+test('doctor reports review as unavailable without the review Skills or the factory-check agent', () => {
+  const skills = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(skills, 'claude', ['code-review']);
+  assert.match(check(doctorAt(skills, project()).report, 'review').message, /code-review/);
+  const agent = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(agent, 'claude', ['factory-check']);
+  const review = check(doctorAt(agent, project()).report, 'review');
+  assert.equal(review.status, 'fail');
+  assert.match(review.message, /factory-check\.md/);
 });
