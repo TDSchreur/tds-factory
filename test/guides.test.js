@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // The README and the colleague guides are the first thing a colleague reads; keep their links and commands true.
-const GUIDES = ['README.md', 'docs/install.md', 'docs/usage.md'];
+const GUIDES = ['README.md', 'docs/install.md', 'docs/usage.md', 'docs/dashboard.md'];
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
 // Subcommands and flags the CLI knows, taken from its own usage text.
@@ -43,3 +43,17 @@ for (const file of GUIDES) {
     }
   });
 }
+
+test('every Mermaid block opens with a diagram type, and the README flow reads top to bottom', () => {
+  for (const file of GUIDES) {
+    for (const [, body] of read(file).matchAll(/```mermaid\n([\s\S]*?)```/g)) assert.match(body, /^(flowchart (TB|TD|LR|RL|BT)|stateDiagram-v2|sequenceDiagram)\b/, `${file}: Mermaid diagram type`);
+  }
+  assert.match(read('README.md'), /```mermaid\nflowchart TB\n/);
+});
+
+test('the README lists the guides in a Documentation section', () => {
+  const readme = read('README.md');
+  const section = readme.slice(readme.indexOf('## Documentation'));
+  assert.ok(section.length < readme.length, 'has a Documentation section');
+  for (const doc of ['docs/install.md', 'docs/usage.md', 'docs/dashboard.md', 'docs/capabilities.md', 'docs/evaluation.md', 'docs/releasing.md']) assert.ok(section.includes(`(${doc})`), doc);
+});

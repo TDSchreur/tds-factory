@@ -2,14 +2,14 @@
 
 TDS Factory is a small software factory. It installs a set of skills into Claude, Codex and Copilot, and one of those skills, `factory`, walks a piece of work from idea to pull request.
 
-**New here?** Read the [install guide](docs/install.md) to set the Factory up, then the [usage guide](docs/usage.md) to run your first piece of work.
+**New here?** Read the [install guide](docs/install.md) to set the Factory up, then the [usage guide](docs/usage.md) to run your first piece of work. Run `tds-factory doctor` in a project first: it checks, without changing anything, whether the project is ready for a Run.
 
 ## The flow
 
 A Run is one pass through five Stages, after a Preflight (`tds-factory doctor` runs its checks). Start it with the `factory` skill (`/factory`).
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Preflight
         P[conventions and verify command]
     end
@@ -103,17 +103,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 ## Dashboard
 
-`dashboard` serves the `.factory/` folder of the main checkout of the current repository (from any subfolder or linked worktree) on 127.0.0.1 and can delete completed or abandoned Runs after confirmation. Deleting a Run also removes the Run worktree that `run start` created (not an adopted one) after checking that nothing in it would be lost: a clean worktree is removed even when it has initialised submodules, and if it has uncommitted changes (including untracked files or a changed submodule) or git cannot remove it, the removal is refused, the message names the cause and the Run stays. Branches are never deleted. Without `--port`, each repository gets its own port (4300 to 4999, derived from the path of its main checkout), so Dashboards for several repositories run side by side and keep their URL across restarts. If that port is busy, the Dashboard takes a free one. `--port` uses exactly the port you give. It prints the URL when it starts.
-
-The page is built with Preact and htm, committed in `dashboard/vendor/` (see `dashboard/vendor/README.md` for versions and how to update them) and loaded as ES modules, so there is no build step. See `docs/adr/0003-preact-htm-dashboard.md`.
-
-| Route | Returns |
-|---|---|
-| `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Check cards show a chip per verdict: Standards, Spec, Security and Infrastructure. |
-| `/style.css`, `/app.js`, `/components.js`, `/model.js`, `/markdown.js`, `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` | The Dashboard's stylesheet, ES modules and vendored libraries, from the `dashboard/` folder. Only these names are served. |
-| `/api/views` | Run records interpreted for the Dashboard. |
-| `/api/runs` | A JSON list of Run records. A record that cannot be read comes back with `unreadable: true`. |
-| `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
+`tds-factory dashboard` serves every Run of the repository on 127.0.0.1, one card per Run in a column per Stage. See the [Dashboard guide](docs/dashboard.md) for what it shows, which routes it serves and how deleting a Run works: it also removes the Run worktree, and refuses when that has uncommitted changes.
 
 Add `.factory/` to the `.gitignore` of any project you run the factory in.
 
@@ -137,6 +127,13 @@ The upstream repos are git submodules in `vendor/`. `skills/` holds committed co
 
 MIT, see [LICENSE](LICENSE). The skills come from other MIT projects; their notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-## More
+## Documentation
 
-`GLOSSARY.md` defines the terms used here (Run, Stage, Spec, Ticket and others). Design decisions live in `docs/adr/`.
+- [Install guide](docs/install.md): set the Factory up and prepare a project.
+- [Usage guide](docs/usage.md): run a piece of work from idea to pull request.
+- [Dashboard guide](docs/dashboard.md): the page that shows every Run.
+- [Capability matrix](docs/capabilities.md): what each Agent target guarantees.
+- [Agent evaluation](docs/evaluation.md): test an agent against the Flow.
+- [Release guide](docs/releasing.md): how maintainers publish a Release.
+- [`GLOSSARY.md`](GLOSSARY.md): the terms used here (Run, Stage, Spec, Ticket and others).
+- [`docs/adr/`](docs/adr/): design decisions.
