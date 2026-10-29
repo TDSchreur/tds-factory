@@ -103,22 +103,69 @@ function withRunLock(root, id, action) {
   try { return action(); }
   finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
-function updateRun(projectDir, id, data) {
+// Reads a Run record under its lock, hands it to change, and writes back what change returns.
+function changeRun(projectDir, id, change) {
   if (!validId(id)) throw new Error('invalid Run id');
   const root = runRoot(projectDir, false);
   return withRunLock(root, id, () => {
-  const dir = path.join(root, id);
-  if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
-  const file = path.join(dir, 'run.json');
-  if (fs.lstatSync(file).isSymbolicLink()) throw new Error('Run record must not be a symlink');
-  const old = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
+    const dir = path.join(root, id);
+    if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
+    const file = path.join(dir, 'run.json');
+    if (fs.lstatSync(file).isSymbolicLink()) throw new Error('Run record must not be a symlink');
+    const old = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
+    write(dir, change(old));
+  });
+}
+function updateRun(projectDir, id, data) {
+  changeRun(projectDir, id, (old) => {
+    validate(data);
+    const locked = gated.find((key) => key in data);
+    if (locked) throw new Error(`${locked} can only change through a Run transition`);
+    if (data.status === 'done') throw new Error('a Run is completed with run complete');
+    if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
+    return apply(old, data);
+  });
+}
+
+// Transitions take only an optional activity line besides their own arguments.
+function moveRun(projectDir, id, data, move) {
   validate(data);
-  const locked = gated.find((key) => key in data);
-  if (locked) throw new Error(`${locked} can only change through a Run transition`);
-  if (data.status === 'done') throw new Error('a Run is completed with run complete');
-  if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
-  write(dir, apply(old, data));
+  if (Object.keys(data).some((key) => key !== 'activity')) throw new Error('a transition accepts only activity');
+  changeRun(projectDir, id, (old) => {
+    if (old.status !== 'running') throw new Error(`only a running Run can change Stage or finish (this one is ${old.status})`);
+    const { record, activity } = move(old);
+    return { ...record, activity: data.activity ?? activity, updated: new Date().toISOString() };
+  });
+}
+function transitionRun(projectDir, id, to, data = {}) {
+  moveRun(projectDir, id, data, (old) => {
+    const next = stages[stages.indexOf(old.stage) + 1];
+    if (!stages.includes(to) || to !== next) throw new Error(`a Run in ${old.stage} can only move to ${next ?? 'nowhere'}, not ${to}`);
+    if (to === 'build') {
+      const missing = [!old.spec_link && 'a Spec link', !(old.tickets?.length > 0) && 'Tickets'].filter(Boolean);
+      if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
+    }
+    if (to === 'check' && old.tickets_done !== old.tickets_total) throw new Error(`Check needs every Ticket done (${old.tickets_done} of ${old.tickets_total})`);
+    if (to === 'finish') throw new Error('Finish needs a clean or Accepted Check');
+    return { record: { ...old, stage: to }, activity: `Starting ${to}` };
+  });
+}
+function reworkRun(projectDir, id, data = {}) {
+  moveRun(projectDir, id, data, (old) => {
+    if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
+    if ((old.check_loops ?? 0) >= 2) throw new Error('the Check loop limit of 2 is reached');
+    const record = { ...old, stage: 'build', check_loops: (old.check_loops ?? 0) + 1 };
+    for (const key of [...verdicts, 'verify', 'accepted']) delete record[key];
+    return { record, activity: 'Rework: back to Build' };
+  });
+}
+function completeRun(projectDir, id, data = {}) {
+  moveRun(projectDir, id, data, (old) => {
+    if (old.stage !== 'finish') throw new Error('only a Run in Finish can be completed');
+    if (!old.pr) throw new Error('completing a Run needs a PR link');
+    if (old.tickets_done > old.tickets_total) throw new Error(`more Tickets done (${old.tickets_done}) than counted (${old.tickets_total})`);
+    return { record: { ...old, status: 'done', waiting_on_human: false, waiting_reason: '' }, activity: 'Done' };
   });
 }
 
@@ -230,6 +277,9 @@ export function openRunStore(callerDir) {
     projectDir,
     start: (data) => startRun(projectDir, data),
     update: (id, data) => updateRun(projectDir, id, data),
+    transition: (id, to, data) => transitionRun(projectDir, id, to, data),
+    rework: (id, data) => reworkRun(projectDir, id, data),
+    complete: (id, data) => completeRun(projectDir, id, data),
     list: () => listRuns(runsDir),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     remove: (id) => removeRun(projectDir, id),

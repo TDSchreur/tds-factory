@@ -13,6 +13,9 @@ const USAGE = `Usage:
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
+  tds-factory run transition --id ID --to prepare|build|check|finish [--data JSON]
+  tds-factory run rework --id ID [--data JSON]
+  tds-factory run complete --id ID [--data JSON]
 
 install defaults to the user-global directory; --project installs into the current directory.`;
 
@@ -24,6 +27,7 @@ const { values, positionals } = parseArgs({
     force: { type: 'boolean', default: false },
     data: { type: 'string' },
     id: { type: 'string' },
+    to: { type: 'string' },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
   },
@@ -33,11 +37,15 @@ try {
   const [command] = positionals;
   if (values.version) console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   else if (command === 'run') {
-    const data = JSON.parse(values.data);
+    const data = values.data === undefined ? undefined : JSON.parse(values.data);
     const store = openRunStore(process.cwd());
-    if (positionals[1] === 'start') console.log(store.start(data));
-    else if (positionals[1] === 'update') store.update(values.id, data);
-    else throw new Error('expected run start or run update');
+    const [, op] = positionals;
+    if (op === 'start') console.log(store.start(data));
+    else if (op === 'update') store.update(values.id, data);
+    else if (op === 'transition') store.transition(values.id, values.to, data);
+    else if (op === 'rework') store.rework(values.id, data);
+    else if (op === 'complete') store.complete(values.id, data);
+    else throw new Error('expected run start, update, transition, rework or complete');
   }
   else if (command === 'sync') sync();
   else if (command === 'install') install(values);
