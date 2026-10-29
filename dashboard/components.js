@@ -58,6 +58,8 @@ function Tickets({ run }) {
 }
 
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
+const pauseLabel = (run) => run.waiting ? 'Needs you' : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
+
 export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onDelete }) {
   const done = run.column === 'done';
   const age = ageMs(run.updated);
@@ -76,7 +78,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
   const toggleText = expanded ? 'Hide details' : 'Show details';
   const classes = ['card', run.unreadable && 'unreadable', run.waiting && 'waiting', selected && 'selected', run.status === 'abandoned' && 'abandoned'].filter(Boolean).join(' ');
   return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => { if (e.key === 'Enter') onSelect(run.id); }}>
-    ${run.waiting && html`<div class="reason">Needs you${run.reason ? ': ' + run.reason : ''}</div>`}
+    ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
     <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
     ${done && run.prState === 'open' && html`<div class="open-pr"><span class="badge open">Open PR</span></div>`}
@@ -176,7 +178,7 @@ export function Detail({ run, onClose }) {
   return html`<section id="detail" aria-label="Run detail">
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
-      ${run.waiting && html`<div class="reason">Needs you${run.reason ? ': ' + run.reason : ''}</div>`}
+      ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
     </header>

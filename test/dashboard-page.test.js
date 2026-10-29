@@ -321,3 +321,18 @@ test('a collapsed Done card with an open pull request shows an Open PR badge', a
     assert.equal(await badge('Merged one'), null);
   } finally { await page.close(); }
 });
+
+test('cards and detail distinguish paused Runs from waiting on a person', async (t) => {
+  const page = await openPage(t, { runs: [
+    run({ id: 'w', waiting: true, reason: 'answer' }),
+    run({ id: 'v', status: 'verification-unavailable', reason: 'no compiler' }),
+    run({ id: 'i', status: 'interrupted', reason: 'signal' }),
+  ] });
+  if (!page) return;
+  try {
+    assert.deepEqual(await page.execute("return [...document.querySelectorAll('.card .reason')].map(x => x.textContent).sort()"), ['Agent interrupted: signal', 'Needs you: answer', 'Verification unavailable: no compiler']);
+    assert.equal(await page.execute("return document.querySelectorAll('.card.waiting').length"), 1);
+    await page.execute("document.querySelector('[data-id=i]').click()");
+    assert.equal(await page.execute("return document.querySelector('#detail .reason').textContent"), 'Agent interrupted: signal');
+  } finally { await page.close(); }
+});

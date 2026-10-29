@@ -441,3 +441,42 @@ test('verify does not write through a symlink planted as verify.log', () => {
   assert.equal(verify(cwd, id).status, 0);
   assert.equal(readFileSync(target, 'utf8'), 'keep');
 });
+
+test('paused Runs require a reason and resume without implying human waiting', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  for (const status of ['verification-unavailable', 'interrupted']) {
+    assert.notEqual(update(cwd, id, { status }).status, 0);
+    assert.notEqual(update(cwd, id, { status, status_reason: '  ' }).status, 0);
+    assert.equal(update(cwd, id, { status, status_reason: 'needs recovery' }).status, 0);
+    assert.equal(read(cwd, id).waiting_on_human, false);
+    assert.equal(read(cwd, id).status_reason, 'needs recovery');
+    assert.notEqual(transition(cwd, id, 'prepare').status, 0);
+    assert.equal(update(cwd, id, { status: 'running' }).status, 0);
+    assert.equal(read(cwd, id).status_reason, '');
+  }
+  assert.notEqual(update(cwd, id, { status_reason: 'orphan reason' }).status, 0);
+});
+
+test('unavailable Verify and interrupted Verify have separate pause states', () => {
+  const cwd = repo();
+  const missing = startRun(cwd, 'tds_missing_verify_command_123');
+  assert.notEqual(verify(cwd, missing).status, 0);
+  assert.equal(read(cwd, missing).status, 'verification-unavailable');
+  assert.match(read(cwd, missing).status_reason, /not found|unavailable/i);
+  assert.notEqual(read(cwd, missing).verify?.exit_code, 0);
+  const killed = startRun(cwd, 'kill -TERM $$');
+  assert.notEqual(verify(cwd, killed).status, 0);
+  assert.equal(read(cwd, killed).status, 'interrupted');
+  assert.match(read(cwd, killed).status_reason, /SIGTERM/);
+  assert.notEqual(read(cwd, killed).verify?.exit_code, 0);
+});
+
+test('Verify with a missing worktree records that verification is unavailable', () => {
+  const cwd = repo();
+  const id = startRun(cwd, 'true');
+  git(cwd, 'worktree', 'remove', read(cwd, id).worktree);
+  assert.notEqual(verify(cwd, id).status, 0);
+  assert.equal(read(cwd, id).status, 'verification-unavailable');
+  assert.match(read(cwd, id).status_reason, /worktree.*missing/);
+});

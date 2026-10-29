@@ -84,7 +84,7 @@ Moving a Run forward becomes a set of named Run store operations that check thei
 ## Out of Scope
 
 - The Dashboard merge action was handled separately in the Dashboard merge Evidence Spec.
-- Repair and recovery, lock ownership and cleanup when start fails midway.
+- Repair and recovery, lock ownership and cleanup when start fails midway were deferred here; the follow-up [Explicit Run recovery](run-recovery.md) Spec now defines that behavior, including distinct non-human pause statuses. Its additions supersede this exclusion.
 - Changes to how composed Skills behave, the agent capability matrix and agent evaluations.
 - Transactional install and sync, local edit detection and the provenance inventory.
 - Sandboxing the Verify command; the project still owns that trust decision.

@@ -1,9 +1,11 @@
 import { test } from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import childProcess, { spawnSync } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { openRunStore } from '../src/run-store.js';
 import { startDashboard } from '../src/dashboard.js';
 import { git, repo, linked } from './git-repo.js';
@@ -217,4 +219,55 @@ test('a branch the user already made with the Run id does not block start', () =
   const id = openRunStore(main).start(start);
   assert.notEqual(id, taken);
   assert.equal(git(record(main, id).worktree, 'branch', '--show-current'), id);
+});
+
+
+test('start rolls back the new worktree and branch if the record cannot be persisted', () => {
+  const main = repo();
+  const rename = fs.renameSync;
+  fs.renameSync = (...args) => { if (args[1].endsWith('/run.json')) throw new Error('simulated record write failure'); return rename(...args); };
+  try { assert.throws(() => openRunStore(main).start(start), /simulated record write failure/); }
+  finally { fs.renameSync = rename; }
+  assert.deepEqual(branches(main), ['main']);
+  assert.equal(git(main, 'worktree', 'list', '--porcelain').match(/^worktree /gm).length, 1);
+  assert.deepEqual(readdirSync(join(main, '.factory', 'runs')), []);
+});
+
+test('failed start keeps a dirty worktree and names the original and rollback failures', () => {
+  const main = repo();
+  const rename = fs.renameSync;
+  fs.renameSync = (...args) => {
+    if (args[1].endsWith('/run.json')) {
+      const id = args[1].split('/').at(-2);
+      writeFileSync(join(main, '.factory', 'worktrees', id, 'unfinished'), 'keep me');
+      throw new Error('simulated record write failure');
+    }
+    return rename(...args);
+  };
+  try { assert.throws(() => openRunStore(main).start(start), /simulated record write failure; rollback failed: worktree remains/); }
+  finally { fs.renameSync = rename; }
+  const branch = branches(main).find((b) => b !== 'main');
+  assert.equal(readFileSync(join(main, '.factory', 'worktrees', branch, 'unfinished'), 'utf8'), 'keep me');
+});
+
+
+test('failed start preserves a branch advanced while rollback is deleting it', () => {
+  const main = repo();
+  const rename = fs.renameSync, spawn = childProcess.spawnSync;
+  let advanced, branch;
+  fs.renameSync = (...args) => { if (args[1].endsWith('/run.json')) throw new Error('record write failed'); return rename(...args); };
+  childProcess.spawnSync = (command, args, options) => {
+    if (command === 'git' && ((args[0] === 'branch' && args[1] === '-D') || (args[0] === 'update-ref' && args[1] === '-d' && args[2].startsWith('refs/heads/')))) {
+      branch = args[2].replace(/^refs\/heads\//, '');
+      const old = git(main, 'rev-parse', `refs/heads/${branch}`);
+      advanced = git(main, 'commit-tree', `${old}^{tree}`, '-p', old, '-m', 'concurrent work');
+      git(main, 'update-ref', `refs/heads/${branch}`, advanced, old);
+    }
+    return spawn(command, args, options);
+  };
+  syncBuiltinESMExports();
+  try { assert.throws(() => openRunStore(main).start(start), /record write failed.*branch .*remains/); }
+  finally { fs.renameSync = rename; childProcess.spawnSync = spawn; syncBuiltinESMExports(); }
+  assert.ok(advanced);
+  assert.equal(git(main, 'rev-parse', `refs/heads/${branch}`), advanced);
 });
