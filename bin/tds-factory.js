@@ -5,11 +5,13 @@ import { install } from '../src/install.js';
 import { openRunStore } from '../src/run-store.js';
 import { sync } from '../src/sync.js';
 import { startDashboard } from '../src/dashboard.js';
+import { doctor } from '../src/doctor.js';
 
 const USAGE = `Usage:
   tds-factory --version
   tds-factory sync [--force]
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force] [--dry-run]
+  tds-factory doctor [--agent claude|codex|copilot] [--json]
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
@@ -28,7 +30,7 @@ install defaults to the user-global directory; --project installs into the curre
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
-    agent: { type: 'string', default: 'all' },
+    agent: { type: 'string' },
     project: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
@@ -79,7 +81,13 @@ try {
     else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect or repair');
   }
   else if (command === 'sync') sync({ force: values.force });
-  else if (command === 'install') install({ ...values, dryRun: values['dry-run'] });
+  else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
+  else if (command === 'doctor') {
+    const report = doctor({ projectDir: process.cwd(), agent: values.agent });
+    if (values.json) console.log(JSON.stringify(report, null, 2));
+    else for (const { id, status, message } of report.checks) console.log(`${status.padEnd(7)} ${id}: ${message.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?')}`);
+    if (!report.ok) process.exitCode = 1;
+  }
   else if (command === 'dashboard') {
     const port = values.port === undefined ? undefined : Number(values.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) throw new Error(`invalid port: ${values.port}`);

@@ -27,7 +27,7 @@ In Copilot in VS Code, type `/`, choose `factory`, and write the description aft
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
-The agent first checks that the project is ready: the setup files exist and `tds-factory` runs. If something is missing it stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
+The agent first checks that the project is ready, by running `tds-factory doctor` (see "Check readiness without starting a Run" below). If something is missing it stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
 
 ## 2. Define: answer the questions
 
@@ -113,10 +113,15 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Ticket | One small unit of work cut from the Spec, an issue in GitHub. |
 | Check axis | One of the independent reviews in Check: Standards, Spec, Security, Infrastructure. |
 | Clean | A Check where every axis passes (Infrastructure may be skipped) and the verify command passed, all for the current code with nothing uncommitted. Only a clean Check goes on without asking you. |
+| Doctor | The read-only `tds-factory doctor` command that checks whether a project is ready for a Run. |
 | Run worktree | The git worktree and branch a Run works in, so Runs never share files. |
 | Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
 
 The full list is in [GLOSSARY.md](../GLOSSARY.md). What each Agent target guarantees, such as how read-only the Check agents are, is in the [capability matrix](capabilities.md). To test an agent against the Flow, see the [agent evaluation](evaluation.md).
+
+## Check readiness without starting a Run
+
+Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the verify command. It exits with 1 until every check passes. `/factory` runs it first; a missing verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish.
 
 ## Recover a Run
 

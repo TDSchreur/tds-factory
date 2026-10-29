@@ -4,6 +4,7 @@ import os from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
+import { originDefaultBranch } from './origin.js';
 
 const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 const paused = ['verification-unavailable', 'interrupted'];
@@ -15,6 +16,16 @@ const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
 const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha'];
 const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
+// Why a Verify command cannot be run at all; undefined when it is usable. Doctor reports the same rule.
+export function verifyCommandProblem(commands) {
+  if (typeof commands !== 'string' || !commands.trim()) return 'the Verify command is empty';
+  if (commands.includes('\0')) return 'the Verify command contains a NUL byte';
+}
+// An empty Verify command stands for one the user has not given yet; any other unusable one is rejected.
+function checkCommands(commands) {
+  const problem = commands === '' ? undefined : verifyCommandProblem(commands);
+  if (problem) throw new Error(problem);
+}
 function validate(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
   for (const [key, value] of Object.entries(data)) {
@@ -71,12 +82,12 @@ function startRun(projectDir, data) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
+  checkCommands(data.commands);
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   if (git('rev-parse', '--git-dir').status !== 0) throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) throw new Error('a Run worktree needs a git repository with at least one commit');
-  const remoteHead = git('ls-remote', '--symref', 'origin', 'HEAD');
-  const branch = remoteHead.status === 0 && remoteHead.stdout.match(/^ref: refs\/heads\/([^\s]+)\s+HEAD$/m)?.[1];
-  if (!branch || git('check-ref-format', '--branch', branch).status !== 0) throw new Error(`cannot determine origin default branch: ${remoteHead.stderr.trim()}`);
+  const { branch, error } = originDefaultBranch(projectDir);
+  if (!branch) throw new Error(`cannot determine origin default branch: ${error}`);
   const fetchRef = `refs/tds-factory/fetch/${randomUUID()}`;
   const fetched = git('fetch', '--no-write-fetch-head', 'origin', `+refs/heads/${branch}:${fetchRef}`);
   if (fetched.status !== 0) throw new Error(`cannot fetch origin default branch: ${fetched.stderr.trim()}`);
@@ -182,6 +193,7 @@ function updateRun(projectDir, id, data) {
     if (locked) throw new Error(`${locked} can only change through a Run transition`);
     // Evidence is only worth something if the command it came from cannot be swapped: set it once.
     if ('commands' in data && old.commands) throw new Error('the Verify command is already set; start a new Run to change it');
+    if ('commands' in data) checkCommands(data.commands);
     if (data.status === 'done') throw new Error('a Run is completed with run complete');
     if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
     return apply(old, data);
@@ -202,6 +214,9 @@ function transitionRun(projectDir, id, to, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     const next = stages[stages.indexOf(old.stage) + 1];
     if (!stages.includes(to) || to !== next) throw new Error(`a Run in ${old.stage} can only move to ${next ?? 'nowhere'}, not ${to}`);
+    // Everything from Build on depends on verification, so an unusable command stops the Run here.
+    const commandProblem = ['build', 'check', 'finish'].includes(to) && verifyCommandProblem(old.commands);
+    if (commandProblem) throw new Error(`${to[0].toUpperCase()}${to.slice(1)} needs a usable Verify command: ${commandProblem}`);
     if (to === 'build') {
       const missing = [!old.spec_link && 'a Spec link', !(old.tickets?.length > 0) && 'Tickets'].filter(Boolean);
       if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
@@ -273,7 +288,8 @@ function worktreeState(record) {
 function verifyRun(projectDir, id) {
   const { dir, record } = readRun(projectDir, id);
   if (record.status !== 'running') throw new Error(`a ${record.status} Run cannot be verified, only a running one`);
-  if (!record.commands?.trim()) throw new Error('the Run has no Verify command');
+  const commandProblem = verifyCommandProblem(record.commands);
+  if (commandProblem) throw new Error(`the Run has no usable Verify command: ${commandProblem}`);
   let state;
   try { state = worktreeState(record); } catch (err) {
     changeRun(projectDir, id, (old) => {

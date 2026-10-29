@@ -23,11 +23,15 @@ One step of the Flow: Define, Prepare, Build, Check or Finish.
 _Avoid_: Phase, step
 
 **Preflight**:
-The checks before the first Stage: project setup and Conventions. Not a Stage.
+The checks before the first Stage: project setup and Conventions, run with the Doctor. Not a Stage.
 
 **Check axis**:
 One of the independent reviews in the Check Stage (Standards, Spec, Security, Infrastructure), each reporting its own verdict. Infrastructure may be skipped when no infrastructure file changed.
 _Avoid_: Reviewer, Gate
+
+**Doctor**:
+The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`.
+_Avoid_: Linter, Health check
 
 **Clean**:
 A Check whose every Check axis is `pass`, with Infrastructure allowed to be `skipped`, backed by current Evidence: a passing Verify result and every verdict recorded for the code as it is now, with nothing uncommitted. Only a clean Check continues to Finish without asking the user.

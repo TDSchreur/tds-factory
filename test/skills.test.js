@@ -18,7 +18,7 @@ const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
 
 test('the factory invokes exactly the skills we expect', () => {
-  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'to-spec', 'to-tickets', 'unslop'];
+  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'tdd', 'to-spec', 'to-tickets', 'unslop'];
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
@@ -225,4 +225,12 @@ test('upstream implement-spec steps that spawn subagents, branches, PRs or revie
   for (const line of upstream['implement-spec'].split('\n').filter((l) => /^\d+\./.test(l) && /subagent|branch|worktree|draft PR|code-review/i.test(l))) {
     assert.ok(covered.some((f) => line.includes(f)), `implement-spec step not overridden: ${line}`);
   }
+});
+
+test('Preflight runs the read-only doctor and stops on anything but a missing Verify command', () => {
+  const preflight = section('Preflight');
+  assert.match(preflight, /tds-factory doctor --json --agent/);
+  assert.ok(preflight.indexOf('tds-factory doctor') < preflight.indexOf('empty `commands`'), 'doctor runs before the Run is created');
+  assert.match(preflight, /other than `verify-command`/);
+  assert.doesNotMatch(preflight, /\/setup-matt-pocock-skills/);
 });

@@ -198,8 +198,44 @@ test('verify refuses a Run with no Verify command, and verify results cannot be 
   assert.notEqual(verify(cwd, id).status, 0);
   assert.equal('verify' in read(cwd, id), false);
   assert.notEqual(update(cwd, id, { verify: { exit_code: 0 } }).status, 0);
-  const blank = startRun(cwd, '   ');
-  assert.notEqual(verify(cwd, blank).status, 0, 'a blank command is no command');
+});
+
+test('a Run cannot start with, or be given, a blank or NUL-containing Verify command', () => {
+  const cwd = repo();
+  for (const commands of ['   ', 'npm\0 test']) {
+    const start = run(cwd, 'start', '--data', json({ title: 'Example', agent: 'codex', commands, conventions: [] }));
+    assert.notEqual(start.status, 0, json(commands));
+  }
+  const id = startRun(cwd, '');
+  for (const commands of ['   ', 'npm\0 test']) assert.notEqual(update(cwd, id, { commands }).status, 0, json(commands));
+  assert.equal(read(cwd, id).commands, '');
+  assert.equal(update(cwd, id, { commands: 'npm test' }).status, 0);
+});
+
+test('Build, Check and Finish need a usable Verify command, so a Run without one cannot progress', () => {
+  const cwd = repo();
+  const id = startRun(cwd, '');
+  update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
+  assert.equal(transition(cwd, id, 'prepare').status, 0);
+  const refused = transition(cwd, id, 'build');
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /usable Verify command/);
+  assert.equal(read(cwd, id).stage, 'prepare');
+  for (const [stage, to] of [['build', 'check'], ['check', 'finish']]) {
+    force(cwd, id, { stage, commands: ' ' });
+    const result = transition(cwd, id, to);
+    assert.match(result.stderr, /usable Verify command/, to);
+    assert.equal(read(cwd, id).stage, stage);
+  }
+  force(cwd, id, { stage: 'prepare', commands: 'npm test' });
+  assert.equal(transition(cwd, id, 'build').status, 0);
+});
+
+test('verify refuses a blank Verify command found in the record', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  force(cwd, id, { commands: '   ' });
+  assert.match(verify(cwd, id).stderr, /usable Verify command/);
 });
 
 test('a verdict is stamped with the head and the Check attempt', () => {

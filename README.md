@@ -8,7 +8,7 @@ It is inspired by [zazencodes software-factory-claude-code](https://github.com/z
 
 ## The flow
 
-A Run is one pass through five Stages, after a Preflight. Start it with the `factory` skill (`/factory`).
+A Run is one pass through five Stages, after a Preflight (`tds-factory doctor` runs its checks). Start it with the `factory` skill (`/factory`).
 
 ```mermaid
 flowchart LR
