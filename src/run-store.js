@@ -4,6 +4,7 @@ import os from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
+import { originDefaultBranch } from './origin.js';
 
 const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 const paused = ['verification-unavailable', 'interrupted'];
@@ -74,9 +75,8 @@ function startRun(projectDir, data) {
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   if (git('rev-parse', '--git-dir').status !== 0) throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) throw new Error('a Run worktree needs a git repository with at least one commit');
-  const remoteHead = git('ls-remote', '--symref', 'origin', 'HEAD');
-  const branch = remoteHead.status === 0 && remoteHead.stdout.match(/^ref: refs\/heads\/([^\s]+)\s+HEAD$/m)?.[1];
-  if (!branch || git('check-ref-format', '--branch', branch).status !== 0) throw new Error(`cannot determine origin default branch: ${remoteHead.stderr.trim()}`);
+  const { branch, error } = originDefaultBranch(projectDir);
+  if (!branch) throw new Error(`cannot determine origin default branch: ${error}`);
   const fetchRef = `refs/tds-factory/fetch/${randomUUID()}`;
   const fetched = git('fetch', '--no-write-fetch-head', 'origin', `+refs/heads/${branch}:${fetchRef}`);
   if (fetched.status !== 0) throw new Error(`cannot fetch origin default branch: ${fetched.stderr.trim()}`);
