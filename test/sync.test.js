@@ -207,3 +207,23 @@ test('replaceDir keeps the previous folder and leaves no staging folder when fil
   assert.equal(readFileSync(join(dest, 'SKILL.md'), 'utf8'), 'new');
   assert.deepEqual(readdirSync(dir), ['skill']);
 });
+
+test('sync refuses to replace a synced skill edited by hand, unless forced', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  quietSync({ root, skillsDir });
+  writeFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'my edit');
+  assert.throws(() => quietSync({ root, skillsDir }), /edited locally.*--force/);
+  assert.equal(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), 'my edit');
+  quietSync({ root, skillsDir, force: true });
+  assert.match(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), /^name: alpha/m);
+  quietSync({ root, skillsDir });
+});
+
+test('sync still replaces a folder whose marker has no hash (older sync)', () => {
+  const { root, skillsDir } = fakeRepo(['vendor/up/skills/alpha'], { alpha }, '');
+  mkdirSync(join(skillsDir, 'alpha'));
+  writeFileSync(join(skillsDir, 'alpha', MARKER), 'vendor/up/skills/alpha\n');
+  writeFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'old');
+  quietSync({ root, skillsDir });
+  assert.match(readFileSync(join(skillsDir, 'alpha', 'SKILL.md'), 'utf8'), /^name: alpha/m);
+});

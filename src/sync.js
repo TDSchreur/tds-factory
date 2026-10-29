@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, SKILLS_DIR, MARKER } from './paths.js';
 import { replaceDir } from './replace-dir.js';
+import { hashLine, modifiedLocally } from './tree-hash.js';
 
 // Skills the factory flow invokes; the model must be able to call them, so upstream's
 // disable-model-invocation flag is removed from their copies.
@@ -29,8 +30,8 @@ const leaves = (base, target) => {
 
 // Copies the skills listed in the manifest from the vendor submodules into skills/.
 // An entry is a path, or { path, as } to ship the skill under another name.
-// Our own skills (no marker) are never touched.
-export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
+// Our own skills (no marker) are never touched, and a marked skill edited by hand is kept unless forced.
+export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}) {
   const { skills } = JSON.parse(fs.readFileSync(path.join(root, 'skills.manifest.json'), 'utf8'));
   const invoked = invokedByFactory(skillsDir);
   // Validate every entry first, so a bad one leaves the skills folder untouched.
@@ -56,6 +57,9 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
     if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, MARKER))) {
       throw new Error(`skills/${name} is not synced from upstream; refusing to overwrite`);
     }
+    if (!force && fs.existsSync(path.join(dest, MARKER)) && modifiedLocally(dest)) {
+      throw new Error(`skills/${name} was edited locally; refusing to replace it (use --force)`);
+    }
     // Shipped skills are plain files: a link could make the rewrite below touch files outside the skill.
     for (const e of fs.readdirSync(src, { recursive: true, withFileTypes: true })) {
       if (e.isSymbolicLink()) throw new Error(`skill ${name} contains a symlink: ${path.relative(src, path.join(e.parentPath ?? e.path, e.name))}`);
@@ -79,7 +83,7 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR } = {}) {
         const skillFile = f === 'SKILL.md';
         fs.writeFileSync(file, rewrite(fs.readFileSync(file, 'utf8'), { skillFile, from: path.basename(rel), to: name, unflag: skillFile && invoked.has(name) }));
       }
-      fs.writeFileSync(path.join(staging, MARKER), `${rel}\n`);
+      fs.writeFileSync(path.join(staging, MARKER), `${rel}\n${hashLine(staging)}`);
     });
     console.log(`synced ${name}`);
   }

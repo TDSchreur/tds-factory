@@ -4,6 +4,7 @@ import path from 'node:path';
 import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
 import { targets } from './flow.js';
 import { replaceDir } from './replace-dir.js';
+import { hashLine, modifiedLocally } from './tree-hash.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
 export function install({ agent, project, force }) {
@@ -29,9 +30,13 @@ export function install({ agent, project, force }) {
         console.warn(`skip ${name}/${skill}: exists and was not installed by tds-factory (use --force)`);
         continue;
       }
+      if (!replaceable && fs.existsSync(dest) && modifiedLocally(dest)) {
+        console.warn(`skip ${name}/${skill}: edited locally (use --force to replace)`);
+        continue;
+      }
       replaceDir(dest, (staging) => {
         fs.cpSync(path.join(SKILLS_DIR, skill), staging, { recursive: true });
-        fs.writeFileSync(path.join(staging, MARKER), '');
+        fs.writeFileSync(path.join(staging, MARKER), hashLine(staging));
       });
       console.log(`installed ${name}/${skill} -> ${dest}`);
     }

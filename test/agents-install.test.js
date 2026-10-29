@@ -63,3 +63,17 @@ test('install keeps a dangling agent symlink', () => {
   installIn(project, 'claude');
   assert.ok(lstatSync(link).isSymbolicLink());
 });
+
+test('install skips an installed skill edited by hand, unless forced', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-skill-edit-'));
+  installIn(project, 'claude');
+  const file = join(project, '.claude/skills/tdd/SKILL.md');
+  const shipped = readFileSync(file, 'utf8');
+  writeFileSync(file, 'my edit');
+  installIn(project, 'claude');
+  assert.equal(readFileSync(file, 'utf8'), 'my edit');
+  installIn(project, 'claude', true);
+  assert.equal(readFileSync(file, 'utf8'), shipped);
+  installIn(project, 'claude');
+  assert.equal(readFileSync(file, 'utf8'), shipped);
+});

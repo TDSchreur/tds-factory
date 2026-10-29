@@ -8,7 +8,7 @@ import { startDashboard } from '../src/dashboard.js';
 
 const USAGE = `Usage:
   tds-factory --version
-  tds-factory sync
+  tds-factory sync [--force]
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force]
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
@@ -76,7 +76,7 @@ try {
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
     else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect or repair');
   }
-  else if (command === 'sync') sync();
+  else if (command === 'sync') sync({ force: values.force });
   else if (command === 'install') install(values);
   else if (command === 'dashboard') {
     const port = values.port === undefined ? undefined : Number(values.port);
