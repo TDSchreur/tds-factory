@@ -18,12 +18,14 @@ const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
 
 test('the factory invokes exactly the skills we expect', () => {
-  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'ponytail', 'pr', 'security-scan', 'tdd', 'to-spec', 'to-tickets', 'unslop'];
+  const expected = ['code-review', 'grill-with-docs', 'implement-spec', 'pr', 'security-scan', 'tdd', 'to-spec', 'to-tickets', 'unslop'];
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
-test('Prepare runs ponytail in lite mode', () => {
-  assert.match(section('Prepare'), /Invoke `ponytail` in lite mode \(`lite` as its argument\)/);
+test('Build asks for the smaller option in one line and the factory no longer invokes ponytail', () => {
+  assert.match(section('Build'), /Build what the Ticket asks; if a smaller option exists, name it in one line in `build\.md`/);
+  assert.match(section('Prepare'), /no work of its own yet/);
+  assert.ok(!invoked.includes('ponytail'));
 });
 
 test('the factory follows the configured tracker and the repo PR template', () => {

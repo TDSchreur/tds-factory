@@ -99,7 +99,7 @@ function install(home, agent, skip = []) {
 test('doctor lists every required Skill that is not installed', () => {
   const none = check(doctor(project()).report, 'skills');
   assert.equal(none.status, 'fail');
-  for (const name of ['factory', 'grill-with-docs', 'to-spec', 'to-tickets', 'implement-spec', 'tdd', 'code-review', 'security-scan', 'ponytail', 'pr', 'unslop']) assert.ok(none.message.includes(name), name);
+  for (const name of ['factory', 'grill-with-docs', 'to-spec', 'to-tickets', 'implement-spec', 'tdd', 'code-review', 'security-scan', 'pr', 'unslop']) assert.ok(none.message.includes(name), name);
   const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   install(home, 'claude', ['tdd']);
   assert.match(check(doctorAt(home, project()).report, 'skills').message, /: tdd$/);

@@ -17,7 +17,7 @@ flowchart TB
         A[grill-with-docs] --> B[to-spec] --> C[to-tickets]
     end
     subgraph Prepare
-        D[ponytail]
+        D[no work of its own yet]
     end
     subgraph Build
         E[implement-spec with tdd]
@@ -36,7 +36,7 @@ flowchart TB
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
-Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare sets Build to build what was asked; Build finishes every Ticket test-first, one commit each; Check gives a Standards, a Spec, a Security and an Infrastructure verdict (Infrastructure is skipped when no infrastructure file changed), each from a fresh read-only subagent; Finish opens the pull request.
+Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Prepare has no work of its own yet; Build finishes every Ticket test-first, one commit each, building what the Ticket asks and naming any smaller option in one line in `build.md`; Check gives a Standards, a Spec, a Security and an Infrastructure verdict (Infrastructure is skipped when no infrastructure file changed), each from a fresh read-only subagent; Finish opens the pull request.
 
 The rules for each Stage live in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). In short: only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most twice.
 
@@ -112,7 +112,6 @@ Add `.factory/` to the `.gitignore` of any project you run the factory in.
 The skills come from four upstream sources.
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)
-- [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)
 - [backnotprop/pstack](https://github.com/backnotprop/pstack/tree/main/skills/unslop), which provides `unslop`
 - [github/awesome-copilot](https://github.com/github/awesome-copilot/tree/main/skills/security-review), which provides `security-scan` (its `security-review` skill, renamed)
 
@@ -121,7 +120,6 @@ The upstream repos are git submodules in `vendor/`. `skills/` holds committed co
 ## Known limitations
 
 - The installer copies skills unchanged. Codex ignores the Claude-only `disable-model-invocation` frontmatter, so Codex may invoke user-only skills such as `factory` on its own.
-- From ponytail, the installer copies only `SKILL.md`. Its hooks and slash commands are not installed.
 
 ## License
 
