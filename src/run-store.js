@@ -110,12 +110,8 @@ function startRun(projectDir, data) {
       const removed = git('worktree', 'remove', worktree);
       if (removed.status !== 0) failures.push(`worktree remains at ${worktree} and branch ${id} remains: ${removed.stderr.trim()}`);
       else {
-        const branchHead = git('rev-parse', '--verify', `refs/heads/${id}`);
-        if (branchHead.status !== 0 || branchHead.stdout.trim() !== commit.stdout.trim()) failures.push(`branch ${id} remains because its head changed`);
-        else {
-          const deleted = git('branch', '-D', id);
-          if (deleted.status !== 0) failures.push(`branch ${id} remains: ${deleted.stderr.trim()}`);
-        }
+        const deleted = git('update-ref', '-d', `refs/heads/${id}`, commit.stdout.trim());
+        if (deleted.status !== 0) failures.push(`branch ${id} remains: ${deleted.stderr.trim()}`);
       }
     }
     try { fs.rmdirSync(path.join(root, id)); } catch (cleanup) { failures.push(`Run folder remains at ${path.join(root, id)}: ${cleanup.message}`); }
