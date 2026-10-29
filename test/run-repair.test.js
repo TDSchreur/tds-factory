@@ -155,3 +155,42 @@ test('repair refuses a proposal when lock ownership changes before application',
   assert.equal(readFileSync(lock, 'utf8'), owner);
   assert.equal(existsSync(path), false);
 });
+
+test('inspect and repair diagnose a missing registered worktree with no Run folder', () => {
+  const cwd = repo(), id = start(cwd), path = recordPath(cwd, id);
+  const worktree = JSON.parse(readFileSync(path, 'utf8')).worktree;
+  const head = git(cwd, 'rev-parse', id);
+  rmSync(join(cwd, '.factory', 'runs', id), { recursive: true });
+  rmSync(worktree, { recursive: true });
+  assert.match(git(cwd, 'worktree', 'list', '--porcelain'), new RegExp(`worktree ${worktree}`));
+  const inspect = run(cwd, 'inspect', '--id', id, '--json');
+  assert.equal(inspect.status, 0, inspect.stderr);
+  assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'worktree-missing'));
+  const plan = repair(cwd, id);
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.match(plan.stdout, /missing.*manual|manual.*missing/i);
+  assert.doesNotMatch(plan.stdout, /Would recreate/);
+  const applied = repair(cwd, id, '--apply');
+  assert.notEqual(applied.status, 0);
+  assert.equal(existsSync(path), false);
+  assert.equal(git(cwd, 'rev-parse', id), head);
+});
+
+test('repair never reconstructs records for registered symlinked worktrees', () => {
+  for (const dangling of [false, true]) {
+    const cwd = repo(), id = start(cwd), path = recordPath(cwd, id);
+    const worktree = JSON.parse(readFileSync(path, 'utf8')).worktree;
+    rmSync(join(cwd, '.factory', 'runs', id), { recursive: true });
+    rmSync(worktree, { recursive: true });
+    const target = dangling ? join(cwd, 'not-present') : mkdtempSync(join(tmpdir(), 'not-run-worktree-'));
+    fsSymlink(target, worktree);
+    const inspect = run(cwd, 'inspect', '--id', id, '--json');
+    assert.equal(inspect.status, 0, inspect.stderr);
+    assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'worktree-unknown'));
+    const result = repair(cwd, id, '--apply');
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout, /unsafe|symlinked/);
+    assert.equal(existsSync(path), false);
+    assert.ok(fsLstat(worktree).isSymbolicLink());
+  }
+});

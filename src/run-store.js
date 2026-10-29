@@ -327,8 +327,10 @@ function ownWorktrees(projectDir) {
     const branch = /^branch refs\/heads\/(.+)$/m.exec(part)?.[1];
     if (!dir || path.dirname(dir) !== base) continue;
     const id = path.basename(dir);
-    if (!validId(id) || !fs.existsSync(dir) || fs.realpathSync(dir) !== dir) continue;
-    entries.set(id, { dir, branch, head: /^HEAD (.+)$/m.exec(part)?.[1] });
+    if (!validId(id)) continue;
+    const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
+    const safe = !!stat && stat.isDirectory() && !stat.isSymbolicLink() && fs.realpathSync(dir) === dir;
+    entries.set(id, { dir, branch, head: /^HEAD (.+)$/m.exec(part)?.[1], missing: !stat, safe });
   }
   return entries;
 }
@@ -358,7 +360,9 @@ function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
   if (!wt) notes.push('Run worktree missing or unregistered; inspect git and recover manually');
   else {
     notes.push(`git worktree ${wt.dir}, branch ${wt.branch ?? '(detached)'}, head ${wt.head ?? '(unknown)'}`);
-    if (wt.branch !== id) blockers.push(`worktree branch does not match Run id ${id}`);
+    if (wt.missing) blockers.push(`registered Run worktree ${wt.dir} is missing; recover it manually`);
+    else if (!wt.safe) blockers.push(`registered Run worktree ${wt.dir} is unsafe or symlinked; investigate manually`);
+    else if (wt.branch !== id) blockers.push(`worktree branch does not match Run id ${id}`);
     else {
       try {
         const state = worktreeState({ worktree: wt.dir });
@@ -370,7 +374,7 @@ function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
   }
   if (record && record.worktree !== wt?.dir) blockers.push('record worktree does not match the registered Run worktree');
   if (!record && !blockers.length && wt) actions.push('recreate missing Run record as interrupted without inventing progress or Evidence');
-  if (wt?.branch === id) {
+  if (wt?.safe && wt.branch === id) {
     const remote = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: projectDir, encoding: 'utf8' });
     const url = remote.status === 0 ? remote.stdout.trim() : '';
     const match = /^(?:https?:\/\/github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/.exec(url);
@@ -433,14 +437,14 @@ async function inspectRuns(projectDir, runsDir, only) {
   const runs = await listRuns(runsDir);
   for (const [id, wt] of ownWorktrees(projectDir)) {
     const existing = runs.find((r) => r.id === id);
-    if (!existing) runs.push({ id, orphan: true, worktree: wt.dir });
-    else if (existing.unreadable && !fs.existsSync(path.join(runsDir, id, 'run.json'))) Object.assign(existing, { orphan: true, worktree: wt.dir });
+    if (!existing) runs.push({ id, orphan: true, worktree: wt.dir, worktreeInfo: wt });
+    else if (existing.unreadable && !fs.existsSync(path.join(runsDir, id, 'run.json'))) Object.assign(existing, { orphan: true, worktree: wt.dir, worktreeInfo: wt });
   }
   const selected = runs.filter((run) => only === undefined || run.id === only);
   if (only !== undefined && !selected.length) throw new Error(`no such Run: ${only}`);
   const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: projectDir, encoding: 'utf8' }).stdout ?? '';
   const known = new Set([...listed.matchAll(/^worktree (.+)$/gm)].map((m) => fs.existsSync(m[1]) ? fs.realpathSync(m[1]) : m[1]));
-  return selected.map(({ id, unreadable, record, orphan, worktree }) => {
+  return selected.map(({ id, unreadable, record, orphan, worktree, worktreeInfo }) => {
     const found = [];
     const add = (code, message) => found.push({ code, message });
     if (pathExists(repairLockFile(runsDir, id))) {
@@ -453,7 +457,9 @@ async function inspectRuns(projectDir, runsDir, only) {
     }
     if (orphan) {
       add('orphan', `registered Run worktree ${worktree} has no Run folder or record`);
-      try { if (worktreeState({ worktree }).dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes'); } catch (err) { add('worktree-unreadable', err.message); }
+      if (worktreeInfo.missing) add('worktree-missing', `the registered Run worktree ${worktree} does not exist`);
+      else if (!worktreeInfo.safe) add('worktree-unknown', `the registered Run worktree ${worktree} is unsafe or symlinked`);
+      else { try { if (worktreeState({ worktree }).dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes'); } catch (err) { add('worktree-unreadable', err.message); } }
     }
     else if (unreadable) add('unreadable', 'run.json is missing or cannot be parsed');
     else {
