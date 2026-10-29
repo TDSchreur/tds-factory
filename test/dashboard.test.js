@@ -215,12 +215,15 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
   for (const id of ['old', 'broken']) mkdirSync(join(cwd, '.factory', 'runs', id), { recursive: true });
   writeFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json'), JSON.stringify({ stage: 'unknown', status: 'waiting', extra: 1 }));
   writeFileSync(join(cwd, '.factory', 'runs', 'broken', 'run.json'), '{');
+  mkdirSync(join(cwd, '.factory', 'runs', 'legacy'), { recursive: true });
+  writeFileSync(join(cwd, '.factory', 'runs', 'legacy', 'run.json'), JSON.stringify({ stage: 'prepare', status: 'running' }));
   const dashboard = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     const records = await (await fetch(dashboard.url + '/api/views')).json();
     const old = records.find((r) => r.id === 'old');
     assert.equal(old.column, 'define');
     assert.equal(old.waiting, true);
+    assert.equal(records.find((r) => r.id === 'legacy').column, 'define');
     assert.equal(records.find((r) => r.id === 'broken').unreadable, true);
   } finally { await dashboard.close(); }
 });

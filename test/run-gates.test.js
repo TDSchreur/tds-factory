@@ -79,7 +79,6 @@ const defined = (cwd) => {
 test('a Run cannot enter Build without a Spec and Tickets, and the message names what is missing', () => {
   const cwd = repo();
   const id = startRun(cwd);
-  assert.equal(transition(cwd, id, 'prepare').status, 0);
   const before = read(cwd, id);
   let result = transition(cwd, id, 'build');
   assert.notEqual(result.status, 0);
@@ -97,14 +96,32 @@ test('a Run cannot enter Build without a Spec and Tickets, and the message names
 test('transitions follow Flow order and skipping a Stage is refused', () => {
   const cwd = repo();
   const id = defined(cwd);
-  for (const to of ['build', 'check', 'finish', 'define', 'nonsense']) assert.notEqual(transition(cwd, id, to).status, 0, to);
+  for (const to of ['prepare', 'check', 'finish', 'define', 'nonsense']) assert.notEqual(transition(cwd, id, to).status, 0, to);
   assert.equal(read(cwd, id).stage, 'define');
+});
+
+test('a Run moves from Define straight to Build', () => {
+  const cwd = repo();
+  const id = defined(cwd);
+  assert.equal(transition(cwd, id, 'build').status, 0);
+  assert.equal(read(cwd, id).stage, 'build');
+});
+
+test('a Run recorded at prepare is read as Define: it moves to Build only with a Spec and Tickets', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  force(cwd, id, { stage: 'prepare' });
+  const refused = transition(cwd, id, 'build');
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /Spec/);
+  update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 });
+  assert.equal(transition(cwd, id, 'build').status, 0);
+  assert.equal(read(cwd, id).stage, 'build');
 });
 
 test('Check needs every counted Ticket done', () => {
   const cwd = repo();
   const id = defined(cwd);
-  transition(cwd, id, 'prepare');
   transition(cwd, id, 'build');
   update(cwd, id, { tickets_done: 1 });
   assert.notEqual(transition(cwd, id, 'check').status, 0);
@@ -216,18 +233,17 @@ test('Build, Check and Finish need a usable Verify command, so a Run without one
   const cwd = repo();
   const id = startRun(cwd, '');
   update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
-  assert.equal(transition(cwd, id, 'prepare').status, 0);
   const refused = transition(cwd, id, 'build');
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /usable Verify command/);
-  assert.equal(read(cwd, id).stage, 'prepare');
+  assert.equal(read(cwd, id).stage, 'define');
   for (const [stage, to] of [['build', 'check'], ['check', 'finish']]) {
     force(cwd, id, { stage, commands: ' ' });
     const result = transition(cwd, id, to);
     assert.match(result.stderr, /usable Verify command/, to);
     assert.equal(read(cwd, id).stage, stage);
   }
-  force(cwd, id, { stage: 'prepare', commands: 'npm test' });
+  force(cwd, id, { stage: 'define', commands: 'npm test' });
   assert.equal(transition(cwd, id, 'build').status, 0);
 });
 
@@ -443,7 +459,6 @@ test('Check needs at least one counted Ticket', () => {
   const cwd = repo();
   const id = startRun(cwd);
   update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1'] });
-  transition(cwd, id, 'prepare');
   assert.equal(transition(cwd, id, 'build').status, 0);
   assert.notEqual(transition(cwd, id, 'check').status, 0);
 });

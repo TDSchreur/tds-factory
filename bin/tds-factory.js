@@ -15,7 +15,7 @@ const USAGE = `Usage:
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
-  tds-factory run transition --id ID --to prepare|build|check|finish [--data JSON]
+  tds-factory run transition --id ID --to build|check|finish [--data JSON]
   tds-factory run rework --id ID [--data JSON]
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'

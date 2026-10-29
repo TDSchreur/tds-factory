@@ -24,7 +24,8 @@ test('the factory invokes exactly the skills we expect', () => {
 
 test('Build asks for the smaller option in one line and the factory no longer invokes ponytail', () => {
   assert.match(section('Build'), /Build what the Ticket asks; if a smaller option exists, name it in one line in `build\.md`/);
-  assert.match(section('Prepare'), /no work of its own yet/);
+  assert.doesNotMatch(flow, /^## Prepare/m);
+  assert.deepEqual(flow.match(/^## (Define|Build|Check|Finish)$/gm), ['## Define', '## Build', '## Check', '## Finish']);
   assert.ok(!invoked.includes('ponytail'));
 });
 

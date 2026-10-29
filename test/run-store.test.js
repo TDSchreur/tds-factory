@@ -31,12 +31,12 @@ test('list flags broken records, tolerates a missing store and orders summaries 
   assert.deepEqual(await openRunStore(cwd).list(), []);
   seed(cwd, 'broken', { 'run.json': '{' });
   seed(cwd, 'norecord', { 'define.md': 'x' });
-  seed(cwd, 'good', { 'run.json': '{"status":"running"}', 'notes.md': 'x', 'finish.md': 'x', 'check-10.md': 'x', 'check-2.md': 'x', 'build.md': 'x', 'prepare.md': 'x', 'check-1.md': 'x', 'define.md': 'x' });
+  seed(cwd, 'good', { 'run.json': '{"status":"running"}', 'notes.md': 'x', 'finish.md': 'x', 'check-10.md': 'x', 'check-2.md': 'x', 'build.md': 'x', 'check-1.md': 'x', 'define.md': 'x' });
   const runs = await openRunStore(cwd).list();
   assert.equal(runs.find((r) => r.id === 'broken').unreadable, true);
   assert.equal(runs.find((r) => r.id === 'norecord').unreadable, true);
   assert.equal(runs.find((r) => r.id === 'good').unreadable, false);
-  assert.deepEqual(runs.find((r) => r.id === 'good').files, ['define.md', 'prepare.md', 'build.md', 'check-1.md', 'check-2.md', 'check-10.md', 'finish.md', 'notes.md']);
+  assert.deepEqual(runs.find((r) => r.id === 'good').files, ['define.md', 'build.md', 'check-1.md', 'check-2.md', 'check-10.md', 'finish.md', 'notes.md']);
 });
 
 test('readFile serves only Markdown inside a Run folder', async () => {

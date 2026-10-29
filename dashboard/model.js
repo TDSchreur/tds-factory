@@ -1,7 +1,6 @@
 // Constants and pure helpers of the Dashboard page. No DOM access.
 export const COLUMNS = [
   { key: 'define', label: 'Define', help: 'Settle what has to be done: the agent interviews you, writes a Spec and cuts it into Tickets.' },
-  { key: 'prepare', label: 'Prepare', help: 'Get ready to build: the agent switches to the minimal-code working style.' },
   { key: 'build', label: 'Build', help: 'Implement the Tickets test-first, one commit per Ticket, running the verify command after each.' },
   { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Problems send the Run back to Build, at most twice.' },
   { key: 'finish', label: 'Finish', help: 'Write the pull request description, push the branch and open the pull request.' },

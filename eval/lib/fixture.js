@@ -60,7 +60,6 @@ export function runAt(fx, upTo, title = 'Add a shout function') {
   wgit('add', '-A');
   wgit('commit', '-q', '-m', 'Spec');
   update({ spec_link: 'docs/specs/shout.md', tickets: ['https://github.com/eval/fixture/issues/1'], tickets_total: 1 });
-  to('prepare');
   to('build');
   if (upTo === 'build') return { id, wt };
   write(wt, 'greet.js', "export const greet = (name) => `Hello, ${name}`;\nexport const shout = (name) => greet(name).toUpperCase();\n");
