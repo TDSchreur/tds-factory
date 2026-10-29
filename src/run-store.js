@@ -96,12 +96,31 @@ function startRun(projectDir, data) {
     id = `${base}-${n++}`;
   }
   const now = new Date().toISOString();
+  const worktree = path.join(worktrees, id);
+  let created = false;
   try {
-    const worktree = path.join(worktrees, id);
     const added = git('worktree', 'add', '-b', id, worktree, commit.stdout.trim());
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
+    created = true;
     write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit.stdout.trim() }));
-  } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
+  } catch (err) {
+    const failures = [];
+    if (created) {
+      const removed = git('worktree', 'remove', worktree);
+      if (removed.status !== 0) failures.push(`worktree remains at ${worktree} and branch ${id} remains: ${removed.stderr.trim()}`);
+      else {
+        const branchHead = git('rev-parse', '--verify', `refs/heads/${id}`);
+        if (branchHead.status !== 0 || branchHead.stdout.trim() !== commit.stdout.trim()) failures.push(`branch ${id} remains because its head changed`);
+        else {
+          const deleted = git('branch', '-D', id);
+          if (deleted.status !== 0) failures.push(`branch ${id} remains: ${deleted.stderr.trim()}`);
+        }
+      }
+    }
+    try { fs.rmdirSync(path.join(root, id)); } catch (cleanup) { failures.push(`Run folder remains at ${path.join(root, id)}: ${cleanup.message}`); }
+    if (failures.length) throw new Error(`${err.message}; rollback failed: ${failures.join('; ')}`, { cause: err });
+    throw err;
+  }
   return id;
 }
 const lockFile = (root, id) => path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
