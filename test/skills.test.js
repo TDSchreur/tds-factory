@@ -50,7 +50,8 @@ test('Build refuses to start without a Spec and Tickets, and Check needs every a
   const build = section('Build');
   assert.match(build, /`spec_link`/);
   assert.match(build, /`tickets`/);
-  assert.match(build, /`stage` to `define`/);
+  assert.match(build, /run transition --id <id> --to build/);
+  assert.match(build, /refuses/i);
   assert.match(build, /continue Define/i);
   assert.match(check, /no verdict in `run\.json`/);
   assert.match(check, /every axis/i);
@@ -166,4 +167,31 @@ test('the README describes the Run worktree, the shared Run store and cleanup', 
   assert.match(readme, /\.factory\/worktrees/);
   assert.match(readme, /main checkout/);
   assert.match(readme, /uncommitted changes/);
+});
+
+test('the factory moves a Run only through the Run commands, and names each of them', () => {
+  for (const command of ['transition', 'rework', 'verify', 'verdict', 'accept', 'complete', 'inspect']) assert.match(flow, new RegExp(`tds-factory run ${command}\\b`), command);
+  for (const field of ['stage', 'check_loops', 'standards', 'spec', 'security', 'infrastructure']) {
+    assert.doesNotMatch(flow, new RegExp(`run update[^\\n]*"${field}"`), `${field} through run update`);
+  }
+  for (const field of ['base_sha', 'verify', 'reviewed', 'accepted']) assert.match(flow, new RegExp(`^\\| \`${field}\` \\|`, 'm'), field);
+  assert.match(section('Finish'), /tds-factory run complete/);
+  assert.match(check, /tds-factory run verdict/);
+  assert.match(check, /tds-factory run rework/);
+  assert.match(check, /tds-factory run accept/);
+});
+
+test('Preflight creates the Run, with an empty verify command, before it marks the Run waiting', () => {
+  const preflight = section('Preflight');
+  const created = preflight.indexOf('empty `commands`');
+  assert.ok(created > 0, 'creates the Run with an empty `commands`');
+  assert.ok(created < preflight.indexOf('`waiting`'), 'creates the Run before marking it waiting');
+});
+
+test('the docs tell users to refresh the installed Skill and call Agent targets by that name', () => {
+  assert.match(readFileSync(join(SKILLS_DIR, '..', 'README.md'), 'utf8'), /tds-factory install.* after every update/);
+  const domain = readFileSync(join(SKILLS_DIR, '..', 'docs', 'agents', 'domain.md'), 'utf8');
+  assert.doesNotMatch(domain, /backend/i);
+  for (const doc of ['GLOSSARY.md', join('docs', 'usage.md')]) assert.match(readFileSync(join(SKILLS_DIR, '..', doc), 'utf8'), /Clean[\s\S]{0,300}(Evidence|verify command passed)/, doc);
+  assert.match(domain, /Agent target/);
 });

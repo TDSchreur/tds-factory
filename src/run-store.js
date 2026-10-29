@@ -5,10 +5,12 @@ import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 
 const statuses = ['running', 'waiting', 'done', 'abandoned'];
-const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr', 'worktree'];
+const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
+// Only the store's own operations (start, transitions) may change these; plain update rejects them.
+const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha'];
 const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
 function validate(data) {
@@ -91,27 +93,194 @@ function startRun(projectDir, data) {
     const worktree = path.join(worktrees, id);
     const added = git('worktree', 'add', '-b', id, worktree, commit.stdout.trim());
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
-    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree }));
+    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit.stdout.trim() }));
   } catch (err) { fs.rmdirSync(path.join(root, id)); throw err; }
   return id;
 }
+const lockFile = (root, id) => path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
 function withRunLock(root, id, action) {
-  const lock = path.join(root, `.lock-${createHash('sha256').update(id).digest('hex')}`);
+  const lock = lockFile(root, id);
   const fd = fs.openSync(lock, 'wx');
   try { return action(); }
   finally { fs.closeSync(fd); fs.unlinkSync(lock); }
 }
-function updateRun(projectDir, id, data) {
+// The Check attempt a Run is in: its first Check is attempt 1, each Rework starts the next.
+const loops = (record) => record.check_loops ?? 0;
+const attempt = (record) => loops(record) + 1;
+
+// A Run's folder and record, refusing links anywhere on the way.
+function readRun(projectDir, id) {
   if (!validId(id)) throw new Error('invalid Run id');
   const root = runRoot(projectDir, false);
-  return withRunLock(root, id, () => {
   const dir = path.join(root, id);
   if (fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
   const file = path.join(dir, 'run.json');
   if (fs.lstatSync(file).isSymbolicLink()) throw new Error('Run record must not be a symlink');
-  const old = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('Run record must be an object');
-  write(dir, apply(old, data));
+  const record = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Run record must be an object');
+  return { root, dir, record };
+}
+// Reads a Run record under its lock, hands it to change, and writes back what change returns.
+function changeRun(projectDir, id, change) {
+  if (!validId(id)) throw new Error('invalid Run id');
+  return withRunLock(runRoot(projectDir, false), id, () => {
+    const { dir, record } = readRun(projectDir, id);
+    write(dir, change(record));
+  });
+}
+function updateRun(projectDir, id, data) {
+  changeRun(projectDir, id, (old) => {
+    validate(data);
+    const locked = gated.find((key) => key in data);
+    if (locked) throw new Error(`${locked} can only change through a Run transition`);
+    // Evidence is only worth something if the command it came from cannot be swapped: set it once.
+    if ('commands' in data && old.commands) throw new Error('the Verify command is already set; start a new Run to change it');
+    if (data.status === 'done') throw new Error('a Run is completed with run complete');
+    if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
+    return apply(old, data);
+  });
+}
+
+// Changes a running Run for a named operation, which takes only an optional activity line besides its own arguments.
+function changeRunning(projectDir, id, data, move) {
+  validate(data);
+  if (Object.keys(data).some((key) => key !== 'activity')) throw new Error('this operation accepts only activity');
+  changeRun(projectDir, id, (old) => {
+    if (old.status !== 'running') throw new Error(`a ${old.status} Run cannot be changed this way, only a running one`);
+    const { record, activity } = move(old);
+    return { ...record, activity: data.activity ?? activity, updated: new Date().toISOString() };
+  });
+}
+function transitionRun(projectDir, id, to, data = {}) {
+  changeRunning(projectDir, id, data, (old) => {
+    const next = stages[stages.indexOf(old.stage) + 1];
+    if (!stages.includes(to) || to !== next) throw new Error(`a Run in ${old.stage} can only move to ${next ?? 'nowhere'}, not ${to}`);
+    if (to === 'build') {
+      const missing = [!old.spec_link && 'a Spec link', !(old.tickets?.length > 0) && 'Tickets'].filter(Boolean);
+      if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
+    }
+    if (to === 'check' && (!old.tickets_total || old.tickets_done !== old.tickets_total)) throw new Error(`Check needs every Ticket done (${old.tickets_done} of ${old.tickets_total})`);
+    if (to === 'finish') {
+      const problems = finishProblems(old);
+      if (problems.length) throw new Error(`Finish needs a clean or Accepted Check: ${problems.join('; ')}`);
+    }
+    return { record: { ...old, stage: to }, activity: `Starting ${to}` };
+  });
+}
+// Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
+function finishProblems(record) {
+  const { head, dirty } = worktreeState(record);
+  if (dirty) return ['the Run worktree has uncommitted changes'];
+  if (record.accepted?.head === head) return [];
+  const problems = [];
+  for (const axis of verdicts) {
+    const seen = record.reviewed?.[axis];
+    if (record[axis] === undefined) problems.push(`${axis} has no verdict`);
+    else if (seen?.head !== head || seen?.attempt !== attempt(record)) problems.push(`${axis} was not reviewed at the current head in this Check attempt`);
+    else if (record[axis] === 'fail') problems.push(`${axis} failed`);
+  }
+  const verify = record.verify;
+  if (!verify) problems.push('there is no Verify result');
+  else if (verify.head !== head || verify.dirty) problems.push('the Verify result is not for the current committed head');
+  else if (verify.command !== record.commands) problems.push('the Verify result came from a different command than the Run\'s Verify command');
+  else if (verify.exit_code !== 0) problems.push(`the Verify command failed (exit ${verify.exit_code})`);
+  return problems;
+}
+function acceptRun(projectDir, id, data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
+  if (Object.keys(data).some((key) => !['findings', 'decision'].includes(key))) throw new Error('accept takes only findings and decision');
+  for (const key of ['findings', 'decision']) if (typeof data[key] !== 'string' || !data[key].trim()) throw new Error(`accept needs ${key}`);
+  changeRunning(projectDir, id, {}, (old) => {
+    if (old.stage !== 'check') throw new Error('only a Run in Check can accept its Check');
+    const { head, dirty } = worktreeState(old);
+    if (dirty) throw new Error('cannot accept a Check while the Run worktree has uncommitted changes');
+    return { record: { ...old, accepted: { findings: data.findings, decision: data.decision, head, at: new Date().toISOString() } }, activity: 'Check accepted by the user' };
+  });
+}
+function reworkRun(projectDir, id, data = {}) {
+  changeRunning(projectDir, id, data, (old) => {
+    if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
+    if (loops(old) >= 2) throw new Error('the Check loop limit of 2 is reached');
+    const record = { ...old, stage: 'build', check_loops: loops(old) + 1 };
+    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
+    return { record, activity: 'Rework: back to Build' };
+  });
+}
+function completeRun(projectDir, id, data = {}) {
+  changeRunning(projectDir, id, data, (old) => {
+    if (old.stage !== 'finish') throw new Error('only a Run in Finish can be completed');
+    if (!old.pr) throw new Error('completing a Run needs a PR link');
+    if (old.tickets_done > old.tickets_total) throw new Error(`more Tickets done (${old.tickets_done}) than counted (${old.tickets_total})`);
+    return { record: { ...old, status: 'done', waiting_on_human: false, waiting_reason: '' }, activity: 'Done' };
+  });
+}
+
+// The code revision a Run's Evidence is about: the worktree's head, and whether it has uncommitted changes.
+function worktreeState(record) {
+  if (!record.worktree || !fs.existsSync(record.worktree)) throw new Error('the Run worktree is missing');
+  const git = (...args) => spawnSync('git', args, { cwd: record.worktree, encoding: 'utf8' });
+  const head = git('rev-parse', 'HEAD'), status = git('status', '--porcelain');
+  if (head.status !== 0 || status.status !== 0) throw new Error(`cannot read the Run worktree: ${(head.stderr || status.stderr).trim()}`);
+  return { head: head.stdout.trim(), dirty: status.stdout.trim() !== '' };
+}
+// Runs the Verify command outside the Run lock, since it can take minutes, and records the result under it.
+function verifyRun(projectDir, id) {
+  const { dir, record } = readRun(projectDir, id);
+  if (record.status !== 'running') throw new Error(`a ${record.status} Run cannot be verified, only a running one`);
+  if (!record.commands?.trim()) throw new Error('the Run has no Verify command');
+  const { head, dirty } = worktreeState(record);
+  const started = new Date().toISOString();
+  // Replace rather than reuse the log, so a planted link is never written through.
+  const log = path.join(dir, 'verify.log');
+  fs.rmSync(log, { force: true });
+  const fd = fs.openSync(log, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+  let ran;
+  try { ran = spawnSync(record.commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] }); }
+  finally { fs.closeSync(fd); }
+  const result = { command: record.commands, cwd: record.worktree, head, dirty, exit_code: ran.status ?? 1, started, ended: new Date().toISOString(), log: 'verify.log' };
+  changeRun(projectDir, id, (old) => {
+    if (old.status !== 'running' || old.commands !== record.commands || loops(old) !== loops(record)) throw new Error('the Run changed while the Verify command ran, so its result was not recorded');
+    return { ...old, verify: result, updated: new Date().toISOString() };
+  });
+  return result;
+}
+function verdictRun(projectDir, id, axis, value) {
+  if (!verdicts.includes(axis)) throw new Error(`unknown Check axis: ${axis}`);
+  validate({ [axis]: value });
+  changeRunning(projectDir, id, {}, (old) => {
+    if (old.stage !== 'check') throw new Error('verdicts are recorded in Check');
+    const { head, dirty } = worktreeState(old);
+    if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
+    return { record: { ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, activity: `${axis} verdict: ${value}` };
+  });
+}
+
+// Read-only health report: what would stop each Run from carrying on. Finished Runs only report records, locks and uncommitted work.
+async function inspectRuns(projectDir, runsDir, only) {
+  const runs = (await listRuns(runsDir)).filter((run) => only === undefined || run.id === only);
+  if (only !== undefined && !runs.length) throw new Error(`no such Run: ${only}`);
+  const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: projectDir, encoding: 'utf8' }).stdout ?? '';
+  const known = new Set([...listed.matchAll(/^worktree (.+)$/gm)].map((m) => fs.existsSync(m[1]) ? fs.realpathSync(m[1]) : m[1]));
+  return runs.map(({ id, unreadable, record }) => {
+    const found = [];
+    const add = (code, message) => found.push({ code, message });
+    if (fs.existsSync(lockFile(runsDir, id))) add('lock', 'a lock file is left behind; another process may be updating this Run, or one died mid-update');
+    if (unreadable) add('unreadable', 'run.json is missing or cannot be parsed');
+    else {
+      // A finished Run only matters here for uncommitted work that would block removing its worktree.
+      const active = ['running', 'waiting'].includes(record.status);
+      if (!record.worktree || !fs.existsSync(record.worktree)) { if (active) add('worktree-missing', `the Run worktree ${record.worktree ?? '(none recorded)'} does not exist`); }
+      else if (!known.has(fs.realpathSync(record.worktree))) { if (active) add('worktree-unknown', `git does not list ${record.worktree} as a worktree`); }
+      else {
+        try {
+          const { head, dirty } = worktreeState(record);
+          if (dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
+          const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head)].filter(Boolean);
+          if (active && ['check', 'finish'].includes(record.stage) && seen.some((h) => h !== head)) add('stale-evidence', 'Evidence was recorded for an earlier head than the current one');
+        } catch (err) { add('worktree-unreadable', err.message); }
+      }
+    }
+    return { id, problems: found };
   });
 }
 
@@ -223,7 +392,14 @@ export function openRunStore(callerDir) {
     projectDir,
     start: (data) => startRun(projectDir, data),
     update: (id, data) => updateRun(projectDir, id, data),
+    transition: (id, to, data) => transitionRun(projectDir, id, to, data),
+    rework: (id, data) => reworkRun(projectDir, id, data),
+    complete: (id, data) => completeRun(projectDir, id, data),
+    accept: (id, data) => acceptRun(projectDir, id, data),
+    verify: (id) => verifyRun(projectDir, id),
+    verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
     list: () => listRuns(runsDir),
+    inspect: (id) => inspectRuns(projectDir, runsDir, id),
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     remove: (id) => removeRun(projectDir, id),
   };

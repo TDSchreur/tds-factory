@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - run: npm test
+
+  # The same suite, but a missing browser fails it instead of skipping the browser tests.
+  browser:
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_BROWSER: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - name: Put the runner's ChromeDriver on PATH
+        run: echo "$CHROMEWEBDRIVER" >> "$GITHUB_PATH"
+      - run: npm test
