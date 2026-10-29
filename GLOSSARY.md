@@ -46,6 +46,10 @@ _Avoid_: Proof
 **Accepted Check**:
 A Check that is not clean but that the user has explicitly allowed to continue to Finish, together with the open findings and the decision. It applies to one code revision only.
 
+**Invocation contract**:
+What the Factory relies on from a Skill it invokes: the `## Invoked Skills` section of the `factory` Skill, which overrides upstream steps that conflict with the Flow (publishing the Spec as an issue, seam and breakdown sign-off, subagent Build, a closing review).
+_Avoid_: Wrapper, Patch
+
 **Rework**:
 Sending a Run back from Check to Build to fix problems. Each Rework counts against the loop limit and makes the earlier Evidence stale.
 _Avoid_: Retry, Loop back

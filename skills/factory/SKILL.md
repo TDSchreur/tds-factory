@@ -101,6 +101,14 @@ When the user answers and the Run continues, set `status` back to `running` befo
 
 `tds-factory install` also installs four Stage agents per Agent target: `factory-define` (Define and Prepare), `factory-build`, `factory-check` (read-only) and `factory-finish`. Their model choices are the user's to edit; install never overwrites an existing agent file. When the client can dispatch to a named agent, hand the Stage's work to it with the instructions of that Stage; otherwise do the work yourself. You stay the coordinator: you talk to the user (relay Define questions and answers), own the Run record, approvals, Check loops and the push. After a handoff, say which agent ran, and report plainly when the requested model was unavailable, substituted or cannot be verified; never claim a model was used that you cannot confirm. The Check agents are read-only and may not run commands: collect the diff and run any validation (such as `bicep build` and `bicep lint`) yourself, and pass the output with the assignment.
 
+## Invoked Skills
+
+The Skills named in Define and Build have upstream defaults that conflict with the Flow. This section is the invocation contract: where it and an upstream step disagree, follow this section. Do not ask the user for an approval, confirmation or review that this section or a Stage below already resolved. Each `Overrides "..."` quotes the upstream sentence it replaces.
+
+- **to-spec.** Overrides "Check with the user that these seams match their expectations." Choose the seams yourself. Overrides "then publish it to the project issue tracker." The Spec is a Markdown file in `docs/specs/`; do not publish it as an issue and apply no triage label to it.
+- **to-tickets.** Overrides "Ask the user:" and "Iterate until the user approves the breakdown." Publish the breakdown without the quiz; the tracker comes from `docs/agents/issue-tracker.md`.
+- **implement-spec.** Build runs inline in the Run worktree, on its branch, one commit per Ticket, in dependency order. Overrides "Use an **exploration subagent**" and "Use **implementer subagents**": create no subagents. Overrides "Create the integration branch.": the Run branch is the integration branch, and no Ticket worktrees or extra branches are made. Overrides "open a draft PR": Finish opens the only PR. Overrides "call the Skill tool with `code-review` on the integration branch": no closing review, Check owns it. Overrides "Clean up all **implementer subagent** worktrees.": nothing to clean up. Ticket resolution is left to Finish through `Closes #N`.
+
 ## Define
 
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.

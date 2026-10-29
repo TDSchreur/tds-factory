@@ -195,3 +195,27 @@ test('the docs tell users to refresh the installed Skill and call Agent targets 
   for (const doc of ['GLOSSARY.md', join('docs', 'usage.md')]) assert.match(readFileSync(join(SKILLS_DIR, '..', doc), 'utf8'), /Clean[\s\S]{0,300}(Evidence|verify command passed)/, doc);
   assert.match(domain, /Agent target/);
 });
+
+const upstream = Object.fromEntries(['to-spec', 'to-tickets', 'implement-spec'].map((n) => [n, readFileSync(join(SKILLS_DIR, n, 'SKILL.md'), 'utf8')]));
+const contract = section('Invoked Skills');
+const overrides = (name) => [...contract.split(/^- \*\*/m).find((b) => b.startsWith(`${name}.`)).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+
+test('the invocation contract overrides each conflicting upstream step, and only steps that still exist', () => {
+  for (const name of Object.keys(upstream)) {
+    const found = overrides(name);
+    assert.ok(found.length > 0, name);
+    for (const fragment of found) assert.ok(upstream[name].includes(fragment), `${name} no longer says: ${fragment}`);
+  }
+  for (const phrase of ['inline', 'Run worktree', 'one commit per Ticket', 'no closing review', 'docs/specs/', 'Do not ask the user']) {
+    assert.ok(contract.toLowerCase().includes(phrase.toLowerCase()), phrase);
+  }
+});
+
+test('upstream approval steps that the Factory already resolved are all overridden', () => {
+  for (const name of ['to-spec', 'to-tickets']) {
+    const covered = overrides(name).join('\n');
+    for (const line of upstream[name].split('\n').filter((l) => /Check with the user|Ask the user|user approves|Quiz the user/.test(l))) {
+      assert.ok(covered.split('\n').some((f) => line.includes(f)) || /^#/.test(line), `${name} asks the user, not overridden: ${line}`);
+    }
+  }
+});

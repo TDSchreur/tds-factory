@@ -1,0 +1,3 @@
+# The invocation contract lives in the factory Skill, not in the upstream copies
+
+`to-spec`, `to-tickets` and `implement-spec` carry defaults that contradict the Flow: a Spec published as an issue, user sign-off on seams and breakdown, subagent Build on extra branches, a closing review and a draft PR. The `factory` Skill now has an `## Invoked Skills` section that names each upstream sentence it overrides. We chose this over editing the copies in `skills/` because `sync` overwrites them and ADR 0001 wants them to stay reviewable as upstream. A test checks that every quoted sentence still exists upstream and that every upstream step that asks the user is overridden, so a sync that changes the conflict fails `npm test`.
