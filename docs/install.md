@@ -16,7 +16,7 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 One command installs it, on macOS, Linux and Windows (PowerShell):
 
 ```sh
-npm install -g https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
+npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 ```
 
 Check it worked:
@@ -62,7 +62,7 @@ Add `--project` to install into the current project instead of your home folder.
 Run the install command from part 2 again, then refresh the skills:
 
 ```sh
-npm install -g https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
+npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 tds-factory install
 ```
 
@@ -87,8 +87,10 @@ Commit the new files. Now `/factory` can start; the [usage guide](usage.md) show
 **`EACCES: permission denied` while installing.** npm cannot write to its global folder. Install into your home folder instead, and put `~/.local/bin` on your PATH:
 
 ```sh
-npm install -g --prefix ~/.local https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
+npm install -g --allow-remote=root --prefix ~/.local https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 ```
+
+**`EALLOWREMOTE` / "Fetching packages of type remote have been disabled".** npm 12 refuses to install from a URL by default. The install command above already passes `--allow-remote=root`; if you typed it without that flag, add it. Older npm versions may print an "unknown config" warning, which is harmless.
 
 **`404 Not Found` on the install URL.** The Factory repository is not public yet, or no Release exists. Ask the maintainer.
 
