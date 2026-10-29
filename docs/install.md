@@ -76,7 +76,15 @@ Do this once per project you want to build with the Factory.
 2. Run `/setup-matt-pocock-skills` in the chat. In Copilot in VS Code, type `/` and choose it; this skill only runs when you start it yourself. It looks at the repository, asks where issues live (choose GitHub) and shows you a draft before it writes anything. It uses one `GLOSSARY.md` and `docs/adr/` at the root without asking, unless the project looks like a monorepo. It writes `docs/agents/issue-tracker.md`, `docs/agents/domain.md` and an `## Agent skills` section in `CLAUDE.md` if that file exists, otherwise `AGENTS.md` (it asks which to create if neither exists).
 3. Add a `## Commands` section to `AGENTS.md` (or `CLAUDE.md`, whichever the project uses) with the command that checks the project, for example `- Verify: npm test`. If it is missing, `/factory` asks you once.
 4. Add `.factory/` to the project's `.gitignore`. That folder holds Run records and Run worktrees, and must not end up in commits.
-5. Make sure the label `ready-for-agent` exists in the repository's GitHub Issues. If it does not, the agent asks before it creates it.
+5. Every Ticket the Factory creates carries the label `ready-for-agent`. If the repository's GitHub Issues do not have it yet, the agent asks before it creates it; you can also create it now with `gh label create ready-for-agent`.
+
+6. Check the project with the Doctor. From the project folder run:
+
+   ```sh
+   tds-factory doctor
+   ```
+
+   It changes nothing and prints one line per check, for example `pass    tracker: issue tracker and domain docs are configured`. Every line should say `pass`. A line that says `missing` or `fail` names what to fix, and the command exits with 1 until nothing is left. The checks are the CLI version, the installed Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities and the Verify command. Add `--agent codex` or `--agent copilot` if you do not use Claude.
 
 Commit the new files. Now `/factory` can start; the [usage guide](usage.md) shows how.
 
@@ -100,6 +108,6 @@ npm install -g --allow-remote=root --prefix ~/.local https://github.com/TDSchreu
 
 **`/factory` does not appear in the chat.** Run `tds-factory install` again, then start a new chat session or restart the editor. In Copilot, `/skills` shows what it loaded.
 
-**`/factory` stops at Preflight.** Run `tds-factory doctor` in the project: it lists what is missing or unusable (Skills, tracker setup, `origin`, review agent, Verify command). For the project setup, do part 5.
+**`/factory` stops at Preflight.** Run `tds-factory doctor` in the project (part 5, step 6): it lists what is missing or unusable (Skills, tracker setup, `origin`, review agent, Verify command). For the project setup, do part 5.
 
 **`tds-factory run start` fails.** The error says what is missing: the folder is not a git repository (run `git init`), the repository has no commit yet (make a first commit), or the `origin` default branch cannot be determined (check `git remote -v` and that you can reach the remote).

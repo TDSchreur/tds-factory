@@ -166,7 +166,7 @@ test('the README describes the Run worktree, the shared Run store and cleanup', 
   const readme = readFileSync(join(SKILLS_DIR, '..', 'README.md'), 'utf8');
   assert.match(readme, /\.factory\/worktrees/);
   assert.match(readme, /main checkout/);
-  assert.match(readme, /uncommitted changes/);
+  assert.match(readFileSync(join(SKILLS_DIR, '..', 'docs', 'dashboard.md'), 'utf8'), /uncommitted changes/);
 });
 
 test('the factory moves a Run only through the Run commands, and names each of them', () => {

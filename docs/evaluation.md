@@ -1,8 +1,8 @@
 # Evaluate an agent against the Flow
 
-`npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` and CI never run it.
+`npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` and CI never run it. What each Agent target guarantees is in the [capability matrix](capabilities.md); the Flow being graded is in the [usage guide](usage.md).
 
-```
+```sh
 npm run eval -- <claude|codex|copilot> [scenario...]
 ```
 

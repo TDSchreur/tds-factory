@@ -4,18 +4,32 @@ This guide walks through one piece of work, from the first message to the merged
 
 ## The Flow in one picture
 
-```text
-you describe the work
-  Define    the agent interviews you, writes a Spec and cuts it into Tickets   (you answer)
-  Prepare   the agent switches to the minimal-code working style
-  Build     the agent implements each Ticket test-first, one commit each
-  Check     four independent reviews: Standards, Spec, Security, Infrastructure
-  Finish    the agent pushes the branch and opens the pull request              (you review and merge)
+```mermaid
+flowchart TB
+    start(["You: /factory and a description"]) --> pre["Preflight: the Doctor checks, conventions and Verify command (asks you if it is missing)"]
+    pre --> define["Define: interview (you answer and confirm), Spec, Tickets"]
+    define --> prepare["Prepare: build only what each Ticket asks"]
+    prepare --> build["Build: each Ticket test-first, one commit each"]
+    build --> check["Check: Standards, Spec, Security, Infrastructure"]
+    check -->|"problems worth fixing, at most 2 times"| build
+    check -->|"clean"| finish["Finish: push the branch, open the pull request"]
+    check -.->|"not clean: you decide"| finish
+    finish --> review(["You: review and merge"])
 ```
+
+The Run waits for you in Define, in Preflight when the Verify command is missing, and at the dotted line from Check.
 
 Define is where the agent needs you most. After that it works on its own and stops only for a missing label or a Check that is not clean (see part 4).
 
 ## 1. Start a Run
+
+Before the first Run in a project, check that it is ready. From the project folder:
+
+```sh
+tds-factory doctor
+```
+
+It changes nothing and prints one line per check, such as `pass    git: origin default branch is master`. Fix every line that says `missing` or `fail` first; `/factory` runs the same checks and stops when one fails. See "Check readiness without starting a Run" below for what it checks.
 
 Open your prepared project (see part 5 of the [install guide](install.md)) in your agent and start a new chat. Describe the work in the same message that starts the skill:
 
@@ -27,7 +41,19 @@ In Copilot in VS Code, type `/`, choose `factory`, and write the description aft
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 
-The agent first checks that the project is ready, by running `tds-factory doctor` (see "Check readiness without starting a Run" below). If something is missing it stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
+The agent first runs `tds-factory doctor` and, if something is missing, stops and tells you which part. Then it starts a Run (if the project has no verify command yet, it asks you for one, see part 4): it makes a git worktree in `.factory/worktrees/<run id>` on its own branch and does all the work there. Your own checkout is never touched, so you can keep working in it, and you can run several Runs side by side.
+
+```mermaid
+flowchart TB
+    main["Your checkout (never touched)"]
+    store[".factory/runs/RUN-ID/: run.json and the Stage summaries"]
+    tree[".factory/worktrees/RUN-ID/: the Run worktree on its own branch"]
+    dash["tds-factory dashboard"]
+    main --- store
+    main --- tree
+    tree -->|"agent works and commits here"| branch["Run branch, then the pull request"]
+    store -->|"read every 2 seconds"| dash
+```
 
 ## 2. Define: answer the questions
 
@@ -49,7 +75,7 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 
 - **Prepare:** the agent switches to building only what each Ticket asks for.
 - **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time.
-- **Check:** the Factory asks for four reviews to run separately, each in a fresh read-only subagent that did not write the code. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
+- **Check:** the Factory asks for up to four reviews to run separately (three when no infrastructure file changed), each in a fresh read-only subagent that did not write the code. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most twice.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
 
 Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md` and the pull request text in `pr.md`. Prepare leaves none. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
@@ -61,6 +87,28 @@ A Run stops and asks you in these cases:
 1. **During Define,** with questions or to confirm the shared understanding.
 2. **At the start,** if the project has no verify command (see below). **Before Build,** if a label the Tickets need does not exist: the agent asks before it creates the label.
 3. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in the Run and in `finish.md`, and only holds for the code as it is then; new commits void it), or no to abandon the Run.
+
+A Run's `status` moves like this:
+
+```mermaid
+stateDiagram-v2
+    [*] --> running
+    running --> waiting: the Run needs your answer
+    waiting --> running: you answer
+    running --> verification_unavailable: a check cannot run
+    running --> interrupted: the agent was interrupted
+    verification_unavailable --> running: resumed
+    interrupted --> running: resumed
+    running --> done: pull request handled
+    running --> abandoned: you stop it
+    waiting --> abandoned: you say no
+    verification_unavailable --> abandoned: you stop it
+    interrupted --> abandoned: you stop it
+    done --> [*]
+    abandoned --> [*]
+```
+
+(`verification_unavailable` is `verification-unavailable` in `run.json`; Mermaid does not allow the hyphen.)
 
 The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
 
@@ -83,7 +131,7 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 - Done cards start collapsed. Press **Show details** on a Done card to see its pull request link, **Merge** and **Delete**. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** removes the Run record and its worktree, and refuses if the worktree has uncommitted changes or git cannot remove it (the message says which). Branches are never deleted.
 - Older Runs are folded away; "Show older" brings them back.
 
-Leave the Dashboard open while you work. It refreshes every two seconds.
+Leave the Dashboard open while you work. It refreshes every two seconds. The routes and the rules for deleting a Run are in the [Dashboard guide](dashboard.md).
 
 ## 6. Stop or redirect a Run
 
@@ -101,7 +149,7 @@ The agent opens the pull request but does not merge it. Before you merge:
 4. Open `check-1.md` (or the highest `check-N.md`) in the Run folder to see the four verdicts and any finding left open.
 5. Look at the diff yourself, like any other pull request.
 
-Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines close the Tickets.
+Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines close the Tickets. Maintainers who publish the merged work as a Release follow the [release guide](releasing.md).
 
 ## Words you will see
 
