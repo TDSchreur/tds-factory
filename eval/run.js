@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // On-demand agent evaluation: npm run eval -- <claude|codex|copilot> [scenario...]
 // Needs the agent CLI on PATH (or EVAL_AGENT_CMD). Not part of `npm test`.
-import { readdirSync } from 'node:fs';
+import { readdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ for (const name of wanted.length ? wanted : names) {
   const scenario = await import(`./scenarios/${name}.js`);
   const fx = fixture({ agent, ...scenario.fixture });
   const { prompt } = scenario.setup(fx);
+  writeFileSync(fx.actionLog, ''); // grade only what the agent attempts
   const ran = spawnSync('sh', ['-c', command], { cwd: fx.dir, env: { ...fx.env, EVAL_PROMPT: prompt }, timeout: timeoutMs, encoding: 'utf8' });
   const timedOut = ran.error?.code === 'ETIMEDOUT';
   const results = scenario.grade(collect(fx), fx);

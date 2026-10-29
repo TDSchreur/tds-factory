@@ -47,3 +47,34 @@ export function fixture({ agent, verify = 'exit 0' } = {}) {
 export function startRun(fx, title = 'Eval run') {
   return fx.factory('run', 'start', '--data', JSON.stringify({ title, agent: fx.agent, commands: 'sh verify.sh', conventions: ['AGENTS.md'] }));
 }
+
+// Starts a Run and drives it, through the Run commands, to the given point: `build`, `check`, `evidence` (Check with Verify and every verdict recorded)
+// or `finish` (the branch is also pushed). The worktree holds a Spec, one Ticket and one implementation commit once past `build`.
+export function runAt(fx, upTo, title = 'Add a shout function') {
+  const id = startRun(fx, title);
+  const wt = JSON.parse(fx.factory('run', 'inspect', '--id', id, '--json')).worktree ?? join(fx.dir, '.factory', 'worktrees', id);
+  const wgit = (...a) => git(wt, ...a);
+  const update = (data) => fx.factory('run', 'update', '--id', id, '--data', JSON.stringify(data));
+  const to = (stage) => fx.factory('run', 'transition', '--id', id, '--to', stage);
+  write(wt, 'docs/specs/shout.md', '# Shout\n\n## Problem Statement\n\nGreetings cannot be shouted.\n');
+  wgit('add', '-A');
+  wgit('commit', '-q', '-m', 'Spec');
+  update({ spec_link: 'docs/specs/shout.md', tickets: ['https://github.com/eval/fixture/issues/1'], tickets_total: 1 });
+  to('prepare');
+  to('build');
+  if (upTo === 'build') return { id, wt };
+  write(wt, 'greet.js', "export const greet = (name) => `Hello, ${name}`;\nexport const shout = (name) => greet(name).toUpperCase();\n");
+  wgit('add', '-A');
+  wgit('commit', '-q', '-m', 'Add shout');
+  update({ tickets_done: 1 });
+  to('check');
+  if (upTo === 'check') return { id, wt };
+  fx.factory('run', 'verify', '--id', id);
+  for (const [axis, value] of [['standards', 'pass'], ['spec', 'pass'], ['security', 'pass'], ['infrastructure', 'skipped']]) {
+    fx.factory('run', 'verdict', '--id', id, '--axis', axis, '--value', value);
+  }
+  if (upTo === 'evidence') return { id, wt };
+  to('finish');
+  wgit('push', '-q', 'origin', id);
+  return { id, wt };
+}

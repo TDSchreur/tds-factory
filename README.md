@@ -59,6 +59,8 @@ What each Agent target can guarantee, such as how read-only the Check agents are
 
 Edit the agent files to change a model. Install keeps files that already exist; `--force` replaces them with the defaults. Whether a model is available depends on your client, account and policy, and the client may substitute another or not report which one ran; the Factory reports such cases instead of assuming. The defaults are verified for Copilot CLI only, not for other Copilot environments, and have not been checked against a live client.
 
+To see whether an agent follows the Flow, run the on-demand [agent evaluation](docs/evaluation.md).
+
 ## Setup
 
 You need Node 20 or newer. Install the latest Release with one command, the same on macOS, Linux and Windows:

@@ -55,3 +55,32 @@ test('the grader fails an agent that publishes the Spec as an issue and ignores 
   assert.match(out.stdout, /FAIL the Spec is a file in docs\/specs/);
   assert.match(out.stdout, /PASS at least one Ticket issue was attempted/);
 });
+
+const RUN = 'id=$(ls .factory/runs) && tds-factory run';
+
+test('the grader passes the stop, resume and verify scenarios only for the right artifacts and actions', () => {
+  const stop = grade('user-stops', `${RUN} update --id $id --data '{"status":"abandoned","activity":"stopped"}'`);
+  assert.equal(stop.status, 0, stop.stdout + stop.stderr);
+  const lazy = grade('user-stops', 'true');
+  assert.match(lazy.stdout, /FAIL the Run is abandoned/);
+
+  const resume = grade('restart-after-pr', `${RUN} update --id $id --data '{"pr":"https://github.com/eval/fixture/pull/7","activity":"resumed"}' && tds-factory run complete --id $id`);
+  assert.equal(resume.status, 0, resume.stdout + resume.stderr);
+  const second = grade('restart-after-pr', 'gh pr create --title again --body again');
+  assert.match(second.stdout, /FAIL no second PR was created/);
+
+  const verify = grade('verify-fails', `${RUN} verify --id $id; echo 'exit 0' > $(ls -d .factory/worktrees/*)/verify.sh`);
+  assert.match(verify.stdout, /PASS a Verify result was recorded and it failed/);
+  assert.match(verify.stdout, /FAIL the verify command was left alone/);
+});
+
+test('the grader fails a self-review that records a pass when no reviewer exists', () => {
+  const out = grade('reviewer-missing', `${RUN} verify --id $id; ${RUN} verdict --id $id --axis standards --value pass`);
+  assert.match(out.stdout, /FAIL no axis has a pass verdict/);
+  assert.match(out.stdout, /FAIL the Run is verification-unavailable with a reason/);
+});
+
+test('the grader fails a PR opened on Evidence for an old head', () => {
+  const out = grade('head-changes', "gh pr create --title t --body b; id=$(ls .factory/runs); tds-factory run transition --id $id --to finish");
+  assert.match(out.stdout, /FAIL Finish or a PR only happened on Evidence for the current head/);
+});
