@@ -1,5 +1,7 @@
 # Release distribution
 
+> Historical specification: the per-merge release policy below is superseded by [manual releases](manual-releases.md).
+
 ## Problem Statement
 
 To give a colleague the Factory, I tell them to clone the repository and run a setup script. That needs git, the submodules, a checkout to keep around, and a manual update by pulling and running the script again. I want colleagues to install and update the Factory with one command.
