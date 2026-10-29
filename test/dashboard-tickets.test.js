@@ -13,3 +13,11 @@ test('interpretRun passes the Ticket links to the page', () => {
   const r = interpretRun({ id: 'a', record: { status: 'running', stage: 'build', tickets: ['u1', 7, 'u2'] } });
   assert.deepEqual(r.tickets, ['u1', 'u2']);
 });
+
+test('interpretRun exposes pause reasons without treating them as human waiting', () => {
+  for (const status of ['interrupted', 'verification-unavailable']) {
+    const view = interpretRun({ id: 'a', record: { status, status_reason: 'blocked', waiting_on_human: false } });
+    assert.equal(view.reason, 'blocked');
+    assert.equal(view.waiting, false);
+  }
+});

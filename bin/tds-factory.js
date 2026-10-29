@@ -63,7 +63,7 @@ try {
     }
     else if (op === 'verify') {
       const result = store.verify(values.id);
-      console.log(`verify ${result.exit_code === 0 ? 'passed' : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
+      console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);

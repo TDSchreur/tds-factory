@@ -4,8 +4,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 
-const statuses = ['running', 'waiting', 'done', 'abandoned'];
-const strings = ['title', 'activity', 'waiting_reason', 'commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
+const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
+const paused = ['verification-unavailable', 'interrupted'];
+const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
@@ -44,6 +45,12 @@ function apply(old, data) {
   } else if ('waiting_on_human' in data || 'waiting_reason' in data) {
     if (result.waiting_on_human !== (result.status === 'waiting') || (result.status !== 'waiting' && result.waiting_reason)) throw new Error('inconsistent waiting fields');
   }
+  if (paused.includes(result.status)) {
+    if (!result.status_reason?.trim()) throw new Error(`${result.status} requires a status reason`);
+  } else if (data.status !== undefined) {
+    if (data.status_reason) throw new Error('only paused Runs can have a status reason');
+    result.status_reason = '';
+  } else if (data.status_reason) throw new Error('only paused Runs can have a status reason');
   result.updated = new Date().toISOString();
   return result;
 }
@@ -227,7 +234,17 @@ function verifyRun(projectDir, id) {
   const { dir, record } = readRun(projectDir, id);
   if (record.status !== 'running') throw new Error(`a ${record.status} Run cannot be verified, only a running one`);
   if (!record.commands?.trim()) throw new Error('the Run has no Verify command');
-  const { head, dirty } = worktreeState(record);
+  let state;
+  try { state = worktreeState(record); } catch (err) {
+    changeRun(projectDir, id, (old) => {
+      if (old.status !== 'running' || old.commands !== record.commands || loops(old) !== loops(record)) throw new Error('the Run changed while verification was prepared');
+      const next = apply(old, { status: 'verification-unavailable', status_reason: err.message });
+      delete next.verify;
+      return next;
+    });
+    throw err;
+  }
+  const { head, dirty } = state;
   const started = new Date().toISOString();
   // Replace rather than reuse the log, so a planted link is never written through.
   const log = path.join(dir, 'verify.log');
@@ -236,10 +253,14 @@ function verifyRun(projectDir, id) {
   let ran;
   try { ran = spawnSync(record.commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] }); }
   finally { fs.closeSync(fd); }
-  const result = { command: record.commands, cwd: record.worktree, head, dirty, exit_code: ran.status ?? 1, started, ended: new Date().toISOString(), log: 'verify.log' };
+  const output = fs.readFileSync(log, 'utf8');
+  const unavailable = ran.error || ([126, 127].includes(ran.status) && /(?:not found|not recognized|permission denied|cannot execute)/i.test(output));
+  const pause = ran.signal ? { status: 'interrupted', status_reason: `Verify interrupted by ${ran.signal}` }
+    : unavailable ? { status: 'verification-unavailable', status_reason: `Verify unavailable: ${ran.error?.message ?? output.trim()}` } : null;
+  const result = { command: record.commands, cwd: record.worktree, head, dirty, exit_code: ran.status, started, ended: new Date().toISOString(), log: 'verify.log', ...(ran.signal ? { signal: ran.signal } : {}) };
   changeRun(projectDir, id, (old) => {
     if (old.status !== 'running' || old.commands !== record.commands || loops(old) !== loops(record)) throw new Error('the Run changed while the Verify command ran, so its result was not recorded');
-    return { ...old, verify: result, updated: new Date().toISOString() };
+    return { ...old, verify: result, ...(pause ? { ...pause, waiting_on_human: false, waiting_reason: '' } : {}), updated: new Date().toISOString() };
   });
   return result;
 }
@@ -267,7 +288,7 @@ async function inspectRuns(projectDir, runsDir, only) {
     if (unreadable) add('unreadable', 'run.json is missing or cannot be parsed');
     else {
       // A finished Run only matters here for uncommitted work that would block removing its worktree.
-      const active = ['running', 'waiting'].includes(record.status);
+      const active = ['running', 'waiting', ...paused].includes(record.status);
       if (!record.worktree || !fs.existsSync(record.worktree)) { if (active) add('worktree-missing', `the Run worktree ${record.worktree ?? '(none recorded)'} does not exist`); }
       else if (!known.has(fs.realpathSync(record.worktree))) { if (active) add('worktree-unknown', `git does not list ${record.worktree} as a worktree`); }
       else {

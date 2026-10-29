@@ -78,7 +78,7 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 
 - Each **card** is one Run. It moves left to right through the columns Define, Prepare, Build, Check, Finish and Done.
 - The **chips** show the Ticket progress, the four Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
-- A card marked **Needs you** is waiting for your answer.
+- A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
 - Click a card to open the **Run detail** on the right: its links, Tickets and the Stage summaries. Click the card again, press Esc or use the close button to close it.
 - Done cards start collapsed. Press **Show details** on a Done card to see its pull request link, **Merge** and **Delete**. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** removes the Run record and its worktree, and refuses if the worktree has uncommitted changes. Branches are never deleted.
 - Older Runs are folded away; "Show older" brings them back.

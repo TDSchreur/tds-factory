@@ -52,9 +52,10 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | --- | --- |
 | `title` | Short human title of the work |
 | `stage` | `define`, `prepare`, `build`, `check` or `finish` |
-| `status` | `running`, `waiting` (blocked on the user), `done` or `abandoned` |
+| `status` | `running`, `waiting` (blocked on the user), `verification-unavailable`, `interrupted`, `done` or `abandoned` |
 | `waiting_on_human` | Boolean, `true` while blocked on the user, otherwise `false` |
 | `waiting_reason` | Short line saying what the user must do, e.g. `confirm the shared understanding`; empty string when not waiting |
+| `status_reason` | Nonempty explanation when `verification-unavailable` or `interrupted`; empty when running or waiting |
 | `activity` | One short line on what is happening now, e.g. `implementing ticket #12` |
 | `agent` | Name of the writing agent: `claude`, `codex` or `copilot` |
 | `tickets_total` | Number of Tickets cut from the Spec. Set once the Tickets exist |
@@ -90,6 +91,8 @@ Before you ask the user at each of these points, update the Run with `status` `w
 - Preflight: no verify command was found, after creating the Run with an empty `commands` and before asking for it.
 - Define: a question for the user or confirmation of the shared understanding after grilling.
 - Check: when any axis is `fail`, or the loop cap is reached with problems still open, to ask for permission to continue to Finish.
+
+If verification cannot run, set `verification-unavailable` with a `status_reason`; if the agent is interrupted, set `interrupted` with a `status_reason`. Resume either explicitly with `status` `running`. A failed Verify command is not an unavailable one.
 
 When the user answers and the Run continues, set `status` back to `running` before doing anything else; the command clears the flag and the reason, also when the Run ends. If an answer needs no work before your next question, skip that clearing write: set the new `waiting_reason` in the next `waiting` write and write `running` only when real work starts.
 
