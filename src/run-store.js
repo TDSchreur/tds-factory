@@ -559,9 +559,14 @@ function removeRun(projectDir, id) {
       if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink()) return 'not-allowed';
       const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
       if (!record || !['done', 'abandoned'].includes(record.status)) return 'not-allowed';
-      // Only a worktree this store created is removed; an adopted one belongs to the user. Never forced, so uncommitted work stays.
+      // Only a worktree this store created is removed; an adopted one belongs to the user.
+      // Git will not remove a worktree with initialised submodules without --force, so check for work that would be lost first and force only a clean one.
       const own = path.join(factory, 'worktrees', id);
-      if (record.worktree === own && fs.existsSync(own) && spawnSync('git', ['worktree', 'remove', own], { cwd: project }).status !== 0) return 'worktree-refused';
+      if (record.worktree === own && fs.existsSync(own)) {
+        const status = spawnSync('git', ['status', '--porcelain', '--ignore-submodules=none'], { cwd: own, encoding: 'utf8' });
+        if (status.status !== 0 || status.stdout.trim()) return 'worktree-refused';
+        if (spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project }).status !== 0) return 'worktree-refused';
+      }
       fs.rmSync(dir, { recursive: true });
       return 'deleted';
     });
