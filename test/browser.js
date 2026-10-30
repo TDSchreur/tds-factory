@@ -105,7 +105,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     // Window sizing is clamped by Chromium (a 375px window can have a 500px viewport).
     // Set CSS viewport dimensions through browser emulation before responsive assertions.
     await request('POST', base + '/goog/cdp/execute', { cmd: 'Emulation.setDeviceMetricsOverride', params: { width, height, deviceScaleFactor: 1, mobile: false } });
-    const execute = (script) => request('POST', base + '/execute/sync', { script, args: [] });
+    const execute = (script, args = []) => request('POST', base + '/execute/sync', { script, args });
     Object.assign(page, {
       state, calls, execute, close,
       screenshot: () => request('GET', base + '/screenshot'),
