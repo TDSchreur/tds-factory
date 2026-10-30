@@ -28,7 +28,8 @@ const USAGE = `Usage:
 
 install defaults to the user-global directory; --project installs into the current directory.
 --dry-run prints what install would do and changes nothing.
-update installs the latest Release when yours is older and refreshes the skills with install --force; --no-force keeps edited agent files.`;
+update installs the latest Release when yours is older and refreshes the skills with install --force, which replaces edited agent files
+and skills of the same name that tds-factory did not install; --no-force keeps them.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,

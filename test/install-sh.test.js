@@ -31,8 +31,8 @@ function sandbox({ node = true, npm = true, major = '22', npmFails = '', cli = t
   }
   if (cli) stub('tds-factory', 'if [ "$1" = "--version" ]; then echo 9.9.9; else echo "tds-factory $*" >> "$CALLS"; fi');
   return {
-    run: (env = {}) => {
-      const result = spawnSync(join(bin, 'sh'), [script], { encoding: 'utf8', env: { PATH: bin, CALLS: calls, HOME: dir, ...env } });
+    run: (env = {}, file = script) => {
+      const result = spawnSync(join(bin, 'sh'), [file], { encoding: 'utf8', env: { PATH: bin, CALLS: calls, HOME: dir, ...env } });
       return { ...result, calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n') : [] };
     },
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
@@ -86,7 +86,7 @@ test('on EACCES install.sh prints the user-prefix and nvm fix and never suggests
     const r = s.run();
     assert.equal(r.status, 1);
     assert.match(r.stderr, /EACCES/);
-    assert.match(r.stderr, /--prefix ~\/\.local/);
+    assert.match(r.stderr, /npm config set prefix ~\/\.local/);
     assert.match(r.stderr, /nvm/);
     assert.match(r.stderr, /Do not use sudo/);
     assert.doesNotMatch(r.stdout + r.stderr, /sudo (npm|-|sh)/);
@@ -110,5 +110,24 @@ test('install.sh explains a tds-factory that is installed but not on PATH', { sk
     const r = s.run();
     assert.equal(r.status, 1);
     assert.match(r.stderr, /not on your PATH.*npm prefix -g/);
+  } finally { s.cleanup(); }
+});
+
+test('a download cut off before the last line runs nothing, because everything is inside main', { skip }, () => {
+  const s = sandbox();
+  try {
+    const text = readFileSync(script, 'utf8');
+    const lastLine = text.lastIndexOf('main "$@"');
+    assert.ok(lastLine > 0 && text.slice(lastLine).trim() === 'main "$@"', 'main is called on the last line');
+    // Cut at every line break before the call, and in the middle of the npm line.
+    const cuts = [...text.slice(0, lastLine).matchAll(/\n/g)].map((m) => m.index + 1).concat(text.indexOf('npm install -g') + 8);
+    for (const cut of cuts) {
+      const file = join(tmpdir(), `install-sh-cut-${process.pid}-${cut}.sh`);
+      writeFileSync(file, text.slice(0, cut));
+      try {
+        const r = s.run({}, file);
+        assert.deepEqual(r.calls, [], `cut at ${cut} ran ${r.calls.join(', ')}`);
+      } finally { rmSync(file, { force: true }); }
+    }
   } finally { s.cleanup(); }
 });

@@ -10,6 +10,13 @@ import { update, compareVersions } from '../src/update.js';
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';
 const tgzUrl = (tag) => `https://github.com/TDSchreur/tds-factory/releases/download/${tag}/tds-factory.tgz`;
+const releaseJson = (tag, { checksum = true } = {}) => Response.json({
+  tag_name: tag,
+  assets: [
+    { name: 'tds-factory.tgz', browser_download_url: tgzUrl(tag) },
+    ...(checksum ? [{ name: 'tds-factory.tgz.sha256', browser_download_url: tgzUrl(tag) + '.sha256' }] : []),
+  ],
+});
 const TGZ = Buffer.alloc(2048, 7);
 const HASH = createHash('sha256').update(TGZ).digest('hex');
 
@@ -17,9 +24,9 @@ const HASH = createHash('sha256').update(TGZ).digest('hex');
 // returning one; `world.calls` records every command that ran, in order.
 function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, installStatus = 0 } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'update-test-'));
-  const state = { calls: [], logs: [], warns: [], fetched: [], sleeps: [], version: undefined };
+  const state = { calls: [], cwds: [], logs: [], warns: [], fetched: [], sleeps: [], version: undefined };
   const defaults = {
-    [API]: () => Response.json({ tag_name: latest, assets: [{ name: 'tds-factory.tgz', browser_download_url: tgzUrl(latest) }] }),
+    [API]: () => releaseJson(latest),
     [tgzUrl(latest)]: () => new Response(TGZ),
     [tgzUrl(latest) + '.sha256']: () => new Response(`${HASH}  tds-factory.tgz\n`),
   };
@@ -32,8 +39,9 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
     if (response instanceof Error) throw response;
     return response;
   };
-  const run = (cmd, args) => {
+  const run = (cmd, args, options = {}) => {
     state.calls.push([cmd, ...args].join(' '));
+    state.cwds.push(options.cwd);
     if (cmd === 'npm') {
       if (npmStatus === 0) state.version = installedAfter ?? latest.replace(/^v/, '');
       return { status: npmStatus, stdout: '', stderr: '' };
@@ -53,11 +61,13 @@ test('an older installed version installs the latest Release, then refreshes the
   try {
     await update({ installed: '0.3.0', ...w.options });
     assert.equal(w.state.calls.length, 3, w.state.calls.join('\n'));
-    assert.match(w.state.calls[0], /^npm install -g .*tds-factory\.tgz$/);
+    assert.equal(w.state.calls[0], 'npm install -g tds-factory.tgz', 'a relative name, so a path with spaces never reaches a shell');
+    assert.match(w.state.cwds[0], /tds-factory-/);
+    assert.ok(w.state.cwds[0].startsWith(w.tmp), 'npm runs inside the temp download folder');
     assert.equal(w.state.calls[1], 'tds-factory --version');
     assert.equal(w.state.calls[2], 'tds-factory install --force');
     assert.deepEqual(readdirSync(w.tmp), [], 'the temp download is removed');
-    assert.match(w.state.warns.join('\n'), /edited agent files are replaced with the defaults/);
+    assert.match(w.state.warns.join('\n'), /edited agent files, and skills with the same names that tds-factory did not install, are replaced \(use --no-force/);
   } finally { w.cleanup(); }
 });
 
@@ -107,7 +117,7 @@ test('when the API fails it falls back to the redirect of /releases/latest', asy
 test('a transient failure is retried with backoff, then succeeds', async () => {
   let attempts = 0;
   const w = world({
-    routes: { [API]: () => (++attempts < 3 ? new Error('connection reset') : Response.json({ tag_name: 'v0.4.0', assets: [{ name: 'tds-factory.tgz', browser_download_url: tgzUrl('v0.4.0') }] })) },
+    routes: { [API]: () => (++attempts < 3 ? new Error('connection reset') : releaseJson('v0.4.0')) },
   });
   try {
     await update({ installed: '0.3.0', ...w.options });
@@ -124,9 +134,61 @@ test('a permanent failure rejects with the error and runs no command', async () 
   } finally { w.cleanup(); }
 });
 
+test('a 5xx or 429 on the redirect lookup is retried, but an API 403 is not', async () => {
+  let api = 0;
+  let redirect = 0;
+  const w = world({
+    routes: {
+      [API]: () => { api++; return new Response('rate limited', { status: 403 }); },
+      [PAGE]: () => (++redirect < 3 ? new Response('busy', { status: redirect === 1 ? 503 : 429 }) : new Response(null, { status: 302, headers: { location: 'https://github.com/TDSchreur/tds-factory/releases/tag/v0.4.0' } })),
+    },
+  });
+  try {
+    await update({ installed: '0.3.0', ...w.options });
+    assert.equal(api, 1, 'a 403 is a rate limit, so it falls back at once');
+    assert.equal(redirect, 3);
+    assert.match(w.state.calls[0], /^npm install -g /);
+  } finally { w.cleanup(); }
+});
+
+test('a 503 on the checksum is retried; a 403 is not', async () => {
+  let hits = 0;
+  const sha = tgzUrl('v0.4.0') + '.sha256';
+  const w = world({ routes: { [sha]: () => (++hits < 2 ? new Response('busy', { status: 503 }) : new Response(`${HASH}  tds-factory.tgz\n`)) } });
+  try {
+    await update({ installed: '0.3.0', ...w.options });
+    assert.equal(hits, 2);
+    assert.match(w.state.logs.join('\n'), /checksum ok/);
+  } finally { w.cleanup(); }
+  let forbidden = 0;
+  const w2 = world({ routes: { [sha]: () => { forbidden++; return new Response('no', { status: 403 }); } } });
+  try {
+    await assert.rejects(update({ installed: '0.3.0', ...w2.options }), /checksum download answered 403/);
+    assert.equal(forbidden, 1);
+    assert.deepEqual(w2.state.calls, []);
+  } finally { w2.cleanup(); }
+});
+
+test('a 404 for a checksum file the Release lists is an error, not a skipped check', async () => {
+  const w = world({ routes: { [tgzUrl('v0.4.0') + '.sha256']: () => new Response('not found', { status: 404 }) } });
+  try {
+    await assert.rejects(update({ installed: '0.3.0', ...w.options }), /lists a checksum file/);
+    assert.deepEqual(w.state.calls, []);
+  } finally { w.cleanup(); }
+});
+
+test('a download URL that is not a Release asset of this repository is refused', async () => {
+  const w = world({ routes: { [API]: () => Response.json({ tag_name: 'v0.4.0', assets: [{ name: 'tds-factory.tgz', browser_download_url: 'https://evil.example/tds-factory.tgz' }] }), [PAGE]: () => new Response(null, { status: 404 }) } });
+  try {
+    await assert.rejects(update({ installed: '0.3.0', ...w.options }), /Could not determine|not a Release asset/);
+    assert.ok(!w.state.fetched.includes('https://evil.example/tds-factory.tgz'), 'nothing is downloaded from it');
+    assert.deepEqual(w.state.calls, []);
+  } finally { w.cleanup(); }
+});
+
 test('the GITHUB_TOKEN is sent to the API when set', async () => {
   let auth;
-  const w = world({ routes: { [API]: (o) => { auth = o.headers?.Authorization; return Response.json({ tag_name: 'v0.4.0', assets: [{ name: 'tds-factory.tgz', browser_download_url: tgzUrl('v0.4.0') }] }); } } });
+  const w = world({ routes: { [API]: (o) => { auth = o.headers?.Authorization; return releaseJson('v0.4.0'); } } });
   try {
     await update({ installed: '0.4.0', ...w.options, env: { GITHUB_TOKEN: 'abc' } });
     assert.equal(auth, 'Bearer abc');
@@ -191,7 +253,7 @@ test('a malformed checksum file is an error, not a skipped check', async () => {
 });
 
 test('a Release without a checksum file warns and still installs', async () => {
-  const w = world({ routes: { [tgzUrl('v0.4.0') + '.sha256']: () => new Response('not found', { status: 404 }) } });
+  const w = world({ routes: { [API]: () => releaseJson('v0.4.0', { checksum: false }), [tgzUrl('v0.4.0') + '.sha256']: () => new Response('not found', { status: 404 }) } });
   try {
     await update({ installed: '0.3.0', ...w.options });
     assert.match(w.state.warns.join('\n'), /no checksum.*not verified/);
