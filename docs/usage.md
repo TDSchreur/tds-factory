@@ -36,7 +36,7 @@ Open your prepared project (see part 5 of the [install guide](install.md)) in yo
 /factory Add a CSV export button to the reports page
 ```
 
-In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. In Copilot in VS Code and in Claude Code the agent never starts `factory` on its own; Codex may.
+In Copilot in VS Code, type `/`, choose `factory`, and write the description after it. In Claude Code, type `/factory` and the description. In other agents, choose `factory` from the agent's own list of skills and write the description in the same message. Any agent can also start `factory` on its own when you describe a feature end to end. Typing `/factory` starts a Run on purpose.
 
 Start with a small task the first time. Good first tasks change one thing and are easy to check, such as a new button, a validation rule or a missing test.
 

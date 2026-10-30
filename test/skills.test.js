@@ -111,8 +111,8 @@ test('Finish has no gate of its own and still fills in the PR checklists', () =>
   assert.doesNotMatch(section('Waiting on the user'), /Finish:/);
 });
 
-test('every skill the factory invokes can be called by the model', () => {
-  for (const name of invoked) {
+test('the factory and every skill it invokes can be called by the model', () => {
+  for (const name of [...invoked, 'factory']) {
     const skill = readFileSync(join(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
     assert.doesNotMatch(skill, /^disable-model-invocation:/m, name);
   }

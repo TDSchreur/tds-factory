@@ -86,7 +86,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 ### Check that your agent sees the skills
 
 - **GitHub Copilot in VS Code:** open the chat and type `/`. The list should include `factory`. Type `/skills` to open the skills menu. Restart VS Code if the list is empty.
-- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs; see Troubleshooting if `/factory` is missing. In Copilot in VS Code and in Claude Code, `factory` and `setup-matt-pocock-skills` only run when you start them. For `factory`, Codex ignores that setting, so it may start it on its own.
+- **Copilot CLI, Claude Code and Codex:** start a new session after installing, so the agent reads the skills folder again. How each agent lists skills differs; see Troubleshooting if `/factory` is missing. In Copilot in VS Code and in Claude Code, `setup-matt-pocock-skills` only runs when you start it. Any agent can start `factory` on its own, so type `/factory` when you want to start a Run yourself.
 
 ## 4. Update
 

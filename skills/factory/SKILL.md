@@ -1,7 +1,6 @@
 ---
 name: factory
 description: Run the TDS software factory flow (Define, Build, Check, Finish) to take a piece of work from idea to pull request. Use when the user says "factory" or wants to build a feature end to end.
-disable-model-invocation: true
 ---
 
 # Factory
