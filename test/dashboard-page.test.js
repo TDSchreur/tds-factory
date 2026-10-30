@@ -145,6 +145,8 @@ test('active Runs offer deletion and dirty changes need separate confirmation', 
     await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?'");
     await page.execute("document.getElementById('dialog-confirm').click()");
     await page.waitFor("return !document.getElementById('dialog').open");
+    // The dialog closes before the request reaches the server, so wait for the call instead of racing it.
+    for (let i = 0; i < 50 && page.calls.length < 3; i++) await new Promise((r) => setTimeout(r, 100));
     assert.deepEqual(page.calls, ['DELETE /api/runs/build', 'DELETE /api/runs/build', 'DELETE /api/runs/build?discardChanges=true']);
   } finally { await page.close(); }
 });

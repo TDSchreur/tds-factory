@@ -9,29 +9,82 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  verify:
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', 'lts/*']
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run test:unit
+
+  browser:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REQUIRE_BROWSER: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: lts/*
+      - name: Put the runner's ChromeDriver on PATH
+        run: echo "$CHROMEWEBDRIVER" >> "$GITHUB_PATH"
+      - run: npm run test:browser
+
+  release:
+    if: github.ref == 'refs/heads/master'
+    needs: [verify, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 20
-      - run: npm test
+          node-version: lts/*
       - name: Pick the version
         id: version
-        run: echo "version=$(node scripts/next-version.js "$(node -p "require('./package.json').version")" $(git tag --list 'v*'))" >> "$GITHUB_OUTPUT"
-      - name: Pack with that version, without a commit
         run: |
-          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
+          mapfile -t tags < <(git tag --list 'v*')
+          version=$(node scripts/next-version.js "$(node -p "require('./package.json').version")" "${tags[@]}")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Pack with that version, without a commit
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm pack
-          mv "tds-factory-${{ steps.version.outputs.version }}.tgz" tds-factory.tgz
+          mv "tds-factory-$VERSION.tgz" tds-factory.tgz
+      - name: Verify the exact tarball before publishing
+        run: npm run test:package -- tds-factory.tgz
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v${{ steps.version.outputs.version }}" tds-factory.tgz --target "$GITHUB_SHA" --title "v${{ steps.version.outputs.version }}" --generate-notes --latest
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v$VERSION" tds-factory.tgz --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes --latest
+      - name: Check that the install URL in the README serves the published tarball
+        env:
+          GITHUB_REPOSITORY_URL: https://github.com/${{ github.repository }}
+        run: |
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
+            --output downloaded.tgz "$GITHUB_REPOSITORY_URL/releases/latest/download/tds-factory.tgz"
+          cmp tds-factory.tgz downloaded.tgz
