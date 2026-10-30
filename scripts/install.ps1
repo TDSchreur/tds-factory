@@ -61,7 +61,7 @@ function Install-TdsFactory {
         }
 
         Write-Host "==> Done: tds-factory $(("$(& $tdsFactory --version)").Trim())"
-        Write-Host "Next: run 'tds-factory doctor' in a project, then read https://github.com/TDSchreur/tds-factory/blob/master/docs/usage.md"
+        Write-Host "Next: run 'tds-factory doctor' in a project, then read https://github.com/TDSchreur/tds-factory/blob/main/docs/usage.md"
     }
     finally {
         Pop-Location

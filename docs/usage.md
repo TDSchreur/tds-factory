@@ -28,7 +28,7 @@ Before the first Run in a project, check that it is ready. From the project fold
 tds-factory doctor
 ```
 
-It changes nothing and prints one line per check, such as `pass    git: origin default branch is master`. Fix every line that says `missing` or `fail` first; `/factory` runs the same checks and stops when one fails. See "Check readiness without starting a Run" below for what it checks.
+It changes nothing and prints one line per check, such as `pass    git: origin default branch is main`. Fix every line that says `missing` or `fail` first; `/factory` runs the same checks and stops when one fails. See "Check readiness without starting a Run" below for what it checks.
 
 Open your prepared project (see part 5 of the [install guide](install.md)) in your agent and start a new chat. Describe the work in the same message that starts the skill:
 

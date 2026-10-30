@@ -53,7 +53,7 @@ MSG
   fi
 
   say "Done: tds-factory $(tds-factory --version)"
-  echo "Next: run 'tds-factory doctor' in a project, then read https://github.com/TDSchreur/tds-factory/blob/master/docs/usage.md"
+  echo "Next: run 'tds-factory doctor' in a project, then read https://github.com/TDSchreur/tds-factory/blob/main/docs/usage.md"
 }
 
 main "$@"
