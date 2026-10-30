@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { adrProblems, avoidTerms, bareAvoidTerms, brokenLinks, misnamedBrowserTests, staleConstants } from '../scripts/doc-checks.js';
+import { git, repo as gitRepo } from './git-repo.js';
+import { adrProblems, avoidTerms, bareAvoidTerms, brokenLinks, misnamedBrowserTests, missingChangelogFragment, staleConstants } from '../scripts/doc-checks.js';
 
 const repo = (files) => {
   const dir = mkdtempSync(join(tmpdir(), 'doc-checks-'));
@@ -82,4 +83,59 @@ test('misnamedBrowserTests reports a browser test whose name CI would not run in
 
 test('every browser test in this repository is named so the CI browser job runs it', () => {
   assert.deepEqual(misnamedBrowserTests(resolve('.')), []);
+});
+
+// A git repository whose origin/main is the initial commit, with a branch checked out on top of it.
+const branch = () => {
+  const dir = gitRepo();
+  git(dir, 'fetch', '-q', 'origin');
+  git(dir, 'checkout', '-q', '-b', 'work');
+  return dir;
+};
+const commit = (dir, files) => {
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(join(dir, dirname(name)), { recursive: true });
+    writeFileSync(join(dir, name), text);
+  }
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-q', '-m', 'change');
+};
+
+test('missingChangelogFragment wants a fragment for a committed change in src, skills or agents', () => {
+  const dir = branch();
+  assert.deepEqual(missingChangelogFragment(dir).problems, []);
+  commit(dir, { 'docs/a.md': 'docs only' });
+  assert.deepEqual(missingChangelogFragment(dir).problems, []);
+  commit(dir, { 'agents/claude/x.md': 'x' });
+  assert.match(missingChangelogFragment(dir).problems[0], /agents\/claude\/x\.md\) but no changelog fragment/);
+  commit(dir, { 'changelog.d/README.md': 'only the guide' });
+  assert.equal(missingChangelogFragment(dir).problems.length, 1, 'the README is not a fragment');
+  commit(dir, { 'changelog.d/x.md': '### Added\n- X.\n' });
+  assert.deepEqual(missingChangelogFragment(dir).problems, []);
+});
+
+test('missingChangelogFragment sees uncommitted and new files', () => {
+  const dir = branch();
+  writeFileSync(join(dir, 'new.js'), 'x');
+  assert.deepEqual(missingChangelogFragment(dir).problems, [], 'a new file outside the three folders needs none');
+  mkdirSync(join(dir, 'src'));
+  writeFileSync(join(dir, 'src', 'new.js'), 'x');
+  assert.equal(missingChangelogFragment(dir).problems.length, 1);
+  mkdirSync(join(dir, 'changelog.d'));
+  writeFileSync(join(dir, 'changelog.d', 'x.md'), '### Added\n- X.\n');
+  assert.deepEqual(missingChangelogFragment(dir).problems, []);
+});
+
+test('missingChangelogFragment skips, with a reason, when there is no origin/main to compare with', () => {
+  const dir = gitRepo();
+  git(dir, 'remote', 'remove', 'origin');
+  commit(dir, { 'src/a.js': 'x' });
+  const result = missingChangelogFragment(dir);
+  assert.match(result.skipped, /no merge base with origin\/main/);
+  assert.deepEqual(result.problems, []);
+  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no merge base/);
+});
+
+test('this repository has a changelog fragment for its changes', () => {
+  assert.deepEqual(missingChangelogFragment(resolve('.')).problems, []);
 });

@@ -1,6 +1,7 @@
 // Mechanical checks on the repository's own documentation and tests. Each takes a root folder and returns a list of problems,
 // so `npm test` can run it on the repo and the tests can run it on a temporary folder.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { MAX_CHECK_LOOPS } from '../src/run-store.js';
 
@@ -120,4 +121,23 @@ export function misnamedBrowserTests(root) {
     .filter((file) => file.endsWith('.test.js') && !file.endsWith('-browser.test.js'))
     .filter((file) => /^import\s*\{[^}]*\bopenPage\b[^}]*\}\s*from\s*'\.\/browser\.js'/m.test(readFileSync(join(root, file), 'utf8')))
     .map((file) => `${file} opens a browser, so it must be named *-browser.test.js`);
+}
+
+const git = (root, ...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).split('\n').filter(Boolean);
+
+// A change to code the package ships needs a changelog fragment. Compares the working tree with the merge base with
+// origin/main, so it sees committed, staged, unstaged and new files. With no git history or no origin/main (a shallow CI
+// checkout, the installed package) it reports why it did not check and finds nothing.
+export function missingChangelogFragment(root) {
+  let base;
+  try {
+    base = git(root, 'merge-base', 'HEAD', 'origin/main')[0];
+  } catch {
+    return { skipped: 'no merge base with origin/main to compare with', problems: [] };
+  }
+  const changed = [...git(root, 'diff', '--name-only', '--diff-filter=ACMRT', base), ...git(root, 'ls-files', '--others', '--exclude-standard')];
+  const shipped = changed.filter((file) => /^(src|skills|agents)\//.test(file));
+  const fragment = changed.some((file) => /^changelog\.d\/(?!README\.md$)[^/]+\.md$/.test(file));
+  if (!shipped.length || fragment) return { problems: [] };
+  return { problems: [`${shipped.length} changed file${shipped.length === 1 ? '' : 's'} in src/, skills/ or agents/ (${shipped[0]}) but no changelog fragment in changelog.d/ (see changelog.d/README.md)`] };
 }
