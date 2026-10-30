@@ -5,6 +5,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
+import { loadProjectReviews, reviewPlan } from './project-reviews.js';
 
 const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 const paused = ['verification-unavailable', 'interrupted'];
@@ -122,7 +123,8 @@ function startRun(projectDir, data) {
     const added = git('worktree', 'add', '-b', id, worktree, commit);
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     created = true;
-    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }));
+    const projectReviews = loadProjectReviews(worktree, data.agent);
+    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews });
   } catch (err) {
     const failures = [];
     if (created) {
@@ -252,6 +254,18 @@ function finishProblems(record, { head, dirty } = worktreeState(record)) {
     else if (seen?.head !== head || seen?.attempt !== attempt(record)) problems.push(`${axis} was not reviewed at the current head in this Check attempt`);
     else if (record[axis] === 'fail') problems.push(`${axis} failed`);
   }
+  for (const review of record.project_reviews ?? []) {
+    const result = record.project_results?.[review.id];
+    if (!result) problems.push(`${review.id} has no verdict`);
+    else if (result.head !== head || result.base_sha !== record.base_sha || result.attempt !== attempt(record)) problems.push(`${review.id} was not reviewed at the current head and base in this Check attempt`);
+    else if (result.verdict === 'fail') problems.push(`${review.id} failed`);
+    else if (!['pass', 'skipped'].includes(result.verdict)) problems.push(`${review.id} has an invalid verdict`);
+    else if (review.mode === 'interactive' && result.verdict === 'pass') {
+      try {
+        if (!result.evidence?.length || result.evidence.some(item => evidenceHash(record, item) !== result.evidence_hashes?.[item])) throw new Error('missing or changed');
+      } catch { problems.push(`${review.id} browser evidence is missing or changed`); }
+    }
+  }
   const verify = record.verify;
   if (!verify) problems.push('there is no Verify result');
   else if (verify.head !== head || verify.dirty) problems.push('the Verify result is not for the current committed head');
@@ -270,7 +284,7 @@ function acceptRun(projectDir, id, data) {
     return { record: { ...old, accepted: { findings: data.findings, decision: data.decision, head, at: new Date().toISOString() } }, activity: 'Check accepted by the user' };
   });
 }
-// Rebases the Run branch onto origin's default branch. A conflict leaves the branch as it was; a moved head makes the Evidence stale, so it goes.
+// Rebases onto origin's default branch. A changed head or recorded base makes Evidence stale, so it goes.
 function syncRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (!['build', 'check'].includes(old.stage)) throw new Error('only a Run in Build or Check can be synced');
@@ -291,9 +305,10 @@ function syncRun(projectDir, id, data = {}) {
       throw new Error(`rebase onto origin ${why}; the branch is unchanged. To resolve it, run git rebase ${base} in the Run worktree, fix each conflicted file, git add it, run git rebase --continue, then run sync again`);
     }
     const moved = worktreeState(old).head !== head;
+    const changed = moved || old.base_sha !== base;
     const record = { ...old, base_sha: base };
-    if (moved) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
-    return { record, activity: moved ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
+    if (changed) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
+    return { record, activity: changed ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
   });
 }
 // Why the Run branch would not merge cleanly into origin's default branch: empty when it would.
@@ -311,7 +326,7 @@ function reworkRun(projectDir, id, data = {}) {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
     if (loops(old) >= MAX_CHECK_LOOPS) throw new Error(`the Check loop limit of ${MAX_CHECK_LOOPS} is reached`);
     const record = { ...old, stage: 'build', check_loops: loops(old) + 1 };
-    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
+    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
     return { record, activity: 'Rework: back to Build' };
   });
 }
@@ -377,6 +392,69 @@ function verdictRun(projectDir, id, axis, value) {
     if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
     return { record: { ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, activity: `${axis} verdict: ${value}` };
   });
+}
+
+// Resolve artifacts only within the Run folder, refusing links and changed evidence.
+function evidenceHash(record, item) {
+  if (typeof item !== 'string' || path.isAbsolute(item) || item.split(/[\\/]/).some(part => !part || part === '.' || part === '..')) throw new Error(`invalid evidence path: ${item}`);
+  const folder = path.join(path.dirname(path.dirname(record.worktree)), 'runs', path.basename(record.worktree));
+  if (fs.realpathSync(folder) !== folder) throw new Error('Run folder must not be a symlink');
+  let current = folder;
+  for (const part of item.split('/')) {
+    current = path.join(current, part);
+    const stat = fs.lstatSync(current);
+    if (stat.isSymbolicLink()) throw new Error(`evidence path contains a symlink: ${item}`);
+  }
+  if (!fs.statSync(current).isFile()) throw new Error(`evidence is not a regular file: ${item}`);
+  return createHash('sha256').update(fs.readFileSync(current)).digest('hex');
+}
+
+// Record a structured project review at the current head and attempt. Browser artifacts live
+// under the Run folder so screenshots do not dirty the implementation worktree.
+function projectReviewRun(projectDir, id, axis, data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('review needs a report object');
+  if (Object.keys(data).some(k => !['verdict', 'inspected', 'findings', 'evidence'].includes(k))) throw new Error('unknown review report field');
+  if (!['pass', 'fail', 'skipped'].includes(data.verdict)) throw new Error('review verdict must be pass, fail or skipped');
+  const isText = value => typeof value === 'string' && !!value.trim() && !/[\x00-\x1f\x7f]/.test(value);
+  if (data.verdict !== 'skipped') {
+    if (!Array.isArray(data.inspected) || !data.inspected.length || !data.inspected.every(isText)) throw new Error('review needs inspected files or screens');
+    if (!Array.isArray(data.findings) || data.findings.some(f => !f || typeof f !== 'object' || Array.isArray(f) || Object.keys(f).some(k => !['severity', 'description', 'location'].includes(k)) || !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].includes(f.severity) || !isText(f.description) || !isText(f.location))) throw new Error('each finding needs severity, description and location');
+    if (data.verdict === 'pass' && data.findings.some(f => ['CRITICAL', 'HIGH', 'MEDIUM'].includes(f.severity))) throw new Error('a review with medium-or-higher findings cannot pass');
+    if (data.evidence !== undefined && (!Array.isArray(data.evidence) || !data.evidence.every(isText))) throw new Error('evidence must be an array of Run-relative artifact paths');
+  } else if (Object.keys(data).length !== 1) throw new Error('a skipped review takes only its verdict');
+  changeRunning(projectDir, id, {}, old => {
+    if (old.stage !== 'check') throw new Error('project reviews are recorded in Check');
+    const review = (old.project_reviews ?? []).find(r => r.id === axis);
+    if (!review) throw new Error(`unknown project review: ${axis}`);
+    const { head, dirty } = worktreeState(old);
+    if (data.verdict !== 'fail' && dirty) throw new Error('cannot record a passing or skipped review with uncommitted changes');
+    const plan = reviewPlan(old).find(r => r.id === axis);
+    if (data.verdict === 'skipped' && plan.applicable) throw new Error(`${axis} is applicable and cannot be skipped`);
+    if (data.verdict !== 'skipped' && !plan.applicable) throw new Error(`${axis} is not applicable; record skipped`);
+    if (review.mode === 'interactive' && data.verdict === 'pass' && !data.evidence?.length) throw new Error(`${axis} needs browser evidence to pass`);
+    const evidenceHashes = Object.fromEntries((data.evidence ?? []).map(item => [item, evidenceHash(old, item)]));
+    const result = { ...data, ...(data.evidence?.length ? { evidence_hashes: evidenceHashes } : {}), ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, base_sha: old.base_sha, attempt: attempt(old) };
+    return { record: { ...old, project_results: { ...old.project_results, [axis]: result } }, activity: `${axis} verdict: ${data.verdict}` };
+  });
+}
+
+// Materialize only captured files into a new private folder; never execute the live Skill.
+function materializeReview(projectDir, id, axis) {
+  const { dir, record } = readRun(projectDir, id);
+  const review = (record.project_reviews ?? []).find(r => r.id === axis);
+  if (!review) throw new Error(`unknown project review: ${axis}`);
+  const files = review.files;
+  if (!files || typeof files !== 'object' || Array.isArray(files) || !Object.hasOwn(files, 'SKILL.md')) throw new Error('frozen Skill is invalid');
+  for (const [name, data] of Object.entries(files)) {
+    if (!name || path.isAbsolute(name) || name.split(/[\\/]/).some(part => !part || part === '.' || part === '..') || typeof data !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)) throw new Error(`invalid frozen Skill file: ${name}`);
+  }
+  const output = fs.mkdtempSync(path.join(dir, 'review-skill-'));
+  for (const [name, data] of Object.entries(files)) {
+    const dest = path.join(output, ...name.split('/'));
+    fs.mkdirSync(path.dirname(dest), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(dest, Buffer.from(data, 'base64'), { flag: 'wx', mode: 0o600 | ((review.modes?.[name] ?? 0) & 0o111) });
+  }
+  return output;
 }
 
 // Only worktrees at the store's own paths can be recovered.
@@ -535,8 +613,9 @@ async function inspectRuns(projectDir, runsDir, only) {
         try {
           const { head, dirty } = worktreeState(record);
           if (dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
-          const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head)].filter(Boolean);
-          if (active && ['check', 'finish'].includes(record.stage) && seen.some((h) => h !== head)) add('stale-evidence', 'Evidence was recorded for an earlier head than the current one');
+          const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head), ...Object.values(record.project_results ?? {}).map((r) => r?.head)].filter(Boolean);
+          const staleBase = Object.values(record.project_results ?? {}).some((r) => r?.base_sha !== record.base_sha);
+          if (active && ['check', 'finish'].includes(record.stage) && (seen.some((h) => h !== head) || staleBase)) add('stale-evidence', 'Evidence was recorded for an earlier head or base than the current one');
         } catch (err) { add('worktree-unreadable', err.message); }
       }
     }
@@ -770,6 +849,9 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
+    reviews: (id) => reviewPlan(readRun(projectDir, id).record),
+    review: (id, axis, data) => projectReviewRun(projectDir, id, axis, data),
+    materializeReview: (id, axis) => materializeReview(projectDir, id, axis),
     mergeEligibility: (id) => {
       const { record } = readRun(projectDir, id);
       const state = worktreeState(record);

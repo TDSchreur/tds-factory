@@ -54,9 +54,14 @@ export function interpretRun(entry) {
   const r = entry.record, status = str(r.status), stage = str(r.stage).toLowerCase();
   const num = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
   const verdict = (v, skip) => { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : ''; };
+  const projectReviews = (Array.isArray(r.project_reviews) ? r.project_reviews : []).filter(x => x && typeof x === 'object' && str(x.id) && str(x.name)).map(x => {
+    const result = r.project_results?.[x.id] ?? {};
+    const findings = (Array.isArray(result.findings) ? result.findings : []).filter(f => f && typeof f === 'object').map(f => ({ severity: str(f.severity), description: str(f.description), location: str(f.location) }));
+    return { id: str(x.id), name: str(x.name), verdict: verdict(result.verdict, true), reason: str(result.reason), findings };
+  });
   const links = [];
   for (const [label, values] of [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]]) for (const value of Array.isArray(values) ? values : [values]) if (str(value)) links.push({ label, href: str(value) });
-  return { id, unreadable: false, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
+  return { id, unreadable: false, projectReviews, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
 }
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.

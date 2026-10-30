@@ -66,8 +66,10 @@ Each Stage produces one result.
 
 - Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker.
 - Build finishes every Ticket test-first, with one commit each. It builds what the Ticket asks and names any smaller option in one line in `build.md`.
-- Check gives a Standards, a Spec, a Security and an Infrastructure verdict. Each comes from a fresh read-only subagent. Infrastructure is skipped when no infrastructure file changed.
+- Check gives Standards, Spec, Security and Infrastructure verdicts from fresh read-only subagents. Infrastructure is skipped when no infrastructure file changed. Projects can add independent source or interactive reviews.
 - Finish opens the pull request.
+
+Projects can add required review Skills for their own stack, UI or UX; see [project reviews](docs/project-reviews.md).
 
 The rules for each Stage are in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). Only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most four times.
 

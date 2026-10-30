@@ -23,12 +23,12 @@ function installIn(project, agent, force = false) {
 
 const dirs = { claude: '.claude/agents', codex: '.codex/agents', copilot: '.github/agents' };
 
-test('install writes the four Stage agents for each target', () => {
+test('install writes the Stage and interactive review agents for each target', () => {
   for (const [agent, dir] of Object.entries(dirs)) {
     const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
     installIn(project, agent);
     const names = readdirSync(join(project, dir)).filter((f) => !f.startsWith('.')).map((f) => f.split('.')[0]).sort();
-    assert.deepEqual(names, ['factory-build', 'factory-check', 'factory-define', 'factory-finish'], agent);
+    assert.deepEqual(names, ['factory-build', 'factory-check', 'factory-define', 'factory-finish', 'factory-interactive-check'], agent);
   }
 });
 
@@ -52,7 +52,7 @@ test('the Check agent of every target is read-only', () => {
 test('install --agent all also writes the Copilot agents', () => {
   const project = mkdtempSync(join(tmpdir(), 'tds-agents-all-'));
   installIn(project, 'all');
-  assert.equal(readdirSync(join(project, '.github', 'agents')).filter((f) => !f.startsWith('.')).length, 4);
+  assert.equal(readdirSync(join(project, '.github', 'agents')).filter((f) => !f.startsWith('.')).length, 5);
 });
 
 test('install keeps a dangling agent symlink', () => {

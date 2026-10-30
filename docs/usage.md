@@ -73,7 +73,7 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 ## 3. What happens without you
 
 - **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time.
-- **Check:** the Factory asks for up to four reviews to run separately (three when no infrastructure file changed), each in a fresh read-only subagent that did not write the code. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most four times.
+- **Check:** the Factory asks for four baseline reviews separately (three when no infrastructure file changed), each in a fresh read-only subagent that did not write the code. Projects may add source or interactive reviews, each with its own independent reviewer. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most four times.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
 
 Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md` and the pull request text in `pr.md`. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
@@ -124,7 +124,7 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 
 - Each **card** is one Run. It moves left to right through the columns Define, Build, Check, Finish and Done.
 - On screens up to 1024 CSS pixels wide, use the Stage buttons to show one column at a time. The buttons show visible Run counts and mark Stages with Runs that need you.
-- The **chips** show the Ticket progress, the four Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
+- The **chips** show the Ticket progress, baseline and project Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
 - Click a card to open the **Run detail** with its links, Tickets and Stage summaries. On compact screens it fills the screen; use **Back to stages** or Esc to return to the same Run. On wider screens it opens on the right; click the card again, press Esc or use the close button to close it.
 - Done cards start collapsed. Press **Show details** on a Done card to see its pull request link and actions. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** is available on every Run. Stop an unfinished Run's agent first. Delete removes its record and Factory-created worktree while keeping the branch. If the worktree has uncommitted changes, a separate confirmation lets you discard them or cancel. **Delete all** applies only to Done Runs and asks separately about each dirty worktree.
@@ -145,7 +145,7 @@ The agent opens the pull request but does not merge it. Before you merge:
 1. Read the **Summary**: does it match what you asked for?
 2. Read **Evidence**: which tests failed before and pass now.
 3. Read **Merge Danger**: whether the change is easy to undo, and what it can break.
-4. Open `check-1.md` (or the highest `check-N.md`) in the Run folder to see the four verdicts and any finding left open.
+4. Open `check-1.md` (or the highest `check-N.md`) in the Run folder to see the baseline and project verdicts and any finding left open.
 5. Look at the diff yourself, like any other pull request.
 
 Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines close the Tickets. Then [clean up the Run's worktree and branch](#clean-up-after-a-merge). Maintainers who publish the merged work as a Release follow the [release guide](releasing.md).
@@ -159,7 +159,7 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Spec | The written definition of what to build, a Markdown file in `docs/specs/`. |
 | Ticket | One small unit of work cut from the Spec, an issue in GitHub. |
 | Check axis | One of the independent reviews in Check: Standards, Spec, Security, Infrastructure. |
-| Clean | A Check where every axis passes (Infrastructure may be skipped) and the verify command passed, all for the current code with nothing uncommitted. Only a clean Check goes on without asking you. |
+| Clean | A Check where every applicable axis passes (Infrastructure and nonmatching project reviews may be skipped) and the verify command passed, all for the current code with nothing uncommitted. Only a clean Check goes on without asking you. |
 | Doctor | The read-only `tds-factory doctor` command that checks whether a project is ready for a Run. |
 | Run worktree | The git worktree and branch a Run works in, so Runs never share files. |
 | Run detail | The panel on the Dashboard that shows a Run's links, Tickets and Stage summaries. |
@@ -172,7 +172,7 @@ Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project.
 
 ## Keep a Run up to date
 
-A Run branches from `origin`'s default branch when it starts, and the default branch moves while you work. `tds-factory run sync --id ID` fetches it and rebases the Run branch on top, in Build or Check. The `factory` Skill runs it before Check. If the rebase conflicts, the command names the files and leaves the branch unchanged; run `git rebase` with the commit it prints in the Run worktree, fix each conflicted file, `git add` it, run `git rebase --continue`, then run `run sync` again so the new base is recorded. `run sync` refuses to start while a rebase is already open in the worktree. A sync that moves the head clears the Evidence, so verify and review again. Moving a Run to Finish is refused while the branch would not merge cleanly into the default branch, so you find conflicts before the PR exists. A base that moved without a conflict does not stop Finish.
+A Run branches from `origin`'s default branch when it starts, and the default branch moves while you work. `tds-factory run sync --id ID` fetches it and rebases the Run branch on top, in Build or Check. The `factory` Skill runs it before Check. If the rebase conflicts, the command names the files and leaves the branch unchanged; run `git rebase` with the commit it prints in the Run worktree, fix each conflicted file, `git add` it, run `git rebase --continue`, then run `run sync` again so the new base is recorded. `run sync` refuses to start while a rebase is already open in the worktree. A sync that changes the head or recorded base clears the Evidence, so verify and review again. Moving a Run to Finish is refused while the branch would not merge cleanly into the default branch, so you find conflicts before the PR exists. A base that moved without a conflict does not stop Finish.
 
 ## Clean up after a merge
 
@@ -181,3 +181,7 @@ A Run keeps its worktree and branch until you remove them. After the pull reques
 ## Recover a Run
 
 Run `tds-factory run inspect --id ID` to diagnose its lock, worktree and stale Evidence. `tds-factory run repair --id ID` prints a proposal without changing anything. Review it, then add `--apply` to apply the safe changes. Repair checks the Run branch and GitHub PR before suggesting changes, keeps dirty worktrees, and reconstructs a missing record as interrupted. It clears only a lock whose local owner is known to have exited; age never expires a lock. An unknown or foreign owner must be investigated manually. A leftover repair coordination lock is also reported for manual investigation.
+
+## Add project reviews
+
+Projects can extend Check with source, UI or UX review Skills. Use the `add-project-review` Skill and see the [project review guide](project-reviews.md) for configuration, browser prerequisites and examples. Project review results participate in Rework and the Finish gate; each Run keeps its original configuration and Skill snapshot.

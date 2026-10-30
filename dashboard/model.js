@@ -50,6 +50,9 @@ export function chipsOf(run) {
   for (const [key, label] of [['standards', 'Standards'], ['spec', 'Spec'], ['security', 'Security'], ['infrastructure', 'Infrastructure']]) {
     if (run[key]) chips.push({ key, cls: run[key], text: `${label} ${run[key]}`, tip: CHIP_HELP[key] });
   }
+  for (const review of run.projectReviews ?? []) {
+    if (review.verdict) chips.push({ key: `project-${review.id}`, cls: review.verdict, text: `${review.name} ${review.verdict}`, tip: review.reason || `Project review: ${review.name}` });
+  }
   if (typeof run.loops === 'number') chips.push({ key: 'loops', cls: '', text: `loop ${run.loops}/4`, tip: CHIP_HELP.loops });
   return chips;
 }
