@@ -58,7 +58,17 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   let session;
   const close = async () => {
     if (session) await request('DELETE', '/session/' + session).catch(() => {});
+    const exited = new Promise((resolve) => {
+      if (driver.exitCode !== null || driver.signalCode !== null) resolve();
+      else driver.once('exit', resolve);
+    });
+    await fetch(`http://127.0.0.1:${driverPort}/shutdown`, { signal: AbortSignal.timeout(1000) }).catch(() => {});
+    if (await Promise.race([exited.then(() => true), delay(2000).then(() => false)])) {
+      await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
+      return;
+    }
     driver.kill();
+    await Promise.race([exited, delay(1000)]);
     await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
   };
   try {
