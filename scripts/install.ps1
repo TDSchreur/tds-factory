@@ -1,9 +1,9 @@
 # Installs the latest TDS Factory Release and its skills. Safe to run again to update.
-#   powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
+#   pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 # Options, as environment variables (irm | iex cannot take parameters):
 #   TDS_FACTORY_FORCE=1        run `tds-factory install --force` (replaces edited agent files and skills, and same-named skills that tds-factory did not install)
 #   TDS_FACTORY_SKIP_SKILLS=1  only install the CLI, do not run `tds-factory install`
-# Written for Windows PowerShell 5.1 as well as PowerShell 7: no ??, ?:, && or ||.
+# Written for PowerShell 7; Windows PowerShell 5.1 is not supported (ADR 0011).
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 

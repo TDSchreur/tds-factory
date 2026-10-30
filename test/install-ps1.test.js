@@ -11,8 +11,8 @@ const URL = 'https://github.com/TDSchreur/tds-factory/releases/latest/download/t
 const win = process.platform === 'win32';
 // spawnSync looks the program up on the PATH given to the child, so find it on ours first.
 const onPath = (name) => (process.env.PATH ?? '').split(delimiter).flatMap((d) => [join(d, name), join(d, `${name}.exe`)]).find(existsSync);
-// INSTALL_PS1_SHELL picks the shell, since CI runs the file on both Windows PowerShell 5.1 and PowerShell 7.
-const candidates = process.env.INSTALL_PS1_SHELL ? [process.env.INSTALL_PS1_SHELL] : win ? ['powershell', 'pwsh'] : ['pwsh', 'powershell'];
+// Only PowerShell 7 is supported (ADR 0011).
+const candidates = ['pwsh'];
 const pwsh = candidates.map(onPath).find((path) => path && spawnSync(path, ['-NoProfile', '-Command', '1'], { encoding: 'utf8' }).status === 0);
 const skip = pwsh ? false : 'PowerShell is not available';
 
@@ -166,10 +166,4 @@ test('install.ps1 explains a tds-factory that is installed but not on PATH', { s
 test('install.ps1 only exits when run as a file, so irm | iex never closes the terminal', () => {
   assert.match(source, /if \(\$PSCommandPath\) \{ exit 1 \}/);
   assert.equal((source.match(/\{ exit \d+ \}|^\s*exit\b/gm) ?? []).length, 1, 'the one exit is the guarded one');
-});
-
-// Windows PowerShell 5.1 is what `powershell -c` runs, and it cannot be run here, so keep out the syntax it lacks.
-test('install.ps1 avoids syntax that Windows PowerShell 5.1 does not have', () => {
-  const code = source.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
-  assert.doesNotMatch(code, /\?\?|\s\?\s|&&|\|\||-SkipHttpErrorCheck|-Parallel|\$IsWindows|\$IsLinux/);
 });

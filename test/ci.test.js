@@ -31,7 +31,7 @@ test('the CI browser job requires a browser instead of skipping', () => {
   assert.match(browser, /run: npm run test:browser/);
 });
 
-test('the CI workflow lints both Bootstrap installers with pinned tools and runs install.ps1 on Windows PowerShell 5.1 and 7', () => {
+test('the CI workflow lints both Bootstrap installers with pinned tools and runs install.ps1 on PowerShell 7 on Windows', () => {
   const shellcheck = ci.slice(ci.indexOf('  shellcheck:'), ci.indexOf('  psscriptanalyzer:'));
   assert.match(shellcheck, /SHELLCHECK_SHA256: [0-9a-f]{64}/, 'the shellcheck download is checksum-verified');
   assert.match(shellcheck, /sha256sum --check/);
@@ -43,8 +43,8 @@ test('the CI workflow lints both Bootstrap installers with pinned tools and runs
   const windows = ci.slice(ci.indexOf('  install-windows:'));
   assert.match(windows, /runs-on: windows-latest/);
   assert.match(windows, /REQUIRE_POWERSHELL: 1/);
-  assert.match(windows, /INSTALL_PS1_SHELL: powershell\s+run: node --test test\/install-ps1\.test\.js/);
-  assert.match(windows, /INSTALL_PS1_SHELL: pwsh\s+run: node --test test\/install-ps1\.test\.js/);
+  assert.doesNotMatch(windows, /INSTALL_PS1_SHELL|Windows PowerShell 5\.1/, 'only PowerShell 7 is tested');
+  assert.match(windows, /run: node --test test\/install-ps1\.test\.js/);
 });
 
 test('every third-party action in the CI workflow is pinned to a commit SHA', () => {
