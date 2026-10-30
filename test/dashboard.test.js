@@ -175,11 +175,12 @@ test('unsupported methods are rejected', async () => {
   }
 });
 
-test('deletion removes completed Runs and protects active Runs', async () => {
+test('deletion removes completed and active Runs', async () => {
   run('2026-02-01-finished', { 'run.json': JSON.stringify({ status: 'done' }), 'finish.md': 'history' });
+  run('active-to-delete', { 'run.json': JSON.stringify({ status: 'running' }) });
   const request = (id) => fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
   assert.equal((await request('2026-02-01-finished')).status, 200);
-  assert.equal((await request('2026-01-01-good')).status, 409);
+  assert.equal((await request('active-to-delete')).status, 200);
   assert.equal((await get(dash, '/files/2026-02-01-finished/finish.md')).status, 404);
   assert.ok((await list()).some((r) => r.id === '2026-01-01-good'));
 });

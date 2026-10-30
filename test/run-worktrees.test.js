@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, appendFileSync, mkdirSync, symlinkSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import childProcess, { spawnSync } from 'node:child_process';
@@ -157,8 +157,21 @@ test('remove refuses a worktree with uncommitted changes and keeps the history',
   const { worktree } = record(main, id);
   writeFileSync(join(worktree, 'unsaved.txt'), 'work in progress');
   finish(store, id);
-  assert.equal(store.remove(id), 'worktree-refused');
+  assert.equal(store.remove(id), 'dirty-worktree');
   assert.ok(existsSync(join(worktree, 'unsaved.txt')) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+});
+
+test('explicit discard removes dirty Run history and worktree but keeps its branch', () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  const { worktree } = record(main, id);
+  writeFileSync(join(worktree, 'unsaved.txt'), 'work in progress');
+  assert.equal(store.remove(id), 'dirty-worktree');
+  assert.ok(existsSync(join(worktree, 'unsaved.txt')));
+  assert.equal(store.remove(id, undefined, { discardChanges: true }), 'deleted');
+  assert.ok(!existsSync(worktree) && !existsSync(join(main, '.factory', 'runs', id)));
+  assert.ok(branches(main).includes(id));
 });
 
 // A repo whose Run worktree has an initialised submodule, as in this project's vendor/ folder.
@@ -201,11 +214,26 @@ for (const [name, dirty, file] of [
     const { main, store, id, worktree } = withSubmodule();
     git(main, 'config', 'status.showUntrackedFiles', 'no');
     dirty(worktree);
-    assert.equal(store.remove(id), 'worktree-refused');
+    assert.equal(store.remove(id), 'dirty-worktree');
     assert.ok(existsSync(worktree) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
     if (file) assert.ok(existsSync(join(worktree, file)));
+    assert.equal(store.remove(id, undefined, { discardChanges: true }), 'deleted');
+    assert.ok(!existsSync(worktree) && !existsSync(join(main, '.factory', 'runs', id)));
+    assert.ok(branches(main).includes(id));
   });
 }
+
+test('discard refuses symlinked Factory worktree storage', () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  const root = join(main, '.factory', 'worktrees');
+  const moved = join(main, '.factory', 'moved-worktrees');
+  renameSync(root, moved);
+  symlinkSync(moved, root);
+  assert.equal(store.remove(id, undefined, { discardChanges: true }), 'worktree-refused');
+  assert.ok(existsSync(join(moved, id)) && existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+});
 
 test('remove leaves an adopted worktree alone', () => {
   const main = repo();
@@ -218,6 +246,27 @@ test('remove leaves an adopted worktree alone', () => {
   finish(store, id);
   assert.equal(store.remove(id), 'deleted');
   assert.ok(existsSync(wt));
+});
+
+test('Dashboard requires an explicit discard option before deleting dirty work', async () => {
+  const main = repo();
+  const store = openRunStore(main);
+  const id = store.start(start);
+  const { worktree } = record(main, id);
+  writeFileSync(join(worktree, 'unsaved.txt'), 'work');
+  const dash = await startDashboard({ projectDir: main, port: 0 });
+  const request = (query, origin = dash.url) => fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: { Origin: origin } });
+  try {
+    const refused = await request('');
+    assert.equal(refused.status, 409);
+    assert.equal(refused.headers.get('x-factory-error'), 'dirty-worktree');
+    for (const bad of ['?discardChanges=false', '?discardChanges=true&discardChanges=true', '?other=true']) assert.equal((await request(bad)).status, 400);
+    assert.equal((await request('?discardChanges=true', 'http://evil.example')).status, 403);
+    assert.equal((await request('?doneOnly=true&discardChanges=true')).status, 409);
+    assert.ok(existsSync(join(worktree, 'unsaved.txt')));
+    assert.equal((await request('?discardChanges=true')).status, 200);
+    assert.ok(!existsSync(worktree) && !existsSync(join(main, '.factory', 'runs', id)));
+  } finally { await dash.close(); }
 });
 
 test('the Dashboard reports a refused worktree removal and keeps the Run', async () => {
@@ -250,6 +299,9 @@ test('the Dashboard shows git\'s error when it cannot remove a clean worktree', 
     const body = await res.text();
     assert.match(body, /git could not remove the Run worktree: .*locked/);
     assert.doesNotMatch(body, /uncommitted changes/);
+    assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
+    const override = await fetch(`${dashboard.url}/api/runs/${id}?discardChanges=true`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    assert.equal(override.status, 409);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
   } finally {
     await dashboard.close();

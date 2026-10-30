@@ -57,12 +57,18 @@ function App() {
     if (open) open.resolve(confirmed);
   };
 
-  const removeRuns = async (runs, message) => {
+  const removeRuns = async (runs, message, doneOnly = false) => {
     if (!await ask(runs.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true)) return;
     const failed = [];
     for (const run of runs) {
       try {
-        const response = await fetch('/api/runs/' + encodeURIComponent(run.id), { method: 'DELETE' });
+        const url = '/api/runs/' + encodeURIComponent(run.id);
+        const query = doneOnly ? '?doneOnly=true' : '';
+        let response = await fetch(url + query, { method: 'DELETE' });
+        if (response.status === 409 && response.headers.get('x-factory-error') === 'dirty-worktree') {
+          if (!await ask('Discard uncommitted changes?', 'The Run \"' + run.title + '\" has uncommitted changes. They will be permanently lost and its Run worktree removed. Continue?', 'Discard and delete', true)) continue;
+          response = await fetch(url + (query ? query + '&' : '?') + 'discardChanges=true', { method: 'DELETE' });
+        }
         if (!response.ok) failed.push(run.title + ' (' + (await response.text()) + ')');
       } catch (err) { failed.push(run.title); }
     }
@@ -98,8 +104,8 @@ function App() {
     select: (id) => setSelectedId((now) => (now === id ? null : id)),
     toggle: (id) => setExpandedIds((now) => { const next = new Set(now); if (!next.delete(id)) next.add(id); return next; }),
     merge: mergeRun,
-    remove: (run) => removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?'),
-    deleteAll: () => removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records, summaries, and Factory-created Run worktrees, including hidden older Runs?'),
+    remove: (run) => removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?' + (!['done', 'abandoned'].includes(run.status) ? ' Stop its agent before deleting this Run.' : '')),
+    deleteAll: () => removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records, summaries, and Factory-created Run worktrees, including hidden older Runs?', true),
   };
   const olderLabel = older.length ? (showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')') : '';
 

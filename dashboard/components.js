@@ -70,9 +70,9 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
     html`<${Tickets} run=${run} />`,
     html`<${Chips} run=${run} />`,
     done && run.pr && html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
-    done && html`<div class="actions">
+    (done || (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) && html`<div class="actions">
       ${run.pr && run.prState === 'open' && run.status === 'done' && html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(e) => { stop(e); onMerge(run); }} onKeyDown=${stop}>Merge</button>`}
-      <button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => { stop(e); onDelete(run); }} onKeyDown=${stop}>Delete</button>
+      ${!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) && html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => { stop(e); onDelete(run); }} onKeyDown=${stop}>Delete</button>`}
     </div>`,
   ];
   const toggleText = expanded ? 'Hide details' : 'Show details';

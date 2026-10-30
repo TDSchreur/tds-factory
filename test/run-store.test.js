@@ -29,6 +29,8 @@ test('start and update go through the store and list returns the raw record', as
 test('list flags broken records, tolerates a missing store and orders summaries by Stage', async () => {
   const cwd = project();
   assert.deepEqual(await openRunStore(cwd).list(), []);
+  for (const status of ['waiting', 'verification-unavailable', 'interrupted', 'abandoned']) seed(cwd, status, { 'run.json': JSON.stringify({ status }) });
+  seed(cwd, 'unknown', { 'run.json': '{"status":"future"}' });
   seed(cwd, 'broken', { 'run.json': '{' });
   seed(cwd, 'norecord', { 'define.md': 'x' });
   seed(cwd, 'good', { 'run.json': '{"status":"running"}', 'notes.md': 'x', 'finish.md': 'x', 'check-10.md': 'x', 'check-2.md': 'x', 'build.md': 'x', 'check-1.md': 'x', 'define.md': 'x' });
@@ -47,15 +49,21 @@ test('readFile serves only Markdown inside a Run folder', async () => {
   for (const bad of ['a/run.json', 'a/../a/define.md', '../x.md', 'a', 'a/b/c.md']) assert.equal(await store.readFile(bad), null);
 });
 
-test('remove deletes only terminal Runs with a readable record', () => {
+test('remove deletes supported Runs with a readable record', () => {
   const cwd = project();
   seed(cwd, 'done', { 'run.json': '{"status":"done"}' });
   seed(cwd, 'running', { 'run.json': '{"status":"running"}' });
+  for (const status of ['waiting', 'verification-unavailable', 'interrupted', 'abandoned']) seed(cwd, status, { 'run.json': JSON.stringify({ status }) });
+  seed(cwd, 'unknown', { 'run.json': '{"status":"future"}' });
   seed(cwd, 'broken', { 'run.json': '{' });
   const store = openRunStore(cwd);
   assert.equal(store.remove('done'), 'deleted');
   assert.equal(existsSync(join(cwd, '.factory', 'runs', 'done')), false);
-  assert.equal(store.remove('running'), 'not-allowed');
+  for (const status of ['running', 'waiting', 'verification-unavailable', 'interrupted', 'abandoned']) assert.equal(store.remove(status), 'deleted');
+  assert.equal(store.remove('unknown'), 'not-allowed');
+  seed(cwd, 'became-active', { 'run.json': '{"status":"running"}' });
+  assert.equal(store.remove('became-active', undefined, { doneOnly: true }), 'not-allowed');
+  assert.ok(existsSync(join(cwd, '.factory', 'runs', 'became-active', 'run.json')));
   assert.equal(store.remove('broken'), 'not-allowed');
   assert.equal(store.remove('missing'), 'not-found');
   assert.equal(store.remove('..'), 'invalid');
