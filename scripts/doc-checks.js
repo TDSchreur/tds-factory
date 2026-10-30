@@ -1,4 +1,4 @@
-// Mechanical checks on the repository's own documentation. Each takes a root folder and returns a list of problems,
+// Mechanical checks on the repository's own documentation and tests. Each takes a root folder and returns a list of problems,
 // so `npm test` can run it on the repo and the tests can run it on a temporary folder.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -111,4 +111,13 @@ export function staleConstants(root, constants = CONSTANTS) {
     }
   }
   return problems;
+}
+
+// Test files that import openPage, the helper that skips without a browser, but are not named *-browser.test.js. CI runs those in the job that requires a browser;
+// any other test file runs in the unit job, where a missing browser skips the test instead of failing it.
+export function misnamedBrowserTests(root) {
+  return walk(root, 'test')
+    .filter((file) => file.endsWith('.test.js') && !file.endsWith('-browser.test.js'))
+    .filter((file) => /^import\s*\{[^}]*\bopenPage\b[^}]*\}\s*from\s*'\.\/browser\.js'/m.test(readFileSync(join(root, file), 'utf8')))
+    .map((file) => `${file} opens a browser, so it must be named *-browser.test.js`);
 }

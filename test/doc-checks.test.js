@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { adrProblems, avoidTerms, bareAvoidTerms, brokenLinks, staleConstants } from '../scripts/doc-checks.js';
+import { adrProblems, avoidTerms, bareAvoidTerms, brokenLinks, misnamedBrowserTests, staleConstants } from '../scripts/doc-checks.js';
 
 const repo = (files) => {
   const dir = mkdtempSync(join(tmpdir(), 'doc-checks-'));
@@ -67,4 +67,19 @@ test('staleConstants reports a statement that differs from the code, in digits o
 test('this repository uses no bare Avoid term and states the Check loop limit as the code does', () => {
   assert.deepEqual(bareAvoidTerms(resolve('.')), []);
   assert.deepEqual(staleConstants(resolve('.')), []);
+});
+
+test('misnamedBrowserTests reports a browser test whose name CI would not run in the browser job', () => {
+  const dir = repo({
+    'test/browser.js': 'export const openPage = 1;',
+    'test/good-browser.test.js': "import { openPage } from './browser.js';",
+    'test/bad.test.js': "import { openPage, run } from './browser.js';",
+    'test/plain.test.js': "import { test } from 'node:test';",
+    'test/teardown.test.js': "import { stopDriver } from './browser.js';",
+  });
+  assert.deepEqual(misnamedBrowserTests(dir), ['test/bad.test.js opens a browser, so it must be named *-browser.test.js']);
+});
+
+test('every browser test in this repository is named so the CI browser job runs it', () => {
+  assert.deepEqual(misnamedBrowserTests(resolve('.')), []);
 });
