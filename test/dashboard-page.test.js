@@ -5,6 +5,11 @@ import { openPage, run } from './browser.js';
 const ESCAPE = '\uE00C';
 const POLL_WAIT = 2400;
 
+// The dialog closes before its request reaches the server, so wait for the call instead of racing it.
+async function waitForCalls(page, count) {
+  for (let i = 0; i < 50 && page.calls.length < count; i++) await new Promise((r) => setTimeout(r, 100));
+}
+
 test('the board explains itself and flags Runs that wait on the user', async (t) => {
   const page = await openPage(t, { runs: [
     run({ id: 'a', title: 'Active', column: 'check', ticketsTotal: 2, ticketsDone: 1, standards: 'pass', spec: 'pass', security: 'fail', infrastructure: 'skipped', loops: 1 }),
@@ -145,8 +150,7 @@ test('active Runs offer deletion and dirty changes need separate confirmation', 
     await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?'");
     await page.execute("document.getElementById('dialog-confirm').click()");
     await page.waitFor("return !document.getElementById('dialog').open");
-    // The dialog closes before the request reaches the server, so wait for the call instead of racing it.
-    for (let i = 0; i < 50 && page.calls.length < 3; i++) await new Promise((r) => setTimeout(r, 100));
+    await waitForCalls(page, 3);
     assert.deepEqual(page.calls, ['DELETE /api/runs/build', 'DELETE /api/runs/build', 'DELETE /api/runs/build?discardChanges=true']);
   } finally { await page.close(); }
 });
@@ -167,6 +171,7 @@ test('Delete all asks separately before discarding each dirty Run', async (t) =>
     await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?' && document.getElementById('dialog-message').textContent !== " + JSON.stringify(first));
     await page.execute("document.getElementById('dialog-confirm').click()");
     await page.waitFor("return !document.getElementById('dialog').open");
+    await waitForCalls(page, 3);
     assert.equal(page.calls.length, 3);
     assert.equal(page.calls.filter(call => call.includes('discardChanges=true')).length, 1);
     assert.equal(page.calls.filter(call => !call.includes('discardChanges=true')).length, 2);
