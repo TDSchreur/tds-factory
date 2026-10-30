@@ -607,7 +607,7 @@ function removeRun(projectDir, id, why = () => {}, { discardChanges = false, don
 }
 
 // State and head commit of a PR as GitHub reports them; undefined when gh cannot say. Only a GitHub PR link is passed to gh.
-export function ghPrInfo(url) {
+function ghPrInfo(url) {
   if (typeof url !== 'string' || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url)) return undefined;
   const out = spawnSync('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { encoding: 'utf8', timeout: 10000 });
   if (out.status !== 0) return undefined;
@@ -627,24 +627,29 @@ function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
   const head = tip.status === 0 ? tip.stdout.trim() : undefined;
   if (!own && !head) return { id, outcome: 'already clean' };
   if (!record.pr) return kept('no PR recorded');
-  const inside = (dir) => { const rel = path.relative(dir, fs.realpathSync(callerDir)); return !rel.startsWith('..') && !path.isAbsolute(rel); };
+  if (record.status !== 'done') return kept('the Run is not done: finish it with run complete first');
+  const inside = (dir) => { const rel = path.relative(dir, fs.realpathSync(callerDir)); return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel); };
   if (own && !own.missing && inside(own.dir)) return kept('run clean from the main checkout, not from inside the Run worktree');
   const pr = prState(record.pr);
   if (!pr) return kept('cannot read the PR state from GitHub');
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
   if (head && head !== pr.head) return kept('the branch has commits that are not in the merged PR');
   if (own && (!own.safe || own.branch !== id)) return kept('the Run worktree is not the one this store created');
+  if (own?.missing) return kept('the Run worktree is missing: inspect it with run repair');
   return withRunLock(root, id, () => {
-    if (own && !own.missing) {
+    // The lookup above can take seconds; a commit made meanwhile must keep the branch.
+    const now = git('rev-parse', '--verify', '-q', `refs/heads/${id}`).stdout.trim();
+    if (head && now !== head) return kept('the branch has commits that are not in the merged PR');
+    if (own) {
       const status = spawnSync('git', ['-c', 'status.showUntrackedFiles=normal', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '--ignore-submodules=none'], { cwd: own.dir, encoding: 'utf8' });
       if (status.status !== 0) return kept('cannot read the Run worktree status');
       if (status.stdout.trim()) return kept('the Run worktree has uncommitted changes');
       const removal = git('worktree', 'remove', own.dir);
       if (removal.status !== 0) return kept(`git could not remove the Run worktree: ${removal.stderr.trim()}`);
-    } else if (own) git('worktree', 'prune');
-    // A squash merge leaves the branch unmerged as far as git knows; the PR head check above is what makes -D safe.
+    }
+    // A squash merge leaves the branch unmerged as far as git knows, so it goes only if its tip is still the merged PR head.
     if (head) {
-      const deleted = git('branch', '-D', id);
+      const deleted = git('update-ref', '-d', `refs/heads/${id}`, head);
       if (deleted.status !== 0) return kept(`git could not delete the branch: ${deleted.stderr.trim()}`);
     }
     return { id, outcome: 'cleaned' };
@@ -654,14 +659,14 @@ function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
 const runIds = (root) => fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && validId(e.name)).map((e) => e.name).sort();
 
 // Ids of Runs whose PR is merged but whose worktree or branch is still there. Doctor reports them; nothing is changed.
-export function mergedLeftovers(projectDir, prState = ghPrInfo) {
-  let root;
-  try { root = runRoot(projectDir, false); } catch { return []; }
+export function mergedLeftovers(callerDir, prState = ghPrInfo) {
+  let projectDir, root, trees;
+  try { projectDir = mainCheckout(callerDir).dir; root = runRoot(projectDir, false); trees = ownWorktrees(projectDir); } catch { return []; }
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   return runIds(root).filter((id) => {
     try {
       const { record } = readRun(projectDir, id);
-      const left = ownWorktrees(projectDir).has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
+      const left = trees.has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
       return left && !!record.pr && prState(record.pr)?.state === 'MERGED';
     } catch { return false; }
   });
@@ -670,8 +675,8 @@ export function mergedLeftovers(projectDir, prState = ghPrInfo) {
 // Cleans every Run that records a PR; a Run folder that cannot be read is reported and skipped.
 function cleanAll(projectDir, callerDir, prState) {
   const root = runRoot(projectDir, false);
-  return runIds(root).map((name) => {
-    try { return cleanRun(projectDir, callerDir, name, prState); } catch (err) { return { id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }; }
+  return runIds(root).flatMap((name) => {
+    try { return readRun(projectDir, name).record.pr ? [cleanRun(projectDir, callerDir, name, prState)] : []; } catch (err) { return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }]; }
   });
 }
 

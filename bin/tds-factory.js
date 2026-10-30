@@ -70,8 +70,8 @@ try {
       console.log(`Done. After the PR is merged, run \`tds-factory run clean --id ${values.id}\` from the main checkout to remove the Run worktree and branch.`);
     }
     else if (op === 'clean') {
-      if (!values.id === !values.all) throw new Error('run clean needs --id ID or --all');
-      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)]) console.log(reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`);
+      if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all');
+      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)]) console.log((reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?'));
     }
     else if (op === 'accept') store.accept(values.id, data);
     else if (op === 'inspect') {

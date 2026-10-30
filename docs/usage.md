@@ -148,7 +148,7 @@ The agent opens the pull request but does not merge it. Before you merge:
 4. Open `check-1.md` (or the highest `check-N.md`) in the Run folder to see the four verdicts and any finding left open.
 5. Look at the diff yourself, like any other pull request.
 
-Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines close the Tickets. Maintainers who publish the merged work as a Release follow the [release guide](releasing.md).
+Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines close the Tickets. Then [clean up the Run's worktree and branch](#clean-up-after-a-merge). Maintainers who publish the merged work as a Release follow the [release guide](releasing.md).
 
 ## Words you will see
 
@@ -172,7 +172,7 @@ Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project.
 
 ## Clean up after a merge
 
-A Run keeps its worktree and branch until you remove them. After the pull request is merged, run `tds-factory run clean --id ID` (or `run clean --all` for every Run) in your main checkout, not inside the Run worktree. It removes the worktree and the local branch of a Run whose PR GitHub reports as merged, and keeps the Run record and its summaries so the Dashboard still shows it. It leaves a Run alone, and says why, when it has no PR, the PR is not merged, the worktree has uncommitted changes, or the branch has commits that are not in the merged PR. GitHub deletes the remote branch on merge when that repository setting is on.
+A Run keeps its worktree and branch until you remove them. After the pull request is merged, run `tds-factory run clean --id ID` (or `run clean --all` for every Run) in your main checkout, not inside the Run worktree. It removes the worktree and the local branch of a Run whose PR GitHub reports as merged, and keeps the Run record and its summaries so the Dashboard still shows it. It deletes the worktree folder as a whole, so ignored files in it (a copied `.env`, notes) go too; copy out anything you want first. It leaves a Run alone, and says why, when it is not done yet (run `run complete` first), the PR is not merged, the worktree has uncommitted changes, or the branch has commits that are not in the merged PR. GitHub deletes the remote branch on merge when that repository setting is on.
 
 ## Recover a Run
 

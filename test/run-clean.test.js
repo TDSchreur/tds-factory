@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { openRunStore } from '../src/run-store.js';
@@ -11,14 +11,21 @@ const PR = 'https://github.com/o/r/pull/1';
 const cli = resolve('bin/tds-factory.js');
 const branches = (main) => git(main, 'branch', '--format=%(refname:short)').split('\n');
 
-// A Run with a recorded PR whose branch has one commit; `state` is what the injected lookup says about the PR.
+const setRecord = (main, id, change) => {
+  const file = join(main, '.factory', 'runs', id, 'run.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), ...change }));
+};
+let prs = 0;
+
+// A done Run with a recorded PR whose branch has one commit; `state` is what the injected lookup says about the PR.
 function finished(main, state = 'MERGED') {
   const store = openRunStore(main);
   const id = store.start(start);
   const wt = join(main, '.factory', 'worktrees', id);
   git(wt, 'commit', '-q', '--allow-empty', '-m', 'work');
-  const pr = `https://github.com/o/r/pull/${id.length}${Math.floor(Math.random() * 1e6)}`;
+  const pr = `https://github.com/o/r/pull/${++prs}`;
   store.update(id, { pr });
+  setRecord(main, id, { status: 'done' });
   const head = git(wt, 'rev-parse', 'HEAD');
   return { store, id, wt, head, pr, prState: () => ({ state, head }) };
 }
@@ -68,6 +75,31 @@ test('clean keeps a worktree with uncommitted changes, and a branch that moved p
   assert.ok(branches(main).includes(moved.id));
 });
 
+test('clean keeps a merged Run that is not done yet, and a branch that moves while GitHub is asked', () => {
+  const main = repo();
+  const going = finished(main);
+  setRecord(main, going.id, { status: 'running' });
+  assert.match(going.store.clean(going.id, { prState: going.prState }).reason, /run complete/);
+  assert.ok(existsSync(going.wt));
+
+  const racing = finished(main);
+  const prState = () => {
+    git(racing.wt, 'commit', '-q', '--allow-empty', '-m', 'late fix');
+    return { state: 'MERGED', head: racing.head };
+  };
+  const result = racing.store.clean(racing.id, { prState });
+  assert.equal(result.outcome, 'kept');
+  assert.match(result.reason, /not in the merged PR/);
+  assert.ok(existsSync(racing.wt) && branches(main).includes(racing.id));
+});
+
+test('clean from a subfolder of the Run worktree is refused, also when the folder name starts with two dots', () => {
+  const main = repo();
+  const { id, wt, prState } = finished(main);
+  mkdirSync(join(wt, '..notes'));
+  assert.match(openRunStore(join(wt, '..notes')).clean(id, { prState }).reason, /main checkout/);
+});
+
 test('clean refuses to run from inside the worktree it would remove', () => {
   const main = repo();
   const { id, wt, prState } = finished(main);
@@ -80,9 +112,6 @@ test('clean refuses to run from inside the worktree it would remove', () => {
 test('after clean, inspect reports no problems and the Run stays listed', async () => {
   const main = repo();
   const { store, id, prState } = finished(main);
-  // Inspect only expects a worktree from a Run that is still going.
-  const file = join(main, '.factory', 'runs', id, 'run.json');
-  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), status: 'done' }));
   store.clean(id, { prState });
   assert.deepEqual((await store.inspect()).filter((r) => r.problems.length), []);
   assert.deepEqual((await store.list()).map((r) => r.id), [id]);
@@ -91,8 +120,9 @@ test('after clean, inspect reports no problems and the Run stays listed', async 
 test('clean --all sweeps merged Runs and leaves the others', () => {
   const main = repo();
   const a = finished(main), b = finished(main, 'OPEN');
+  const noPr = openRunStore(main).start(start);
   const results = a.store.cleanAll({ prState: (url) => (url === a.pr ? { state: 'MERGED', head: a.head } : { state: 'OPEN', head: b.head }) });
-  assert.deepEqual(results.map(({ id, outcome }) => [id, outcome]), [[a.id, 'cleaned'], [b.id, 'kept']]);
+  assert.deepEqual(results.map(({ id, outcome }) => [id, outcome]), [[a.id, 'cleaned'], [b.id, 'kept']], `${noPr} has no PR and is not listed`);
   assert.ok(!existsSync(a.wt) && existsSync(b.wt));
 });
 

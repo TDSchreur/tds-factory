@@ -30,8 +30,12 @@ One of the independent reviews in the Check Stage (Standards, Spec, Security, In
 _Avoid_: Reviewer, Gate
 
 **Doctor**:
-The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`.
+The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`. It may add non-blocking notes, such as merged Runs that still hold a worktree.
 _Avoid_: Linter, Health check
+
+**Run clean-up**:
+The `tds-factory run clean` command, which removes the worktree and local branch of a Run whose PR is merged and keeps its Run record. Not to be confused with a clean Check.
+_Avoid_: Clean (alone)
 
 **Clean**:
 A Check whose every Check axis is `pass`, with Infrastructure allowed to be `skipped`, backed by current Evidence: a passing Verify result and every verdict recorded for the code as it is now, with nothing uncommitted. Only a clean Check continues to Finish without asking the user.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -165,6 +165,8 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   const merged = store.start({ title: 'Merged', agent: 'claude', commands: 'npm test', conventions: [] });
   const open = store.start({ title: 'Open', agent: 'claude', commands: 'npm test', conventions: [] });
   store.update(merged, { pr: 'https://github.com/o/r/pull/1' });
+  const file = join(dir, '.factory', 'runs', merged, 'run.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), status: 'done' }));
   store.update(open, { pr: 'https://github.com/o/r/pull/2' });
   const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   const head = git(join(dir, '.factory', 'worktrees', merged), 'rev-parse', 'HEAD');
