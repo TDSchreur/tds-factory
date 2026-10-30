@@ -1,6 +1,6 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
 import { render } from 'preact';
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, Intro, html } from './components.js';
 import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
 
@@ -13,12 +13,21 @@ function App() {
   const [status, setStatus] = useState({ error: false, text: 'Loading...' });
   const [selectedId, setSelectedId] = useState(null);
   const [selectedStage, setSelectedStage] = useState(null);
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
   const [showOlder, setShowOlder] = useState(false); // Runs older than a week stay folded until asked for
   const [expandedIds, setExpandedIds] = useState(() => new Set()); // Done cards the user opened
   const [request, setRequest] = useState(null);
   const queue = useRef(Promise.resolve());
   const current = useRef(null);
+  const returnFocus = useRef(null);
   current.current = request;
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1024px)');
+    const change = (event) => setCompact(event.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
 
   const poll = useCallback(() => fetch('/api/views', { cache: 'no-store' })
     .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
@@ -41,14 +50,15 @@ function App() {
   // Closing the Run detail hands focus back to its card.
   const closeDetail = () => {
     const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
+    if (compact) returnFocus.current = card;
+    else if (card) card.focus();
     setSelectedId(null);
-    if (card) card.focus();
   };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDetail(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedId]);
+  }, [selectedId, compact]);
 
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
   const ask = (title, message, action, danger, notice) => {
@@ -108,11 +118,71 @@ function App() {
   }, [selectedStage, status, defaultStage]);
   const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
   useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
+  useLayoutEffect(() => {
+    if (!openRun || !compact) return undefined;
+    const background = [...document.querySelectorAll('#app > header, #intro, .board-wrap')];
+    const previous = background.map((element) => element.inert);
+    const overflow = document.body.style.overflow;
+    background.forEach((element) => { element.inert = true; });
+    document.body.style.overflow = 'hidden';
+    const detail = document.getElementById('detail');
+    if (!detail.contains(document.activeElement)) detail.querySelector('h2')?.focus({ preventScroll: true });
+    const trap = (event) => {
+      if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
+      const targets = [...detail.querySelectorAll('a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
+      if (!targets.length) { event.preventDefault(); return; }
+      const first = targets[0], last = targets[targets.length - 1], active = document.activeElement;
+      if (event.shiftKey && (active === first || !targets.includes(active))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', trap);
+    return () => {
+      document.removeEventListener('keydown', trap);
+      background.forEach((element, index) => { element.inert = previous[index]; });
+      document.body.style.overflow = overflow;
+    };
+  }, [!!openRun, compact]);
+  useLayoutEffect(() => {
+    if (!openRun && returnFocus.current) {
+      returnFocus.current.focus({ preventScroll: true });
+      returnFocus.current = null;
+    }
+  }, [!!openRun]);
+  // The desktop drawer starts below the intro as well as the header. Measure its
+  // actual top so its bottom stays in view before and after scrolling.
+  useLayoutEffect(() => {
+    if (!openRun || compact) return undefined;
+    const detail = document.getElementById('detail');
+    const header = document.querySelector('#app > header');
+    const intro = document.getElementById('intro');
+    const fit = () => {
+      detail.style.top = (header.getBoundingClientRect().height + 20) + 'px';
+      detail.style.maxHeight = Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(header);
+    observer.observe(intro);
+    window.addEventListener('resize', fit);
+    window.addEventListener('scroll', fit, { passive: true });
+    fit();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('scroll', fit);
+      detail.style.removeProperty('top');
+      detail.style.removeProperty('max-height');
+    };
+  }, [!!openRun, compact]);
   const waiting = entries.filter((r) => r.waiting).length;
   useEffect(() => { const name = folderName(project); document.title = (waiting ? '(' + waiting + ') ' : '') + (name ? name + ' · ' : '') + BRAND; }, [waiting, project]);
 
   const actions = {
-    select: (id) => setSelectedId((now) => (now === id ? null : id)),
+    select: (id) => {
+      const selected = runs.find((run) => run.id === id);
+      if (selected) setSelectedStage(selected.column);
+      setSelectedId((now) => (now === id ? null : id));
+    },
     toggle: (id) => setExpandedIds((now) => { const next = new Set(now); if (!next.delete(id)) next.add(id); return next; }),
     merge: mergeRun,
     remove: (run) => removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?' + (!['done', 'abandoned'].includes(run.status) ? ' Stop its agent before deleting this Run.' : '')),
@@ -124,7 +194,7 @@ function App() {
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
       <${Board} runs=${runs} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-      <${Detail} run=${openRun} onClose=${closeDetail} />
+      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }

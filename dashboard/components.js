@@ -164,11 +164,11 @@ export function Header({ project, version, status, olderLabel, onOlder }) {
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
-export function Detail({ run, onClose }) {
+export function Detail({ run, compact, onClose }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
   const heading = useRef(null);
-  useEffect(() => { if (run) heading.current?.focus(); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
+  useEffect(() => { if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true }); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
@@ -180,7 +180,8 @@ export function Detail({ run, onClose }) {
   }, [key]);
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<section id="detail" aria-label="Run detail">
+  return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
+    <div class="compact-back"><button type="button" onClick=${onClose}>← Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}

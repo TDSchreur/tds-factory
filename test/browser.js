@@ -83,6 +83,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), { width, height });
       },
       key: (value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value }, { type: 'keyUp', value }] }] }),
+      keyChord: (modifier, value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: modifier }, { type: 'keyDown', value }, { type: 'keyUp', value }, { type: 'keyUp', value: modifier }] }] }),
       wait: delay,
     };
     await page.load();
