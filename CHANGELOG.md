@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-30
+
 ### Added
 - A `ci-ok` job that succeeds only when every other CI job does, for the `master` ruleset to require.
 - `SECURITY.md`, `CONTRIBUTING.md`, issue templates and a PR template.
