@@ -29,6 +29,19 @@ PRs and pushes to `master` run the main suite on Linux with Node 20, 22, 24 and 
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
 
+## Switching between the Release and your checkout
+
+Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
+
+```sh
+sh scripts/use-official.sh   # the latest Release from GitHub
+sh scripts/use-repo.sh       # this checkout, including uncommitted changes
+```
+
+`use-repo.sh` differs from `dev-install.js`, which installs the default branch of `origin`. Both scripts replace skills you edited by hand, like `install --force` does.
+
+To see which one you use, run `tds-factory --version` and `which -a tds-factory`. The first entry wins. A checkout and a Release can share a version number, so bump `package.json` if you need to tell them apart.
+
 ## Developer skills
 
 Besides the skills the Factory ships, a few skills help while developing the Factory itself. They are not in `skills.manifest.json`, so users do not get them. `scripts/dev-install.js` (step 6) copies them from `vendor/` to `~/.claude/skills` and `~/.agents/skills`, which Claude, Codex and Copilot all read. It only replaces skills it installed earlier (marked `.tds-factory-dev`) and skips same-named skills from other tools. `docs-sync-audit` and `test-gap-audit` need `python3`; `webapp-testing` needs Playwright. To change the set, edit `DEV_SKILLS` in the script.
