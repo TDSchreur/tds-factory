@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   verify:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -30,7 +30,7 @@ jobs:
       - run: npm run test:unit
 
   browser:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -47,7 +47,7 @@ jobs:
       - run: npm run test:browser
 
   release:
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     needs: [verify, browser]
     environment: release
     runs-on: ubuntu-latest

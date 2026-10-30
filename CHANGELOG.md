@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The default branch is now `main` instead of `master`; workflows, docs and installer links follow.
+
 ## [0.3.2] - 2026-10-30
 
 ### Added

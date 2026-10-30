@@ -29,10 +29,10 @@ test('the script prints the next version for the workflow', () => {
 
 // The workflow cannot run here, so check the points that break installs when they change.
 const workflow = readFileSync(resolve('.github/workflows/release.yml'), 'utf8');
-test('the release workflow runs manually on master and tests before it publishes', () => {
+test('the release workflow runs manually on main and tests before it publishes', () => {
   assert.match(workflow, /on:\s+workflow_dispatch:/);
   assert.doesNotMatch(workflow, /\n\s+push:/);
-  assert.match(workflow, /if: github\.ref == 'refs\/heads\/master'/);
+  assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /needs: \[verify, browser\]/, 'publication waits for verification jobs');
   assert.ok(workflow.indexOf('npm run test:package -- tds-factory.tgz') < workflow.indexOf('gh release create'), 'the published asset is tested before release');
 });
