@@ -91,10 +91,6 @@ The skills come from three upstream sources.
 
 The upstream repos are git submodules in `vendor/`. `skills/` holds committed copies of the skills the factory uses, so a change upstream shows up in a diff before it reaches you. See `docs/adr/0001-committed-skill-copies.md`.
 
-## Known limitations
-
-- The installer copies skills unchanged. Codex ignores the Claude-only `disable-model-invocation` frontmatter, so Codex may invoke user-only skills such as `factory` on its own.
-
 ## License
 
 MIT, see [LICENSE](LICENSE). The skills come from other MIT projects. Their notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
