@@ -172,7 +172,7 @@ Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project.
 
 ## Keep a Run up to date
 
-A Run branches from `origin`'s default branch when it starts, and the default branch moves while you work. `tds-factory run sync --id ID` fetches it and rebases the Run branch on top, in Build or Check. The `factory` Skill runs it before Check. If the rebase conflicts, the command names the files and leaves the branch unchanged; run `git rebase` in the Run worktree, resolve the conflicts and commit. A sync that moves the head clears the Evidence, so verify and review again. Moving a Run to Finish is refused while the branch would not merge cleanly into the default branch, so you find conflicts before the PR exists. A base that moved without a conflict does not stop Finish.
+A Run branches from `origin`'s default branch when it starts, and the default branch moves while you work. `tds-factory run sync --id ID` fetches it and rebases the Run branch on top, in Build or Check. The `factory` Skill runs it before Check. If the rebase conflicts, the command names the files and leaves the branch unchanged; run `git rebase` with the commit it prints in the Run worktree, fix each conflicted file, `git add` it, run `git rebase --continue`, then run `run sync` again so the new base is recorded. `run sync` refuses to start while a rebase is already open in the worktree. A sync that moves the head clears the Evidence, so verify and review again. Moving a Run to Finish is refused while the branch would not merge cleanly into the default branch, so you find conflicts before the PR exists. A base that moved without a conflict does not stop Finish.
 
 ## Clean up after a merge
 

@@ -7,7 +7,7 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 | You need | Check it with | Notes |
 |---|---|---|
 | Node 20 or newer | `node --version` | Installs from nodejs.org, your package manager or nvm. |
-| git | `git --version` | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote. |
+| git (2.38 or later) | `git --version` | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote. |
 | GitHub CLI, signed in | `gh auth status` | Tickets and pull requests go through `gh`. Sign in with `gh auth login`. |
 | One coding agent | | GitHub Copilot (VS Code or the Copilot CLI), Claude Code or Codex. |
 

@@ -68,7 +68,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `infrastructure` | `pass`, `fail` or `skipped`: the Infrastructure verdict of the latest review. `fail` while any CRITICAL, HIGH or MEDIUM infrastructure finding is open, or a changed infrastructure file is not validated; write `skipped` when no infrastructure file changed. Set with `run verdict` after each review |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `4`. Starts at `0`; `run rework` raises it by 1 on each return to Build |
 | `worktree` | Path of the Run worktree the Run works in. Set by `run start` |
-| `base_sha` | Commit the Run branched from: the fetched `origin` default branch head. Set by `run start` |
+| `base_sha` | The fetched `origin` default branch head the Run is based on. Set by `run start` and `run sync` |
 | `verify` | The latest Verify result, an object. Set by `run verify` |
 | `reviewed` | For each axis with a verdict, the head and Check attempt it was recorded for. Set by `run verdict` |
 | `accepted` | The user's decision to continue with a Check that is not clean: findings, decision, head and time. Set by `run accept` |

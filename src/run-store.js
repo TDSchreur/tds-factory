@@ -274,15 +274,21 @@ function acceptRun(projectDir, id, data) {
 function syncRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (!['build', 'check'].includes(old.stage)) throw new Error('only a Run in Build or Check can be synced');
+    const git = (...args) => spawnSync('git', args, { cwd: old.worktree, encoding: 'utf8' });
+    // A rebase the user left open is theirs to finish; starting another or aborting it would lose their work.
+    for (const dir of ['rebase-merge', 'rebase-apply']) {
+      if (fs.existsSync(path.resolve(old.worktree, git('rev-parse', '--git-path', dir).stdout.trim()))) throw new Error('a rebase is already in progress in the Run worktree: finish it with git rebase --continue (or stop it with git rebase --abort), then run sync again');
+    }
     const { head, dirty } = worktreeState(old);
     if (dirty) throw new Error('cannot sync while the Run worktree has uncommitted changes');
     const base = fetchOriginDefault(projectDir);
-    const git = (...args) => spawnSync('git', args, { cwd: old.worktree, encoding: 'utf8' });
     const rebased = git('rebase', base);
     if (rebased.status !== 0) {
       const files = git('diff', '--name-only', '--diff-filter=U').stdout.trim().split('\n').filter(Boolean);
-      git('rebase', '--abort');
-      throw new Error(`rebase onto origin conflicts in ${files.join(', ') || 'unknown files'}; the branch is unchanged. Run git rebase ${base} in the Run worktree, resolve the conflicts and commit`);
+      const aborted = git('rebase', '--abort');
+      const why = files.length ? `conflicts in ${files.join(', ')}` : `failed: ${rebased.stderr.trim()}`;
+      if (aborted.status !== 0) throw new Error(`rebase onto origin ${why}; it could not be aborted: ${aborted.stderr.trim()}`);
+      throw new Error(`rebase onto origin ${why}; the branch is unchanged. To resolve it, run git rebase ${base} in the Run worktree, fix each conflicted file, git add it, run git rebase --continue, then run sync again`);
     }
     const moved = worktreeState(old).head !== head;
     const record = { ...old, base_sha: base };
@@ -295,8 +301,9 @@ function mergeProblem(projectDir, record) {
   const base = fetchOriginDefault(projectDir);
   const merged = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', base, 'HEAD'], { cwd: record.worktree, encoding: 'utf8' });
   if (merged.status === 0) return '';
-  if (merged.status !== 1) throw new Error(`cannot check the merge into origin: ${merged.stderr.trim()}`);
-  const files = merged.stdout.split('\n\n')[1]?.trim().split('\n').filter(Boolean) ?? [];
+  if (merged.status !== 1) throw new Error(`cannot check the merge into origin (git merge-tree --write-tree needs git 2.38 or later): ${merged.stderr.trim()}`);
+  // The first line is the tree id, then the conflicted files, then a blank line and git's messages.
+  const files = merged.stdout.split('\n\n')[0].split('\n').slice(1).filter(Boolean);
   return `the branch conflicts with origin's default branch${files.length ? ` in ${files.join(', ')}` : ''}; run \`tds-factory run sync\` and resolve it`;
 }
 function reworkRun(projectDir, id, data = {}) {

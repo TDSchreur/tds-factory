@@ -35,6 +35,7 @@ _Avoid_: Linter, Health check
 
 **Run sync**:
 The `tds-factory run sync` command, which rebases a Run branch onto the current default branch of `origin` so conflicts surface during the Run. Finish refuses a branch that would not merge cleanly.
+_Avoid_: Sync (alone), which is the maintainer command `tds-factory sync`
 
 **Changelog fragment**:
 A file in `changelog.d/` that holds the changelog entries of one change. A maintainer folds the fragments into `CHANGELOG.md` at release time, so PRs never edit the same lines.

@@ -73,6 +73,20 @@ test('sync names the conflicting files and leaves the branch alone', () => {
   assert.equal(git(wt, 'status', '--porcelain'), '');
 });
 
+test('sync does not touch a rebase the user left open', () => {
+  const { cwd, id, wt } = checked();
+  writeFileSync(join(wt, 'shared.txt'), 'one\nmine\nthree\n');
+  git(wt, 'commit', '-q', '-am', 'edit shared');
+  advance(cwd, 'shared.txt', 'one\ntheirs\nthree\n', 'edit shared on main');
+  assert.throws(() => git(wt, 'rebase', git(cwd, 'rev-parse', 'main')));
+  writeFileSync(join(wt, 'shared.txt'), 'one\nboth\nthree\n');
+  git(wt, 'add', '-A');
+  const refused = run(cwd, 'sync', '--id', id);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /rebase is already in progress/);
+  assert.equal(git(wt, 'diff', '--cached', '--name-only'), 'shared.txt');
+});
+
 test('sync refuses uncommitted changes and Runs outside Build and Check', () => {
   const { cwd, id, wt } = checked();
   writeFileSync(join(wt, 'dirty.txt'), 'x\n');
@@ -81,7 +95,7 @@ test('sync refuses uncommitted changes and Runs outside Build and Check', () => 
   assert.match(run(cwd, 'sync', '--id', define).stderr, /Build or Check/);
 });
 
-test('Finish refuses a branch that conflicts with origin, and passes after sync resolves it', () => {
+test('Finish refuses a branch that conflicts with origin, even when accepted, and passes once it is resolved and reviewed again', () => {
   const { cwd, id, wt } = checked();
   writeFileSync(join(wt, 'shared.txt'), 'one\nmine\nthree\n');
   git(wt, 'commit', '-q', '-am', 'edit shared');
@@ -89,8 +103,21 @@ test('Finish refuses a branch that conflicts with origin, and passes after sync 
   review(cwd, id);
   const refused = run(cwd, 'transition', '--id', id, '--to', 'finish');
   assert.notEqual(refused.status, 0);
-  assert.match(refused.stderr, /merges cleanly.*shared\.txt.*run sync/);
+  assert.match(refused.stderr, /merges cleanly: the branch conflicts with origin's default branch in shared\.txt; run `tds-factory run sync`/);
+  assert.doesNotMatch(refused.stderr, /CONFLICT|Auto-merging/);
   assert.equal(read(cwd, id).stage, 'check');
+  // An Accepted Check does not excuse the conflict.
+  ok(run(cwd, 'accept', '--id', id, '--data', data({ findings: 'none', decision: 'go' })));
+  assert.match(run(cwd, 'transition', '--id', id, '--to', 'finish').stderr, /merges cleanly/);
+  // Resolving it by hand and syncing again clears the gate once the Check is redone.
+  assert.notEqual(run(cwd, 'sync', '--id', id).status, 0);
+  assert.throws(() => git(wt, 'rebase', git(cwd, 'rev-parse', 'main')));
+  writeFileSync(join(wt, 'shared.txt'), 'one\nmine\ntheirs\nthree\n');
+  git(wt, 'add', '-A');
+  git(wt, '-c', 'core.editor=true', 'rebase', '--continue');
+  ok(run(cwd, 'sync', '--id', id));
+  review(cwd, id);
+  ok(run(cwd, 'transition', '--id', id, '--to', 'finish'));
 });
 
 test('Finish accepts a branch whose base moved without a conflict, keeping the Evidence', () => {
