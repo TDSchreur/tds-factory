@@ -28,14 +28,14 @@ flowchart TB
 
     P --> A
     C --> E --> F
-    F -->|problems found, fewer than 2 loops so far| E
+    F -->|problems found, fewer than 4 loops so far| E
     F -->|clean| G
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
 Each Stage's result: Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker; Build finishes every Ticket test-first, one commit each, building what the Ticket asks and naming any smaller option in one line in `build.md`; Check gives a Standards, a Spec, a Security and an Infrastructure verdict (Infrastructure is skipped when no infrastructure file changed), each from a fresh read-only subagent; Finish opens the pull request.
 
-The rules for each Stage live in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). In short: only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most twice.
+The rules for each Stage live in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). In short: only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most four times.
 
 Agents need `tds-factory` on PATH to create and update the Run record (`run.json`, in `.factory/runs/<id>/`, plus a Markdown summary per Stage). Every Run works in its own Run worktree in `.factory/worktrees/<run id>`, on a branch named after the Run id, cut from the freshly fetched default branch of `origin`, so agents in separate tabs never share files. Run records always live in the main checkout, so one Dashboard shows every Run. Dependencies are not installed for you: run the project's normal setup in the worktree.
 
@@ -58,14 +58,30 @@ To see whether an agent follows the Flow, run the on-demand [agent evaluation](d
 
 ## Setup
 
-You need Node 20 or newer. Install the latest Release with one command, the same on macOS, Linux and Windows:
+You need Node 20 or newer. Install the latest Release and its skills with one line.
+
+macOS and Linux:
+
+```sh
+curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
+```
+
+Each script checks Node and npm, installs the Release with npm and runs `tds-factory install`. Run the same line again to update. To read before you run, download the script and open it, or run the two commands yourself, the same on macOS, Linux and Windows:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 tds-factory install
 ```
 
-The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself, and again after every update, because the installed `factory` Skill must use the same Run commands as the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
+The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; `tds-factory install` does that, and it has to run again after every update, because the installed `factory` Skill must use the same Run commands as the CLI. `tds-factory update` and the one-line scripts do both steps for you.
+
+To update, run `tds-factory update`. It installs the latest Release when yours is older, checks the download against the Release's checksum, and then runs `tds-factory install --force`, which replaces agent files and skills you edited with the defaults, and any skill folder of the same name that `tds-factory` did not install. Use `tds-factory update --no-force` to keep them. The one-line scripts keep them too; set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
 
 ### Working from a checkout
 
@@ -90,7 +106,7 @@ node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo 
 
 Run the tests with `npm test`. They use `node:test`.
 
-PRs and pushes to `master` run the main suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows; the full suite currently uses Unix shell fixtures, so it is not run on Windows. CI also validates both workflows with `actionlint`.
+PRs and pushes to `master` run the main suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows; the full suite currently uses Unix shell fixtures, so it is not run on Windows. CI also validates the workflows with `actionlint`, lints the Bootstrap installers with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on Windows PowerShell 5.1 and 7.
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
 
@@ -118,7 +134,7 @@ Besides the skills the Factory ships, a few skills help while developing the Fac
 |---|---|
 | `--agent claude\|codex\|copilot\|all` | Pick the Agent target. `all` is the default and means Claude plus Codex, because Copilot reads both directories. |
 | `--project` | Install into the current directory instead of the user-global directory. |
-| `--force` | Overwrite skill folders that tds-factory did not install or that you edited. |
+| `--force` | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install. |
 | `--dry-run` | Print what install would do and change nothing. |
 
 | Agent | Project directory | Global directory |

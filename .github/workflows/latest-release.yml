@@ -1,7 +1,8 @@
 name: latest-release
 
-# The README installs from releases/latest/download/tds-factory.tgz. A Release that is Latest but
-# lacks that file breaks every install with a 404, so check it whenever a Release changes and daily.
+# The README installs from releases/latest/download/ (tds-factory.tgz, install.sh, install.ps1) and update reads
+# tds-factory.tgz.sha256. A Release that is Latest but lacks one of these files breaks installs with a 404, so
+# check it whenever a Release changes and daily.
 on:
   release:
     types: [published, edited, released, deleted]
@@ -19,9 +20,11 @@ jobs:
     env:
       GITHUB_REPOSITORY_URL: https://github.com/${{ github.repository }}
     steps:
-      # A Release created by hand gets its file a moment later, so retry before failing.
-      - name: The latest Release serves tds-factory.tgz
+      # A Release created by hand gets its files a moment later, so retry before failing.
+      - name: The latest Release serves the tarball, its checksum and both Bootstrap installers
         run: |
-          curl --fail --silent --show-error --location --retry 6 --retry-delay 20 --retry-all-errors \
-            --output /dev/null "$GITHUB_REPOSITORY_URL/releases/latest/download/tds-factory.tgz" \
-            || { echo "::error::The latest Release has no tds-factory.tgz, so the README install command returns 404. Run the release workflow or attach the file."; exit 1; }
+          for name in tds-factory.tgz tds-factory.tgz.sha256 install.sh install.ps1; do
+            curl --fail --silent --show-error --location --retry 6 --retry-delay 20 --retry-all-errors \
+              --output /dev/null "$GITHUB_REPOSITORY_URL/releases/latest/download/$name" \
+              || { echo "::error::The latest Release has no $name, so the install commands in the README return 404. Run the release workflow or attach the file."; exit 1; }
+          done

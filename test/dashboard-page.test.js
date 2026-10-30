@@ -23,7 +23,7 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
       ['Define', 'Build', 'Check', 'Finish', 'Done'].map((label) => [label, 0, true]));
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('[data-stage=check] .chip')].map(c => [c.textContent, c.className, c.title.length > 10])"), [
       ['1/2 tickets', 'chip ', true], ['Standards pass', 'chip pass', true], ['Spec pass', 'chip pass', true],
-      ['Security fail', 'chip fail', true], ['Infrastructure skipped', 'chip skipped', true], ['loop 1/2', 'chip ', true],
+      ['Security fail', 'chip fail', true], ['Infrastructure skipped', 'chip skipped', true], ['loop 1/4', 'chip ', true],
     ]);
     assert.equal(await page.execute("return document.querySelector('.card.waiting .reason').textContent"), 'Needs you: confirm the plan');
     assert.equal(await page.execute('return document.title'), '(1) test · TDS Factory');

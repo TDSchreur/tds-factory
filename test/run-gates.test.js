@@ -150,9 +150,17 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   assert.equal(after.stage, 'build');
   assert.equal(after.check_loops, 1);
   for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted']) assert.equal(key in after, false, key);
-  force(cwd, id, { stage: 'check', check_loops: 2 });
-  assert.notEqual(run(cwd, 'rework', '--id', id).status, 0);
+  for (const loops of [2, 3]) {
+    force(cwd, id, { stage: 'check', check_loops: loops });
+    assert.equal(run(cwd, 'rework', '--id', id).status, 0, `loop ${loops + 1} of 4 is allowed`);
+    assert.equal(read(cwd, id).check_loops, loops + 1);
+  }
+  force(cwd, id, { stage: 'check', check_loops: 4 });
+  const refused = run(cwd, 'rework', '--id', id);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /Check loop limit of 4/);
   assert.equal(read(cwd, id).stage, 'check');
+  assert.equal(read(cwd, id).check_loops, 4);
 });
 
 test('complete ends a Run only at Finish with a PR link and sane Ticket counts', () => {

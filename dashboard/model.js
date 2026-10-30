@@ -2,7 +2,7 @@
 export const COLUMNS = [
   { key: 'define', label: 'Define', help: 'Settle what has to be done: the agent interviews you, writes a Spec and cuts it into Tickets.' },
   { key: 'build', label: 'Build', help: 'Implement the Tickets test-first, one commit per Ticket, running the verify command after each.' },
-  { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Problems send the Run back to Build, at most twice.' },
+  { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Problems send the Run back to Build, at most four times.' },
   { key: 'finish', label: 'Finish', help: 'Write the pull request description, push the branch and open the pull request.' },
   { key: 'done', label: 'Done', help: 'The Run is finished: its pull request is open, merged or closed, or the Run was abandoned.' },
 ];
@@ -13,7 +13,7 @@ export const CHIP_HELP = {
   spec: 'Check verdict: does the code match what the Spec asked for?',
   security: 'Check verdict: no open critical, high or medium security findings.',
   infrastructure: 'Check verdict for Bicep and pipeline changes; skipped when none changed.',
-  loops: 'Times Check sent the Run back to Build to fix problems. The maximum is 2.',
+  loops: 'Times Check sent the Run back to Build to fix problems. The maximum is 4.',
 };
 
 export const POLL_MS = 2000;
@@ -50,7 +50,7 @@ export function chipsOf(run) {
   for (const [key, label] of [['standards', 'Standards'], ['spec', 'Spec'], ['security', 'Security'], ['infrastructure', 'Infrastructure']]) {
     if (run[key]) chips.push({ key, cls: run[key], text: `${label} ${run[key]}`, tip: CHIP_HELP[key] });
   }
-  if (typeof run.loops === 'number') chips.push({ key: 'loops', cls: '', text: `loop ${run.loops}/2`, tip: CHIP_HELP.loops });
+  if (typeof run.loops === 'number') chips.push({ key: 'loops', cls: '', text: `loop ${run.loops}/4`, tip: CHIP_HELP.loops });
   return chips;
 }
 

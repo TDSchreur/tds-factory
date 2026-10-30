@@ -43,15 +43,30 @@ test('the release workflow publishes tds-factory.tgz as the latest Release, seri
   assert.doesNotMatch(workflow, /git (commit|push)/);
 });
 
-test('the release workflow checks that the README install URL serves the published tarball', () => {
-  const check = workflow.indexOf('releases/latest/download/tds-factory.tgz');
-  assert.ok(check > workflow.indexOf('gh release create'), 'the check comes after publishing');
-  assert.match(workflow, /cmp tds-factory\.tgz downloaded\.tgz/);
+const ASSETS = ['tds-factory.tgz', 'tds-factory.tgz.sha256', 'install.sh', 'install.ps1'];
+const latestWorkflow = readFileSync(resolve('.github/workflows/latest-release.yml'), 'utf8');
+
+test('the release workflow attaches the tarball, its checksum and both installers in the call that creates the Release', () => {
+  assert.match(workflow, /gh release create "v\$VERSION" tds-factory\.tgz tds-factory\.tgz\.sha256 scripts\/install\.sh scripts\/install\.ps1 /);
 });
-test('a scheduled workflow fails when the latest Release has no tds-factory.tgz', () => {
-  const latest = readFileSync(resolve('.github/workflows/latest-release.yml'), 'utf8');
-  assert.match(latest, /schedule:/);
-  assert.match(latest, /release:\s+types:/);
-  assert.match(latest, /releases\/latest\/download\/tds-factory\.tgz/);
-  assert.match(latest, /permissions:\s+contents: read/);
+
+test('the release workflow checks that every published asset URL serves the file it built', () => {
+  const check = workflow.slice(workflow.indexOf('Check that the install URLs'));
+  assert.ok(workflow.indexOf('Check that the install URLs') > workflow.indexOf('gh release create'), 'the check comes after publishing');
+  for (const asset of ASSETS) assert.ok(check.includes(asset), `${asset} is checked`);
+  assert.match(check, /releases\/latest\/download\/\$name/);
+  assert.match(check, /cmp "\$file" downloaded/);
+  assert.match(check, /sha256sum --check tds-factory\.tgz\.sha256/);
+});
+
+test('a scheduled workflow fails when the latest Release lacks any of the four assets', () => {
+  assert.match(latestWorkflow, /schedule:/);
+  assert.match(latestWorkflow, /release:\s+types:/);
+  for (const asset of ASSETS) assert.ok(latestWorkflow.includes(asset), `${asset} is checked`);
+  assert.match(latestWorkflow, /permissions:\s+contents: read/);
+});
+
+test('the release guide lists the four assets of a Release', () => {
+  const guide = readFileSync(resolve('docs/releasing.md'), 'utf8');
+  for (const asset of ASSETS) assert.ok(guide.includes(asset), `${asset} is listed`);
 });

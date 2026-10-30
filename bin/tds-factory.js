@@ -6,11 +6,13 @@ import { openRunStore } from '../src/run-store.js';
 import { sync } from '../src/sync.js';
 import { startDashboard } from '../src/dashboard.js';
 import { doctor } from '../src/doctor.js';
+import { update } from '../src/update.js';
 
 const USAGE = `Usage:
   tds-factory --version
   tds-factory sync [--force]
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force] [--dry-run]
+  tds-factory update [--no-force]
   tds-factory doctor [--agent claude|codex|copilot] [--json]
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
@@ -25,7 +27,9 @@ const USAGE = `Usage:
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
 
 install defaults to the user-global directory; --project installs into the current directory.
---dry-run prints what install would do and changes nothing.`;
+--dry-run prints what install would do and changes nothing.
+update installs the latest Release when yours is older and refreshes the skills with install --force, which replaces edited agent files
+and skills, and same-named skills that tds-factory did not install; --no-force keeps them.`;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -33,6 +37,7 @@ const { values, positionals } = parseArgs({
     agent: { type: 'string' },
     project: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
+    'no-force': { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
     data: { type: 'string' },
     id: { type: 'string' },
@@ -48,7 +53,8 @@ const { values, positionals } = parseArgs({
 
 try {
   const [command] = positionals;
-  if (values.version) console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  if (values.version) console.log(version);
   else if (command === 'run') {
     const data = values.data === undefined ? undefined : JSON.parse(values.data);
     const store = openRunStore(process.cwd());
@@ -80,6 +86,7 @@ try {
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
     else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect or repair');
   }
+  else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
   else if (command === 'sync') sync({ force: values.force });
   else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
   else if (command === 'doctor') {
