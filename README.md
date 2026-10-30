@@ -1,6 +1,6 @@
 # TDS Factory
 
-TDS Factory is a small software factory. It installs skills into Claude, Codex and Copilot. The skill `factory`, takes a piece of work from idea to pull request.
+TDS Factory is a small software factory. It installs skills into Claude, Codex and Copilot. One of them, `factory`, takes a piece of work from idea to pull request.
 
 New here? Read the [install guide](docs/install.md) to set the Factory up, then the [usage guide](docs/usage.md) to run your first piece of work. Before a first Run, run `tds-factory doctor` in the project. It checks whether the project is ready and changes nothing.
 
