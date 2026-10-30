@@ -168,7 +168,11 @@ The full list is in [GLOSSARY.md](../GLOSSARY.md). What each Agent target guaran
 
 ## Check readiness without starting a Run
 
-Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the verify command. It exits with 1 until every check passes. `/factory` runs it first; a missing verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish.
+Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the verify command. It exits with 1 until every check passes. `/factory` runs it first; a missing verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish. Doctor also prints a `note` (and a `notes` list with `--json`) when merged Runs still hold a worktree or branch; a note never makes it fail.
+
+## Clean up after a merge
+
+A Run keeps its worktree and branch until you remove them. After the pull request is merged, run `tds-factory run clean --id ID` (or `run clean --all` for every Run) in your main checkout, not inside the Run worktree. It removes the worktree and the local branch of a Run whose PR GitHub reports as merged, and keeps the Run record and its summaries so the Dashboard still shows it. It leaves a Run alone, and says why, when it has no PR, the PR is not merged, the worktree has uncommitted changes, or the branch has commits that are not in the merged PR. GitHub deletes the remote branch on merge when that repository setting is on.
 
 ## Recover a Run
 
