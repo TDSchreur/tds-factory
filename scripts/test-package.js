@@ -17,15 +17,18 @@ function run(command, args, cwd = temp) {
   assert.equal(result.status, 0, `${command}: ${result.stderr}\n${result.stdout}`);
   return result.stdout.trim();
 }
-const npm = windows ? 'npm.cmd' : 'npm';
+// A bare quoted npm.cmd resolves its own folder to the current directory in cmd.exe, so run npm's script with node when npm started us.
+const npmCli = process.env.npm_execpath?.endsWith('.js') ? process.env.npm_execpath : undefined;
+const npm = npmCli ? process.execPath : windows ? 'npm.cmd' : 'npm';
+const npmArgs = (args) => (npmCli ? [npmCli, ...args] : args);
 try {
   let tarball = process.argv[2] && resolve(process.argv[2]);
   if (!tarball) {
-    run(npm, ['pack', '--pack-destination', temp], process.cwd());
+    run(npm, npmArgs(['pack', '--pack-destination', temp]), process.cwd());
     tarball = join(temp, readdirSync(temp).find((file) => file.endsWith('.tgz')));
   }
   const prefix = join(temp, 'prefix');
-  run(npm, ['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', '--offline', tarball]);
+  run(npm, npmArgs(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', '--offline', tarball]));
   const cli = windows ? join(prefix, 'tds-factory.cmd') : join(prefix, 'bin', 'tds-factory');
   const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(run(cli, ['--version']), version);
