@@ -7,13 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The default branch is now `main` instead of `master`; workflows, docs and installer links follow.
+
 ## [0.3.2] - 2026-10-30
 
 ### Added
-- The default branch is now `main` instead of `master`; workflows, docs and installer links follow.
-- A `ci-ok` job that succeeds only when every other CI job does, for the `main` ruleset to require.
+- A `ci-ok` job that succeeds only when every other CI job does, for the `master` ruleset to require.
 - `SECURITY.md`, `CONTRIBUTING.md`, issue templates and a PR template.
-- The release job runs in a `release` environment that only `main` can deploy to.
+- The release job runs in a `release` environment that only `master` can deploy to.
 - `scripts/use-official.sh` and `scripts/use-repo.sh` switch between the latest Release and this checkout, and remove the other version first.
 
 ## [0.3.0] - 2026-10-30
