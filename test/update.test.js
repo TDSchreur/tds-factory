@@ -4,12 +4,14 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { update, compareVersions } from '../src/update.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';
 const tgzUrl = (tag) => `https://github.com/TDSchreur/tds-factory/releases/download/${tag}/tds-factory.tgz`;
 const TGZ = Buffer.alloc(2048, 7);
+const HASH = createHash('sha256').update(TGZ).digest('hex');
 
 // A fake world: the GitHub endpoints, npm and the tds-factory binary. `routes` maps a URL to a response or a function
 // returning one; `world.calls` records every command that ran, in order.
@@ -19,6 +21,7 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
   const defaults = {
     [API]: () => Response.json({ tag_name: latest, assets: [{ name: 'tds-factory.tgz', browser_download_url: tgzUrl(latest) }] }),
     [tgzUrl(latest)]: () => new Response(TGZ),
+    [tgzUrl(latest) + '.sha256']: () => new Response(`${HASH}  tds-factory.tgz\n`),
   };
   const table = { ...defaults, ...routes };
   const fetchFn = async (url, options = {}) => {
@@ -159,6 +162,47 @@ test('a failing skills step rejects', async () => {
   try {
     await assert.rejects(update({ installed: '0.4.0', ...w.options }), /tds-factory install.*exit code 1/);
   } finally { w.cleanup(); }
+});
+
+test('a matching checksum installs', async () => {
+  const w = world({ routes: { [tgzUrl('v0.4.0') + '.sha256']: () => new Response(`${HASH.toUpperCase()} *tds-factory.tgz\n`) } });
+  try {
+    await update({ installed: '0.3.0', ...w.options });
+    assert.match(w.state.calls[0], /^npm install -g /);
+    assert.match(w.state.logs.join('\n'), /checksum ok/);
+  } finally { w.cleanup(); }
+});
+
+test('a checksum mismatch aborts before npm runs and removes the download', async () => {
+  const w = world({ routes: { [tgzUrl('v0.4.0') + '.sha256']: () => new Response(`${'0'.repeat(64)}  tds-factory.tgz\n`) } });
+  try {
+    await assert.rejects(update({ installed: '0.3.0', ...w.options }), /checksum mismatch/);
+    assert.deepEqual(w.state.calls, []);
+    assert.deepEqual(readdirSync(w.tmp), []);
+  } finally { w.cleanup(); }
+});
+
+test('a malformed checksum file is an error, not a skipped check', async () => {
+  const w = world({ routes: { [tgzUrl('v0.4.0') + '.sha256']: () => new Response('<html>oops</html>') } });
+  try {
+    await assert.rejects(update({ installed: '0.3.0', ...w.options }), /checksum file/);
+    assert.deepEqual(w.state.calls, []);
+  } finally { w.cleanup(); }
+});
+
+test('a Release without a checksum file warns and still installs', async () => {
+  const w = world({ routes: { [tgzUrl('v0.4.0') + '.sha256']: () => new Response('not found', { status: 404 }) } });
+  try {
+    await update({ installed: '0.3.0', ...w.options });
+    assert.match(w.state.warns.join('\n'), /no checksum.*not verified/);
+    assert.match(w.state.calls[0], /^npm install -g /);
+  } finally { w.cleanup(); }
+});
+
+test('the release workflow writes the checksum and attaches it with the tarball', () => {
+  const workflow = readFileSync(resolve('.github/workflows/release.yml'), 'utf8');
+  assert.match(workflow, /sha256sum tds-factory\.tgz > tds-factory\.tgz\.sha256/);
+  assert.match(workflow, /gh release create .*tds-factory\.tgz tds-factory\.tgz\.sha256/);
 });
 
 test('versions compare as semver and a prerelease sorts below its release', () => {

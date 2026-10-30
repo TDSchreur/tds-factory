@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const REPO = 'TDSchreur/tds-factory';
 const ASSET = 'tds-factory.tgz';
@@ -71,6 +72,17 @@ async function latestRelease({ fetchFn, env, retry }) {
   }
 }
 
+// The Release's `<asset>.sha256` holds the hash and file name as `sha256sum` prints them. Releases from before the file
+// existed answer 404; those warn instead of failing. Anything else wrong with the file stops the update.
+async function expectedHash(url, { fetchFn, retry }) {
+  const response = await withRetry('checksum download', () => fetchFn(url, { headers: { 'User-Agent': 'tds-factory' } }), retry);
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new Error(`checksum download answered ${response.status}`);
+  const hash = /^([0-9a-f]{64})(?:\s|$)/i.exec((await response.text()).trim())?.[1];
+  if (!hash) throw new Error('the checksum file is not a sha256 hash');
+  return hash.toLowerCase();
+}
+
 const formatVersion = ({ core, pre }) => core.join('.') + (pre ? `-${pre}` : '');
 const exitText = (what, result) => `'${what}' failed with exit code ${result.status}`;
 
@@ -105,6 +117,13 @@ export async function update({
         fs.writeFileSync(file, Buffer.from(await (await ok(fetchFn, latest.url, { headers: { 'User-Agent': 'tds-factory' } }, 'download')).arrayBuffer()));
         if (fs.statSync(file).size < 1024) throw new Error('downloaded file is suspiciously small');
       }, retry);
+      const expected = await expectedHash(`${latest.url}.sha256`, { fetchFn, retry });
+      if (!expected) warn(`this Release has no checksum file; the download was not verified`);
+      else {
+        const actual = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+        if (actual !== expected) throw new Error(`checksum mismatch: expected ${expected}, got ${actual}`);
+        log('checksum ok');
+      }
       log(`installing ${latest.tag} with npm`);
       const npm = run('npm', ['install', '-g', file], { inherit: true });
       if (npm.status !== 0) throw new Error(exitText(`npm install -g ${ASSET}`, npm));

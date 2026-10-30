@@ -74,13 +74,14 @@ jobs:
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm pack
           mv "tds-factory-$VERSION.tgz" tds-factory.tgz
+          sha256sum tds-factory.tgz > tds-factory.tgz.sha256
       - name: Verify the exact tarball before publishing
         run: npm run test:package -- tds-factory.tgz
       - name: Publish the Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
-        run: gh release create "v$VERSION" tds-factory.tgz --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes --latest
+        run: gh release create "v$VERSION" tds-factory.tgz tds-factory.tgz.sha256 --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes --latest
       - name: Check that the install URL in the README serves the published tarball
         env:
           GITHUB_REPOSITORY_URL: https://github.com/${{ github.repository }}
@@ -88,3 +89,7 @@ jobs:
           curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
             --output downloaded.tgz "$GITHUB_REPOSITORY_URL/releases/latest/download/tds-factory.tgz"
           cmp tds-factory.tgz downloaded.tgz
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
+            --output downloaded.sha256 "$GITHUB_REPOSITORY_URL/releases/latest/download/tds-factory.tgz.sha256"
+          cmp tds-factory.tgz.sha256 downloaded.sha256
+          sha256sum --check tds-factory.tgz.sha256
