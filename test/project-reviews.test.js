@@ -12,6 +12,7 @@ const invoke = (cwd, ...args) => spawnSync(process.execPath, [cli, ...args], { c
 const config = { reviews: [{ id: 'angular', name: 'Angular', mode: 'source', skill: { source: 'project', path: 'review/angular' }, patterns: ['src/**/*.ts'] }] };
 function setup() {
   const cwd = repo();
+  git(cwd, 'config', 'user.name', 't'); git(cwd, 'config', 'user.email', 't@t');
   mkdirSync(join(cwd, '.factory'), { recursive: true });
   mkdirSync(join(cwd, 'review/angular/references'), { recursive: true });
   writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify(config));
