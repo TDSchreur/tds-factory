@@ -1,6 +1,6 @@
 // Presentational components of the Dashboard page. State, polling and actions live in app.js.
 import { Fragment, h } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
 import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, safeUrl, ticketsOf } from './model.js';
@@ -93,7 +93,7 @@ export function Board({ runs, stage, onStage, selectedId, expandedIds, doneCount
   <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
     const mine = runs.filter((r) => r.column === c.key);
     return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
-      <span>${c.label} <span class="stage-count">(${mine.length})</span></span>
+      <span>${c.label} <span class="stage-count">(${mine.length})</span></span>${' '}
       ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
     </button>`;
   })}</nav>
@@ -169,6 +169,57 @@ export function Detail({ run, compact, onClose }) {
   const [loaded, setLoaded] = useState(null);
   const heading = useRef(null);
   useEffect(() => { if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true }); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
+  // Compact detail covers the Dashboard: the background becomes inert and stops scrolling, and Tab stays inside the detail.
+  useLayoutEffect(() => {
+    if (!run || !compact) return undefined;
+    const detail = document.getElementById('detail');
+    const background = [...document.querySelectorAll('#app > header, #intro, .board-wrap')];
+    const previous = background.map((element) => element.inert);
+    const overflow = document.body.style.overflow;
+    background.forEach((element) => { element.inert = true; });
+    document.body.style.overflow = 'hidden';
+    if (!detail.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
+    const trap = (event) => {
+      if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
+      const targets = [...detail.querySelectorAll('a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
+      if (!targets.length) { event.preventDefault(); return; }
+      const first = targets[0], last = targets[targets.length - 1], active = document.activeElement;
+      const outside = !detail.contains(active);
+      if (event.shiftKey && (active === first || outside)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (active === last || outside)) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', trap);
+    return () => {
+      document.removeEventListener('keydown', trap);
+      background.forEach((element, index) => { element.inert = previous[index]; });
+      document.body.style.overflow = overflow;
+    };
+  }, [!!run, compact]);
+  // The desktop drawer starts below the intro as well as the header. Measure its actual top so its bottom stays in view.
+  useLayoutEffect(() => {
+    if (!run || compact) return undefined;
+    const detail = document.getElementById('detail');
+    const header = document.querySelector('#app > header');
+    const intro = document.getElementById('intro');
+    const fit = () => {
+      detail.style.top = (header.getBoundingClientRect().height + 20) + 'px';
+      detail.style.maxHeight = Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(header);
+    observer.observe(intro);
+    window.addEventListener('resize', fit);
+    window.addEventListener('scroll', fit, { passive: true });
+    fit();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('scroll', fit);
+      detail.style.removeProperty('top');
+      detail.style.removeProperty('max-height');
+    };
+  }, [!!run, compact]);
   useEffect(() => {
     if (!run) return undefined;
     let live = true;

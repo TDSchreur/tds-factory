@@ -4,6 +4,9 @@ import { openPage, run } from './browser.js';
 
 const TAB = '\uE004';
 const ESCAPE = '\uE00C';
+const SHIFT = '\uE008';
+const PAGE_DOWN = '\uE00F';
+const SHORT_HEIGHT = 280;
 
 test('compact Run detail contains keyboard focus and returns to the same Stage and card', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r', column: 'build', title: 'Run to inspect', links: [{ label: 'PR', href: 'https://example.test/pull/1' }] })] }, { width: 375, height: 700 });
@@ -15,7 +18,7 @@ test('compact Run detail contains keyboard focus and returns to the same Stage a
     assert.equal(await page.execute("return !![...document.querySelectorAll('#detail button')].find(b => /Back to stages/i.test(b.textContent))"), true);
     assert.equal(await page.execute("document.getElementById('theme').focus(); return document.activeElement.closest('#detail') !== null"), true);
     await page.execute("document.querySelector('#detail .compact-back button').focus()");
-    await page.keyChord('\uE008', TAB); // Shift+Tab wraps to the last detail control.
+    await page.keyChord(SHIFT, TAB); // Shift+Tab wraps to the last detail control.
     assert.equal(await page.execute("return document.activeElement === document.querySelector('#detail .link a')"), true);
     await page.key(TAB);
     assert.equal(await page.execute("return document.activeElement === document.querySelector('#detail .compact-back button')"), true);
@@ -64,25 +67,23 @@ test('desktop detail stays inside the viewport and leaves the board interactive'
 test('detail keeps its Back control and background position on a short screen', async (t) => {
   const runs = Array.from({ length: 12 }, (_, i) => run({ id: 'r' + i, title: 'Run ' + i, files: ['define.md'] }));
   runs[4].title = 'A very long title '.repeat(30);
-  const page = await openPage(t, { runs, files: { 'r4/define.md': '# Findings\n\n' + Array.from({ length: 80 }, (_, i) => `- item ${i}`).join('\n') } }, { width: 320, height: 280 });
+  const page = await openPage(t, { runs, files: { 'r4/define.md': '# Findings\n\n' + Array.from({ length: 80 }, (_, i) => `- item ${i}`).join('\n') } }, { width: 320, height: SHORT_HEIGHT });
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=r4]')");
     const before = await page.execute("const card=document.querySelector('[data-id=r4]'); card.scrollIntoView({block:'center'}); card.focus(); return window.scrollY");
     await page.execute("document.querySelector('[data-id=r4]').click()");
     await page.waitFor("return document.querySelector('#detail h2') === document.activeElement");
-    for (let i = 0; i < 4; i++) await page.key('\uE00F'); // Page Down is handled by the open detail.
+    for (let i = 0; i < 4; i++) await page.key(PAGE_DOWN); // Page Down is handled by the open detail.
     await page.waitFor("return document.getElementById('detail').scrollTop > 0");
     const result = await page.execute("const d=document.getElementById('detail'), b=document.querySelector('#detail .compact-back button').getBoundingClientRect(); return {page:window.scrollY,detail:d.scrollTop,top:b.top,bottom:b.bottom}");
     assert.equal(result.page, before);
-    assert.ok(result.detail > 0 && result.top >= 0 && result.bottom <= innerHeightForTest, JSON.stringify(result));
+    assert.ok(result.detail > 0 && result.top >= 0 && result.bottom <= SHORT_HEIGHT, JSON.stringify(result));
     await page.key(ESCAPE);
     await page.waitFor("return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=r4]')");
     assert.equal(await page.execute('return window.scrollY'), before);
   } finally { await page.close(); }
 });
-
-const innerHeightForTest = 280;
 
 test('open detail changes focus and background behavior when crossing the breakpoint', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r', title: 'Resize me' })] }, { width: 375, height: 700 });
@@ -106,7 +107,7 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
   const page = await openPage(t, {
     runs: [run({ id: 'r', title: 'A long run title '.repeat(12) })],
     respond: () => ({ status: 409, body: 'dirty', headers: { 'x-factory-error': 'dirty-worktree' } }),
-  }, { width: 320, height: 280 });
+  }, { width: 320, height: SHORT_HEIGHT });
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=r] .danger')");
@@ -117,7 +118,7 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
     await page.execute("const b=document.getElementById('dialog-confirm'); b.scrollIntoView(); b.click()");
     await page.waitFor("return document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?'");
     const reach = await page.execute("const b=document.getElementById('dialog-cancel'); b.scrollIntoView(); const r=b.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,width:document.documentElement.scrollWidth, dialog:document.querySelector('dialog').getBoundingClientRect().height}");
-    assert.ok(reach.top >= 0 && reach.bottom <= 280 && reach.width <= 320 && reach.dialog <= 280, JSON.stringify(reach));
+    assert.ok(reach.top >= 0 && reach.bottom <= SHORT_HEIGHT && reach.width <= 320 && reach.dialog <= SHORT_HEIGHT, JSON.stringify(reach));
     await page.key(ESCAPE);
     await page.waitFor("return !document.querySelector('dialog').open");
     assert.deepEqual(page.calls, ['DELETE /api/runs/r']);
@@ -160,5 +161,34 @@ test('resizing desktop detail returns to the Stage of the selected Run', async (
     await page.waitFor("return document.getElementById('detail').hidden");
     assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=b]')"), true);
     assert.equal(await page.execute("return document.querySelector('[data-stage=check]').getBoundingClientRect().height > 0"), true);
+  } finally { await page.close(); }
+});
+
+test('Back lands on the Stage the Run is in now when it moved while its detail was open', async (t) => {
+  const state = { runs: [run({ id: 'r', column: 'build', title: 'Moving run' })] };
+  const page = await openPage(t, state, { width: 375, height: 700 });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=r]')");
+    await page.execute("document.querySelector('[data-id=r]').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    state.runs = [run({ id: 'r', column: 'check', title: 'Moving run' })];
+    await page.wait(3500);
+    await page.waitFor("return document.querySelector('[data-id=r]').closest('[data-stage=check]') !== null");
+    await page.key(ESCAPE);
+    await page.waitFor("return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=r]')");
+    assert.equal(await page.execute("return document.querySelector('[data-stage=check]').getBoundingClientRect().height > 0"), true);
+  } finally { await page.close(); }
+});
+
+test('Shift+Tab from the detail heading goes to the Back control', async (t) => {
+  const page = await openPage(t, { runs: [run({ id: 'r', links: [{ label: 'PR', href: 'https://example.test/pull/1' }] })] }, { width: 375, height: 700 });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=r]')");
+    await page.execute("document.querySelector('[data-id=r]').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    await page.keyChord('', TAB);
+    assert.equal(await page.execute("return document.activeElement === document.querySelector('#detail .compact-back button')"), true);
   } finally { await page.close(); }
 });

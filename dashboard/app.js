@@ -5,6 +5,7 @@ import { Board, ConfirmDialog, Detail, Header, Intro, html } from './components.
 import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
 
 const BRAND = 'TDS Factory';
+const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media query in style.css
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -13,7 +14,8 @@ function App() {
   const [status, setStatus] = useState({ error: false, text: 'Loading...' });
   const [selectedId, setSelectedId] = useState(null);
   const [selectedStage, setSelectedStage] = useState(null);
-  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 1024px)').matches);
+  const [loaded, setLoaded] = useState(false); // true after the first successful poll
+  const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
   const [showOlder, setShowOlder] = useState(false); // Runs older than a week stay folded until asked for
   const [expandedIds, setExpandedIds] = useState(() => new Set()); // Done cards the user opened
   const [request, setRequest] = useState(null);
@@ -23,7 +25,7 @@ function App() {
   current.current = request;
 
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 1024px)');
+    const query = window.matchMedia(COMPACT_QUERY);
     const change = (event) => setCompact(event.matches);
     query.addEventListener('change', change);
     return () => query.removeEventListener('change', change);
@@ -33,6 +35,7 @@ function App() {
     .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
     .then((data) => {
       setEntries(Array.isArray(data) ? data : []);
+      setLoaded(true);
       setStatus({ error: false, text: 'Updated ' + new Date().toLocaleTimeString() });
     })
     .catch((err) => setStatus({ error: true, text: 'Cannot reach the server (' + err.message + '); showing last data. Retrying...' })), []);
@@ -50,8 +53,10 @@ function App() {
   // Closing the Run detail hands focus back to its card.
   const closeDetail = () => {
     const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
-    if (compact) returnFocus.current = card;
-    else if (card) card.focus();
+    if (compact) {
+      returnFocus.current = card;
+      if (card) setSelectedStage(card.closest('.column').dataset.stage); // the Run may have moved while its detail was open
+    } else if (card) card.focus();
     setSelectedId(null);
   };
   useLayoutEffect(() => {
@@ -113,67 +118,19 @@ function App() {
   const defaultStage = COLUMNS.find((c) => runs.some((r) => r.column === c.key && r.waiting))?.key
     ?? COLUMNS.find((c) => runs.some((r) => r.column === c.key))?.key ?? COLUMNS[0].key;
   const stage = selectedStage ?? defaultStage;
+  // The first view picks a Stage once and keeps it, so polling never moves the user to another Stage.
   useEffect(() => {
-    if (selectedStage === null && status.text.startsWith('Updated ')) setSelectedStage(defaultStage);
-  }, [selectedStage, status, defaultStage]);
+    if (selectedStage === null && loaded) setSelectedStage(defaultStage);
+  }, [selectedStage, loaded, defaultStage]);
   const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
   useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
-  useLayoutEffect(() => {
-    if (!openRun || !compact) return undefined;
-    const background = [...document.querySelectorAll('#app > header, #intro, .board-wrap')];
-    const previous = background.map((element) => element.inert);
-    const overflow = document.body.style.overflow;
-    background.forEach((element) => { element.inert = true; });
-    document.body.style.overflow = 'hidden';
-    const detail = document.getElementById('detail');
-    if (!detail.contains(document.activeElement)) detail.querySelector('h2')?.focus({ preventScroll: true });
-    const trap = (event) => {
-      if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
-      const targets = [...detail.querySelectorAll('a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-        .filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
-      if (!targets.length) { event.preventDefault(); return; }
-      const first = targets[0], last = targets[targets.length - 1], active = document.activeElement;
-      if (event.shiftKey && (active === first || !targets.includes(active))) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', trap);
-    return () => {
-      document.removeEventListener('keydown', trap);
-      background.forEach((element, index) => { element.inert = previous[index]; });
-      document.body.style.overflow = overflow;
-    };
-  }, [!!openRun, compact]);
+  // Compact detail covers the board, so focus returns to the card once the board is shown again.
   useLayoutEffect(() => {
     if (!openRun && returnFocus.current) {
       returnFocus.current.focus({ preventScroll: true });
       returnFocus.current = null;
     }
   }, [!!openRun]);
-  // The desktop drawer starts below the intro as well as the header. Measure its
-  // actual top so its bottom stays in view before and after scrolling.
-  useLayoutEffect(() => {
-    if (!openRun || compact) return undefined;
-    const detail = document.getElementById('detail');
-    const header = document.querySelector('#app > header');
-    const intro = document.getElementById('intro');
-    const fit = () => {
-      detail.style.top = (header.getBoundingClientRect().height + 20) + 'px';
-      detail.style.maxHeight = Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(header);
-    observer.observe(intro);
-    window.addEventListener('resize', fit);
-    window.addEventListener('scroll', fit, { passive: true });
-    fit();
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', fit);
-      window.removeEventListener('scroll', fit);
-      detail.style.removeProperty('top');
-      detail.style.removeProperty('max-height');
-    };
-  }, [!!openRun, compact]);
   const waiting = entries.filter((r) => r.waiting).length;
   useEffect(() => { const name = folderName(project); document.title = (waiting ? '(' + waiting + ') ' : '') + (name ? name + ' · ' : '') + BRAND; }, [waiting, project]);
 

@@ -84,3 +84,30 @@ test('compact header keeps theme, version and connection errors visible', async 
     assert.equal(await page.execute("return document.getElementById('factory-version').textContent"), 'v9.1.2');
   } finally { await page.close(); }
 });
+
+test('Stage buttons count the visible Runs and mark the Stage that needs the user', async (t) => {
+  const old = new Date(Date.now() - 9 * 86400000).toISOString();
+  const runs = [run({ id: 'a', column: 'define' }), run({ id: 'b', column: 'build' }), run({ id: 'c', column: 'build', waiting: true }), run({ id: 'old', column: 'build', updated: old }), run({ id: 'done', column: 'done', status: 'done' })];
+  const page = await openPage(t, { runs }, { width: 390, height: 800 });
+  if (!page) return;
+  try {
+    const buttons = "return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button')].map((b) => b.textContent.replace(/\\s+/g, ' ').trim())";
+    await page.waitFor("return document.querySelectorAll('.card').length > 0");
+    assert.deepEqual(await page.execute(buttons), ['Define (1)', 'Build (2) Needs you', 'Check (0)', 'Finish (0)', 'Done (1)']);
+    await page.execute("document.getElementById('older').click()");
+    await page.waitFor("return document.getElementById('older').textContent === 'Hide older runs'");
+    assert.deepEqual(await page.execute(buttons), ['Define (1)', 'Build (3) Needs you', 'Check (0)', 'Finish (0)', 'Done (1)']);
+  } finally { await page.close(); }
+});
+
+test('Show older and Delete all are touch sized on compact screens', async (t) => {
+  const old = new Date(Date.now() - 9 * 86400000).toISOString();
+  const page = await openPage(t, { runs: [run({ id: 'a', column: 'done', status: 'done' }), run({ id: 'old', column: 'build', updated: old })] }, { width: 320, height: 800 });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('.card')");
+    assert.equal(await page.execute(clickStage('Done')), true);
+    const sizes = await page.execute("return ['#older', '.column[data-stage=done] > button'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))");
+    assert.ok(sizes.every((h) => h >= 44), `touch heights: ${sizes}`);
+  } finally { await page.close(); }
+});
