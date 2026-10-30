@@ -18,4 +18,4 @@ Do not edit `CHANGELOG.md` for a change. Add a fragment `changelog.d/<name>.md`;
 
 ## Commands
 
-- Verify: `npm test` (runs `node --test test/*.test.js`, which checks the skills, the guides and the sync and dashboard code).
+- Verify: `npm test` (runs `node --test test/*.test.js`, which checks the skills, the guides, Markdown links, ADR numbers, the changelog fragment, the glossary's Avoid terms, the stated Check loop limit, the sync and dashboard code and the names of browser tests).

@@ -34,7 +34,7 @@ The Flow has four Stages: Define, Build, Check and Finish. A Run moves from Defi
 - Run gates: Define moves to Build; moving to `prepare` is refused; a Run whose `run.json` says `prepare` can move to Build once it has the Spec and Tickets.
 - Dashboard: a Run recorded at `prepare` shows in the Define column; the page has no Prepare column.
 - The skills test asserts the Flow has no Prepare section and the Stage list is Define, Build, Check, Finish. The eval fixture goes straight from Define to Build.
-- Prior art: `test/run-gates.test.js`, `test/dashboard-page.test.js`, `test/skills.test.js`.
+- Prior art: `test/run-gates.test.js`, `test/dashboard-page-browser.test.js`, `test/skills.test.js`.
 
 ## Out of Scope
 

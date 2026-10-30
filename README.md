@@ -65,7 +65,7 @@ flowchart TB
 Each Stage produces one result.
 
 - Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker.
-- Build finishes every Ticket test-first, with one commit each. It builds what the Ticket asks and names any smaller option in one line in `build.md`.
+- Build finishes every Ticket test-first, with one commit each. It builds what the Ticket asks and names any smaller option in one line in `build.md`. After the last Ticket and after every Rework it works through an Exit checklist: a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff.
 - Check gives Standards, Spec, Security and Infrastructure verdicts from fresh read-only subagents. Infrastructure is skipped when no infrastructure file changed. Projects can add independent source or interactive reviews.
 - Finish opens the pull request.
 

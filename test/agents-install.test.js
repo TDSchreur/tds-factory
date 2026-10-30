@@ -43,6 +43,13 @@ test('install keeps an existing agent file you edited, unless forced', () => {
   assert.equal(readFileSync(file, 'utf8'), readFileSync(join(AGENTS_DIR, 'claude', 'factory-build.md'), 'utf8'));
 });
 
+test('the Build agent of every target follows the Exit checklist and records no verdict', () => {
+  const sentence = 'After the last Ticket and after every Rework, follow the Exit checklist in the Build instructions: a term sweep, the required artifacts, a story trace and a security check in `build.md`, and one inline self-check of your own diff that records no verdict or Evidence.';
+  for (const file of ['claude/factory-build.md', 'codex/factory-build.toml', 'copilot/factory-build.agent.md']) {
+    assert.ok(readFileSync(join(AGENTS_DIR, file), 'utf8').includes(sentence), file);
+  }
+});
+
 test('the Check agent of every target is read-only', () => {
   assert.match(readFileSync(join(AGENTS_DIR, 'claude', 'factory-check.md'), 'utf8'), /^tools: Read, Grep, Glob$/m);
   assert.match(readFileSync(join(AGENTS_DIR, 'copilot', 'factory-check.agent.md'), 'utf8'), /^tools: \["view", "grep", "glob"\]$/m);
