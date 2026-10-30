@@ -45,8 +45,8 @@ function verifyCommandCheck(projectDir) {
   const file = conventionsFile(projectDir);
   const commands = file && read(path.join(projectDir, file)).match(/^## Commands[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1];
   const found = commands?.match(/^[ \t]*[-*][ \t]*Verify:[ \t]*(?:`([^`\n]*)`|(\S[^\n]*))/mi);
-  const command = found && (found[1] ?? found[2].trim());
-  if (command === undefined) return ['missing', 'no Verify command found under "## Commands" in AGENTS.md or CLAUDE.md'];
+  const command = found ? (found[1] ?? found[2].trim()) : undefined;
+  if (command === undefined) return ['missing', 'no Verify command found under "## Commands" in AGENTS.md or CLAUDE.md; add a line like "- Verify: `npm test`" (a command in a code block is not read)'];
   const problem = verifyCommandProblem(command);
   if (problem) return ['fail', problem];
   const words = command.trim().split(/\s+/);
