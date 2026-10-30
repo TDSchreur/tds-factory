@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -39,14 +39,17 @@ function sandbox({ node = true, npm = true, major = '22', npmFails = false, cli 
     }
   }
   const calls = join(dir, 'calls');
+  const cwds = join(dir, 'cwds');
+  const elsewhere = join(dir, 'untrusted-checkout');
+  mkdirSync(elsewhere);
   const stub = (name, sh, cmd) => {
     if (win) writeFileSync(join(bin, `${name}.cmd`), `@echo off\r\n${cmd}\r\n`);
     else { writeFileSync(join(bin, name), `#!/bin/sh\n${sh}\n`); chmodSync(join(bin, name), 0o755); }
   };
   if (node) stub('node', `echo v${major}.1.0`, `echo v${major}.1.0`);
-  if (npm) stub('npm', `echo "npm $*" >> "$CALLS"\n${npmFails ? 'exit 7' : 'exit 0'}`, `echo npm %*>> "%CALLS%"\r\n${npmFails ? 'exit /b 7' : 'exit /b 0'}`);
+  if (npm) stub('npm', `echo "npm $*" >> "$CALLS"\necho "$PWD|\${NoDefaultCurrentDirectoryInExePath:-unset}" >> "$CWDS"\n${npmFails ? 'exit 7' : 'exit 0'}`, `echo npm %*>> "%CALLS%"\r\n${npmFails ? 'exit /b 7' : 'exit /b 0'}`);
   if (cli && !shims) {
-    stub('tds-factory', 'if [ "$1" = "--version" ]; then echo 9.9.9; else echo "tds-factory $*" >> "$CALLS"; fi',
+    stub('tds-factory', 'if [ "$1" = "--version" ]; then echo 9.9.9; else echo "tds-factory $*" >> "$CALLS"; echo "$PWD|${NoDefaultCurrentDirectoryInExePath:-unset}" >> "$CWDS"; fi',
       'if "%1"=="--version" (echo 9.9.9) else (echo tds-factory %*>> "%CALLS%")');
   }
   // Next to the plain commands, the .cmd shims that npm also creates on Windows; PowerShell prefers the .ps1 ones, which
@@ -59,11 +62,13 @@ chmod +x "$(dirname "$0")/tds-factory.cmd"`, '');
   }
   const base = win ? { SystemRoot: process.env.SystemRoot, PATHEXT: process.env.PATHEXT, ComSpec: process.env.ComSpec } : { DOTNET_ROOT: process.env.DOTNET_ROOT };
   return {
-    run: (env = {}) => {
-      const result = spawnSync(pwsh, ['-NoProfile', '-NonInteractive', '-File', script], {
-        encoding: 'utf8', env: { ...base, HOME: dir, USERPROFILE: dir, PATH: bin + delimiter + host, CALLS: calls, ...env },
+    dir,
+    // `elsewhere` is the folder the user's terminal is in when they paste the line.
+    run: (env = {}, { args = ['-File', script] } = {}) => {
+      const result = spawnSync(pwsh, ['-NoProfile', '-NonInteractive', ...args], {
+        cwd: elsewhere, encoding: 'utf8', env: { ...base, HOME: dir, USERPROFILE: dir, PATH: bin + delimiter + host, CALLS: calls, CWDS: cwds, ...env },
       });
-      return { ...result, calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split(/\r?\n/).map((l) => l.trim()) : [] };
+      return { ...result, cwds: existsSync(cwds) ? readFileSync(cwds, 'utf8').trim().split('\n') : [], calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split(/\r?\n/).map((l) => l.trim()) : [] };
     },
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
@@ -86,6 +91,26 @@ test('install.ps1 calls the .cmd shims of npm and tds-factory when they exist', 
     const r = s.run();
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.deepEqual(r.calls, [`npm.cmd install -g --allow-remote=root ${URL}`, 'tds-factory.cmd install']);
+  } finally { s.cleanup(); }
+});
+
+test('npm and tds-factory run in the home folder with NoDefaultCurrentDirectoryInExePath set, whatever folder the terminal is in', { skip: skip || (win && 'the Windows stubs do not log their folder') }, () => {
+  const s = sandbox();
+  try {
+    const r = s.run();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.ok(r.cwds.length >= 2, 'npm and tds-factory both logged');
+    for (const line of r.cwds) assert.equal(line, `${realpathSync(s.dir)}|1`, 'home folder, switch on');
+  } finally { s.cleanup(); }
+});
+
+test('after the install the terminal is back in its folder and the environment switch is as it was', { skip: skip || (win && 'the Windows stubs do not log their folder') }, () => {
+  const s = sandbox();
+  try {
+    // Dot-sourced, as `irm | iex` runs it: in the caller's session, which must not be left changed.
+    const r = s.run({}, { args: ['-Command', `. '${script}'; Write-Output ('after: ' + (Get-Location).Path + '|' + [string]$env:NoDefaultCurrentDirectoryInExePath + '|')`] });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, new RegExp(`after: ${join(realpathSync(s.dir), 'untrusted-checkout').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\|\\|`));
   } finally { s.cleanup(); }
 });
 

@@ -187,7 +187,7 @@ test('a download URL that is not a Release asset of this repository is refused',
   } finally { w.cleanup(); }
 });
 
-test('tds-factory runs in the home folder, never in the current folder, and npm in the download folder', async () => {
+test('tds-factory runs in the home folder, never in the current folder', async () => {
   for (const installed of ['0.3.0', '0.4.0']) {
     const w = world();
     try {
@@ -208,6 +208,16 @@ test('a download URL that a parser would resolve into another repository is refu
     assert.deepEqual(w.state.fetched.filter((u) => u.includes('other/repo')), []);
     assert.match(w.state.warns.join('\n'), /not a Release asset of TDSchreur\/tds-factory/);
   } finally { w.cleanup(); }
+});
+
+test('a download URL with credentials or another port is refused', async () => {
+  for (const url of ['https://user:pw@github.com/TDSchreur/tds-factory/releases/download/v0.4.0/tds-factory.tgz', 'https://github.com:8443/TDSchreur/tds-factory/releases/download/v0.4.0/tds-factory.tgz']) {
+    const w = world({ routes: { [API]: () => Response.json({ tag_name: 'v0.4.0', assets: [{ name: 'tds-factory.tgz', browser_download_url: url }] }), [PAGE]: () => new Response(null, { status: 404 }) } });
+    try {
+      await assert.rejects(update({ installed: '0.3.0', ...w.options }), /Could not determine/);
+      assert.ok(!w.state.fetched.includes(url));
+    } finally { w.cleanup(); }
+  }
 });
 
 test('a tag from the redirect that is not a plain version is refused before any URL is built', async () => {

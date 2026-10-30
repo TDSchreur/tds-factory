@@ -134,7 +134,7 @@ Besides the skills the Factory ships, a few skills help while developing the Fac
 |---|---|
 | `--agent claude\|codex\|copilot\|all` | Pick the Agent target. `all` is the default and means Claude plus Codex, because Copilot reads both directories. |
 | `--project` | Install into the current directory instead of the user-global directory. |
-| `--force` | Overwrite skill folders that tds-factory did not install or that you edited. |
+| `--force` | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install. |
 | `--dry-run` | Print what install would do and change nothing. |
 
 | Agent | Project directory | Global directory |

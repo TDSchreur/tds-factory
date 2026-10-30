@@ -47,7 +47,7 @@ function defaultRun(cmd, args, { inherit = false, cwd } = {}) {
 function isReleaseAsset(text) {
   try {
     const url = new URL(text);
-    return url.href === text && url.origin === 'https://github.com' && url.pathname.startsWith(DOWNLOADS) && !url.search && !url.hash;
+    return url.href === text && url.origin === 'https://github.com' && !url.username && !url.password && url.pathname.startsWith(DOWNLOADS) && !url.search && !url.hash;
   } catch { return false; }
 }
 
