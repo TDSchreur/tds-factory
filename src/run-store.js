@@ -16,7 +16,7 @@ const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
 const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha'];
 // How many times Check may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
-const MAX_CHECK_LOOPS = 4;
+export const MAX_CHECK_LOOPS = 4;
 const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
 // Why a Verify command cannot be run at all; undefined when it is usable. Doctor reports the same rule.

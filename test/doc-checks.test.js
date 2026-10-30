@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { adrProblems, brokenLinks } from '../scripts/doc-checks.js';
+import { adrProblems, avoidTerms, bareAvoidTerms, brokenLinks, staleConstants } from '../scripts/doc-checks.js';
 
 const repo = (files) => {
   const dir = mkdtempSync(join(tmpdir(), 'doc-checks-'));
@@ -42,4 +42,29 @@ test('adrProblems reports a reused number and a badly named file and passes a cl
 test('this repository has no broken relative link and its ADR numbers are unique', () => {
   assert.deepEqual(brokenLinks(resolve('.')), []);
   assert.deepEqual(adrProblems(resolve('.')), []);
+});
+
+const GLOSSARY = '**A**:\nx\n_Avoid_: Pipeline, step, Sync (alone), which is the maintainer command `x`, Ticket (a Ticket is a unit, not a click), Modal, Loop back\n';
+
+test('avoidTerms keeps plain terms and drops qualified terms, explanations and ordinary words', () => {
+  assert.deepEqual(avoidTerms(GLOSSARY), ['Pipeline', 'Loop back']);
+});
+
+test('bareAvoidTerms reports an Avoid term in the docs and reads no code, glossary, ADR or archived Spec', () => {
+  const dir = repo({ 'GLOSSARY.md': GLOSSARY, 'README.md': 'Our Pipeline runs. `Pipeline` and a Loop back.\n```\nPipeline\n```', 'docs/usage.md': 'A pipeline is fine.', 'docs/adr/0001-a.md': 'Pipeline', 'docs/specs/archive/x.md': 'Pipeline', 'CHANGELOG.md': 'Pipeline' });
+  assert.deepEqual(bareAvoidTerms(dir), ['README.md: "Pipeline" is a glossary Avoid term (Our Pipeline runs.  and a Loop back.)', 'README.md: "Loop back" is a glossary Avoid term (Our Pipeline runs.  and a Loop back.)']);
+});
+
+const LIMIT = [{ name: 'Check loop limit', value: 4, patterns: [/at most (\w+) times/g, /`0` to `(\w+)`/g], files: ['README.md', 'docs/usage.md'] }];
+
+test('staleConstants reports a statement that differs from the code, in digits or in words, and a file that no longer states it', () => {
+  const dir = repo({ 'README.md': 'Back at most four times, `0` to `4`.', 'docs/usage.md': 'Back at most 2 times.' });
+  assert.deepEqual(staleConstants(dir, LIMIT), ['docs/usage.md says the Check loop limit is 2, the code says 4']);
+  writeFileSync(join(dir, 'README.md'), 'No limit here.');
+  assert.deepEqual(staleConstants(dir, LIMIT), ['README.md no longer states the Check loop limit; update the patterns in scripts/doc-checks.js', 'docs/usage.md says the Check loop limit is 2, the code says 4']);
+});
+
+test('this repository uses no bare Avoid term and states the Check loop limit as the code does', () => {
+  assert.deepEqual(bareAvoidTerms(resolve('.')), []);
+  assert.deepEqual(staleConstants(resolve('.')), []);
 });

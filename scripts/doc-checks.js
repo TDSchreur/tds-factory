@@ -2,6 +2,7 @@
 // so `npm test` can run it on the repo and the tests can run it on a temporary folder.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { MAX_CHECK_LOOPS } from '../src/run-store.js';
 
 const walk = (root, dir, skip = () => false) => {
   const full = join(root, dir);
@@ -44,6 +45,70 @@ export function adrProblems(root) {
     if (!number) problems.push(`docs/adr/${name} is not named NNNN-slug.md`);
     else if (owners.has(number)) problems.push(`docs/adr/${name} reuses number ${number} of ${owners.get(number)}`);
     else owners.set(number, name);
+  }
+  return problems;
+}
+
+// Words in the glossary's Avoid lists that are also ordinary words, so a bare use is no sign of drift.
+const ORDINARY_WORDS = new Set(['step', 'Standards', 'Clean', 'Sync', 'Reviewer', 'Restart', 'Log', 'Job', 'Task', 'Board', 'Monitor', 'Package', 'Distribution', 'Upgrade', 'Modal', 'Backend', 'platform', 'story', 'Ticket']);
+
+// The terms the glossary says to avoid. A term with a qualifier, or an explanation instead of a term, is left out.
+export function avoidTerms(glossary) {
+  const terms = [];
+  for (const [, line] of glossary.matchAll(/^_Avoid_: (.+)$/gm)) {
+    let depth = 0;
+    let item = '';
+    const items = [];
+    for (const char of line) {
+      if (char === '(') depth++;
+      if (char === ')') depth--;
+      if (char === ',' && !depth) { items.push(item.trim()); item = ''; } else item += char;
+    }
+    items.push(item.trim());
+    terms.push(...items.filter((term) => /^[A-Za-z]+(?: [A-Za-z]+){0,2}$/.test(term) && !ORDINARY_WORDS.has(term)));
+  }
+  return terms;
+}
+
+const withoutCode = (text) => text.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]+`/g, '');
+
+// Documentation that uses an Avoid term as the term. The glossary, the changelog, the ADRs (history) and archived Specs are not read.
+export function bareAvoidTerms(root) {
+  const terms = avoidTerms(readFileSync(join(root, 'GLOSSARY.md'), 'utf8'));
+  const docs = ['README.md', 'skills/factory/SKILL.md', ...walk(root, 'docs', (path) => path === join('docs', 'adr') || path === join('docs', 'specs', 'archive')).filter((file) => file.endsWith('.md'))].filter((file) => existsSync(join(root, file)));
+  const problems = [];
+  for (const file of docs) {
+    withoutCode(readFileSync(join(root, file), 'utf8')).split('\n').forEach((line, index) => {
+      for (const term of terms) if (new RegExp(`\\b${term}\\b`).test(line)) problems.push(`${file}: "${term}" is a glossary Avoid term (${line.trim().slice(0, 60)})`);
+    });
+  }
+  return problems;
+}
+
+const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+// Constants the code defines and the prose states. Each entry names the files that state it and the patterns that find the
+// statement; the first capture of a pattern is the number or the number word. A new constant is a new entry.
+export const CONSTANTS = [{
+  name: 'Check loop limit',
+  value: MAX_CHECK_LOOPS,
+  patterns: [/at most (\w+) times/g, /\(at most (\w+)\)/g, /`0` to `(\w+)`/g],
+  files: ['README.md', 'docs/usage.md', 'dashboard/model.js', 'skills/factory/SKILL.md'],
+}];
+
+// Files whose statement of a constant differs from the code, or that no longer state it at all.
+export function staleConstants(root, constants = CONSTANTS) {
+  const problems = [];
+  for (const { name, value, patterns, files } of constants) {
+    for (const file of files) {
+      const text = readFileSync(join(root, file), 'utf8');
+      const found = patterns.flatMap((pattern) => [...text.matchAll(pattern)].map((m) => m[1]));
+      if (!found.length) problems.push(`${file} no longer states the ${name}; update the patterns in scripts/doc-checks.js`);
+      for (const word of found) {
+        const number = NUMBER_WORDS[word] ?? Number(word);
+        if (number !== value) problems.push(`${file} says the ${name} is ${word}, the code says ${value}`);
+      }
+    }
   }
   return problems;
 }
