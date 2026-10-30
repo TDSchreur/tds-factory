@@ -1,7 +1,7 @@
 ---
 name: factory-check
 description: Factory check Stage worker
-model: claude-sonnet-4.6
+model: claude-sonnet-5.5
 include-custom-instructions: true
 tools: ["view", "grep", "glob"]
 ---
