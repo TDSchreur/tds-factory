@@ -26,6 +26,7 @@ const USAGE = `Usage:
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
   tds-factory run reviews --id ID
+  tds-factory run review --id ID --axis ID --data JSON
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
   tds-factory run clean --id ID | --all     (after the PR is merged, from the main checkout: removes the Run worktree and branch)
 
@@ -95,6 +96,7 @@ try {
       console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
+    else if (op === 'review') store.review(values.id, values.axis, data);
     else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
     else throw new Error('expected run start, update, transition, rework, sync, complete, accept, verify, verdict, inspect, repair or clean');

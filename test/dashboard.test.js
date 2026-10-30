@@ -280,3 +280,12 @@ test('the page links the SVG favicon and a plain title', async () => {
   assert.match(res.body, /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(res.body, /<title>TDS Factory<\/title>/);
 });
+
+test('project review outcomes, findings and skip reasons are visible in the Dashboard view', async () => {
+  run('2026-01-05-project-reviews', { 'run.json': JSON.stringify({ title: 'Reviews', stage: 'check', status: 'running', project_reviews: [{ id: 'angular', name: 'Angular' }, { id: 'ux', name: 'UX' }], project_results: { angular: { verdict: 'fail', findings: [{ severity: 'MEDIUM', description: 'Bad label', location: 'src/app.html' }] }, ux: { verdict: 'skipped', reason: 'No changed file matches the review patterns' } } }) });
+  const views = JSON.parse((await get(dash, '/api/views')).body);
+  const view = views.find(v => v.id === '2026-01-05-project-reviews');
+  assert.deepEqual(view.projectReviews.map(r => [r.name, r.verdict]), [['Angular', 'fail'], ['UX', 'skipped']]);
+  assert.equal(view.projectReviews[0].findings[0].description, 'Bad label');
+  assert.match(view.projectReviews[1].reason, /No changed file/);
+});

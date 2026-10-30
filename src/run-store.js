@@ -254,6 +254,13 @@ function finishProblems(record, { head, dirty } = worktreeState(record)) {
     else if (seen?.head !== head || seen?.attempt !== attempt(record)) problems.push(`${axis} was not reviewed at the current head in this Check attempt`);
     else if (record[axis] === 'fail') problems.push(`${axis} failed`);
   }
+  for (const review of record.project_reviews ?? []) {
+    const result = record.project_results?.[review.id];
+    if (!result) problems.push(`${review.id} has no verdict`);
+    else if (result.head !== head || result.attempt !== attempt(record)) problems.push(`${review.id} was not reviewed at the current head in this Check attempt`);
+    else if (result.verdict === 'fail') problems.push(`${review.id} failed`);
+    else if (!['pass', 'skipped'].includes(result.verdict)) problems.push(`${review.id} has an invalid verdict`);
+  }
   const verify = record.verify;
   if (!verify) problems.push('there is no Verify result');
   else if (verify.head !== head || verify.dirty) problems.push('the Verify result is not for the current committed head');
@@ -313,7 +320,7 @@ function reworkRun(projectDir, id, data = {}) {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
     if (loops(old) >= MAX_CHECK_LOOPS) throw new Error(`the Check loop limit of ${MAX_CHECK_LOOPS} is reached`);
     const record = { ...old, stage: 'build', check_loops: loops(old) + 1 };
-    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
+    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
     return { record, activity: 'Rework: back to Build' };
   });
 }
@@ -378,6 +385,45 @@ function verdictRun(projectDir, id, axis, value) {
     const { head, dirty } = worktreeState(old);
     if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
     return { record: { ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, activity: `${axis} verdict: ${value}` };
+  });
+}
+
+// Record a structured project review at the current head and attempt. Browser artifacts live
+// under the Run folder so screenshots do not dirty the implementation worktree.
+function projectReviewRun(projectDir, id, axis, data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('review needs a report object');
+  if (Object.keys(data).some(k => !['verdict', 'inspected', 'findings', 'evidence'].includes(k))) throw new Error('unknown review report field');
+  if (!['pass', 'fail', 'skipped'].includes(data.verdict)) throw new Error('review verdict must be pass, fail or skipped');
+  const isText = value => typeof value === 'string' && !!value.trim() && !/[\x00-\x1f\x7f]/.test(value);
+  if (data.verdict !== 'skipped') {
+    if (!Array.isArray(data.inspected) || !data.inspected.length || !data.inspected.every(isText)) throw new Error('review needs inspected files or screens');
+    if (!Array.isArray(data.findings) || data.findings.some(f => !f || typeof f !== 'object' || Array.isArray(f) || Object.keys(f).some(k => !['severity', 'description', 'location'].includes(k)) || !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].includes(f.severity) || !isText(f.description) || !isText(f.location))) throw new Error('each finding needs severity, description and location');
+    if (data.verdict === 'pass' && data.findings.some(f => ['CRITICAL', 'HIGH', 'MEDIUM'].includes(f.severity))) throw new Error('a review with medium-or-higher findings cannot pass');
+    if (data.evidence !== undefined && (!Array.isArray(data.evidence) || !data.evidence.every(isText))) throw new Error('evidence must be an array of Run-relative artifact paths');
+  } else if (Object.keys(data).length !== 1) throw new Error('a skipped review takes only its verdict');
+  changeRunning(projectDir, id, {}, old => {
+    if (old.stage !== 'check') throw new Error('project reviews are recorded in Check');
+    const review = (old.project_reviews ?? []).find(r => r.id === axis);
+    if (!review) throw new Error(`unknown project review: ${axis}`);
+    const { head, dirty } = worktreeState(old);
+    if (data.verdict !== 'fail' && dirty) throw new Error('cannot record a passing or skipped review with uncommitted changes');
+    const plan = reviewPlan(old).find(r => r.id === axis);
+    if (data.verdict === 'skipped' && plan.applicable) throw new Error(`${axis} is applicable and cannot be skipped`);
+    if (data.verdict !== 'skipped' && !plan.applicable) throw new Error(`${axis} is not applicable; record skipped`);
+    if (review.mode === 'interactive' && data.verdict === 'pass' && !data.evidence?.length) throw new Error(`${axis} needs browser evidence to pass`);
+    const folder = readRun(projectDir, id).dir;
+    for (const item of data.evidence ?? []) {
+      if (path.isAbsolute(item) || item.split(/[\\/]/).some(part => !part || part === '.' || part === '..')) throw new Error(`invalid evidence path: ${item}`);
+      let current = folder;
+      for (const part of item.split('/')) {
+        current = path.join(current, part);
+        const stat = fs.lstatSync(current);
+        if (stat.isSymbolicLink()) throw new Error(`evidence path contains a symlink: ${item}`);
+      }
+      if (!fs.statSync(current).isFile()) throw new Error(`evidence is not a regular file: ${item}`);
+    }
+    const result = { ...data, ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, attempt: attempt(old) };
+    return { record: { ...old, project_results: { ...old.project_results, [axis]: result } }, activity: `${axis} verdict: ${data.verdict}` };
   });
 }
 
@@ -773,6 +819,7 @@ export function openRunStore(callerDir) {
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
     reviews: (id) => reviewPlan(readRun(projectDir, id).record),
+    review: (id, axis, data) => projectReviewRun(projectDir, id, axis, data),
     mergeEligibility: (id) => {
       const { record } = readRun(projectDir, id);
       const state = worktreeState(record);
