@@ -58,14 +58,30 @@ To see whether an agent follows the Flow, run the on-demand [agent evaluation](d
 
 ## Setup
 
-You need Node 20 or newer. Install the latest Release with one command, the same on macOS, Linux and Windows:
+You need Node 20 or newer. Install the latest Release and its skills with one line.
+
+macOS and Linux:
+
+```sh
+curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
+```
+
+Each script checks Node and npm, installs the Release with npm and runs `tds-factory install`. Run the same line again to update. To read before you run, download the script and open it, or run the two commands yourself, the same on macOS, Linux and Windows:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 tds-factory install
 ```
 
-The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. Run the same `npm install` command again to update, then `tds-factory install` to refresh the skills. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; you run `tds-factory install` yourself, and again after every update, because the installed `factory` Skill must use the same Run commands as the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
+The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; `tds-factory install` does that, and you run it again after every update, because the installed `factory` Skill must use the same Run commands as the CLI.
+
+To update, run `tds-factory update`. It installs the latest Release when yours is older, checks the download against the Release's checksum, and then runs `tds-factory install --force`, which replaces agent files you edited with the defaults. Use `tds-factory update --no-force` to keep them. The one-line scripts keep edited agent files too; set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
 
 ### Working from a checkout
 

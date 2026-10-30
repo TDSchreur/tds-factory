@@ -13,7 +13,21 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 
 ## 2. Install the Factory
 
-One command installs it, on macOS, Linux and Windows (PowerShell):
+One line installs the CLI and the skills. On macOS and Linux:
+
+```sh
+curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
+```
+
+On Windows (PowerShell):
+
+```powershell
+powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
+```
+
+The script checks that Node 20 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip step 3. It never installs Node, and it never asks for `sudo`.
+
+If you prefer to read before you run, open the script first (the same URL in a browser) or run the two commands yourself, which work the same on macOS, Linux and Windows. This is the install:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
@@ -59,14 +73,18 @@ Add `--project` to install into the current project instead of your home folder.
 
 ## 4. Update
 
-Run the install command from part 2 again, then refresh the skills:
+Run `tds-factory update`. It looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and then runs `tds-factory install --force` so the skills and agents match the CLI. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades.
+
+`--force` replaces agent files you edited (for example your model choices) with the defaults. To keep them, run `tds-factory update --no-force`.
+
+Running the one-line install from part 2 again also updates, and keeps edited agent files unless you set `TDS_FACTORY_FORCE=1`. The manual way still works too:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
 tds-factory install
 ```
 
-`tds-factory --version` shows what you now have. Maintainers publish new versions when a group of changes is ready, so updating now and then is enough. Skills are never updated by `npm install` alone; `tds-factory install` does that.
+`tds-factory --version` shows what you now have. Maintainers publish new versions when a group of changes is ready, so updating now and then is enough. Skills are never updated by `npm install` alone; `tds-factory install` and `tds-factory update` do that.
 
 ## 5. Prepare a project
 
@@ -89,6 +107,8 @@ Do this once per project you want to build with the Factory.
 Commit the new files. Now `/factory` can start; the [usage guide](usage.md) shows how.
 
 ## Troubleshooting
+
+**The one-line install fails.** Read the error it printed: it says whether Node is missing or older than 20, whether npm cannot write its global folder (`EACCES`, see that entry below) or whether `tds-factory` is installed but not on your PATH. Behind a proxy, check that `curl` or `irm` can reach `github.com`. Running it again is safe. As a last resort use the manual commands in part 2.
 
 **`tds-factory: command not found` (or "not recognized").** The folder where npm puts global commands is not on your PATH. Find it with `npm prefix -g`, add its `bin` folder (on Windows the folder itself) to PATH, and open a new terminal.
 
