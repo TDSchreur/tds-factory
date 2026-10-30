@@ -63,6 +63,35 @@ test('Build refuses to start without a Spec and Tickets, and Check needs every a
   assert.equal(check.split('on every Run').length, 2);
 });
 
+test('Build ends with an Exit checklist of five steps, run after the last Ticket and after every Rework', () => {
+  const build = section('Build');
+  const checklist = build.slice(build.indexOf('### Exit checklist'), build.indexOf('### After a Rework'));
+  const steps = [...checklist.matchAll(/^\d\. \*\*([^*]+)\*\*/gm)].map((m) => m[1]);
+  assert.deepEqual(steps, ['Term sweep.', 'Required artifacts.', 'Story trace.', 'Security check.', 'Self-check.']);
+  assert.match(checklist, /after the last Ticket, before `run sync`, and again after every Rework/);
+  assert.match(checklist, /`build\.md`/);
+  assert.match(checklist, /Universal safeguards/);
+  assert.match(checklist, /changelog fragment/);
+  assert.match(build, /run the Exit checklist below, then run `tds-factory run sync/);
+});
+
+test('the Exit checklist self-check is inline and records no verdict, and the contract says it is not the closing review', () => {
+  const build = section('Build');
+  const checklist = build.slice(build.indexOf('### Exit checklist'), build.indexOf('### After a Rework'));
+  assert.match(checklist, /create no subagent, do not call `code-review` and record nothing with `run verdict`/);
+  assert.match(checklist, /One pass only/);
+  assert.doesNotMatch(checklist, /run verdict --id/);
+  assert.match(section('Invoked Skills'), /self-check is inline and is not the closing review: it creates no subagent, does not call `code-review`, and records no verdict or Evidence/);
+});
+
+test('a Rework sweeps the docs again, reads its own diff and fixes cheap LOW findings', () => {
+  const rework = section('Build').split('### After a Rework')[1];
+  assert.match(rework, /run the term sweep again/);
+  assert.match(rework, /read the rework diff/);
+  assert.match(rework, /Fix the cheap LOW findings/);
+  assert.match(rework, /Name a LOW you leave, with the reason/);
+});
+
 test('Check feeds project rules to Standards and Security', () => {
   assert.match(check, /`applyTo`/);
   assert.match(check, /Universal safeguards/);

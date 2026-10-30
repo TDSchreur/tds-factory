@@ -93,7 +93,7 @@ const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven
 export const CONSTANTS = [{
   name: 'Check loop limit',
   value: MAX_CHECK_LOOPS,
-  patterns: [/at most (\w+) times/g, /\(at most (\w+)\)/g, /`0` to `(\w+)`/g],
+  patterns: [/at most (\w+) times/g, /\(at most (\w+)\)/g, /`0` to `(\w+)`/g, /maximum is (\w+)/g],
   files: ['README.md', 'docs/usage.md', 'dashboard/model.js', 'skills/factory/SKILL.md'],
 }];
 

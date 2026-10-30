@@ -72,7 +72,7 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 
 ## 3. What happens without you
 
-- **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time.
+- **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time. After the last Ticket it works through an Exit checklist (a sweep of the docs for what changed, the required artifacts, a story trace, a security check and a self-check of its own diff), so that Check finds less to send back.
 - **Check:** the Factory asks for four baseline reviews separately (three when no infrastructure file changed), each in a fresh read-only subagent that did not write the code. Projects may add source or interactive reviews, each with its own independent reviewer. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most four times.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
 
