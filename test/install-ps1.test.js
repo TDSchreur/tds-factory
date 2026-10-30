@@ -11,8 +11,14 @@ const URL = 'https://github.com/TDSchreur/tds-factory/releases/latest/download/t
 const win = process.platform === 'win32';
 // spawnSync looks the program up on the PATH given to the child, so find it on ours first.
 const onPath = (name) => (process.env.PATH ?? '').split(delimiter).flatMap((d) => [join(d, name), join(d, `${name}.exe`)]).find(existsSync);
-const pwsh = ['pwsh', 'powershell'].map(onPath).find((path) => path && spawnSync(path, ['-NoProfile', '-Command', '1'], { encoding: 'utf8' }).status === 0);
+// INSTALL_PS1_SHELL picks the shell, since CI runs the file on both Windows PowerShell 5.1 and PowerShell 7.
+const candidates = process.env.INSTALL_PS1_SHELL ? [process.env.INSTALL_PS1_SHELL] : win ? ['powershell', 'pwsh'] : ['pwsh', 'powershell'];
+const pwsh = candidates.map(onPath).find((path) => path && spawnSync(path, ['-NoProfile', '-Command', '1'], { encoding: 'utf8' }).status === 0);
 const skip = pwsh ? false : 'PowerShell is not available';
+
+test('CI has the PowerShell it asks for', { skip: !process.env.REQUIRE_POWERSHELL }, () => {
+  assert.ok(pwsh, `REQUIRE_POWERSHELL is set but ${candidates.join(' or ')} was not found`);
+});
 
 // node, npm and tds-factory are stubs on a PATH of their own that record what they were asked to do, so a real node or
 // npm on the machine never takes part. On Windows the stubs are .cmd files, elsewhere sh scripts.
