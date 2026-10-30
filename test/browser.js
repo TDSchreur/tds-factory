@@ -24,11 +24,11 @@ export async function openPage(t, state, { args = [], width = 1200 } = {}) {
   state.files ??= {};
   const server = createServer((req, res) => {
     const path = req.url.split('?')[0];
-    const send = (status, type, body) => { res.writeHead(status, { 'content-type': type }); res.end(body); };
+    const send = (status, type, body, headers = {}) => { res.writeHead(status, { 'content-type': type, ...headers }); res.end(body); };
     if (req.method !== 'GET') {
       calls.push(`${req.method} ${req.url}`);
       const answer = state.respond?.(req) ?? { status: 200, body: '' };
-      return send(answer.status, 'text/plain', answer.body);
+      return send(answer.status, 'text/plain', answer.body, answer.headers);
     }
     if (path === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(path)) return send(200, TYPES[path.split('.').pop()], readFileSync(new URL(path.slice(1), DASHBOARD)));

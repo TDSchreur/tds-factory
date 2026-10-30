@@ -123,11 +123,59 @@ test('Escape cancels a confirmation, and the Merge button keeps keyboard focus a
   } finally { await page.close(); }
 });
 
+test('active Runs offer deletion and dirty changes need separate confirmation', async (t) => {
+  const page = await openPage(t, {
+    runs: ['define', 'build', 'check', 'finish'].map(column => run({ id: column, title: column, column })),
+    respond: (req) => req.url.includes('discardChanges=true') ? { status: 200, body: 'deleted' } : { status: 409, body: 'dirty', headers: { 'x-factory-error': 'dirty-worktree' } },
+  });
+  if (!page) return;
+  try {
+    assert.equal(await page.execute("return document.querySelectorAll('.card .actions .danger').length"), 4);
+    await page.execute("document.querySelector('[data-id=build] .danger').click()");
+    await page.waitFor("return document.getElementById('dialog').open");
+    assert.match(await page.execute("return document.getElementById('dialog-message').textContent"), /stop.*agent/i);
+    await page.execute("document.getElementById('dialog-confirm').click()");
+    await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?'");
+    assert.match(await page.execute("return document.getElementById('dialog-message').textContent"), /build.*permanently.*worktree/i);
+    await page.execute("document.getElementById('dialog-cancel').click()");
+    assert.deepEqual(page.calls, ['DELETE /api/runs/build']);
+    await page.execute("document.querySelector('[data-id=build] .danger').click()");
+    await page.waitFor("return document.getElementById('dialog').open");
+    await page.execute("document.getElementById('dialog-confirm').click()");
+    await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?'");
+    await page.execute("document.getElementById('dialog-confirm').click()");
+    await page.waitFor("return !document.getElementById('dialog').open");
+    assert.deepEqual(page.calls, ['DELETE /api/runs/build', 'DELETE /api/runs/build', 'DELETE /api/runs/build?discardChanges=true']);
+  } finally { await page.close(); }
+});
+
+test('Delete all asks separately before discarding each dirty Run', async (t) => {
+  const page = await openPage(t, {
+    runs: ['a', 'b'].map(id => run({ id, title: id, column: 'done', status: 'done' })),
+    respond: (req) => req.url.includes('discardChanges=true') ? { status: 200, body: 'deleted' } : { status: 409, body: 'dirty', headers: { 'x-factory-error': 'dirty-worktree' } },
+  });
+  if (!page) return;
+  try {
+    await page.execute("[...document.querySelectorAll('button')].find(b => b.textContent === 'Delete all').click()");
+    await page.waitFor("return document.getElementById('dialog').open");
+    await page.execute("document.getElementById('dialog-confirm').click()");
+    await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?'");
+    const first = await page.execute("return document.getElementById('dialog-message').textContent");
+    await page.execute("document.getElementById('dialog-cancel').click()");
+    await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?' && document.getElementById('dialog-message').textContent !== " + JSON.stringify(first));
+    await page.execute("document.getElementById('dialog-confirm').click()");
+    await page.waitFor("return !document.getElementById('dialog').open");
+    assert.equal(page.calls.length, 3);
+    assert.equal(page.calls.filter(call => call.includes('discardChanges=true')).length, 1);
+    assert.equal(page.calls.filter(call => !call.includes('discardChanges=true')).length, 2);
+  } finally { await page.close(); }
+});
+
 test('Delete all names the hidden older Runs and reports the Runs that fail', async (t) => {
   const done = (id, over) => run({ id, title: id, column: 'done', status: 'done', ...over });
   const page = await openPage(t, {
     runs: [done('new'), done('old', { updated: '2020-01-01T00:00:00Z' }), run({ id: 'active', title: 'active' })],
-    respond: (req) => (req.url.endsWith('/old') ? { status: 409, body: 'refused' } : { status: 200, body: 'deleted' }),
+    respond: (req) => (req.url.startsWith('/api/runs/old') ? { status: 409, body: 'refused' } : { status: 200, body: 'deleted' }),
   });
   if (!page) return;
   try {
@@ -142,7 +190,7 @@ test('Delete all names the hidden older Runs and reports the Runs that fail', as
     await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Could not delete'");
     assert.equal(await page.execute("return document.getElementById('dialog-message').textContent"), 'old (refused)');
     assert.equal(await page.execute("return document.getElementById('dialog-cancel').hidden"), true);
-    assert.deepEqual(page.calls.sort(), ['DELETE /api/runs/new', 'DELETE /api/runs/old']);
+    assert.deepEqual(page.calls.sort(), ['DELETE /api/runs/new?doneOnly=true', 'DELETE /api/runs/old?doneOnly=true']);
   } finally { await page.close(); }
 });
 

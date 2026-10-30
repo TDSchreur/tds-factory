@@ -91,10 +91,14 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         if (req.headers.origin !== `http://${req.headers.host}`) return send(403, 'text/plain', 'forbidden');
         let id;
         try { id = decodeURIComponent(path.slice('/api/runs/'.length)); } catch { return send(400, 'text/plain', 'invalid id'); }
+        const query = new URL(req.url, 'http://localhost').searchParams;
+        const options = [...query.entries()];
+        if (options.some(([key, value]) => !['discardChanges', 'doneOnly'].includes(key) || value !== 'true' || query.getAll(key).length !== 1)) return send(400, 'text/plain', 'invalid delete option');
         let reason;
-        const outcome = store.remove(id, (text) => { reason = text; });
-        const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409, 'worktree-refused': 409 }[outcome];
-        const text = { deleted: 'deleted', 'worktree-refused': reason }[outcome] ?? 'cannot delete Run';
+        const outcome = store.remove(id, (text) => { reason = text; }, { discardChanges: query.has('discardChanges'), doneOnly: query.has('doneOnly') });
+        const status = { deleted: 200, invalid: 400, 'not-found': 404, 'not-allowed': 409, 'worktree-refused': 409, 'dirty-worktree': 409 }[outcome];
+        if (outcome === 'dirty-worktree') res.setHeader('x-factory-error', outcome);
+        const text = { deleted: 'deleted', 'worktree-refused': reason, 'dirty-worktree': reason }[outcome] ?? 'cannot delete Run';
         return send(status, 'text/plain', text);
       }
       const merge = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/merge$/);
