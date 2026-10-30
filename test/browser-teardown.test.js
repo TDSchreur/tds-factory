@@ -25,6 +25,8 @@ test('teardown kills a driver that ignores shutdown, with its children, within t
   await stopDriver(driver, await freePort(), { graceMs: 300, killMs: 1000 });
   assert.ok(Date.now() - started < 3000, 'teardown stayed bounded');
   assert.equal(alive(-driver.pid), false, 'the driver process group is gone');
+  // The killed child is reaped by init asynchronously (macOS shows it as a zombie for a moment), so allow a short wait.
+  for (let i = 0; i < 40 && alive(child); i++) await delay(50);
   assert.equal(alive(child), false, 'the child is gone');
 });
 
