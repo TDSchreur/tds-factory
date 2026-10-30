@@ -11,9 +11,13 @@ test('on a phone the ticket links, Show details and Delete are at least 44 px hi
   const page = await openPage(t, { runs: [checking, finished(1)] }, { width: 375 });
   if (!page) return;
   try {
+    let sizes = await page.execute(heights('[data-stage=check] .tickets a, [data-stage=check] .actions button'));
+    assert.ok(sizes.length && sizes.every((h) => h >= 44), `Check touch heights: ${sizes}`);
+    await page.execute("document.querySelectorAll('.stage-nav button')[4].click()");
+    await page.waitFor("return document.querySelector('[data-stage=done]').getBoundingClientRect().height > 0");
     await page.execute("document.querySelector('.toggle').click()");
-    for (const selector of ['.tickets a', '.toggle', '.actions button']) {
-      const sizes = await page.execute(heights(selector));
+    for (const selector of ['[data-stage=done] .toggle', '[data-stage=done] .actions button']) {
+      sizes = await page.execute(heights(selector));
       assert.ok(sizes.length && sizes.every((h) => h >= 44), `${selector}: ${sizes}`);
     }
   } finally { await page.close(); }

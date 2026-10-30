@@ -46,7 +46,9 @@
   #intro { margin: 1rem 1.25rem 0; padding: .5rem .75rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); font-size: .875rem; }
   #intro summary { cursor: pointer; font-weight: 600; }
   #intro p, #intro ol { margin: .5rem 0; color: var(--muted); }
-  #board { display: grid; grid-template-columns: repeat(6, minmax(12rem, 1fr)); gap: 1rem; padding: 1.25rem; overflow-x: auto; align-items: start; }
+  .board-wrap { min-width: 0; }
+  .stage-nav { display: none; }
+  #board { display: grid; grid-template-columns: repeat(5, minmax(12rem, 1fr)); gap: 1rem; padding: 1.25rem; overflow-x: auto; align-items: start; }
   .column { background: var(--panel); border-radius: calc(var(--radius) * 1.5); padding: .75rem; min-width: 0; }
   .column h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin: .1rem .25rem .75rem; color: var(--muted); }
   .column > button { margin: 0 0 .75rem; }
@@ -69,7 +71,7 @@
   .badge.open { color: var(--primary); border-color: var(--primary); }
   .badge.merged { color: var(--ok); border-color: var(--ok); }
   .badge.closed { color: var(--flag); border-color: var(--flag); }
-  .actions { display: flex; gap: .5rem; margin-top: .75rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
   .actions button { font-weight: 600; padding: .35rem .9rem; }
   .actions .primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
   .actions .primary:hover { filter: brightness(1.1); }
@@ -128,14 +130,24 @@
   .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.5rem; }
   .dialog-actions .primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); font-weight: 600; }
   .dialog-actions .danger { background: var(--flag); border-color: var(--flag); color: var(--card); }
-  @media (max-width: 48rem) {
+  @media (max-width: 1024px) {
     header { padding: .6rem 1rem; }
     #status { order: 1; }
     #project { order: 2; }
     #theme, #older { order: 3; }
-    .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; min-height: 44px; }
+    #status { min-width: 0; overflow-wrap: anywhere; }
+    #project { max-width: min(16rem, 100%); }
+    #theme, #older, .column > button, .tickets a, .card .toggle, .actions button, #intro summary { min-height: 44px; }
+    .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; }
+    #intro summary { padding: .625rem 0; }
+    .stage-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .5rem; padding: 1rem 1rem 0; }
+    .stage-nav button { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .25rem .5rem; min-width: 0; min-height: 44px; }
+    .stage-nav button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+    .stage-waiting { color: var(--flag); font-size: .75rem; font-weight: 700; }
+    .stage-nav button[aria-pressed="true"] .stage-waiting { color: inherit; }
     .column[data-stage="done"] .cards { max-height: none; overflow-y: visible; }
     #board { grid-template-columns: 1fr; padding: 1rem; }
+    #board .column[data-active="false"] { display: none; }
     #layout.open { grid-template-columns: minmax(0, 1fr); }
     #detail { position: fixed; inset: 0; z-index: 20; max-height: none; margin: 0; padding: 0 1rem 1rem; border: 0; border-radius: 0; }
   }

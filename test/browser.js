@@ -78,6 +78,10 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         throw new Error('Timed out waiting for: ' + script);
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${server.address().port}/` }),
+      async resize(width, height) {
+        await request('POST', base + '/goog/cdp/execute', { cmd: 'Emulation.setDeviceMetricsOverride', params: { width, height, deviceScaleFactor: 1, mobile: false } });
+        assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), { width, height });
+      },
       key: (value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value }, { type: 'keyUp', value }] }] }),
       wait: delay,
     };

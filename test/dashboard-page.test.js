@@ -167,6 +167,8 @@ test('Delete all asks separately before discarding each dirty Run', async (t) =>
     await page.waitFor("return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?' && document.getElementById('dialog-message').textContent !== " + JSON.stringify(first));
     await page.execute("document.getElementById('dialog-confirm').click()");
     await page.waitFor("return !document.getElementById('dialog').open");
+    // Closing the confirmation precedes the final request reaching the server.
+    for (let i = 0; i < 50 && page.calls.length < 3; i++) await page.wait(100);
     assert.equal(page.calls.length, 3);
     assert.equal(page.calls.filter(call => call.includes('discardChanges=true')).length, 1);
     assert.equal(page.calls.filter(call => !call.includes('discardChanges=true')).length, 2);

@@ -123,6 +123,7 @@ tds-factory dashboard
 It prints an address such as `http://127.0.0.1:4521`. Each repository gets its own port, and normally keeps it; if that port is busy, the Dashboard takes a free one and prints it. Open the address in a browser.
 
 - Each **card** is one Run. It moves left to right through the columns Define, Build, Check, Finish and Done.
+- On screens up to 1024 CSS pixels wide, use the Stage buttons to show one column at a time. The buttons show visible Run counts and mark Stages with Runs that need you.
 - The **chips** show the Ticket progress, the four Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
 - Click a card to open the **Run detail** on the right: its links, Tickets and the Stage summaries. Click the card again, press Esc or use the close button to close it.

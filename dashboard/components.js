@@ -88,16 +88,24 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
   </li>`;
 }
 
-export function Board({ runs, selectedId, expandedIds, doneCount, actions }) {
-  return html`<main id="board" aria-label="Runs by Stage" tabindex="-1">${COLUMNS.map((c) => {
+export function Board({ runs, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
+  return html`<div class="board-wrap">
+  <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
     const mine = runs.filter((r) => r.column === c.key);
-    return html`<section key=${c.key} class="column" data-stage=${c.key} aria-labelledby=${'col-' + c.key}>
+    return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
+      <span>${c.label} <span class="stage-count">(${mine.length})</span></span>
+      ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
+    </button>`;
+  })}</nav>
+  <main id="board" aria-label="Runs by Stage" tabindex="-1">${COLUMNS.map((c) => {
+    const mine = runs.filter((r) => r.column === c.key);
+    return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
       <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
       ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
       <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onMerge=${actions.merge} onDelete=${actions.remove} />`)}</ul>
       ${!mine.length && html`<div class="empty">No runs</div>`}
     </section>`;
-  })}</main>`;
+  })}</main></div>`;
 }
 
 export function Intro() {
