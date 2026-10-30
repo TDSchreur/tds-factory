@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createServer as createPortServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
@@ -12,7 +13,7 @@ export const hasBrowser = () => spawnSync('sh', ['-c', 'command -v chromedriver 
 
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
-export async function openPage(t, state, { args = [], width = 1200 } = {}) {
+export async function openPage(t, state, { args = [], width = 1200, height = 700 } = {}) {
   if (!hasBrowser()) {
     // CI sets REQUIRE_BROWSER so that a runner without a browser fails instead of silently skipping these tests.
     if (process.env.REQUIRE_BROWSER) throw new Error('Chromium and ChromeDriver are required (REQUIRE_BROWSER is set)');
@@ -62,21 +63,31 @@ export async function openPage(t, state, { args = [], width = 1200 } = {}) {
   };
   try {
     for (let i = 0; i < 50; i++) { try { await request('GET', '/status'); break; } catch { await delay(100); } }
-    session = (await request('POST', '/session', { capabilities: { alwaysMatch: { browserName: 'chrome', 'goog:chromeOptions': { args: ['--headless', '--no-sandbox', '--disable-dev-shm-usage', `--window-size=${width},700`, ...args] } } } })).sessionId;
+    session = (await request('POST', '/session', { capabilities: { alwaysMatch: { browserName: 'chrome', 'goog:chromeOptions': { args: ['--headless', '--no-sandbox', '--disable-dev-shm-usage', `--window-size=${width},${height}`, ...args] } } } })).sessionId;
     const base = '/session/' + session;
+    // Window sizing is clamped by Chromium (a 375px window can have a 500px viewport).
+    // Set CSS viewport dimensions through browser emulation before responsive assertions.
+    await request('POST', base + '/goog/cdp/execute', { cmd: 'Emulation.setDeviceMetricsOverride', params: { width, height, deviceScaleFactor: 1, mobile: false } });
     const execute = (script) => request('POST', base + '/execute/sync', { script, args: [] });
     const page = {
       state, calls, execute, close,
+      screenshot: () => request('GET', base + '/screenshot'),
       // Resolves when the script returns something truthy; fails with the script after five seconds.
       async waitFor(script) {
         for (let i = 0; i < 50; i++) { if (await execute(script)) return; await delay(100); }
         throw new Error('Timed out waiting for: ' + script);
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${server.address().port}/` }),
+      async resize(width, height) {
+        await request('POST', base + '/goog/cdp/execute', { cmd: 'Emulation.setDeviceMetricsOverride', params: { width, height, deviceScaleFactor: 1, mobile: false } });
+        assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), { width, height });
+      },
       key: (value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value }, { type: 'keyUp', value }] }] }),
+      keyChord: (modifier, value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: modifier }, { type: 'keyDown', value }, { type: 'keyUp', value }, { type: 'keyUp', value: modifier }] }] }),
       wait: delay,
     };
     await page.load();
+    assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), { width, height }, 'browser CSS viewport matches requested dimensions');
     await page.waitFor("return !!document.querySelector('#board section')");
     return page;
   } catch (err) {

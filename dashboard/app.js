@@ -1,10 +1,11 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
 import { render } from 'preact';
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, Intro, html } from './components.js';
-import { OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
+import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
 
 const BRAND = 'TDS Factory';
+const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media query in style.css
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -12,17 +13,30 @@ function App() {
   const [version, setVersion] = useState('');
   const [status, setStatus] = useState({ error: false, text: 'Loading...' });
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedStage, setSelectedStage] = useState(null);
+  const [loaded, setLoaded] = useState(false); // true after the first successful poll
+  const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
   const [showOlder, setShowOlder] = useState(false); // Runs older than a week stay folded until asked for
   const [expandedIds, setExpandedIds] = useState(() => new Set()); // Done cards the user opened
   const [request, setRequest] = useState(null);
   const queue = useRef(Promise.resolve());
   const current = useRef(null);
+  const returnFocus = useRef(null);
+  const shown = useRef(null); // the Run whose detail is open, as of the last render; the Escape handler outlives renders
   current.current = request;
+
+  useEffect(() => {
+    const query = window.matchMedia(COMPACT_QUERY);
+    const change = (event) => setCompact(event.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
 
   const poll = useCallback(() => fetch('/api/views', { cache: 'no-store' })
     .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
     .then((data) => {
       setEntries(Array.isArray(data) ? data : []);
+      setLoaded(true);
       setStatus({ error: false, text: 'Updated ' + new Date().toLocaleTimeString() });
     })
     .catch((err) => setStatus({ error: true, text: 'Cannot reach the server (' + err.message + '); showing last data. Retrying...' })), []);
@@ -40,14 +54,16 @@ function App() {
   // Closing the Run detail hands focus back to its card.
   const closeDetail = () => {
     const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
+    if (shown.current) setSelectedStage(shown.current.column); // the Run may have moved while its detail was open
+    if (compact) returnFocus.current = card;
+    else if (card) card.focus();
     setSelectedId(null);
-    if (card) card.focus();
   };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDetail(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedId]);
+  }, [selectedId, compact]);
 
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
   const ask = (title, message, action, danger, notice) => {
@@ -99,13 +115,33 @@ function App() {
   const older = entries.filter((r) => { const a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
   // Newest first within a column; unreadable and undated records sort last.
   const runs = entries.filter((r) => showOlder || !older.includes(r)).sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id));
+  const defaultStage = COLUMNS.find((c) => runs.some((r) => r.column === c.key && r.waiting))?.key
+    ?? COLUMNS.find((c) => runs.some((r) => r.column === c.key))?.key ?? COLUMNS[0].key;
+  const stage = selectedStage ?? defaultStage;
+  // The first view picks a Stage once and keeps it, so polling never moves the user to another Stage.
+  useEffect(() => {
+    if (selectedStage === null && loaded) setSelectedStage(defaultStage);
+  }, [selectedStage, loaded, defaultStage]);
   const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
+  shown.current = openRun;
   useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
+  // Compact detail covers the board, so focus returns to the card once the board is shown again.
+  useLayoutEffect(() => {
+    if (!openRun && returnFocus.current) {
+      returnFocus.current.focus({ preventScroll: true });
+      returnFocus.current.scrollIntoView({ block: 'nearest' }); // the card may sit in another Stage list than the scroll position restored
+      returnFocus.current = null;
+    }
+  }, [!!openRun]);
   const waiting = entries.filter((r) => r.waiting).length;
   useEffect(() => { const name = folderName(project); document.title = (waiting ? '(' + waiting + ') ' : '') + (name ? name + ' · ' : '') + BRAND; }, [waiting, project]);
 
   const actions = {
-    select: (id) => setSelectedId((now) => (now === id ? null : id)),
+    select: (id) => {
+      const selected = runs.find((run) => run.id === id);
+      if (selected) setSelectedStage(selected.column);
+      setSelectedId((now) => (now === id ? null : id));
+    },
     toggle: (id) => setExpandedIds((now) => { const next = new Set(now); if (!next.delete(id)) next.add(id); return next; }),
     merge: mergeRun,
     remove: (run) => removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?' + (!['done', 'abandoned'].includes(run.status) ? ' Stop its agent before deleting this Run.' : '')),
@@ -116,8 +152,8 @@ function App() {
   return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} />
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
-      <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-      <${Detail} run=${openRun} onClose=${closeDetail} />
+      <${Board} runs=${runs} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
+      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }

@@ -6,6 +6,10 @@ Without `--port`, each repository gets its own port (4300 to 4999, derived from 
 
 The header shows the serving Factory installation's version beside the logo, including when there are no Runs. This is the same version printed by that installation's `tds-factory --version`.
 
+At widths up to 1024 CSS pixels, the Dashboard shows one Stage at a time. Use the Stage buttons to switch columns; each button shows the number of visible Runs and flags those waiting for you. The first view favors a waiting Run's Stage, then the first nonempty Stage. Your selection stays in place while the Dashboard refreshes or you change the older-Run filter. Wider screens show all five columns together.
+
+Selecting a Run opens its detail across the screen at compact widths. Use **Back to stages** or Escape to return to the Run's card in its Stage. The Dashboard remains beside the detail on wider screens, where you can select another Run without closing it.
+
 The page is built with Preact and htm, committed in `dashboard/vendor/` (see `dashboard/vendor/README.md` for versions and how to update them) and loaded as ES modules, so there is no build step. See `docs/adr/0003-preact-htm-dashboard.md`.
 
 | Route | Returns |

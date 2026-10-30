@@ -1,6 +1,6 @@
 // Presentational components of the Dashboard page. State, polling and actions live in app.js.
 import { Fragment, h } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
 import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, safeUrl, ticketsOf } from './model.js';
@@ -35,7 +35,7 @@ export function Markdown({ text }) {
     if (b.type === 'code') return html`<pre><code>${b.text}</code></pre>`;
     if (b.type === 'list') return html`<${MdList} list=${b} />`;
     if (b.type === 'table') {
-      return html`<div class="scroll"><table>
+      return html`<div class="scroll" tabindex="0"><table>
         <thead><tr>${b.head.map((c) => html`<th>${inline(c)}</th>`)}</tr></thead>
         <tbody>${b.rows.map((row) => html`<tr>${row.map((c) => html`<td>${inline(c)}</td>`)}</tr>`)}</tbody>
       </table></div>`;
@@ -88,16 +88,24 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
   </li>`;
 }
 
-export function Board({ runs, selectedId, expandedIds, doneCount, actions }) {
-  return html`<main id="board" aria-label="Runs by Stage" tabindex="-1">${COLUMNS.map((c) => {
+export function Board({ runs, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
+  return html`<div class="board-wrap">
+  <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
     const mine = runs.filter((r) => r.column === c.key);
-    return html`<section key=${c.key} class="column" data-stage=${c.key} aria-labelledby=${'col-' + c.key}>
+    return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
+      <span>${c.label} <span class="stage-count">(${mine.length})</span></span>${' '}
+      ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
+    </button>`;
+  })}</nav>
+  <main id="board" aria-label="Runs by Stage" tabindex="-1">${COLUMNS.map((c) => {
+    const mine = runs.filter((r) => r.column === c.key);
+    return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
       <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
       ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
       <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onMerge=${actions.merge} onDelete=${actions.remove} />`)}</ul>
       ${!mine.length && html`<div class="empty">No runs</div>`}
     </section>`;
-  })}</main>`;
+  })}</main></div>`;
 }
 
 export function Intro() {
@@ -156,11 +164,62 @@ export function Header({ project, version, status, olderLabel, onOlder }) {
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
-export function Detail({ run, onClose }) {
+export function Detail({ run, compact, onClose }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
   const heading = useRef(null);
-  useEffect(() => { if (run) heading.current?.focus(); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
+  useEffect(() => { if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true }); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
+  // Compact detail covers the Dashboard: the background becomes inert and stops scrolling, and Tab stays inside the detail.
+  useLayoutEffect(() => {
+    if (!run || !compact) return undefined;
+    const detail = document.getElementById('detail');
+    const background = [...document.querySelectorAll('#app > header, #intro, .board-wrap')];
+    const previous = background.map((element) => element.inert);
+    const overflow = document.body.style.overflow;
+    background.forEach((element) => { element.inert = true; });
+    document.body.style.overflow = 'hidden';
+    if (!detail.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
+    const trap = (event) => {
+      if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
+      const targets = [...detail.querySelectorAll('a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
+      if (!targets.length) { event.preventDefault(); return; }
+      const first = targets[0], last = targets[targets.length - 1], active = document.activeElement;
+      const outside = !detail.contains(active);
+      if (event.shiftKey && (active === first || outside)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (active === last || outside)) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', trap);
+    return () => {
+      document.removeEventListener('keydown', trap);
+      background.forEach((element, index) => { element.inert = previous[index]; });
+      document.body.style.overflow = overflow;
+    };
+  }, [!!run, compact]);
+  // The desktop drawer starts below the intro as well as the header. Measure its actual top so its bottom stays in view.
+  useLayoutEffect(() => {
+    if (!run || compact) return undefined;
+    const detail = document.getElementById('detail');
+    const header = document.querySelector('#app > header');
+    const intro = document.getElementById('intro');
+    const fit = () => {
+      detail.style.top = (header.getBoundingClientRect().height + 20) + 'px';
+      detail.style.maxHeight = Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(header);
+    observer.observe(intro);
+    window.addEventListener('resize', fit);
+    window.addEventListener('scroll', fit, { passive: true });
+    fit();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', fit);
+      window.removeEventListener('scroll', fit);
+      detail.style.removeProperty('top');
+      detail.style.removeProperty('max-height');
+    };
+  }, [!!run, compact]);
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
@@ -172,7 +231,8 @@ export function Detail({ run, onClose }) {
   }, [key]);
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<section id="detail" aria-label="Run detail">
+  return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
+    <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
