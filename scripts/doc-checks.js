@@ -35,7 +35,7 @@ const decode = (target) => { try { return decodeURIComponent(target); } catch { 
 export function brokenLinks(root) {
   const problems = [];
   for (const file of linkedDocs(root)) {
-    for (const [, angled, plain] of withoutCode(readFileSync(join(root, file), 'utf8')).matchAll(/\]\(\s*(?:<([^>#]+)>|([^)#\s<>]+))[^)]*\)/g)) {
+    for (const [, angled, plain] of withoutCode(readFileSync(join(root, file), 'utf8')).matchAll(/\]\(\s*(?:<([^>#]+)[^>]*>|([^)#\s<>]+))[^)]*\)/g)) {
       const target = angled ?? plain;
       if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
       const path = decode(target);
@@ -121,8 +121,8 @@ export function staleConstants(root, constants = CONSTANTS) {
   return problems;
 }
 
-// Test files that import the browser helper and call openPage, which skips without a browser, but are not named *-browser.test.js. CI runs those in the job that requires a browser;
-// any other test file runs in the unit job, where a missing browser skips the test instead of failing it.
+// Test files that call openPage but are not named *-browser.test.js. openPage skips the test when there is no browser.
+// CI runs the *-browser files in the job that requires a browser; any other file runs in the unit job, where it skips.
 export function misnamedBrowserTests(root) {
   return walk(root, 'test')
     .filter((file) => file.endsWith('.test.js') && !file.endsWith('-browser.test.js'))
@@ -131,8 +131,11 @@ export function misnamedBrowserTests(root) {
     .map(([file]) => `${file} calls openPage, so it must be named *-browser.test.js`);
 }
 
-const git = (root, ...args) => execFileSync('git', ['-c', 'core.quotePath=false', ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).split('\n').filter(Boolean);
-// Exit status 1 of rev-parse --verify --quiet means the ref does not exist and 128 that this is no repository; any other failure throws.
+// English git messages (LC_ALL=C), because resolves reads one of them.
+const git = (root, ...args) => execFileSync('git', ['-c', 'core.quotePath=false', ...args], { cwd: root, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' }, stdio: ['ignore', 'pipe', 'pipe'] }).split('\n').filter(Boolean);
+
+// Exit status 1 of rev-parse --verify --quiet means the ref does not exist. A folder that is no repository exits 128 like every
+// other fatal error, so that case is told apart by its message. Any other failure throws.
 const resolves = (root, ref) => {
   try {
     git(root, 'rev-parse', '--verify', '--quiet', ref);

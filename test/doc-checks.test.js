@@ -32,11 +32,11 @@ test('brokenLinks resolves a link from the folder of the file that holds it and 
 
 test('brokenLinks reads links with a title, an escaped space or a root path, and no fenced or double-backtick code', () => {
   const dir = repo({
-    'README.md': '[a](docs/a.md "Title") [b](<docs/a.md>) [c](docs/with%20space.md) [d](/docs/a.md) [e](docs/gone.md "T") [h](<docs/with space.md>)\n~~~\n[f](nope.md)\n~~~\n``[g](nope.md)``',
+    'README.md': '[a](docs/a.md "Title") [b](<docs/a.md>) [c](docs/with%20space.md) [d](/docs/a.md) [e](docs/gone.md "T") [h](<docs/with space.md>) [i](<docs/a.md#top>) [j](<docs/gone2.md#top>)\n~~~\n[f](nope.md)\n~~~\n``[g](nope.md)``',
     'docs/a.md': '',
     'docs/with space.md': '',
   });
-  assert.deepEqual(brokenLinks(dir), ['README.md links to missing docs/gone.md']);
+  assert.deepEqual(brokenLinks(dir), ['README.md links to missing docs/gone.md', 'README.md links to missing docs/gone2.md']);
 });
 
 test('brokenLinks skips archived Specs and the vendored Skills but reads the Factory Skill and the agent files', () => {
