@@ -25,6 +25,8 @@ node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo 
 
 Run the tests with `npm test`. They use `node:test`.
 
+`scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/main` and is skipped, with a reason, when that ref does not exist, as in a shallow CI checkout. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
+
 PRs and pushes to `main` run the full suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows; the full suite currently uses Unix shell fixtures, so it is not run on Windows. CI also validates the workflows with `actionlint`, lints the Bootstrap installers with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on Windows PowerShell 5.1 and 7.
 
 The `ci-ok` job succeeds only when all the other jobs do. The `main` ruleset requires it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.

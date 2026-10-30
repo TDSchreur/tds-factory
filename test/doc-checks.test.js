@@ -27,6 +27,15 @@ test('brokenLinks resolves a link from the folder of the file that holds it and 
   assert.deepEqual(brokenLinks(dir), ['docs/adr/0002-b.md links to missing ../specs/y.md']);
 });
 
+test('brokenLinks reads links with a title, an escaped space or a root path, and no fenced or double-backtick code', () => {
+  const dir = repo({
+    'README.md': '[a](docs/a.md "Title") [b](<docs/a.md>) [c](docs/with%20space.md) [d](/docs/a.md) [e](docs/gone.md "T")\n~~~\n[f](nope.md)\n~~~\n``[g](nope.md)``',
+    'docs/a.md': '',
+    'docs/with space.md': '',
+  });
+  assert.deepEqual(brokenLinks(dir), ['README.md links to missing docs/gone.md']);
+});
+
 test('brokenLinks skips archived Specs and the vendored Skills but reads the Factory Skill and the agent files', () => {
   const dir = repo({ 'docs/specs/archive/old.md': '[gone](nope.md)', 'skills/other/GLOSSARY-FORMAT.md': '[gone](nope.md)', 'skills/factory/SKILL.md': '[gone](nope.md)', 'agents/claude/factory-build.md': '[gone](nope.md)' });
   assert.deepEqual(brokenLinks(dir), ['skills/factory/SKILL.md links to missing nope.md', 'agents/claude/factory-build.md links to missing nope.md']);
@@ -45,15 +54,15 @@ test('this repository has no broken relative link and its ADR numbers are unique
   assert.deepEqual(adrProblems(resolve('.')), []);
 });
 
-const GLOSSARY = '**A**:\nx\n_Avoid_: Pipeline, step, Sync (alone), which is the maintainer command `x`, Ticket (a Ticket is a unit, not a click), Modal, Loop back\n';
+const GLOSSARY = '**A**:\nx\n_Avoid_: Pipeline, step, Sync (alone), which is the maintainer command `x`, Ticket (a Ticket is a unit, not a click), Modal, Loop back, Self-review\n';
 
 test('avoidTerms keeps plain terms and drops qualified terms, explanations and ordinary words', () => {
-  assert.deepEqual(avoidTerms(GLOSSARY), ['Pipeline', 'Loop back']);
+  assert.deepEqual(avoidTerms(GLOSSARY), ['Pipeline', 'Loop back', 'Self-review']);
 });
 
 test('bareAvoidTerms reports an Avoid term in the docs and reads no code, glossary, ADR or archived Spec', () => {
-  const dir = repo({ 'GLOSSARY.md': GLOSSARY, 'README.md': 'Our Pipeline runs. `Pipeline` and a Loop back.\n```\nPipeline\n```', 'docs/usage.md': 'A pipeline is fine.', 'docs/adr/0001-a.md': 'Pipeline', 'docs/specs/archive/x.md': 'Pipeline', 'CHANGELOG.md': 'Pipeline' });
-  assert.deepEqual(bareAvoidTerms(dir), ['README.md: "Pipeline" is a glossary Avoid term (Our Pipeline runs.  and a Loop back.)', 'README.md: "Loop back" is a glossary Avoid term (Our Pipeline runs.  and a Loop back.)']);
+  const dir = repo({ 'GLOSSARY.md': GLOSSARY, 'README.md': 'Our Pipeline runs. `Pipeline` and a Loop back, no Self-review.\n```\nPipeline\n```', 'docs/usage.md': 'A pipeline is fine.', 'docs/adr/0001-a.md': 'Pipeline', 'docs/specs/archive/x.md': 'Pipeline', 'CHANGELOG.md': 'Pipeline' });
+  assert.deepEqual(bareAvoidTerms(dir), ['README.md: "Pipeline" is a glossary Avoid term (Our Pipeline runs.  and a Loop back, no Self-review.)', 'README.md: "Loop back" is a glossary Avoid term (Our Pipeline runs.  and a Loop back, no Self-review.)', 'README.md: "Self-review" is a glossary Avoid term (Our Pipeline runs.  and a Loop back, no Self-review.)']);
 });
 
 const LIMIT = [{ name: 'Check loop limit', value: 4, patterns: [/at most (\w+) times/g, /`0` to `(\w+)`/g], files: ['README.md', 'docs/usage.md'] }];
@@ -73,12 +82,13 @@ test('this repository uses no bare Avoid term and states the Check loop limit as
 test('misnamedBrowserTests reports a browser test whose name CI would not run in the browser job', () => {
   const dir = repo({
     'test/browser.js': 'export const openPage = 1;',
-    'test/good-browser.test.js': "import { openPage } from './browser.js';",
-    'test/bad.test.js': "import { openPage, run } from './browser.js';",
+    'test/good-browser.test.js': "import { openPage } from './browser.js';\nawait openPage(t, {});",
+    'test/bad.test.js': "import { openPage, run } from './browser.js';\nawait openPage(t, {});",
+    'test/worse.test.js': 'import * as b from "./browser.js";\nawait b.openPage(t, {});',
     'test/plain.test.js': "import { test } from 'node:test';",
     'test/teardown.test.js': "import { stopDriver } from './browser.js';",
   });
-  assert.deepEqual(misnamedBrowserTests(dir), ['test/bad.test.js opens a browser, so it must be named *-browser.test.js']);
+  assert.deepEqual(misnamedBrowserTests(dir), ['test/bad.test.js calls openPage, so it must be named *-browser.test.js', 'test/worse.test.js calls openPage, so it must be named *-browser.test.js']);
 });
 
 test('every browser test in this repository is named so the CI browser job runs it', () => {
@@ -114,6 +124,18 @@ test('missingChangelogFragment wants a fragment for a committed change in src, s
   assert.deepEqual(missingChangelogFragment(dir).problems, []);
 });
 
+test('missingChangelogFragment counts a deleted fragment, as in the change that folds the fragments at a release', () => {
+  const dir = gitRepo();
+  commit(dir, { 'changelog.d/x.md': '### Added\n- X.\n' });
+  git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  git(dir, 'fetch', '-q', 'origin');
+  git(dir, 'checkout', '-q', '-b', 'release');
+  git(dir, 'rm', '-q', 'changelog.d/x.md');
+  mkdirSync(join(dir, 'src'));
+  writeFileSync(join(dir, 'src', 'version.js'), 'x');
+  assert.deepEqual(missingChangelogFragment(dir).problems, []);
+});
+
 test('missingChangelogFragment sees uncommitted and new files', () => {
   const dir = branch();
   writeFileSync(join(dir, 'new.js'), 'x');
@@ -131,9 +153,9 @@ test('missingChangelogFragment skips, with a reason, when there is no origin/mai
   git(dir, 'remote', 'remove', 'origin');
   commit(dir, { 'src/a.js': 'x' });
   const result = missingChangelogFragment(dir);
-  assert.match(result.skipped, /no merge base with origin\/main/);
+  assert.match(result.skipped, /no origin\/main/);
   assert.deepEqual(result.problems, []);
-  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no merge base/);
+  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no origin\/main/);
 });
 
 test('this repository has a changelog fragment for its changes', (t) => {

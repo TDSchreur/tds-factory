@@ -72,7 +72,7 @@ _Avoid_: Wrapper, Patch
 The per-Agent-target table in `docs/capabilities.md` of how Skills and Stage agents are invoked, how far review is isolated, how a Run resumes and what happens when an independent reviewer is unavailable.
 
 **Exit checklist**:
-The inline steps Build runs after the last Ticket and after every Rework, before moving on: a sweep of the docs for the terms the change touched, the required artifacts, a table of Spec stories and their tests, a security self-check, and one self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
+The inline steps Build runs after the last Ticket and after every Rework, before moving on: a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
 _Avoid_: Self-review
 
 **Rework**:
