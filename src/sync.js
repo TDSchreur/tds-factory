@@ -44,7 +44,10 @@ const leaves = (base, target) => {
 // An entry is a path, or { path, as } to ship the skill under another name.
 // Our own skills (no marker) are never touched, and a marked skill edited by hand is kept unless forced.
 export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}) {
-  const { skills, upstreams = {} } = JSON.parse(fs.readFileSync(path.join(root, 'skills.manifest.json'), 'utf8'));
+  const manifestPath = path.join(root, 'skills.manifest.json');
+  // The installed package ships skills/ but not the manifest or vendor/, so sync only works in a checkout.
+  if (!fs.existsSync(manifestPath)) throw new Error(`${manifestPath} not found. sync is a maintainer command that needs a repository checkout: run \`node bin/tds-factory.js sync\` from the checkout, not the installed tds-factory.`);
+  const { skills, upstreams = {} } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const invoked = invokedByFactory(skillsDir);
   // Validate every entry first, so a bad one leaves the skills folder untouched.
   const seen = new Set();

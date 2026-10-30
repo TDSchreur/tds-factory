@@ -246,3 +246,8 @@ test('sync records provenance per skill: source, upstream, transformations, lice
   assert.match(entry.transformations[0], /^renamed from alpha/);
   assert.equal(entry.transformations[1], 'disable-model-invocation flag removed');
 });
+
+test('sync without a manifest says it is a maintainer command that needs a repository checkout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tds-sync-'));
+  assert.throws(() => quietSync({ root, skillsDir: join(root, 'skills') }), (err) => /checkout/.test(err.message) && /bin\/tds-factory\.js sync/.test(err.message) && !/ENOENT/.test(err.message));
+});
