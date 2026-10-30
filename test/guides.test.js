@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // The README and the colleague guides are the first thing a colleague reads; keep their links and commands true.
-const GUIDES = ['README.md', 'docs/install.md', 'docs/usage.md', 'docs/dashboard.md'];
+const GUIDES = ['README.md', 'docs/install.md', 'docs/usage.md', 'docs/dashboard.md', 'docs/development.md'];
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
 // Subcommands and flags the CLI knows, taken from its own usage text.
