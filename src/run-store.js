@@ -306,7 +306,7 @@ function syncRun(projectDir, id, data = {}) {
     }
     const moved = worktreeState(old).head !== head;
     const record = { ...old, base_sha: base };
-    if (moved) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
+    if (moved) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
     return { record, activity: moved ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
   });
 }

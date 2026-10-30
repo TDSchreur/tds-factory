@@ -208,3 +208,15 @@ test('a passing required project review allows Finish after baseline and Verify 
   for (const [axis, value] of [['standards','pass'], ['spec','pass'], ['security','pass'], ['infrastructure','skipped']]) assert.equal(run('verdict', '--axis', axis, '--value', value).status, 0);
   const result = run('transition', '--to', 'finish'); assert.equal(result.status, 0, result.stderr);
 });
+
+test('sync clears project review Evidence when rebasing onto an advanced base', () => {
+  const cwd = setup(), { id, run } = checking(cwd);
+  const report = { verdict: 'pass', inspected: ['src/app.ts'], findings: [] };
+  assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify(report)).status, 0);
+  writeFileSync(join(cwd, 'other.txt'), 'change');
+  git(cwd, 'add', 'other.txt'); git(cwd, 'commit', '-qm', 'other change');
+  const result = run('sync'); assert.equal(result.status, 0, result.stderr);
+  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
+  assert.equal(record.project_results, undefined);
+  assert.equal(record.check_loops, 0);
+});
