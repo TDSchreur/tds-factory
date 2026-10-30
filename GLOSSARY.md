@@ -130,5 +130,5 @@ The `tds-factory update` command: it installs the latest Release when the instal
 _Avoid_: Upgrade, Self-update
 
 **Bootstrap installer**:
-A script attached to every Release (`install.sh` for macOS and Linux, `install.ps1` for Windows) that a new user pipes into a shell to get the Factory. It only checks Node and npm, installs the Release with npm and runs `tds-factory install`.
+A script attached to every Release (`install.sh` for macOS and Linux, `install.ps1` for Windows, PowerShell 7) that a new user pipes into a shell to get the Factory. It only checks Node and npm, installs the Release with npm and runs `tds-factory install`.
 _Avoid_: Setup script

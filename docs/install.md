@@ -19,10 +19,10 @@ One line installs the CLI and the skills. On macOS and Linux:
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 ```
 
-On Windows (PowerShell):
+On Windows (PowerShell 7, `pwsh`; install it from https://aka.ms/powershell if you do not have it):
 
 ```powershell
-powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
+pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 ```
 
 The script checks that Node 20 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip part 3. It never installs Node, and it never asks for `sudo`.

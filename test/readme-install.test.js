@@ -8,7 +8,7 @@ const setup = readme.slice(readme.indexOf('## Setup'), readme.indexOf('\n## ', r
 
 const base = 'https://github.com/TDSchreur/tds-factory/releases/latest/download/';
 const curl = `curl -fsSL ${base}install.sh | sh`;
-const irm = `powershell -c "irm ${base}install.ps1 | iex"`;
+const irm = `pwsh -c "irm ${base}install.ps1 | iex"`;
 const manual = `npm install -g --allow-remote=root ${base}tds-factory.tgz`;
 const guide = readFileSync(resolve('docs/install.md'), 'utf8');
 const install = guide.slice(guide.indexOf('## 2. Install the Factory'), guide.indexOf('## 3.'));

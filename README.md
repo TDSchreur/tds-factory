@@ -14,10 +14,10 @@ macOS and Linux:
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 ```
 
-Windows (PowerShell):
+Windows (PowerShell 7, `pwsh`; install it from https://aka.ms/powershell first if you do not have it):
 
 ```powershell
-powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
+pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 ```
 
 Each script checks Node and npm, installs the Release with npm and runs `tds-factory install`. Run the same line again to update. To read the script before you run it, download and open it. You can also run the two commands yourself, the same on macOS, Linux and Windows:
