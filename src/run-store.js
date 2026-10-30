@@ -257,7 +257,7 @@ function finishProblems(record, { head, dirty } = worktreeState(record)) {
   for (const review of record.project_reviews ?? []) {
     const result = record.project_results?.[review.id];
     if (!result) problems.push(`${review.id} has no verdict`);
-    else if (result.head !== head || result.attempt !== attempt(record)) problems.push(`${review.id} was not reviewed at the current head in this Check attempt`);
+    else if (result.head !== head || result.base_sha !== record.base_sha || result.attempt !== attempt(record)) problems.push(`${review.id} was not reviewed at the current head and base in this Check attempt`);
     else if (result.verdict === 'fail') problems.push(`${review.id} failed`);
     else if (!['pass', 'skipped'].includes(result.verdict)) problems.push(`${review.id} has an invalid verdict`);
     else if (review.mode === 'interactive' && result.verdict === 'pass') {
@@ -284,7 +284,7 @@ function acceptRun(projectDir, id, data) {
     return { record: { ...old, accepted: { findings: data.findings, decision: data.decision, head, at: new Date().toISOString() } }, activity: 'Check accepted by the user' };
   });
 }
-// Rebases the Run branch onto origin's default branch. A conflict leaves the branch as it was; a moved head makes the Evidence stale, so it goes.
+// Rebases onto origin's default branch. A changed head or recorded base makes Evidence stale, so it goes.
 function syncRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (!['build', 'check'].includes(old.stage)) throw new Error('only a Run in Build or Check can be synced');
@@ -305,9 +305,10 @@ function syncRun(projectDir, id, data = {}) {
       throw new Error(`rebase onto origin ${why}; the branch is unchanged. To resolve it, run git rebase ${base} in the Run worktree, fix each conflicted file, git add it, run git rebase --continue, then run sync again`);
     }
     const moved = worktreeState(old).head !== head;
+    const changed = moved || old.base_sha !== base;
     const record = { ...old, base_sha: base };
-    if (moved) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
-    return { record, activity: moved ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
+    if (changed) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
+    return { record, activity: changed ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
   });
 }
 // Why the Run branch would not merge cleanly into origin's default branch: empty when it would.
@@ -432,7 +433,7 @@ function projectReviewRun(projectDir, id, axis, data) {
     if (data.verdict !== 'skipped' && !plan.applicable) throw new Error(`${axis} is not applicable; record skipped`);
     if (review.mode === 'interactive' && data.verdict === 'pass' && !data.evidence?.length) throw new Error(`${axis} needs browser evidence to pass`);
     const evidenceHashes = Object.fromEntries((data.evidence ?? []).map(item => [item, evidenceHash(old, item)]));
-    const result = { ...data, ...(data.evidence?.length ? { evidence_hashes: evidenceHashes } : {}), ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, attempt: attempt(old) };
+    const result = { ...data, ...(data.evidence?.length ? { evidence_hashes: evidenceHashes } : {}), ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, base_sha: old.base_sha, attempt: attempt(old) };
     return { record: { ...old, project_results: { ...old.project_results, [axis]: result } }, activity: `${axis} verdict: ${data.verdict}` };
   });
 }
@@ -613,7 +614,8 @@ async function inspectRuns(projectDir, runsDir, only) {
           const { head, dirty } = worktreeState(record);
           if (dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
           const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head), ...Object.values(record.project_results ?? {}).map((r) => r?.head)].filter(Boolean);
-          if (active && ['check', 'finish'].includes(record.stage) && seen.some((h) => h !== head)) add('stale-evidence', 'Evidence was recorded for an earlier head than the current one');
+          const staleBase = Object.values(record.project_results ?? {}).some((r) => r?.base_sha !== record.base_sha);
+          if (active && ['check', 'finish'].includes(record.stage) && (seen.some((h) => h !== head) || staleBase)) add('stale-evidence', 'Evidence was recorded for an earlier head or base than the current one');
         } catch (err) { add('worktree-unreadable', err.message); }
       }
     }

@@ -92,7 +92,7 @@ tds-factory run review --id "$RUN_ID" --axis angular --data '{"verdict":"pass","
 
 Record `fail` with findings when problems remain. An interactive pass also needs a nonempty `evidence` array naming existing regular screenshot or browser-evidence files relative to `.factory/runs/<run>/`; store artifacts under `evidence/`, not in the implementation worktree. For example, add `"evidence":["evidence/home.png"]` to the report. The coordinator records `{ "verdict": "skipped" }` only for a nonmatching review; the stored reason comes from the plan. The worktree must be clean for a pass or skip. Required browser artifacts must remain present and unchanged through Finish and merge; the Factory records their hashes with the report.
 
-Each result is tied to the current committed head and Check attempt. Missing, failed or stale reviews stop a clean Check; a fresh review and Verify are required after a new commit. Rework clears prior results and shares the existing four-return limit. A user may explicitly accept an unclean Check for that head only. The Dashboard displays project verdicts and findings alongside the baseline.
+Each result is tied to the current committed head, recorded base and Check attempt. Missing, failed or stale reviews stop a clean Check; a fresh review and Verify are required after a new commit. Sync clears Evidence when it changes the head or recorded base, because the review scope can change even when the head stays the same. Rework clears prior results and shares the existing four-return limit. A user may explicitly accept an unclean Check for that head only. The Dashboard displays project verdicts and findings alongside the baseline.
 
 ## Troubleshooting
 

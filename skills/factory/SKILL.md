@@ -33,14 +33,14 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 - `tds-factory run review --id <id> --axis <axis> --data '<JSON>'` records a project review report tied to the current head and attempt. See the installed `add-project-review` Skill's `references/project-reviews.md` for the report contract and browser artifacts.
 - `tds-factory run verdict --id <id> --axis standards|spec|security|infrastructure --value pass|fail|skipped` records one Check axis verdict for the current head. Only Infrastructure may be `skipped`, and a `pass` or `skipped` on a worktree with uncommitted changes is refused.
 - `tds-factory run rework --id <id>` sends a Run in Check back to Build: it counts the loop (at most 4) and clears the verdicts, the Verify result and any accepted decision.
-- `tds-factory run sync --id <id>` rebases the Run branch onto the freshly fetched default branch of `origin` in Build or Check. It refuses uncommitted changes, and on a conflict it names the files and leaves the branch unchanged. It clears the Evidence when the head moves, without counting a loop.
+- `tds-factory run sync --id <id>` rebases the Run branch onto the freshly fetched default branch of `origin` in Build or Check. It refuses uncommitted changes, and on a conflict it names the files and leaves the branch unchanged. It clears the Evidence when the head or recorded base changes, without counting a loop.
 - `tds-factory run accept --id <id> --data '{"findings":"...","decision":"..."}'` records the user's decision to continue to Finish with a Check that is not clean, for the current head only.
 - `tds-factory run complete --id <id>` ends a Run in Finish that has a `pr` link and sets `status` to `done`.
 - `tds-factory run clean --id <id> | --all` removes the worktree and local branch of a Run whose recorded PR is merged, from the main checkout only. It keeps the Run record, and leaves a Run that is not done, has an unmerged PR, uncommitted changes, submodule work that exists nowhere else, or branch commits outside the merged PR in place, saying why.
 - `tds-factory run inspect [--id <id>] [--json]` reports records that cannot be read, lock ownership, orphaned, missing, unknown or dirty worktrees, and stale Evidence without changing anything.
 - `tds-factory run repair --id <id>` prints a repair proposal; add `--apply` only after reviewing it. It reconciles git and GitHub, preserves dirty worktrees, may reconstruct missing records and only clears a lock whose same-host owner is demonstrably dead. It never clears a lock because of age. Inspect a reported repair coordination lock and resolve it manually.
 
-Evidence is the Verify result and the verdicts, each tied to the head commit it was recorded for. A commit made afterwards makes it stale, and Finish only accepts current Evidence.
+Evidence is the Verify result and the verdicts, each tied to the head commit it was recorded for. Project review verdicts are also tied to the recorded base. A commit made afterwards makes Evidence stale, and Finish only accepts current Evidence.
 
 **Gitignore.** If `.factory/` is not covered by the project's `.gitignore`, tell the user to add it. Do not edit `.gitignore` yourself.
 
@@ -69,7 +69,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set with `run verdict` after each review |
 | `infrastructure` | `pass`, `fail` or `skipped`: the Infrastructure verdict of the latest review. `fail` while any CRITICAL, HIGH or MEDIUM infrastructure finding is open, or a changed infrastructure file is not validated; write `skipped` when no infrastructure file changed. Set with `run verdict` after each review |
 | `project_reviews` | Frozen project review definitions, Skill content and bundled file modes captured at Run start. Set by `run start`; older Runs may omit this field |
-| `project_results` | Project review reports, verdicts, findings, artifact paths, head and Check attempt. Set by `run review` and cleared by Rework |
+| `project_results` | Project review reports, verdicts, findings, artifact paths, head, base and Check attempt. Set by `run review` and cleared by Rework |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `4`. Starts at `0`; `run rework` raises it by 1 on each return to Build |
 | `worktree` | Path of the Run worktree the Run works in. Set by `run start` |
 | `base_sha` | The fetched `origin` default branch head the Run is based on. Set by `run start` and `run sync` |

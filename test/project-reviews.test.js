@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
+import { openRunStore } from '../src/run-store.js';
 
 const cli = resolve('bin/tds-factory.js');
 const invoke = (cwd, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
@@ -219,4 +220,55 @@ test('sync clears project review Evidence when rebasing onto an advanced base', 
   const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
   assert.equal(record.project_results, undefined);
   assert.equal(record.check_loops, 0);
+});
+
+
+test('sync invalidates skipped reviews when the recorded base changes without moving HEAD', () => {
+  const cwd = setup();
+  mkdirSync(join(cwd, 'src'), { recursive: true });
+  writeFileSync(join(cwd, 'src/app.ts'), 'original\n');
+  git(cwd, 'add', '.'); git(cwd, 'commit', '-qm', 'original app');
+  const created = start(cwd); assert.equal(created.status, 0, created.stderr);
+  const id = created.stdout.trim();
+  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).worktree;
+  const run = (...args) => invoke(cwd, 'run', ...args, '--id', id);
+  assert.equal(run('update', '--data', JSON.stringify({ spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 })).status, 0);
+  assert.equal(run('transition', '--to', 'build').status, 0);
+  writeFileSync(join(wt, 'src/app.ts'), 'temporary\n');
+  git(wt, 'add', 'src/app.ts'); git(wt, 'commit', '-qm', 'temporary app change');
+  writeFileSync(join(wt, 'src/app.ts'), 'original\n');
+  writeFileSync(join(wt, 'other.txt'), 'keep this commit\n');
+  git(wt, 'add', '.'); git(wt, 'commit', '-qm', 'restore app');
+  assert.equal(run('transition', '--to', 'check').status, 0);
+  writeFileSync(join(cwd, 'src/app.ts'), 'upstream\n');
+  git(cwd, 'add', 'src/app.ts'); git(cwd, 'commit', '-qm', 'upstream app change');
+  const base = git(cwd, 'rev-parse', 'main');
+  assert.notEqual(run('sync').status, 0, 'upstream change conflicts with the first Run commit');
+  assert.throws(() => git(wt, 'rebase', base));
+  writeFileSync(join(wt, 'src/app.ts'), 'temporary\n');
+  git(wt, 'add', 'src/app.ts');
+  git(wt, '-c', 'core.editor=true', 'rebase', '--continue');
+  const head = git(wt, 'rev-parse', 'HEAD');
+  assert.equal(JSON.parse(plan(cwd, id).stdout)[0].applicable, false, 'the outdated recorded base hides the app change');
+  assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify({ verdict: 'skipped' })).status, 0);
+  assert.equal(run('verify').status, 0);
+  for (const [axis, value] of [['standards','pass'], ['spec','pass'], ['security','pass'], ['infrastructure','skipped']]) assert.equal(run('verdict', '--axis', axis, '--value', value).status, 0);
+  assert.deepEqual(openRunStore(cwd).mergeEligibility(id).problems, []);
+  const oldResult = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).project_results.angular;
+  const sync = run('sync'); assert.equal(sync.status, 0, sync.stderr);
+  assert.equal(git(wt, 'rev-parse', 'HEAD'), head, 'the follow-up sync only updates the recorded base');
+  assert.equal(JSON.parse(plan(cwd, id).stdout)[0].applicable, true, 'the app differs from the current base');
+  const merge = openRunStore(cwd).mergeEligibility(id);
+  assert.ok(merge.problems.some(p => p.includes('angular')), JSON.stringify(merge.problems));
+  assert.notEqual(run('transition', '--to', 'finish').status, 0, 'Finish must require a fresh applicable review');
+  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
+  assert.equal(record.base_sha, base);
+  assert.equal(record.project_results, undefined);
+  assert.equal(record.verify, undefined);
+  // Simulate restoring an old result into a record that has a newer base.
+  record.project_results = { angular: oldResult };
+  writeFileSync(join(cwd, '.factory/runs', id, 'run.json'), JSON.stringify(record));
+  assert.ok(openRunStore(cwd).mergeEligibility(id).problems.some(p => /angular.*base/.test(p)));
+  const inspection = run('inspect', '--json'); assert.equal(inspection.status, 0, inspection.stderr);
+  assert.ok(JSON.parse(inspection.stdout)[0].problems.some(p => p.code === 'stale-evidence'));
 });
