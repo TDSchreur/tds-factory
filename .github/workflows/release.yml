@@ -81,15 +81,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
-        run: gh release create "v$VERSION" tds-factory.tgz tds-factory.tgz.sha256 --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes --latest
-      - name: Check that the install URL in the README serves the published tarball
+        run: gh release create "v$VERSION" tds-factory.tgz tds-factory.tgz.sha256 scripts/install.sh scripts/install.ps1 --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes --latest
+      - name: Check that the install URLs serve the published files
         env:
           GITHUB_REPOSITORY_URL: https://github.com/${{ github.repository }}
         run: |
-          curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
-            --output downloaded.tgz "$GITHUB_REPOSITORY_URL/releases/latest/download/tds-factory.tgz"
-          cmp tds-factory.tgz downloaded.tgz
-          curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
-            --output downloaded.sha256 "$GITHUB_REPOSITORY_URL/releases/latest/download/tds-factory.tgz.sha256"
-          cmp tds-factory.tgz.sha256 downloaded.sha256
+          for pair in tds-factory.tgz:tds-factory.tgz tds-factory.tgz.sha256:tds-factory.tgz.sha256 install.sh:scripts/install.sh install.ps1:scripts/install.ps1; do
+            name=${pair%%:*}
+            file=${pair#*:}
+            curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
+              --output downloaded "$GITHUB_REPOSITORY_URL/releases/latest/download/$name"
+            cmp "$file" downloaded
+          done
           sha256sum --check tds-factory.tgz.sha256
