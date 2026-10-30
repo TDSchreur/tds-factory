@@ -146,7 +146,10 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         const body = await readFile(join(dashboardDir, path.slice(1)), 'utf8').catch(() => null);
         return body === null ? send(404, 'text/plain', 'not found') : send(200, ASSETS[path], body);
       }
-      if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir) }));
+      if (path === '/api/info') {
+        const version = await readFile(new URL('../package.json', import.meta.url), 'utf8').then((data) => str(JSON.parse(data).version)).catch(() => '');
+        return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir), ...(version ? { version } : {}) }));
+      }
       if (path === '/api/views') return send(200, 'application/json', JSON.stringify(await Promise.all((await store.list()).map(view))));
       if (path === '/api/runs') return send(200, 'application/json', JSON.stringify(await store.list()));
       if (path.startsWith('/files/')) {

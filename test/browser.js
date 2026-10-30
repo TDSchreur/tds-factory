@@ -33,7 +33,7 @@ export async function openPage(t, state, { args = [], width = 1200 } = {}) {
     if (path === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(path)) return send(200, TYPES[path.split('.').pop()], readFileSync(new URL(path.slice(1), DASHBOARD)));
     if (/^\/api\/runs\/[^/]+\/merge-checks$/.test(path)) return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
-    if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: state.project ?? 'test' }));
+    if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: state.project ?? 'test', version: state.version }));
     if (path === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
     if (path === '/api/views') return send(200, 'application/json', JSON.stringify(state.runs));
     if (path.startsWith('/files/')) {

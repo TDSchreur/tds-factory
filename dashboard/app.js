@@ -9,6 +9,7 @@ const BRAND = 'TDS Factory';
 function App() {
   const [entries, setEntries] = useState([]);
   const [project, setProject] = useState('');
+  const [version, setVersion] = useState('');
   const [status, setStatus] = useState({ error: false, text: 'Loading...' });
   const [selectedId, setSelectedId] = useState(null);
   const [showOlder, setShowOlder] = useState(false); // Runs older than a week stay folded until asked for
@@ -29,7 +30,10 @@ function App() {
   useEffect(() => {
     poll();
     const timer = setInterval(poll, POLL_MS);
-    fetch('/api/info', { cache: 'no-store' }).then((res) => res.json()).then((info) => setProject(typeof info.project === 'string' ? info.project.trim() : '')).catch(() => {});
+    fetch('/api/info', { cache: 'no-store' }).then((res) => res.json()).then((info) => {
+      setProject(typeof info.project === 'string' ? info.project.trim() : '');
+      setVersion(typeof info.version === 'string' ? info.version.trim() : '');
+    }).catch(() => {});
     return () => clearInterval(timer);
   }, []);
 
@@ -109,7 +113,7 @@ function App() {
   };
   const olderLabel = older.length ? (showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')') : '';
 
-  return html`<${Header} project=${project} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} />
+  return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} />
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
       <${Board} runs=${runs} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />

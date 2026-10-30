@@ -71,3 +71,26 @@ test('an empty or root project path shows no pill', async (t) => {
     } finally { await page.close(); }
   }
 });
+
+
+test('the header displays the serving Factory version with and without Runs', async (t) => {
+  for (const runs of [[run()], []]) {
+    const page = await openPage(t, { project: '/work/project', version: '1.2.3', runs }, { width: 400 });
+    if (!page) return;
+    try {
+      await page.waitFor("return document.getElementById('factory-version')?.textContent === 'v1.2.3'");
+      assert.equal(await page.execute("return document.querySelector('header .title').contains(document.getElementById('factory-version'))"), true);
+      assert.equal(await page.execute('return document.documentElement.scrollWidth <= window.innerWidth'), true);
+    } finally { await page.close(); }
+  }
+});
+
+test('the header omits the version when it is unavailable', async (t) => {
+  const page = await openPage(t, { project: '/work/project', runs: [] });
+  if (!page) return;
+  try {
+    await page.waitFor("return document.getElementById('project')?.textContent === 'project'");
+    assert.equal(await page.execute("return document.getElementById('factory-version')"), null);
+    assert.equal(await page.execute("return !!document.getElementById('theme')"), true);
+  } finally { await page.close(); }
+});

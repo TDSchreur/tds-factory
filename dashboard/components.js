@@ -144,9 +144,9 @@ function Logo() {
 }
 
 // The pill shows the last segment of the project path; the full path is its tooltip.
-export function Header({ project, status, olderLabel, onOlder }) {
+export function Header({ project, version, status, olderLabel, onOlder }) {
   return html`<header>
-    <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span></div>
+    <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
     <${ThemeSelect} />
