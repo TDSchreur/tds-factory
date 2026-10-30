@@ -34,7 +34,7 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 - `tds-factory run rework --id <id>` sends a Run in Check back to Build: it counts the loop (at most 4) and clears the verdicts, the Verify result and any accepted decision.
 - `tds-factory run accept --id <id> --data '{"findings":"...","decision":"..."}'` records the user's decision to continue to Finish with a Check that is not clean, for the current head only.
 - `tds-factory run complete --id <id>` ends a Run in Finish that has a `pr` link and sets `status` to `done`.
-- `tds-factory run clean --id <id> | --all` removes the worktree and local branch of a Run whose recorded PR is merged, from the main checkout only. It keeps the Run record, and leaves a Run with an unmerged PR, uncommitted changes or branch commits outside the merged PR in place, saying why.
+- `tds-factory run clean --id <id> | --all` removes the worktree and local branch of a Run whose recorded PR is merged, from the main checkout only. It keeps the Run record, and leaves a Run that is not done, has an unmerged PR, uncommitted changes, submodule work that exists nowhere else, or branch commits outside the merged PR in place, saying why.
 - `tds-factory run inspect [--id <id>] [--json]` reports records that cannot be read, lock ownership, orphaned, missing, unknown or dirty worktrees, and stale Evidence without changing anything.
 - `tds-factory run repair --id <id>` prints a repair proposal; add `--apply` only after reviewing it. It reconciles git and GitHub, preserves dirty worktrees, may reconstruct missing records and only clears a lock whose same-host owner is demonstrably dead. It never clears a lock because of age. Inspect a reported repair coordination lock and resolve it manually.
 

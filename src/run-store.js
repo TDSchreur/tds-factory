@@ -572,6 +572,13 @@ const worktreeChanges = (dir) => {
   return status.status === 0 ? status.stdout.trim() : undefined;
 };
 
+// A linked worktree keeps its submodules' repositories in its own git folder, so `git worktree remove --force` deletes them.
+// Commits that no remote has and stashes live only there; undefined when Git cannot say.
+const submoduleLocalWork = (dir) => {
+  const out = spawnSync('git', ['submodule', 'foreach', '--recursive', '--quiet', 'git log --branches --tags HEAD --not --remotes --oneline; git stash list'], { cwd: dir, encoding: 'utf8' });
+  return out.status === 0 ? out.stdout.trim() : undefined;
+};
+
 // Deletes a readable Run in the project's own, unlinked storage.
 function removeRun(projectDir, id, why = () => {}, { discardChanges = false, doneOnly = false } = {}) {
   if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
@@ -641,17 +648,23 @@ function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
   if (head && head !== pr.head) return kept('the branch has commits that are not in the merged PR');
   if (own && (!own.safe || own.branch !== id)) return kept('the Run worktree is not the one this store created');
+  if (record.worktree !== path.join(projectDir, '.factory', 'worktrees', id)) return kept('the Run record does not name the worktree this store created');
   if (own?.missing) return kept('the Run worktree is missing: inspect it with run repair');
   return withRunLock(root, id, () => {
     // The lookup above can take seconds; a commit made meanwhile must keep the branch.
     const now = git('rev-parse', '--verify', '-q', `refs/heads/${id}`).stdout.trim();
     if (head && now !== head) return kept('the branch has commits that are not in the merged PR');
-    const elsewhere = git('worktree', 'list', '--porcelain').stdout.split('\n\n').some((part) => new RegExp(`^branch refs/heads/${id}$`, 'm').test(part) && !(own && part.startsWith(`worktree ${own.dir}\n`)));
+    const listed = git('worktree', 'list', '--porcelain');
+    if (listed.status !== 0) return kept('cannot list the git worktrees');
+    const elsewhere = listed.stdout.split('\n\n').some((part) => new RegExp(`^branch refs/heads/${id}$`, 'm').test(part) && !(own && part.startsWith(`worktree ${own.dir}\n`)));
     if (elsewhere) return kept('the branch is checked out in another worktree');
     if (own) {
       const changes = worktreeChanges(own.dir);
       if (changes === undefined) return kept('cannot read the Run worktree status');
       if (changes) return kept('the Run worktree has uncommitted changes');
+      const local = submoduleLocalWork(own.dir);
+      if (local === undefined) return kept('cannot read the submodules of the Run worktree');
+      if (local) return kept('a submodule of the Run worktree has commits or stashes that exist nowhere else');
       // Git refuses a plain remove when a submodule is initialised; the status above already showed nothing to lose.
       const removal = git('worktree', 'remove', '--force', own.dir);
       if (removal.status !== 0) return kept(`git could not remove the Run worktree: ${removal.stderr.trim()}`);
@@ -669,10 +682,10 @@ const runIds = (root) => fs.readdirSync(root, { withFileTypes: true }).filter((e
 
 // Ids of Runs whose PR is merged but whose worktree or branch is still there. Doctor reports them; nothing is changed.
 export function mergedLeftovers(callerDir, prState = ghPrInfo) {
-  let projectDir, root, trees;
-  try { projectDir = mainCheckout(callerDir).dir; root = runRoot(projectDir, false); trees = ownWorktrees(projectDir); } catch { return []; }
+  let projectDir, root, trees, ids;
+  try { projectDir = mainCheckout(callerDir).dir; root = runRoot(projectDir, false); trees = ownWorktrees(projectDir); ids = runIds(root); } catch { return []; }
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
-  return runIds(root).filter((id) => {
+  return ids.filter((id) => {
     try {
       const { record } = readRun(projectDir, id);
       const left = trees.has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
@@ -683,6 +696,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
 
 // Cleans every Run that records a PR; a Run folder that cannot be read is reported and skipped.
 function cleanAll(projectDir, callerDir, prState) {
+  if (!fs.existsSync(path.join(projectDir, '.factory', 'runs'))) return [];
   const root = runRoot(projectDir, false);
   return runIds(root).flatMap((name) => {
     try { return readRun(projectDir, name).record.pr ? [cleanRun(projectDir, callerDir, name, prState)] : []; } catch (err) { return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }]; }

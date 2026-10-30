@@ -118,6 +118,39 @@ test('clean removes a clean worktree that has an initialised submodule', () => {
   assert.ok(existsSync(dirty.wt));
 });
 
+test('clean keeps a worktree whose submodule holds a commit or stash that exists nowhere else', () => {
+  const sub = repo();
+  git(sub, 'commit', '-q', '--allow-empty', '-m', 'second');
+  const main = repo();
+  git(main, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'vendor');
+  git(main, 'commit', '-q', '-m', 'add submodule');
+  for (const local of ['commit', 'stash']) {
+    const { id, wt, store } = finished(main);
+    git(wt, '-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '-q');
+    if (local === 'commit') {
+      git(join(wt, 'vendor'), 'commit', '-q', '--allow-empty', '-m', 'only here');
+      git(wt, 'commit', '-q', '-am', 'bump the submodule');
+    } else {
+      writeFileSync(join(wt, 'vendor', 'tracked.txt'), 'x');
+      git(join(wt, 'vendor'), 'add', 'tracked.txt');
+      git(join(wt, 'vendor'), 'stash', '-q');
+    }
+    const head = git(wt, 'rev-parse', 'HEAD');
+    const result = store.clean(id, { prState: () => ({ state: 'MERGED', head }) });
+    assert.equal(result.outcome, 'kept', local);
+    assert.match(result.reason, /submodule/);
+    assert.ok(existsSync(wt) && branches(main).includes(id));
+  }
+});
+
+test('clean keeps a Run whose record does not name the worktree this store made, and tolerates a project with no Runs', () => {
+  const main = repo();
+  const { id, store, prState } = finished(main);
+  setRecord(main, id, { worktree: join(main, 'elsewhere') });
+  assert.match(store.clean(id, { prState }).reason, /does not name the worktree this store created/);
+  assert.deepEqual(openRunStore(repo()).cleanAll({ prState }), []);
+});
+
 test('clean keeps a branch that is checked out in another worktree', () => {
   const main = repo();
   const { id, wt, prState, store } = finished(main);
