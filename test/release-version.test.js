@@ -33,11 +33,25 @@ test('the release workflow runs manually on master and tests before it publishes
   assert.match(workflow, /on:\s+workflow_dispatch:/);
   assert.doesNotMatch(workflow, /\n\s+push:/);
   assert.match(workflow, /if: github\.ref == 'refs\/heads\/master'/);
-  assert.ok(workflow.indexOf('npm test') < workflow.indexOf('gh release create'), 'npm test comes before gh release create');
+  assert.match(workflow, /needs: \[verify, browser\]/, 'publication waits for verification jobs');
+  assert.ok(workflow.indexOf('npm run test:package -- tds-factory.tgz') < workflow.indexOf('gh release create'), 'the published asset is tested before release');
 });
 test('the release workflow publishes tds-factory.tgz as the latest Release, serialized and without committing', () => {
   assert.match(workflow, /gh release create .*tds-factory\.tgz/);
   assert.match(workflow, /--latest/);
   assert.match(workflow, /concurrency:\s+group: release\s+cancel-in-progress: false/);
   assert.doesNotMatch(workflow, /git (commit|push)/);
+});
+
+test('the release workflow checks that the README install URL serves the published tarball', () => {
+  const check = workflow.indexOf('releases/latest/download/tds-factory.tgz');
+  assert.ok(check > workflow.indexOf('gh release create'), 'the check comes after publishing');
+  assert.match(workflow, /cmp tds-factory\.tgz downloaded\.tgz/);
+});
+test('a scheduled workflow fails when the latest Release has no tds-factory.tgz', () => {
+  const latest = readFileSync(resolve('.github/workflows/latest-release.yml'), 'utf8');
+  assert.match(latest, /schedule:/);
+  assert.match(latest, /release:\s+types:/);
+  assert.match(latest, /releases\/latest\/download\/tds-factory\.tgz/);
+  assert.match(latest, /permissions:\s+contents: read/);
 });

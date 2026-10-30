@@ -18,15 +18,15 @@ test('browser tests skip without a browser, and fail when REQUIRE_BROWSER is set
 
 // The workflow cannot run here, so check the points that make it protect pull requests.
 const ci = readFileSync(resolve('.github/workflows/ci.yml'), 'utf8');
-test('the CI workflow tests every pull request on the latest LTS Node', () => {
+test('the CI workflow tests every pull request with read-only permissions', () => {
   assert.match(ci, /on:\s+pull_request:/);
   assert.match(ci, /node-version: lts\/\*/);
-  assert.match(ci, /run: npm test/);
+  assert.match(ci, /run: npm run test:unit/);
   assert.match(ci, /permissions:\s+contents: read/);
 });
 test('the CI browser job requires a browser instead of skipping', () => {
   const browser = ci.slice(ci.indexOf('browser:'));
   assert.match(browser, /REQUIRE_BROWSER: 1/);
   assert.match(browser, /GITHUB_PATH/);
-  assert.match(browser, /run: npm test/);
+  assert.match(browser, /run: npm run test:browser/);
 });
