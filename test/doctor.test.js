@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -154,4 +154,32 @@ test('doctor text output does not pass terminal escapes through', () => {
   const dir = project('## Commands\n\n- Verify: `no-such-tool\u001b[2J`\n');
   const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
   assert.doesNotMatch(result.stdout, /\u001b/);
+});
+
+test('doctor notes merged Runs that still hold a worktree or branch, without failing', async () => {
+  const { doctor: run } = await import('../src/doctor.js');
+  const { openRunStore } = await import('../src/run-store.js');
+  const dir = project();
+  git(dir, 'add', '.'); git(dir, 'commit', '-q', '-m', 'project');
+  const store = openRunStore(dir);
+  const merged = store.start({ title: 'Merged', agent: 'claude', commands: 'npm test', conventions: [] });
+  const open = store.start({ title: 'Open', agent: 'claude', commands: 'npm test', conventions: [] });
+  store.update(merged, { pr: 'https://github.com/o/r/pull/1' });
+  const file = join(dir, '.factory', 'runs', merged, 'run.json');
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), status: 'done' }));
+  store.update(open, { pr: 'https://github.com/o/r/pull/2' });
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const head = git(join(dir, '.factory', 'worktrees', merged), 'rev-parse', 'HEAD');
+  const prState = (url) => ({ state: url.endsWith('/1') ? 'MERGED' : 'OPEN', head });
+  const before = run({ projectDir: dir, homeDir: home, prState });
+  assert.equal(before.notes.length, 1);
+  assert.match(before.notes[0], new RegExp(merged));
+  assert.match(before.notes[0], /tds-factory run clean --all/);
+  assert.ok(!before.notes[0].includes(open));
+  const going = store.start({ title: 'Going', agent: 'claude', commands: 'npm test', conventions: [] });
+  store.update(going, { pr: 'https://github.com/o/r/pull/1' });
+  assert.ok(!run({ projectDir: dir, homeDir: home, prState }).notes[0].includes(going), 'a Run that is not done is not named: clean would keep it');
+  assert.equal(before.ok, run({ projectDir: dir, homeDir: home, prState: () => undefined }).ok, 'notes do not change ok');
+  store.clean(merged, { prState });
+  assert.deepEqual(run({ projectDir: dir, homeDir: home, prState }).notes, []);
 });

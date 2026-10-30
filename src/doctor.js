@@ -6,7 +6,7 @@ import { ROOT, SKILLS_DIR, AGENTS_DIR } from './paths.js';
 import { targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
-import { verifyCommandProblem } from './run-store.js';
+import { verifyCommandProblem, mergedLeftovers } from './run-store.js';
 
 // The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
 const read = (file) => {
@@ -79,7 +79,7 @@ function which(name, cwd) {
 }
 
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
-export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir() }) {
+export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir(), prState }) {
   if (!Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
   const has = isInstalled(agent, projectDir, homeDir);
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
@@ -87,5 +87,8 @@ export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir() })
   const checks = [['cli', cliCheck], ['skills', () => skillsCheck(has)], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['review', () => reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', () => verifyCommandCheck(projectDir)]]
     .map(([id, check]) => [id, attempt(check)])
     .map(([id, [status, message]]) => ({ id, status, message }));
-  return { ok: checks.every((c) => c.status === 'pass'), checks };
+  // Not a check: merged Runs that kept a worktree or branch never stop a Run, they only deserve a hint.
+  const left = checks.find((c) => c.id === 'git')?.status === 'pass' ? mergedLeftovers(projectDir, prState) : [];
+  const notes = left.length ? [`${left.length} Run${left.length === 1 ? ' is' : 's are'} merged but still hold a worktree or branch (${left.join(', ')}); run \`tds-factory run clean --all\` from the main checkout`] : [];
+  return { ok: checks.every((c) => c.status === 'pass'), checks, notes };
 }
