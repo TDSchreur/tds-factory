@@ -100,7 +100,7 @@ _Avoid_: Board, Monitor
 The version of the Factory installation serving a Dashboard, independent of the project or its Runs.
 
 **Run detail**:
-The side panel the Dashboard opens beside the board when a Run's card is selected, showing its status, links and Stage summaries.
+The panel the Dashboard opens when a Run's card is selected, showing its status, links and Stage summaries.
 _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Modal
 
 **Release**:
