@@ -66,6 +66,23 @@ tds-factory install --agent copilot
 
 Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create. `--force` does overwrite it, so a skill of your own with the same name would be lost. An installed skill you edited is skipped as well, until you use `--force`. Add `--dry-run` to see what install would do without changing anything.
 
+Install options:
+
+| Option | Effect |
+|---|---|
+| `--agent claude\|codex\|copilot\|all` | Pick the Agent target. `all` is the default and means Claude plus Codex, because Copilot reads both directories. |
+| `--project` | Install into the current directory instead of the user-global directory. |
+| `--force` | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install. |
+| `--dry-run` | Print what install would do and change nothing. |
+
+| Agent | Project directory | Global directory |
+|---|---|---|
+| claude | `.claude/skills` | `~/.claude/skills` |
+| codex | `.agents/skills` | `~/.agents/skills` |
+| copilot | `.github/skills` | `~/.copilot/skills` |
+
+After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
+
 ### Check that your agent sees the skills
 
 - **GitHub Copilot in VS Code:** open the chat and type `/`. The list should include `factory`. Type `/skills` to open the skills menu. Restart VS Code if the list is empty.
