@@ -10,7 +10,7 @@ flowchart TB
     pre --> define["Define: interview (you answer and confirm), Spec, Tickets"]
     define --> build["Build: each Ticket test-first, one commit each"]
     build --> check["Check: Standards, Spec, Security, Infrastructure"]
-    check -->|"problems worth fixing, at most 2 times"| build
+    check -->|"problems worth fixing, at most 4 times"| build
     check -->|"clean"| finish["Finish: push the branch, open the pull request"]
     check -.->|"not clean: you decide"| finish
     finish --> review(["You: review and merge"])
@@ -84,7 +84,7 @@ A Run stops and asks you in these cases:
 
 1. **During Define,** with questions or to confirm the shared understanding.
 2. **At the start,** if the project has no verify command (see below). **Before Build,** if a label the Tickets need does not exist: the agent asks before it creates the label.
-3. **After Check,** when a review still fails or problems are still open after two rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in the Run and in `finish.md`, and only holds for the code as it is then; new commits void it), or no to abandon the Run.
+3. **After Check,** when a review still fails or problems are still open after four rounds of fixes. The agent lists the open findings and asks permission to continue. Say yes to open the pull request anyway (your decision is recorded in the Run and in `finish.md`, and only holds for the code as it is then; new commits void it), or no to abandon the Run.
 
 A Run's `status` moves like this:
 

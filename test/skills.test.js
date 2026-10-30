@@ -88,6 +88,7 @@ test('Check continues to Finish only when clean, otherwise it asks the user firs
   assert.match(check, /no verdict/i);
   assert.match(check, /not validated/i);
   assert.match(check, /loop cap/i);
+  assert.match(check, /go back at most 4 times/);
   assert.match(check, /no problem worth fixing is left/i);
   assert.match(check, /not clean or problems worth fixing are still open/);
   assert.match(check, /no verdict, or .*not validated.*counts as `fail`/);

@@ -14,6 +14,8 @@ const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
 const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha'];
+// How many times Check may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
+const MAX_CHECK_LOOPS = 4;
 const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
 // Why a Verify command cannot be run at all; undefined when it is usable. Doctor reports the same rule.
@@ -31,7 +33,7 @@ function validate(data) {
   for (const [key, value] of Object.entries(data)) {
     let ok = strings.includes(key) ? typeof value === 'string'
       : lists.includes(key) ? Array.isArray(value) && value.every((v) => typeof v === 'string')
-      : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0 && (key !== 'check_loops' || value <= 2)
+      : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0 && (key !== 'check_loops' || value <= MAX_CHECK_LOOPS)
       : verdicts.includes(key) ? ['pass', 'fail', ...(key === 'infrastructure' ? ['skipped'] : [])].includes(value)
       : key === 'stage' ? stages.includes(value)
       : key === 'status' ? statuses.includes(value)
@@ -263,7 +265,7 @@ function acceptRun(projectDir, id, data) {
 function reworkRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
-    if (loops(old) >= 2) throw new Error('the Check loop limit of 2 is reached');
+    if (loops(old) >= MAX_CHECK_LOOPS) throw new Error(`the Check loop limit of ${MAX_CHECK_LOOPS} is reached`);
     const record = { ...old, stage: 'build', check_loops: loops(old) + 1 };
     for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
     return { record, activity: 'Rework: back to Build' };
