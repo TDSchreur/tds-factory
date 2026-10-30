@@ -106,3 +106,11 @@ _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click)
 **Release**:
 A packaged build of the Factory published on GitHub when a maintainer chooses to release changes. Colleagues install the latest Release with one command.
 _Avoid_: Package, Distribution
+
+**Update**:
+The `tds-factory update` command: it installs the latest Release when the installed version is older, then refreshes the Skills and Stage agents so they match the CLI.
+_Avoid_: Upgrade, Self-update
+
+**Bootstrap installer**:
+A script attached to every Release (`install.sh` for macOS and Linux, `install.ps1` for Windows) that a new user pipes into a shell to get the Factory. It only checks Node and npm, installs the Release with npm and runs `tds-factory install`.
+_Avoid_: Setup script, Installer
