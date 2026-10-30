@@ -13,9 +13,16 @@ const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
 export const hasBrowser = () => spawnSync('sh', ['-c', 'command -v chromedriver && (command -v chromium || command -v google-chrome)']).status === 0;
 
+// ChromeDriver runs in its own process group, so an interrupted test run (Ctrl-C, a CI cancel) would not reach it.
+// Kill the groups of drivers that are still open when this process exits or is signalled.
+const live = new Map();
+const killLive = () => { for (const [pid, dir] of live) { try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ } rmSync(dir, { recursive: true, force: true }); } };
+process.on('exit', killLive);
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { killLive(); process.exit(128 + (signal === 'SIGINT' ? 2 : 15)); });
+
 // Ends ChromeDriver and the Chromium it started, and waits for them to exit, so Chromium removes its temporary profile
 // (/tmp/org.chromium.Chromium.scoped_dir.*). The driver runs in its own process group, so the whole group is waited on and,
-// when it does not leave within graceMs of /shutdown, killed. Every wait is bounded, so a stuck browser cannot hang the suite.
+// when it does not leave within graceMs of /shutdown, killed. The driver must have been spawned with detached: true. Every wait is bounded, so a stuck browser cannot hang the suite.
 export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 } = {}) {
   const alive = () => { try { process.kill(-driver.pid, 0); return true; } catch { return false; } };
   const untilGone = async (ms) => {
@@ -70,6 +77,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   // directories in it even after a clean exit, so close() removes the whole directory after the processes are gone.
   const tmp = mkdtempSync(join(tmpdir(), 'tds-factory-browser-'));
   const driver = spawn('chromedriver', [`--port=${driverPort}`], { stdio: 'ignore', detached: true, env: { ...process.env, TMPDIR: tmp } });
+  live.set(driver.pid, tmp);
   const request = async (method, path, body, timeout) => {
     const res = await fetch(`http://127.0.0.1:${driverPort}` + path, { method, headers: { 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}), ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}) });
     const data = await res.json();
@@ -80,11 +88,15 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   let closing;
   const page = { driverPid: driver.pid, tmp, leftovers: null };
   const close = () => closing ??= (async () => {
-    if (session) await request('DELETE', '/session/' + session, undefined, 5000).catch(() => {});
-    await stopDriver(driver, driverPort);
-    page.leftovers = readdirSync(tmp);
-    rmSync(tmp, { recursive: true, force: true });
-    await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
+    try {
+      if (session) await request('DELETE', '/session/' + session, undefined, 5000).catch(() => {});
+      await stopDriver(driver, driverPort);
+      live.delete(driver.pid);
+      page.leftovers = (() => { try { return readdirSync(tmp); } catch { return []; } })();
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+      await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
+    }
   })();
   try {
     for (let i = 0; i < 50; i++) { try { await request('GET', '/status'); break; } catch { await delay(100); } }
@@ -116,7 +128,8 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     await page.waitFor("return !!document.querySelector('#board section')");
     return page;
   } catch (err) {
-    await close();
+    await close().catch(() => {});
+    err.tmp = tmp;
     err.driverPid = page.driverPid;
     err.leftovers = page.leftovers;
     throw err;
