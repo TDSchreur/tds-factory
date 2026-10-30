@@ -21,7 +21,7 @@ jobs:
       GITHUB_REPOSITORY_URL: https://github.com/${{ github.repository }}
     steps:
       # A Release created by hand gets its files a moment later, so retry before failing.
-      - name: The latest Release serves the tarball, its checksum and both installers
+      - name: The latest Release serves the tarball, its checksum and both Bootstrap installers
         run: |
           for name in tds-factory.tgz tds-factory.tgz.sha256 install.sh install.ps1; do
             curl --fail --silent --show-error --location --retry 6 --retry-delay 20 --retry-all-errors \

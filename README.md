@@ -79,9 +79,9 @@ npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/rele
 tds-factory install
 ```
 
-The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; `tds-factory install` does that, and you run it again after every update, because the installed `factory` Skill must use the same Run commands as the CLI.
+The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; `tds-factory install` does that, and it has to run again after every update, because the installed `factory` Skill must use the same Run commands as the CLI. `tds-factory update` and the one-line scripts do both steps for you.
 
-To update, run `tds-factory update`. It installs the latest Release when yours is older, checks the download against the Release's checksum, and then runs `tds-factory install --force`, which replaces agent files you edited with the defaults. Use `tds-factory update --no-force` to keep them. The one-line scripts keep edited agent files too; set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
+To update, run `tds-factory update`. It installs the latest Release when yours is older, checks the download against the Release's checksum, and then runs `tds-factory install --force`, which replaces agent files you edited with the defaults, and also a skill folder of the same name that `tds-factory` did not install. Use `tds-factory update --no-force` to keep them. The one-line scripts keep edited agent files too; set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
 
 ### Working from a checkout
 
@@ -106,7 +106,7 @@ node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo 
 
 Run the tests with `npm test`. They use `node:test`.
 
-PRs and pushes to `master` run the main suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows; the full suite currently uses Unix shell fixtures, so it is not run on Windows. CI also validates both workflows with `actionlint`.
+PRs and pushes to `master` run the main suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows; the full suite currently uses Unix shell fixtures, so it is not run on Windows. CI also validates the workflows with `actionlint`, lints the Bootstrap installers with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on Windows PowerShell 5.1 and 7.
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
 

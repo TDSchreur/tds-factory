@@ -21,10 +21,10 @@ Add an Update command to the CLI and two Bootstrap installers attached to every 
 6. As a user who edited agent files, I want `update --no-force` to keep them, so that my model choices survive.
 7. As a user, I want `update` to verify the download against the published checksum and stop on a mismatch, so that a corrupted download is not installed. An older Release without a checksum warns and continues.
 8. As a user behind a rate-limited GitHub API, I want `update` to fall back to the `/releases/latest` redirect and retry transient failures, so that a busy network does not break the update.
-9. As a user with Node missing or older than 20, I want the installer to say so and where to get Node, instead of failing inside npm.
-10. As a Linux user whose npm cannot write its global folder, I want the installer to print the user-prefix and nvm fix, never a `sudo` suggestion.
-11. As a user, I want to pass `TDS_FACTORY_FORCE=1` or `TDS_FACTORY_SKIP_SKILLS=1` to the installers, since `irm | iex` cannot take parameters, and the same variables on both.
-12. As a maintainer, I want the Release to carry the installers and checksum from the moment it is Latest, so that the one-liners never return 404.
+9. As a user with Node missing or older than 20, I want the Bootstrap installer to say so and where to get Node, instead of failing inside npm.
+10. As a Linux user whose npm cannot write its global folder, I want the Bootstrap installer to print the user-prefix and nvm fix, never a `sudo` suggestion.
+11. As a user, I want to pass `TDS_FACTORY_FORCE=1` or `TDS_FACTORY_SKIP_SKILLS=1` to the Bootstrap installers, since `irm | iex` cannot take parameters, and the same variables on both.
+12. As a maintainer, I want the Release to carry the Bootstrap installers and checksum from the moment it is Latest, so that the one-liners never return 404.
 13. As a maintainer, I want shellcheck and PSScriptAnalyzer in CI and tests for `update` and `install.sh`, so that the scripts stay correct.
 14. As a reader of the docs, I want the manual `npm install -g` commands kept next to the one-liners, so that I can read before running.
 
@@ -37,7 +37,7 @@ Add an Update command to the CLI and two Bootstrap installers attached to every 
 - **Bootstrap installers.** `scripts/install.sh` and `scripts/install.ps1`, not part of the npm package (`files` is unchanged). Both are idempotent. Environment variables: `TDS_FACTORY_FORCE=1` adds `--force` to `tds-factory install`; `TDS_FACTORY_SKIP_SKILLS=1` skips it. Neither installs Node. `install.sh` recognises EACCES in npm's output and prints the `--prefix ~/.local` and nvm advice. `install.ps1` runs on Windows PowerShell 5.1 and `pwsh`. The installers do not verify the checksum; `update` does.
 - **Release workflow.** `gh release create` attaches `tds-factory.tgz`, `tds-factory.tgz.sha256`, `install.sh` and `install.ps1`. The closing check downloads all four from `releases/latest/download/` and compares them with the built files; `latest-release.yml` checks that all four URLs resolve. `docs/releasing.md` lists the four assets.
 - **CI.** `ci.yml` gets a pinned shellcheck job (download verified by checksum, like actionlint), a pinned PSScriptAnalyzer job, and a Windows smoke test running `install.ps1` against stub `node` and `npm`.
-- **Docs.** `README.md` Setup and `docs/install.md` part 2 open with the two one-liners; the manual commands stay as the inspectable alternative; update sections name `tds-factory update`; Troubleshooting covers a failing one-liner. `GLOSSARY.md` gains Update and Bootstrap installer; ADR 0008 records why bootstrap installers are acceptable after ADR 0005.
+- **Docs.** `README.md` Setup and `docs/install.md` part 2 open with the two one-liners; the manual commands stay as the inspectable alternative; update sections name `tds-factory update`; Troubleshooting covers a failing one-liner. `GLOSSARY.md` gains Update and Bootstrap installer; ADR 0009 records why bootstrap installers are acceptable after ADR 0005.
 - The reference PowerShell updater is used for behaviour only; nothing is copied from it.
 
 ## Testing Decisions
