@@ -33,6 +33,13 @@ _Avoid_: Reviewer, Gate
 The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`. It may add non-blocking notes, such as merged Runs that still hold a worktree.
 _Avoid_: Linter, Health check
 
+**Run sync**:
+The `tds-factory run sync` command, which rebases a Run branch onto the current default branch of `origin` so conflicts surface during the Run. Finish refuses a branch that would not merge cleanly.
+_Avoid_: Sync (alone), which is the maintainer command `tds-factory sync`
+
+**Changelog fragment**:
+A file in `changelog.d/` that holds the changelog entries of one change. A maintainer folds the fragments into `CHANGELOG.md` at release time, so PRs never edit the same lines.
+
 **Run clean-up**:
 The `tds-factory run clean` command, which removes the worktree and local branch of a Run whose PR is merged and keeps its Run record. Not to be confused with a clean Check.
 _Avoid_: Clean (alone)

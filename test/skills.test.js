@@ -174,7 +174,7 @@ test('the README describes the Run worktree, the shared Run store and cleanup', 
 });
 
 test('the factory moves a Run only through the Run commands, and names each of them', () => {
-  for (const command of ['transition', 'rework', 'verify', 'verdict', 'accept', 'complete', 'inspect']) assert.match(flow, new RegExp(`tds-factory run ${command}\\b`), command);
+  for (const command of ['transition', 'rework', 'sync', 'verify', 'verdict', 'accept', 'complete', 'inspect']) assert.match(flow, new RegExp(`tds-factory run ${command}\\b`), command);
   for (const field of ['stage', 'check_loops', 'standards', 'spec', 'security', 'infrastructure']) {
     assert.doesNotMatch(flow, new RegExp(`run update[^\\n]*"${field}"`), `${field} through run update`);
   }
