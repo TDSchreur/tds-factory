@@ -62,6 +62,9 @@ test('doctor fails the git check without a repository, a commit or an origin', (
 
 test('doctor tells a missing Verify command from a malformed or unusable one', () => {
   assert.equal(check(doctor(project('# A\n\n## Agent skills\n')).report, 'verify-command').status, 'missing');
+  const noBullet = check(doctor(project('## Commands\n\n```powershell\n# Required after code changes\n.\\build.ps1\n```\n')).report, 'verify-command');
+  assert.equal(noBullet.status, 'missing', 'a Commands section without a "- Verify:" line is missing, not an empty command');
+  assert.match(noBullet.message, /- Verify:/);
   assert.equal(check(doctor(project('## Commands\n\n- Verify: ``\n')).report, 'verify-command').status, 'fail');
   assert.match(check(doctor(project('## Commands\n\n- Verify: `   `\n')).report, 'verify-command').message, /empty/);
   assert.match(check(doctor(project('## Commands\n\n- Verify: `npm\0 test`\n')).report, 'verify-command').message, /NUL/);
