@@ -5,8 +5,10 @@ import { pathToFileURL } from 'node:url';
 export function nextVersion(base, tags) {
   const line = /^(\d+)\.(\d+)\.\d+$/.exec(base);
   if (!line) throw new Error(`not a version: ${base}`);
-  const tagged = new RegExp(`^v${line[1]}\\.${line[2]}\\.(\\d+)$`);
-  const patches = tags.map((tag) => tagged.exec(tag)).filter(Boolean).map((m) => Number(m[1]));
+  const prefix = `v${line[1]}.${line[2]}.`;
+  const patches = tags
+    .filter((tag) => tag.startsWith(prefix) && /^\d+$/.test(tag.slice(prefix.length)))
+    .map((tag) => Number(tag.slice(prefix.length)));
   return `${line[1]}.${line[2]}.${patches.length ? Math.max(...patches) + 1 : 0}`;
 }
 

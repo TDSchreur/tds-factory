@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
-const clickStage = (name) => `const button = [...document.querySelectorAll('nav[aria-label="Stages"] button')].find((b) => b.textContent.includes(${JSON.stringify(name)})); if (button) button.click(); return !!button`;
+const clickStage = `const button = [...document.querySelectorAll('nav[aria-label="Stages"] button')].find((b) => b.textContent.includes(arguments[0])); if (button) button.click(); return !!button`;
 const visibleStages = `return [...document.querySelectorAll('#board section')].filter((s) => s.getBoundingClientRect().height > 0).map((s) => s.dataset.stage)`;
 
 test('compact users can select a Stage and find waiting Runs after polling', async (t) => {
@@ -14,7 +14,7 @@ test('compact users can select a Stage and find waiting Runs after polling', asy
     assert.deepEqual(await page.execute(visibleStages), ['build']);
     assert.equal(await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button')].length"), 5);
     assert.match(await page.execute("return document.querySelector('nav[aria-label=\"Stages\"]').textContent"), /Needs you/);
-    assert.equal(await page.execute(clickStage('Finish')), true);
+    assert.equal(await page.execute(clickStage, ['Finish']), true);
     assert.deepEqual(await page.execute(visibleStages), ['finish']);
     assert.match(await page.execute("return document.querySelector('[data-stage=finish]').textContent"), /No runs/);
     state.runs = [run({ id: 'c', column: 'check', title: 'New waiting run', waiting: true })];
@@ -35,7 +35,7 @@ for (const width of [320, 375, 390, 768, 1024]) {
       assert.equal(await page.execute("return document.getElementById('project').title"), '/work/' + 'long-project-name-'.repeat(12));
       const sizes = await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button, #theme, #intro summary, #board .column[data-active=true] .actions button')].map((e) => Math.round(e.getBoundingClientRect().height))");
       assert.ok(sizes.length >= 8 && sizes.every((h) => h >= 44), `touch heights: ${sizes}`);
-      assert.equal(await page.execute(clickStage('Done')), true);
+      assert.equal(await page.execute(clickStage, ['Done']), true);
       assert.deepEqual(await page.execute(visibleStages), ['done']);
     } finally { await page.close(); }
   });
@@ -58,7 +58,7 @@ test('Stage choice survives older-Run filtering and crossing the desktop breakpo
   if (!page) return;
   try {
     await page.waitFor("return document.getElementById('older').textContent.includes('Show older')");
-    assert.equal(await page.execute(clickStage('Finish')), true);
+    assert.equal(await page.execute(clickStage, ['Finish']), true);
     assert.match(await page.execute("return document.querySelector('[data-stage=finish]').textContent"), /No runs/);
     await page.execute("document.getElementById('older').click()");
     await page.waitFor("return !!document.querySelector('.card[data-id=old]')");
@@ -106,7 +106,7 @@ test('Show older and Delete all are touch sized on compact screens', async (t) =
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('.card')");
-    assert.equal(await page.execute(clickStage('Done')), true);
+    assert.equal(await page.execute(clickStage, ['Done']), true);
     const sizes = await page.execute("return ['#older', '.column[data-stage=done] > button'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))");
     assert.ok(sizes.every((h) => h >= 44), `touch heights: ${sizes}`);
   } finally { await page.close(); }
