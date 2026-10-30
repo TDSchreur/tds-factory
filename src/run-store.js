@@ -80,6 +80,19 @@ function runRoot(projectDir, create) {
   if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
   return root;
 }
+// Fetches origin's default branch and returns the commit it points at, without touching any local ref.
+function fetchOriginDefault(dir) {
+  const git = (...args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+  const { branch, error } = originDefaultBranch(dir);
+  if (!branch) throw new Error(`cannot determine origin default branch: ${error}`);
+  const fetchRef = `refs/tds-factory/fetch/${randomUUID()}`;
+  const fetched = git('fetch', '--no-write-fetch-head', 'origin', `+refs/heads/${branch}:${fetchRef}`);
+  if (fetched.status !== 0) throw new Error(`cannot fetch origin default branch: ${fetched.stderr.trim()}`);
+  const commit = git('rev-parse', '--verify', `${fetchRef}^{commit}`);
+  git('update-ref', '-d', fetchRef);
+  if (commit.status !== 0) throw new Error('cannot resolve fetched origin default branch');
+  return commit.stdout.trim();
+}
 function startRun(projectDir, data) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
@@ -88,14 +101,7 @@ function startRun(projectDir, data) {
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   if (git('rev-parse', '--git-dir').status !== 0) throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) throw new Error('a Run worktree needs a git repository with at least one commit');
-  const { branch, error } = originDefaultBranch(projectDir);
-  if (!branch) throw new Error(`cannot determine origin default branch: ${error}`);
-  const fetchRef = `refs/tds-factory/fetch/${randomUUID()}`;
-  const fetched = git('fetch', '--no-write-fetch-head', 'origin', `+refs/heads/${branch}:${fetchRef}`);
-  if (fetched.status !== 0) throw new Error(`cannot fetch origin default branch: ${fetched.stderr.trim()}`);
-  const commit = git('rev-parse', '--verify', `${fetchRef}^{commit}`);
-  git('update-ref', '-d', fetchRef);
-  if (commit.status !== 0) throw new Error('cannot resolve fetched origin default branch');
+  const commit = fetchOriginDefault(projectDir);
   const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'run';
   const base = `${new Date().toISOString().slice(0, 10)}-${slug}`;
   const root = runRoot(projectDir, true);
@@ -113,17 +119,17 @@ function startRun(projectDir, data) {
   const worktree = path.join(worktrees, id);
   let created = false;
   try {
-    const added = git('worktree', 'add', '-b', id, worktree, commit.stdout.trim());
+    const added = git('worktree', 'add', '-b', id, worktree, commit);
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     created = true;
-    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit.stdout.trim() }));
+    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }));
   } catch (err) {
     const failures = [];
     if (created) {
       const removed = git('worktree', 'remove', worktree);
       if (removed.status !== 0) failures.push(`worktree remains at ${worktree} and branch ${id} remains: ${removed.stderr.trim()}`);
       else {
-        const deleted = git('update-ref', '-d', `refs/heads/${id}`, commit.stdout.trim());
+        const deleted = git('update-ref', '-d', `refs/heads/${id}`, commit);
         if (deleted.status !== 0) failures.push(`branch ${id} remains: ${deleted.stderr.trim()}`);
       }
     }
@@ -229,6 +235,8 @@ function transitionRun(projectDir, id, to, data = {}) {
     if (to === 'finish') {
       const problems = finishProblems(old);
       if (problems.length) throw new Error(`Finish needs a clean or Accepted Check: ${problems.join('; ')}`);
+      const conflict = mergeProblem(projectDir, old);
+      if (conflict) throw new Error(`Finish needs a branch that merges cleanly: ${conflict}`);
     }
     return { record: { ...old, stage: to }, activity: `Starting ${to}` };
   });
@@ -261,6 +269,35 @@ function acceptRun(projectDir, id, data) {
     if (dirty) throw new Error('cannot accept a Check while the Run worktree has uncommitted changes');
     return { record: { ...old, accepted: { findings: data.findings, decision: data.decision, head, at: new Date().toISOString() } }, activity: 'Check accepted by the user' };
   });
+}
+// Rebases the Run branch onto origin's default branch. A conflict leaves the branch as it was; a moved head makes the Evidence stale, so it goes.
+function syncRun(projectDir, id, data = {}) {
+  changeRunning(projectDir, id, data, (old) => {
+    if (!['build', 'check'].includes(old.stage)) throw new Error('only a Run in Build or Check can be synced');
+    const { head, dirty } = worktreeState(old);
+    if (dirty) throw new Error('cannot sync while the Run worktree has uncommitted changes');
+    const base = fetchOriginDefault(projectDir);
+    const git = (...args) => spawnSync('git', args, { cwd: old.worktree, encoding: 'utf8' });
+    const rebased = git('rebase', base);
+    if (rebased.status !== 0) {
+      const files = git('diff', '--name-only', '--diff-filter=U').stdout.trim().split('\n').filter(Boolean);
+      git('rebase', '--abort');
+      throw new Error(`rebase onto origin conflicts in ${files.join(', ') || 'unknown files'}; the branch is unchanged. Run git rebase ${base} in the Run worktree, resolve the conflicts and commit`);
+    }
+    const moved = worktreeState(old).head !== head;
+    const record = { ...old, base_sha: base };
+    if (moved) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted']) delete record[key];
+    return { record, activity: moved ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
+  });
+}
+// Why the Run branch would not merge cleanly into origin's default branch: empty when it would.
+function mergeProblem(projectDir, record) {
+  const base = fetchOriginDefault(projectDir);
+  const merged = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', base, 'HEAD'], { cwd: record.worktree, encoding: 'utf8' });
+  if (merged.status === 0) return '';
+  if (merged.status !== 1) throw new Error(`cannot check the merge into origin: ${merged.stderr.trim()}`);
+  const files = merged.stdout.split('\n\n')[1]?.trim().split('\n').filter(Boolean) ?? [];
+  return `the branch conflicts with origin's default branch${files.length ? ` in ${files.join(', ')}` : ''}; run \`tds-factory run sync\` and resolve it`;
 }
 function reworkRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
@@ -721,6 +758,7 @@ export function openRunStore(callerDir) {
     update: (id, data) => updateRun(projectDir, id, data),
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     rework: (id, data) => reworkRun(projectDir, id, data),
+    sync: (id, data) => syncRun(projectDir, id, data),
     complete: (id, data) => completeRun(projectDir, id, data),
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id) => verifyRun(projectDir, id),
