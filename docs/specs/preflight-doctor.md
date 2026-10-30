@@ -21,8 +21,8 @@ A read-only `tds-factory doctor` command that checks, in one pass and without ch
 
 ## Implementation decisions
 
-- `src/doctor.js` exports `doctor({ projectDir, agent })` returning `{ ok, checks: [{ id, status, message }] }`. `status` is `pass`, `missing` (the user can supply it) or `fail`. Check ids: `cli`, `skills`, `tracker`, `git`, `review`, `verify-command`.
-- `tds-factory doctor [--agent claude|codex|copilot] [--json]` prints one line per check, or the object as JSON. `--agent` defaults to `claude`. Exit status is 1 unless every check is `pass`. It is read-only: it fetches nothing and writes nothing (`git ls-remote` only).
+- `src/doctor.js` exports `doctor({ projectDir, agent })` returning `{ ok, checks: [{ id, status, message }], notes: [string] }` (`notes` are non-blocking hints; an optional `prState` replaces the `gh` lookup in tests). `status` is `pass`, `missing` (the user can supply it) or `fail`. Check ids: `cli`, `skills`, `tracker`, `git`, `review`, `verify-command`.
+- `tds-factory doctor [--agent claude|codex|copilot] [--json]` prints one line per check, or the object as JSON. `--agent` defaults to `claude`. Exit status is 1 unless every check is `pass`. It is read-only: it fetches nothing and writes nothing. It runs `git ls-remote`, and `gh pr view` for each done Run that records a PR and still has a worktree or branch, to add a note.
 - **cli:** reports the `package.json` version and fails when the Node version is below `engines.node`.
 - **skills:** the required Skills are the `factory` Skill and every Skill it invokes, read from the shipped `factory` Skill by the word `Invoke` followed by a backticked name. A Skill counts as installed when `<name>/SKILL.md` exists in the Agent target's project or user-global Skill directory (`targets` in `src/flow.js`). The message lists every missing one.
 - **tracker:** `docs/agents/issue-tracker.md` and `docs/agents/domain.md` exist and `AGENTS.md` or `CLAUDE.md` has an `## Agent skills` section. The message lists what is missing and never names a setup command.

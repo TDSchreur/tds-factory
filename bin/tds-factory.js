@@ -10,7 +10,7 @@ import { update } from '../src/update.js';
 
 const USAGE = `Usage:
   tds-factory --version
-  tds-factory sync [--force]
+  tds-factory sync [--force]       (maintainers only: needs a repository checkout, run it as node bin/tds-factory.js sync)
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force] [--dry-run]
   tds-factory update [--no-force]
   tds-factory doctor [--agent claude|codex|copilot] [--json]
@@ -25,6 +25,7 @@ const USAGE = `Usage:
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
+  tds-factory run clean --id ID | --all     (after the PR is merged, from the main checkout: removes the Run worktree and branch)
 
 install defaults to the user-global directory; --project installs into the current directory.
 --dry-run prints what install would do and changes nothing.
@@ -46,6 +47,7 @@ const { values, positionals } = parseArgs({
     value: { type: 'string' },
     json: { type: 'boolean', default: false },
     apply: { type: 'boolean', default: false },
+    all: { type: 'boolean', default: false },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
   },
@@ -63,7 +65,14 @@ try {
     else if (op === 'update') store.update(values.id, data);
     else if (op === 'transition') store.transition(values.id, values.to, data);
     else if (op === 'rework') store.rework(values.id, data);
-    else if (op === 'complete') store.complete(values.id, data);
+    else if (op === 'complete') {
+      store.complete(values.id, data);
+      console.log(`Done. After the PR is merged, run \`tds-factory run clean --id ${values.id}\` from the main checkout to remove the Run worktree and branch.`);
+    }
+    else if (op === 'clean') {
+      if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all, not both');
+      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)]) console.log((reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'));
+    }
     else if (op === 'accept') store.accept(values.id, data);
     else if (op === 'inspect') {
       const report = await store.inspect(values.id);
@@ -84,7 +93,7 @@ try {
       if (result.exit_code !== 0) process.exitCode = 1;
     }
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
-    else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect or repair');
+    else throw new Error('expected run start, update, transition, rework, complete, accept, verify, verdict, inspect, repair or clean');
   }
   else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
   else if (command === 'sync') sync({ force: values.force });
@@ -93,6 +102,7 @@ try {
     const report = doctor({ projectDir: process.cwd(), agent: values.agent });
     if (values.json) console.log(JSON.stringify(report, null, 2));
     else for (const { id, status, message } of report.checks) console.log(`${status.padEnd(7)} ${id}: ${message.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?')}`);
+    if (!values.json) for (const note of report.notes) console.log(`note    ${note.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?')}`);
     if (!report.ok) process.exitCode = 1;
   }
   else if (command === 'dashboard') {
