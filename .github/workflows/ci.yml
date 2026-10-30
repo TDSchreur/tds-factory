@@ -140,3 +140,18 @@ jobs:
         env:
           INSTALL_PS1_SHELL: pwsh
         run: node --test test/install-ps1.test.js
+
+  # One stable name for the branch ruleset to require, so changing a matrix never needs a ruleset edit.
+  ci-ok:
+    if: always()
+    needs: [test, browser, package, workflows, shellcheck, psscriptanalyzer, install-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            [ "$result" = success ] || { echo "::error::A job finished as $result."; exit 1; }
+          done
