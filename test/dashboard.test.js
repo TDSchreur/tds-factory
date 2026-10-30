@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
@@ -37,6 +37,7 @@ before(async () => {
   run('2026-01-02-broken', { 'run.json': '{"title": "half writt' });
   run('2026-01-03-sparse', { 'run.json': JSON.stringify({ surprise: 1 }) });
   run('2026-01-04-norecord', { 'define.md': 'x' });
+  writeFileSync(join(project, 'package.json'), JSON.stringify({ version: '99.88.77' }));
   writeFileSync(join(tmp, 'secret.md'), 'SECRET');
   writeFileSync(join(project, '.factory', 'secret.md'), 'NOT-A-RUN-FILE');
   dash = await startDashboard({ projectDir: project, port: 0 });
@@ -124,7 +125,10 @@ test('the stylesheet styles a skipped chip', async () => {
 test('info route names the project directory the Dashboard serves', async () => {
   const res = await get(dash, '/api/info');
   assert.equal(res.status, 200);
-  assert.deepEqual(JSON.parse(res.body), { project });
+  const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+  assert.deepEqual(JSON.parse(res.body), { project, version });
+  assert.notEqual(version, '99.88.77');
+  assert.deepEqual(JSON.parse((await get(emptyDash, '/api/info')).body), { project: empty, version });
 });
 
 const getAs = (d, path, host) =>

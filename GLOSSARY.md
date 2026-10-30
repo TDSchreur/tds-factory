@@ -96,6 +96,9 @@ _Avoid_: Sandbox, Workspace
 A local web page that shows every Run as a card in a column per Stage and flags the Runs waiting on a human.
 _Avoid_: Board, Monitor
 
+**Factory version**:
+The version of the Factory installation serving a Dashboard, independent of the project or its Runs.
+
 **Run detail**:
 The side panel the Dashboard opens beside the board when a Run's card is selected, showing its status, links and Stage summaries.
 _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Modal

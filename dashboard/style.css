@@ -33,6 +33,7 @@
   .logo { display: block; height: 2.25rem; width: auto; }
   .logo .ink { fill: var(--logo-ink); }
   .tagline { color: var(--muted); font-size: .875rem; }
+  #factory-version { color: var(--muted); font-size: .75rem; white-space: nowrap; }
   #project { min-width: 0; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: .15rem .65rem; font: .8125rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; }
   #status { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; color: var(--muted); font-size: .875rem; }
   #status::before { content: ''; flex: none; width: .55rem; height: .55rem; border-radius: 50%; background: var(--ok); }
