@@ -26,7 +26,8 @@ test('the README starts Setup with the two one-liners, then the manual commands,
 test('the README explains update, its --force default and --no-force', () => {
   assert.match(setup, /`tds-factory update`/);
   assert.match(setup, /--no-force/);
-  assert.match(setup, /replaces agent files you edited/);
+  assert.match(setup, /replaces agent files and skills you edited/);
+  assert.match(setup, /skill folder of the same name that `tds-factory` did not install/);
   assert.match(setup, /`TDS_FACTORY_FORCE=1`/);
 });
 

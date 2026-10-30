@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { update, compareVersions } from '../src/update.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
@@ -51,7 +52,7 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
   };
   return {
     state, tmp,
-    options: { fetchFn, run, sleep: async (ms) => { state.sleeps.push(ms); }, tmpdir: tmp, env: {}, log: (m) => state.logs.push(m), warn: (m) => state.warns.push(m) },
+    options: { fetchFn, run, home: '/home-for-test', sleep: async (ms) => { state.sleeps.push(ms); }, tmpdir: tmp, env: {}, log: (m) => state.logs.push(m), warn: (m) => state.warns.push(m) },
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   };
 }
@@ -67,7 +68,7 @@ test('an older installed version installs the latest Release, then refreshes the
     assert.equal(w.state.calls[1], 'tds-factory --version');
     assert.equal(w.state.calls[2], 'tds-factory install --force');
     assert.deepEqual(readdirSync(w.tmp), [], 'the temp download is removed');
-    assert.match(w.state.warns.join('\n'), /edited agent files, and skills with the same names that tds-factory did not install, are replaced \(use --no-force/);
+    assert.match(w.state.warns.join('\n'), /edited agent files and skills, and same-named skills that tds-factory did not install, are replaced \(use --no-force/);
   } finally { w.cleanup(); }
 });
 
@@ -184,6 +185,51 @@ test('a download URL that is not a Release asset of this repository is refused',
     assert.ok(!w.state.fetched.includes('https://evil.example/tds-factory.tgz'), 'nothing is downloaded from it');
     assert.deepEqual(w.state.calls, []);
   } finally { w.cleanup(); }
+});
+
+test('tds-factory runs in the home folder, never in the current folder, and npm in the download folder', async () => {
+  for (const installed of ['0.3.0', '0.4.0']) {
+    const w = world();
+    try {
+      await update({ installed, ...w.options });
+      w.state.calls.forEach((call, i) => {
+        if (call.startsWith('tds-factory')) assert.equal(w.state.cwds[i], '/home-for-test', `${call} runs in the home folder`);
+      });
+      assert.ok(w.state.calls.some((c) => c === 'tds-factory install --force'));
+    } finally { w.cleanup(); }
+  }
+});
+
+test('a download URL that a parser would resolve into another repository is refused', async () => {
+  const sneaky = 'https://github.com/TDSchreur/tds-factory/releases/download/x/../../../../other/repo/releases/download/v9/tds-factory.tgz';
+  const w = world({ routes: { [API]: () => Response.json({ tag_name: 'v0.4.0', assets: [{ name: 'tds-factory.tgz', browser_download_url: sneaky }] }), [PAGE]: () => new Response(null, { status: 404 }) } });
+  try {
+    await assert.rejects(update({ installed: '0.3.0', ...w.options }), /Could not determine/);
+    assert.deepEqual(w.state.fetched.filter((u) => u.includes('other/repo')), []);
+    assert.match(w.state.warns.join('\n'), /not a Release asset of TDSchreur\/tds-factory/);
+  } finally { w.cleanup(); }
+});
+
+test('a tag from the redirect that is not a plain version is refused before any URL is built', async () => {
+  for (const tag of ['v0.4.0?x=1', 'v0.4.0%2F..', 'nightly-2026.10.30']) {
+    const w = world({ routes: { [API]: () => new Response('limited', { status: 403 }), [PAGE]: () => new Response(null, { status: 302, headers: { location: `https://github.com/TDSchreur/tds-factory/releases/tag/${tag}` } }) } });
+    try {
+      await assert.rejects(update({ installed: '0.3.0', ...w.options }), /Cannot parse version/, tag);
+      assert.deepEqual(w.state.calls, []);
+      assert.ok(!w.state.fetched.some((u) => u.includes('/download/')), 'nothing is downloaded');
+    } finally { w.cleanup(); }
+  }
+});
+
+test('the failing update command exits with 1 and prints the error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'update-cli-test-'));
+  try {
+    const stub = join(dir, 'offline.mjs');
+    writeFileSync(stub, "globalThis.fetch = async () => { throw Object.assign(new Error('offline'), { permanent: true }); };\n");
+    const result = spawnSync(process.execPath, ['--import', pathToFileURL(stub).href, resolve('bin/tds-factory.js'), 'update'], { encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /error: offline/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the GITHUB_TOKEN is sent to the API when set', async () => {

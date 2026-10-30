@@ -31,6 +31,7 @@ function sandbox({ node = true, npm = true, major = '22', npmFails = '', cli = t
   }
   if (cli) stub('tds-factory', 'if [ "$1" = "--version" ]; then echo 9.9.9; else echo "tds-factory $*" >> "$CALLS"; fi');
   return {
+    dir,
     run: (env = {}, file = script) => {
       const result = spawnSync(join(bin, 'sh'), [file], { encoding: 'utf8', env: { PATH: bin, CALLS: calls, HOME: dir, ...env } });
       return { ...result, calls: existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n') : [] };
@@ -122,7 +123,7 @@ test('a download cut off before the last line runs nothing, because everything i
     // Cut at every line break before the call, and in the middle of the npm line.
     const cuts = [...text.slice(0, lastLine).matchAll(/\n/g)].map((m) => m.index + 1).concat(text.indexOf('npm install -g') + 8);
     for (const cut of cuts) {
-      const file = join(tmpdir(), `install-sh-cut-${process.pid}-${cut}.sh`);
+      const file = join(s.dir, `cut-${cut}.sh`);
       writeFileSync(file, text.slice(0, cut));
       try {
         const r = s.run({}, file);

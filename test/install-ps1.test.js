@@ -22,7 +22,7 @@ test('CI has the PowerShell it asks for', { skip: !process.env.REQUIRE_POWERSHEL
 
 // node, npm and tds-factory are stubs on a PATH of their own that record what they were asked to do, so a real node or
 // npm on the machine never takes part. On Windows the stubs are .cmd files, elsewhere sh scripts.
-function sandbox({ node = true, npm = true, major = '22', npmFails = false, cli = true } = {}) {
+function sandbox({ node = true, npm = true, major = '22', npmFails = false, cli = true, shims = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'install-ps1-test-'));
   const bin = join(dir, 'bin');
   mkdirSync(bin);
@@ -31,6 +31,13 @@ function sandbox({ node = true, npm = true, major = '22', npmFails = false, cli 
   mkdirSync(host);
   const dotnet = win ? undefined : (process.env.PATH ?? '').split(delimiter).map((d) => join(d, 'dotnet')).find(existsSync);
   if (dotnet) symlinkSync(dotnet, join(host, 'dotnet'));
+  // The npm.cmd stub below writes tds-factory.cmd the way a real install would, which needs these two tools.
+  if (shims && !win) {
+    for (const tool of ['chmod', 'dirname']) {
+      const found = ['/usr/bin', '/bin'].map((d) => join(d, tool)).find(existsSync);
+      if (found) symlinkSync(found, join(host, tool));
+    }
+  }
   const calls = join(dir, 'calls');
   const stub = (name, sh, cmd) => {
     if (win) writeFileSync(join(bin, `${name}.cmd`), `@echo off\r\n${cmd}\r\n`);
@@ -38,9 +45,17 @@ function sandbox({ node = true, npm = true, major = '22', npmFails = false, cli 
   };
   if (node) stub('node', `echo v${major}.1.0`, `echo v${major}.1.0`);
   if (npm) stub('npm', `echo "npm $*" >> "$CALLS"\n${npmFails ? 'exit 7' : 'exit 0'}`, `echo npm %*>> "%CALLS%"\r\n${npmFails ? 'exit /b 7' : 'exit /b 0'}`);
-  if (cli) {
+  if (cli && !shims) {
     stub('tds-factory', 'if [ "$1" = "--version" ]; then echo 9.9.9; else echo "tds-factory $*" >> "$CALLS"; fi',
       'if "%1"=="--version" (echo 9.9.9) else (echo tds-factory %*>> "%CALLS%")');
+  }
+  // Next to the plain commands, the .cmd shims that npm also creates on Windows; PowerShell prefers the .ps1 ones, which
+  // the default execution policy blocks, so the installer has to ask for the .cmd shims by name.
+  if (shims) {
+    // tds-factory.cmd appears only when npm installs it, as in real life, so the installer must choose it after the install.
+    stub('npm.cmd', `echo "npm.cmd $*" >> "$CALLS"
+printf '#!/bin/sh\\nif [ "$1" = "--version" ]; then echo 9.9.9; else echo "tds-factory.cmd $*" >> "$CALLS"; fi\\n' > "$(dirname "$0")/tds-factory.cmd"
+chmod +x "$(dirname "$0")/tds-factory.cmd"`, '');
   }
   const base = win ? { SystemRoot: process.env.SystemRoot, PATHEXT: process.env.PATHEXT, ComSpec: process.env.ComSpec } : { DOTNET_ROOT: process.env.DOTNET_ROOT };
   return {
@@ -62,6 +77,15 @@ test('install.ps1 installs with npm from the latest Release URL, then installs t
     assert.deepEqual(r.calls, [`npm install -g --allow-remote=root ${URL}`, 'tds-factory install']);
     assert.match(r.stdout, /Done: tds-factory 9\.9\.9/);
     assert.match(r.stdout, /tds-factory doctor/);
+  } finally { s.cleanup(); }
+});
+
+test('install.ps1 calls the .cmd shims of npm and tds-factory when they exist', { skip: skip || (win && 'the Windows stubs are already .cmd files') }, () => {
+  const s = sandbox({ shims: true });
+  try {
+    const r = s.run();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.deepEqual(r.calls, [`npm.cmd install -g --allow-remote=root ${URL}`, 'tds-factory.cmd install']);
   } finally { s.cleanup(); }
 });
 

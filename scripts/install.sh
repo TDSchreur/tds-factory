@@ -2,7 +2,7 @@
 # Installs the latest TDS Factory Release and its skills. Safe to run again to update.
 #   curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 # Options, as environment variables:
-#   TDS_FACTORY_FORCE=1        run `tds-factory install --force` (replaces edited agent files and same-named skills that tds-factory did not install)
+#   TDS_FACTORY_FORCE=1        run `tds-factory install --force` (replaces edited agent files and skills, and same-named skills that tds-factory did not install)
 #   TDS_FACTORY_SKIP_SKILLS=1  only install the CLI, do not run `tds-factory install`
 set -eu
 
@@ -45,7 +45,7 @@ MSG
   if [ "${TDS_FACTORY_SKIP_SKILLS:-}" = 1 ]; then
     say 'Skipping skills install (TDS_FACTORY_SKIP_SKILLS=1)'
   elif [ "${TDS_FACTORY_FORCE:-}" = 1 ]; then
-    say 'Installing skills and agents (--force: edited agent files and same-named skills not installed by tds-factory are replaced)'
+    say 'Installing skills and agents (--force: edited agent files and skills, and same-named skills that tds-factory did not install, are replaced)'
     tds-factory install --force
   else
     say 'Installing skills and agents'

@@ -7,11 +7,11 @@ import { createHash } from 'node:crypto';
 const REPO = 'TDSchreur/tds-factory';
 const ASSET = 'tds-factory.tgz';
 const ATTEMPTS = 3;
-const DOWNLOADS = `https://github.com/${REPO}/releases/download/`;
+const DOWNLOADS = `/${REPO}/releases/download/`;
 const USER_AGENT = { 'User-Agent': 'tds-factory' };
 
 function parseVersion(text) {
-  const m = /(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/.exec(text);
+  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(text);
   if (!m) throw new Error(`Cannot parse version '${text}'`);
   return { core: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] };
 }
@@ -35,15 +35,28 @@ export function compareVersions(a, b) {
 
 // npm and tds-factory are .cmd shims on Windows, which spawn only runs through a shell.
 function defaultRun(cmd, args, { inherit = false, cwd } = {}) {
-  const result = spawnSync(cmd, args, { cwd, encoding: 'utf8', stdio: inherit ? 'inherit' : 'pipe', shell: process.platform === 'win32' });
+  const win = process.platform === 'win32';
+  // cmd.exe looks in the current folder before PATH; this switch and the cwd the caller passes keep a file planted there from running.
+  const env = win ? { ...process.env, NoDefaultCurrentDirectoryInExePath: '1' } : process.env;
+  const result = spawnSync(cmd, args, { cwd, env, encoding: 'utf8', stdio: inherit ? 'inherit' : 'pipe', shell: win });
   if (result.error) throw result.error;
   return result;
 }
 
+// Parsed, not prefix-matched: a URL with `..` or encoded separators must not resolve into another repository.
+function isReleaseAsset(text) {
+  try {
+    const url = new URL(text);
+    return url.href === text && url.origin === 'https://github.com' && url.pathname.startsWith(DOWNLOADS) && !url.search && !url.hash;
+  } catch { return false; }
+}
+
 // A rate limit or an error answer from the server may pass; any other status will not, so it is not worth waiting for.
+const transient = (status) => status === 429 || status >= 500;
+
 function statusError(what, status) {
   const err = new Error(`${what} answered ${status}`);
-  err.permanent = status !== 429 && status < 500;
+  err.permanent = !transient(status);
   return err;
 }
 
@@ -72,18 +85,18 @@ async function latestRelease({ fetchFn, env, retry }) {
     const asset = release.assets?.find((a) => a.name === ASSET);
     if (!asset) throw new Error(`Release ${release.tag_name} has no asset '${ASSET}'`);
     // The API answer is data: only a download from this repository's Releases is ever fetched.
-    if (!asset.browser_download_url?.startsWith(DOWNLOADS)) throw new Error(`the asset URL is not a Release asset of ${REPO}`);
+    if (!isReleaseAsset(asset.browser_download_url)) throw new Error(`the asset URL is not a Release asset of ${REPO}`);
     return { version: parseVersion(release.tag_name), tag: release.tag_name, url: asset.browser_download_url, hasChecksum: release.assets.some((a) => a.name === `${ASSET}.sha256`) };
   } catch (err) {
     retry.warn(`API lookup failed (${err.message}); falling back to the release redirect`);
     const response = await withRetry('redirect lookup', async () => {
       const answer = await fetchFn(`https://github.com/${REPO}/releases/latest`, { method: 'HEAD', redirect: 'manual', headers: USER_AGENT });
-      if (answer.status === 429 || answer.status >= 500) throw statusError('redirect lookup', answer.status);
+      if (transient(answer.status)) throw statusError('redirect lookup', answer.status);
       return answer;
     }, retry);
     const tag = /\/tag\/([^/]+)$/.exec(response.headers.get('location') ?? '')?.[1];
     if (!tag) throw new Error(`Could not determine the latest Release (${err.message})`);
-    return { version: parseVersion(tag), tag, url: `${DOWNLOADS}${tag}/${ASSET}`, hasChecksum: false };
+    return { version: parseVersion(tag), tag, url: `https://github.com${DOWNLOADS}${tag}/${ASSET}`, hasChecksum: false };
   }
 }
 
@@ -117,6 +130,7 @@ export async function update({
   run = defaultRun,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   tmpdir = os.tmpdir(),
+  home = os.homedir(),
   env = process.env,
   log = console.log,
   warn = console.warn,
@@ -150,7 +164,7 @@ export async function update({
       // A relative name inside the download folder: on Windows a shell would split a temp path that contains spaces.
       const npm = run('npm', ['install', '-g', ASSET], { inherit: true, cwd: dir });
       if (npm.status !== 0) throw new Error(exitText(`npm install -g ${ASSET}`, npm));
-      const now = (run('tds-factory', ['--version']).stdout ?? '').trim();
+      const now = (run('tds-factory', ['--version'], { cwd: home }).stdout ?? '').trim();
       if (compareVersions(now, latest.tag) !== 0) throw new Error(`installed version is '${now}', expected ${formatVersion(latest.version)}`);
       log(`installed ${now}`);
     } finally {
@@ -158,8 +172,8 @@ export async function update({
     }
   }
 
-  if (force) warn('using --force: edited agent files, and skills with the same names that tds-factory did not install, are replaced (use --no-force to keep them)');
+  if (force) warn('using --force: edited agent files and skills, and same-named skills that tds-factory did not install, are replaced (use --no-force to keep them)');
   const args = force ? ['install', '--force'] : ['install'];
-  const skills = run('tds-factory', args, { inherit: true });
+  const skills = run('tds-factory', args, { inherit: true, cwd: home });
   if (skills.status !== 0) throw new Error(exitText(`tds-factory ${args.join(' ')}`, skills));
 }
