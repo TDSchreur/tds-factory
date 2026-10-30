@@ -35,7 +35,7 @@ export function Markdown({ text }) {
     if (b.type === 'code') return html`<pre><code>${b.text}</code></pre>`;
     if (b.type === 'list') return html`<${MdList} list=${b} />`;
     if (b.type === 'table') {
-      return html`<div class="scroll"><table>
+      return html`<div class="scroll" tabindex="0"><table>
         <thead><tr>${b.head.map((c) => html`<th>${inline(c)}</th>`)}</tr></thead>
         <tbody>${b.rows.map((row) => html`<tr>${row.map((c) => html`<td>${inline(c)}</td>`)}</tr>`)}</tbody>
       </table></div>`;
@@ -232,7 +232,7 @@ export function Detail({ run, compact, onClose }) {
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
   return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
-    <div class="compact-back"><button type="button" onClick=${onClose}>← Back to stages</button></div>
+    <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}

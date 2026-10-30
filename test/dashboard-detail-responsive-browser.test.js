@@ -173,7 +173,6 @@ test('Back lands on the Stage the Run is in now when it moved while its detail w
     await page.execute("document.querySelector('[data-id=r]').click()");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
     state.runs = [run({ id: 'r', column: 'check', title: 'Moving run' })];
-    await page.wait(3500);
     await page.waitFor("return document.querySelector('[data-id=r]').closest('[data-stage=check]') !== null");
     await page.key(ESCAPE);
     await page.waitFor("return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=r]')");
@@ -188,7 +187,38 @@ test('Shift+Tab from the detail heading goes to the Back control', async (t) => 
     await page.waitFor("return !!document.querySelector('[data-id=r]')");
     await page.execute("document.querySelector('[data-id=r]').click()");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
-    await page.keyChord('', TAB);
+    await page.keyChord(SHIFT, TAB);
     assert.equal(await page.execute("return document.activeElement === document.querySelector('#detail .compact-back button')"), true);
+  } finally { await page.close(); }
+});
+
+test('a wide table in compact detail can be reached with the keyboard', async (t) => {
+  const wide = 'wide'.repeat(120);
+  const page = await openPage(t, { runs: [run({ id: 'r', files: ['define.md'], links: [{ label: 'PR', href: 'https://example.test/pull/1' }] })], files: { 'r/define.md': `| A | B |\n| --- | --- |\n| ${wide} | ${wide} |` } }, { width: 375, height: 700 });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=r]')");
+    await page.execute("document.querySelector('[data-id=r]').click()");
+    await page.waitFor("return !!document.querySelector('#detail .md .scroll')");
+    await page.execute("document.querySelector('#detail .link a').focus()");
+    await page.key(TAB);
+    assert.equal(await page.execute("return document.activeElement === document.querySelector('#detail .md .scroll')"), true);
+  } finally { await page.close(); }
+});
+
+test('closing desktop detail keeps the Stage of the Run that moved while it was open', async (t) => {
+  const state = { runs: [run({ id: 'r', column: 'build' }), run({ id: 'x', column: 'define' })] };
+  const page = await openPage(t, state, { width: 1200, height: 700 });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=r]')");
+    await page.execute("document.querySelector('[data-id=r]').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    state.runs = [run({ id: 'r', column: 'check' }), run({ id: 'x', column: 'define' })];
+    await page.waitFor("return document.querySelector('[data-id=r]').closest('[data-stage=check]') !== null");
+    await page.key(ESCAPE);
+    await page.waitFor("return document.getElementById('detail').hidden");
+    await page.resize(375, 700);
+    await page.waitFor("return document.querySelector('[data-stage=check]').getBoundingClientRect().height > 0");
   } finally { await page.close(); }
 });

@@ -22,6 +22,7 @@ function App() {
   const queue = useRef(Promise.resolve());
   const current = useRef(null);
   const returnFocus = useRef(null);
+  const shown = useRef(null); // the Run whose detail is open, as of the last render; the Escape handler outlives renders
   current.current = request;
 
   useEffect(() => {
@@ -53,10 +54,9 @@ function App() {
   // Closing the Run detail hands focus back to its card.
   const closeDetail = () => {
     const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
-    if (compact) {
-      returnFocus.current = card;
-      if (card) setSelectedStage(card.closest('.column').dataset.stage); // the Run may have moved while its detail was open
-    } else if (card) card.focus();
+    if (shown.current) setSelectedStage(shown.current.column); // the Run may have moved while its detail was open
+    if (compact) returnFocus.current = card;
+    else if (card) card.focus();
     setSelectedId(null);
   };
   useLayoutEffect(() => {
@@ -123,11 +123,13 @@ function App() {
     if (selectedStage === null && loaded) setSelectedStage(defaultStage);
   }, [selectedStage, loaded, defaultStage]);
   const openRun = runs.find((r) => r.id === selectedId) || null; // the Run whose detail is shown
+  shown.current = openRun;
   useEffect(() => { if (selectedId && !openRun) setSelectedId(null); }, [openRun]); // a Run that left the list must not reopen its detail when it returns
   // Compact detail covers the board, so focus returns to the card once the board is shown again.
   useLayoutEffect(() => {
     if (!openRun && returnFocus.current) {
       returnFocus.current.focus({ preventScroll: true });
+      returnFocus.current.scrollIntoView({ block: 'nearest' }); // the card may sit in another Stage list than the scroll position restored
       returnFocus.current = null;
     }
   }, [!!openRun]);
