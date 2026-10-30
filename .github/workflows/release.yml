@@ -49,6 +49,7 @@ jobs:
   release:
     if: github.ref == 'refs/heads/master'
     needs: [verify, browser]
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
