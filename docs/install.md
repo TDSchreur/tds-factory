@@ -25,7 +25,7 @@ On Windows (PowerShell):
 powershell -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 ```
 
-The script checks that Node 20 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip step 3. It never installs Node, and it never asks for `sudo`.
+The script checks that Node 20 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip part 3. It never installs Node, and it never asks for `sudo`.
 
 If you prefer to read before you run, open the script first (the same URL in a browser) or run the two commands yourself, which work the same on macOS, Linux and Windows. This is the install:
 
