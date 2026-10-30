@@ -25,8 +25,6 @@ The rule for an unavailable reviewer is in the Check section of [`skills/factory
 | Check | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-5.5`, not set |
 | Finish | Haiku, low | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set |
 
-What each Agent target can guarantee, such as how read-only the Check agents are, is in the [capability matrix](docs/capabilities.md).
-
 Edit the agent files to change a model. The Copilot agents set no `modelPolicy`, so a model your plan does not offer is replaced by the session model with a warning when you start the agent directly, but Copilot refuses to dispatch it as a subagent, which is how the Factory uses it. Check `/model` in Copilot CLI for the ids your plan offers and edit `model:` to match. Install updates agent files you have not edited and keeps ones you have; `--force` replaces those with the defaults too. Agent files from an install that predates this count as edited, so use `--force` once. Whether a model is available depends on your client, account and policy, and the client may substitute another or not report which one ran; the Factory reports such cases instead of assuming. The Copilot defaults were checked by dispatching against Copilot CLI 1.0.105 with one plan's model list, not against other Copilot environments or plans.
 
-To see whether an agent follows the Flow, run the on-demand [agent evaluation](docs/evaluation.md).
+To see whether an agent follows the Flow, run the on-demand [agent evaluation](evaluation.md).
