@@ -1,6 +1,6 @@
 // Mechanical checks on the repository's own documentation and tests. Each takes a root folder and returns a list of problems,
 // so `npm test` can run it on the repo and the tests can run it on a temporary folder.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, posix } from 'node:path';
 import { MAX_CHECK_LOOPS } from '../src/run-store.js';
@@ -11,7 +11,9 @@ const walk = (root, dir, skip = () => false) => {
   return readdirSync(full).flatMap((name) => {
     const path = posix.join(dir, name);
     if (skip(path)) return [];
-    return statSync(join(root, path)).isDirectory() ? walk(root, path, skip) : [path];
+    const stat = lstatSync(join(root, path));
+    if (stat.isSymbolicLink()) return [];
+    return stat.isDirectory() ? walk(root, path, skip) : [path];
   });
 };
 
@@ -33,7 +35,8 @@ const decode = (target) => { try { return decodeURIComponent(target); } catch { 
 export function brokenLinks(root) {
   const problems = [];
   for (const file of linkedDocs(root)) {
-    for (const [, target] of withoutCode(readFileSync(join(root, file), 'utf8')).matchAll(/\]\(\s*<?([^)#\s>]+)[^)]*\)/g)) {
+    for (const [, angled, plain] of withoutCode(readFileSync(join(root, file), 'utf8')).matchAll(/\]\(\s*(?:<([^>#]+)>|([^)#\s<>]+))[^)]*\)/g)) {
+      const target = angled ?? plain;
       if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
       const path = decode(target);
       const at = path.startsWith('/') ? path.slice(1) : posix.join(posix.dirname(file), path);
@@ -97,7 +100,7 @@ const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven
 export const CONSTANTS = [{
   name: 'Check loop limit',
   value: MAX_CHECK_LOOPS,
-  patterns: [/at most (\w+) times/g, /\(at most (\w+)\)/g, /`0` to `(\w+)`/g, /maximum is (\w+)/g, /fewer than (\w+) loops/g],
+  patterns: [/at most (\w+) times/g, /\(at most (\w+)\)/g, /`0` to `(\w+)`/g, /maximum is (\w+)/g, /fewer than (\w+) loops/g, /loops\}\/(\w+)/g],
   files: ['README.md', 'docs/usage.md', 'dashboard/model.js', 'skills/factory/SKILL.md'],
 }];
 
@@ -129,18 +132,31 @@ export function misnamedBrowserTests(root) {
 }
 
 const git = (root, ...args) => execFileSync('git', ['-c', 'core.quotePath=false', ...args], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).split('\n').filter(Boolean);
+// Exit status 1 of rev-parse --verify --quiet means the ref does not exist and 128 that this is no repository; any other failure throws.
 const resolves = (root, ref) => {
-  try { git(root, 'rev-parse', '--verify', '--quiet', ref); return true; } catch (err) { if (err.code === 'ENOENT') throw err; return false; }
+  try {
+    git(root, 'rev-parse', '--verify', '--quiet', ref);
+    return true;
+  } catch (err) {
+    if (err.status === 1 || /not a git repository/.test(err.stderr ?? '')) return false;
+    throw err;
+  }
 };
 
 // A change to code the package ships needs a changelog fragment. Compares the working tree with the merge base with
 // origin/main, so it sees committed, staged, unstaged and new files. With no git history or no origin/main (a shallow CI
-// checkout, the installed package) it reports why it did not check and finds nothing; any other git failure throws.
+// checkout, the installed package) or no common ancestor with it, it reports why it did not check and finds nothing; any other git failure throws.
 // A deleted fragment counts too, so the release change that folds the fragments is not asked for a new one.
 export function missingChangelogFragment(root) {
   if (!resolves(root, 'origin/main')) return { skipped: 'no origin/main to compare with', problems: [] };
-  const base = git(root, 'merge-base', 'HEAD', 'origin/main')[0];
-  const changed = [...git(root, 'diff', '--name-only', base), ...git(root, 'ls-files', '--others', '--exclude-standard', '--full-name')];
+  let base;
+  try {
+    base = git(root, 'merge-base', 'HEAD', 'origin/main')[0];
+  } catch (err) {
+    if (err.status === 1) return { skipped: 'no common ancestor with origin/main (a shallow fetch)', problems: [] };
+    throw err;
+  }
+  const changed = [...git(root, 'diff', '--name-only', '--no-renames', base), ...git(root, 'ls-files', '--others', '--exclude-standard', '--full-name')];
   const shipped = changed.filter((file) => /^(src|skills|agents)\//.test(file));
   const fragment = changed.some((file) => /^changelog\.d\/(?!README\.md$)[^/]+\.md$/.test(file));
   if (!shipped.length || fragment) return { problems: [] };

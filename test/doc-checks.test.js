@@ -1,17 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { git, repo as gitRepo } from './git-repo.js';
 import { adrProblems, avoidTerms, bareAvoidTerms, brokenLinks, misnamedBrowserTests, missingChangelogFragment, staleConstants } from '../scripts/doc-checks.js';
 
-const repo = (files) => {
-  const dir = mkdtempSync(join(tmpdir(), 'doc-checks-'));
+const write = (dir, files) => {
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(join(dir, dirname(name)), { recursive: true });
     writeFileSync(join(dir, name), text);
   }
+};
+const repo = (files) => {
+  const dir = mkdtempSync(join(tmpdir(), 'doc-checks-'));
+  write(dir, files);
   return dir;
 };
 
@@ -29,7 +32,7 @@ test('brokenLinks resolves a link from the folder of the file that holds it and 
 
 test('brokenLinks reads links with a title, an escaped space or a root path, and no fenced or double-backtick code', () => {
   const dir = repo({
-    'README.md': '[a](docs/a.md "Title") [b](<docs/a.md>) [c](docs/with%20space.md) [d](/docs/a.md) [e](docs/gone.md "T")\n~~~\n[f](nope.md)\n~~~\n``[g](nope.md)``',
+    'README.md': '[a](docs/a.md "Title") [b](<docs/a.md>) [c](docs/with%20space.md) [d](/docs/a.md) [e](docs/gone.md "T") [h](<docs/with space.md>)\n~~~\n[f](nope.md)\n~~~\n``[g](nope.md)``',
     'docs/a.md': '',
     'docs/with space.md': '',
   });
@@ -39,6 +42,14 @@ test('brokenLinks reads links with a title, an escaped space or a root path, and
 test('brokenLinks skips archived Specs and the vendored Skills but reads the Factory Skill and the agent files', () => {
   const dir = repo({ 'docs/specs/archive/old.md': '[gone](nope.md)', 'skills/other/GLOSSARY-FORMAT.md': '[gone](nope.md)', 'skills/factory/SKILL.md': '[gone](nope.md)', 'agents/claude/factory-build.md': '[gone](nope.md)' });
   assert.deepEqual(brokenLinks(dir), ['skills/factory/SKILL.md links to missing nope.md', 'agents/claude/factory-build.md links to missing nope.md']);
+});
+
+test('brokenLinks does not follow a symbolic link out of the root', () => {
+  const outside = repo({ 'x.md': '[gone](nope.md)' });
+  const dir = repo({ 'README.md': '' });
+  mkdirSync(join(dir, 'docs'));
+  symlinkSync(outside, join(dir, 'docs', 'link'));
+  assert.deepEqual(brokenLinks(dir), []);
 });
 
 test('adrProblems reports a reused number and a badly named file and passes a clean folder', () => {
@@ -103,10 +114,7 @@ const branch = () => {
   return dir;
 };
 const commit = (dir, files) => {
-  for (const [name, text] of Object.entries(files)) {
-    mkdirSync(join(dir, dirname(name)), { recursive: true });
-    writeFileSync(join(dir, name), text);
-  }
+  write(dir, files);
   git(dir, 'add', '-A');
   git(dir, 'commit', '-q', '-m', 'change');
 };
@@ -134,6 +142,28 @@ test('missingChangelogFragment counts a deleted fragment, as in the change that 
   mkdirSync(join(dir, 'src'));
   writeFileSync(join(dir, 'src', 'version.js'), 'x');
   assert.deepEqual(missingChangelogFragment(dir).problems, []);
+});
+
+test('missingChangelogFragment skips when the branch shares no history with origin/main, and sees a file moved out of src', () => {
+  const dir = branch();
+  git(dir, 'checkout', '-q', '--orphan', 'unrelated');
+  commit(dir, { 'src/a.js': 'x' });
+  assert.match(missingChangelogFragment(dir).skipped, /no common ancestor/);
+  const moved = branch();
+  commit(moved, { 'src/a.js': 'same content\n'.repeat(20) });
+  git(moved, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  git(moved, 'fetch', '-q', 'origin');
+  commit(moved, { 'changelog.d/x.md': '### Added\n- X.\n' });
+  git(moved, 'mv', 'src/a.js', 'lib.js');
+  git(moved, 'commit', '-q', '-m', 'move');
+  assert.deepEqual(missingChangelogFragment(moved).problems, []);
+  const bare = branch();
+  commit(bare, { 'src/b.js': 'same content\n'.repeat(20) });
+  git(bare, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  git(bare, 'fetch', '-q', 'origin');
+  git(bare, 'mv', 'src/b.js', 'lib.js');
+  git(bare, 'commit', '-q', '-m', 'move');
+  assert.equal(missingChangelogFragment(bare).problems.length, 1, 'the removed src file is a change');
 });
 
 test('missingChangelogFragment sees uncommitted and new files', () => {
