@@ -5,6 +5,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { stages, targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
+import { loadProjectReviews, reviewPlan } from './project-reviews.js';
 
 const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 const paused = ['verification-unavailable', 'interrupted'];
@@ -122,7 +123,8 @@ function startRun(projectDir, data) {
     const added = git('worktree', 'add', '-b', id, worktree, commit);
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     created = true;
-    write(path.join(root, id), apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }));
+    const projectReviews = loadProjectReviews(worktree, data.agent);
+    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews });
   } catch (err) {
     const failures = [];
     if (created) {
@@ -770,6 +772,7 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
+    reviews: (id) => reviewPlan(readRun(projectDir, id).record),
     mergeEligibility: (id) => {
       const { record } = readRun(projectDir, id);
       const state = worktreeState(record);

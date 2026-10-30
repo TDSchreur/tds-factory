@@ -7,6 +7,7 @@ import { targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
 import { verifyCommandProblem, mergedLeftovers } from './run-store.js';
+import { loadProjectReviews } from './project-reviews.js';
 
 // The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
 const read = (file) => {
@@ -67,6 +68,7 @@ function skillsCheck(has) {
 
 // Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.
 function reviewCheck(agent, projectDir, homeDir, has) {
+  loadProjectReviews(projectDir, agent, homeDir);
   const missing = ['code-review', 'security-scan'].filter((name) => !has(name));
   const file = fs.readdirSync(path.join(AGENTS_DIR, agent)).find((f) => f.startsWith('factory-check.'));
   if (![path.join(projectDir, targets[agent].projectAgents), path.join(homeDir, targets[agent].agents)].some((dir) => fs.existsSync(path.join(dir, file)))) missing.push(`the factory-check Stage agent (${file})`);
