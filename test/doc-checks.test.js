@@ -136,6 +136,8 @@ test('missingChangelogFragment skips, with a reason, when there is no origin/mai
   assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no merge base/);
 });
 
-test('this repository has a changelog fragment for its changes', () => {
-  assert.deepEqual(missingChangelogFragment(resolve('.')).problems, []);
+test('this repository has a changelog fragment for its changes', (t) => {
+  const { skipped, problems } = missingChangelogFragment(resolve('.'));
+  if (skipped) t.skip(skipped);
+  assert.deepEqual(problems, []);
 });

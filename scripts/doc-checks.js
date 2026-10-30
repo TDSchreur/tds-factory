@@ -17,7 +17,7 @@ const walk = (root, dir, skip = () => false) => {
 
 // Documentation that holds links. Archived Specs are history and the vendored upstream Skills have example links
 // that never resolve, so neither is checked.
-export function linkedDocs(root) {
+function linkedDocs(root) {
   const loose = ['README.md', 'CONTRIBUTING.md', 'GLOSSARY.md', 'AGENTS.md', 'changelog.d/README.md', 'skills/factory/SKILL.md'].filter((file) => existsSync(join(root, file)));
   const docs = walk(root, 'docs', (path) => path === join('docs', 'specs', 'archive')).filter((file) => file.endsWith('.md'));
   const agents = walk(root, 'agents').filter((file) => file.endsWith('.md'));
