@@ -46,7 +46,7 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
 }
 
 // State and head commit of a PR as GitHub reports them; undefined when gh cannot say. Only a GitHub PR link is passed to gh.
-export function ghPrInfo(url) {
+function ghPrInfo(url) {
   if (typeof url !== 'string' || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url)) return undefined;
   const out = spawnSync('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { encoding: 'utf8', timeout: 10000 });
   if (out.status !== 0) return undefined;

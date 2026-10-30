@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-`src/run-store.js` is 869 lines, about two thirds of `src/`. The Run record rules, the Run folder and its locks, the git worktree helpers, the gates and Evidence, and Run repair all sit in one file. Run metrics, a Follow-up Stage, a Fast track and a project config file would each have to edit it and read all of it first. This is GitHub issue #243.
+`src/run-store.js` is 869 lines, about half of `src/`. The Run record rules, the Run folder and its locks, the git worktree helpers, the gates and Evidence, and Run repair all sit in one file. Run metrics, a Follow-up Stage, a Fast track and a project config file would each have to edit it and read all of it first. This is GitHub issue #243.
 
 ## Solution
 

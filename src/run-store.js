@@ -10,7 +10,7 @@ import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 export { MAX_CHECK_LOOPS, verifyCommandProblem } from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
 
-// The one module that touches .factory/runs. remove(id, why, options) reports dirty work separately from other refusals.
+// The one interface to the modules that touch .factory/runs. remove(id, why, options) reports dirty work separately from other refusals.
 export function openRunStore(callerDir) {
   const { dir: projectDir } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
