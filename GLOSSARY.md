@@ -26,8 +26,11 @@ _Avoid_: Phase, step
 The checks before the first Stage: project setup and Conventions, run with the Doctor. Not a Stage.
 
 **Check axis**:
-One of the independent reviews in the Check Stage (Standards, Spec, Security, Infrastructure), each reporting its own verdict. Infrastructure may be skipped when no infrastructure file changed.
+One of the independent reviews in the Check Stage, each reporting its own verdict. Standards, Spec, Security and Infrastructure are the Factory's baseline axes; a Project review is an additional axis.
 _Avoid_: Reviewer, Gate
+
+**Project review**:
+An additional Check axis supplied by a project through a Skill, alongside the Factory's baseline reviews. Its findings can send a Run back to Build for Rework.
 
 **Doctor**:
 The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`. It may add non-blocking notes, such as merged Runs that still hold a worktree.
