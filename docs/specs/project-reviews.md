@@ -1,6 +1,6 @@
 # Project reviews
 
-Status: shared understanding confirmed; implementation in progress.
+Status: implemented; Factory Check pending.
 
 ## Problem
 
@@ -46,7 +46,7 @@ PR #223 (https://github.com/TDSchreur/tds-factory/pull/223) merged the default-b
 
 ## Implementation scope
 
-Run gates and Evidence, CLI, Doctor, Dashboard, Stage agent capabilities, Factory invocation contract, the setup Skill, documentation and behavior tests. No implementation changes have been made. Projects with no review configuration keep their existing behavior. Advisory-only reviews are outside this initial change.
+Run gates and Evidence, CLI, Doctor, Dashboard, Stage agent capabilities, Factory invocation contract, the setup Skill, documentation and behavior tests. Projects with no review configuration keep their existing behavior. Advisory-only reviews are outside this initial change.
 
 ## User stories
 

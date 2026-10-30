@@ -68,10 +68,15 @@ function skillsCheck(has) {
 
 // Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.
 function reviewCheck(agent, projectDir, homeDir, has) {
-  loadProjectReviews(projectDir, agent, homeDir);
+  const reviews = loadProjectReviews(projectDir, agent, homeDir);
   const missing = ['code-review', 'security-scan'].filter((name) => !has(name));
   const file = fs.readdirSync(path.join(AGENTS_DIR, agent)).find((f) => f.startsWith('factory-check.'));
-  if (![path.join(projectDir, targets[agent].projectAgents), path.join(homeDir, targets[agent].agents)].some((dir) => fs.existsSync(path.join(dir, file)))) missing.push(`the factory-check Stage agent (${file})`);
+  const agentDirs = [path.join(projectDir, targets[agent].projectAgents), path.join(homeDir, targets[agent].agents)];
+  if (!agentDirs.some((dir) => fs.existsSync(path.join(dir, file)))) missing.push(`the factory-check Stage agent (${file})`);
+  if (reviews.some(review => review.mode === 'interactive')) {
+    const interactive = fs.readdirSync(path.join(AGENTS_DIR, agent)).find(f => f.startsWith('factory-interactive-check.'));
+    if (!interactive || !agentDirs.some(dir => fs.existsSync(path.join(dir, interactive)))) missing.push('the factory-interactive-check agent');
+  }
   return missing.length ? ['fail', `review is not available, missing: ${missing.join(', ')}`] : ['pass', 'review Skills and the read-only factory-check agent are installed'];
 }
 

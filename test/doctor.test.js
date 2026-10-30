@@ -183,3 +183,17 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   store.clean(merged, { prState });
   assert.deepEqual(run({ projectDir: dir, homeDir: home, prState }).notes, []);
 });
+
+test('Doctor requires an interactive review agent when an interactive project review is configured', () => {
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'codex', ['factory-interactive-check']);
+  const dir = project();
+  mkdirSync(join(dir, '.factory'), { recursive: true });
+  mkdirSync(join(dir, 'review'), { recursive: true });
+  writeFileSync(join(dir, 'review', 'SKILL.md'), 'Review UX');
+  writeFileSync(join(dir, '.factory', 'reviews.json'), JSON.stringify({ reviews: [{ id: 'ux', name: 'UX', mode: 'interactive', skill: { source: 'project', path: 'review' }, runtime: { start: 'npm start', ready: 'localhost:4200', setup: 'No account' } }] }));
+  const unavailable = check(doctorAt(home, dir, '--agent', 'codex').report, 'review');
+  assert.equal(unavailable.status, 'fail'); assert.match(unavailable.message, /factory-interactive-check/);
+  install(home, 'codex');
+  assert.equal(check(doctorAt(home, dir, '--agent', 'codex').report, 'review').status, 'pass');
+});

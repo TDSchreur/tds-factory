@@ -260,6 +260,11 @@ function finishProblems(record, { head, dirty } = worktreeState(record)) {
     else if (result.head !== head || result.attempt !== attempt(record)) problems.push(`${review.id} was not reviewed at the current head in this Check attempt`);
     else if (result.verdict === 'fail') problems.push(`${review.id} failed`);
     else if (!['pass', 'skipped'].includes(result.verdict)) problems.push(`${review.id} has an invalid verdict`);
+    else if (review.mode === 'interactive' && result.verdict === 'pass') {
+      try {
+        if (!result.evidence?.length || result.evidence.some(item => evidenceHash(record, item) !== result.evidence_hashes?.[item])) throw new Error('missing or changed');
+      } catch { problems.push(`${review.id} browser evidence is missing or changed`); }
+    }
   }
   const verify = record.verify;
   if (!verify) problems.push('there is no Verify result');
@@ -388,6 +393,21 @@ function verdictRun(projectDir, id, axis, value) {
   });
 }
 
+// Resolve artifacts only within the Run folder, refusing links and changed evidence.
+function evidenceHash(record, item) {
+  if (typeof item !== 'string' || path.isAbsolute(item) || item.split(/[\\/]/).some(part => !part || part === '.' || part === '..')) throw new Error(`invalid evidence path: ${item}`);
+  const folder = path.join(path.dirname(path.dirname(record.worktree)), 'runs', path.basename(record.worktree));
+  if (fs.realpathSync(folder) !== folder) throw new Error('Run folder must not be a symlink');
+  let current = folder;
+  for (const part of item.split('/')) {
+    current = path.join(current, part);
+    const stat = fs.lstatSync(current);
+    if (stat.isSymbolicLink()) throw new Error(`evidence path contains a symlink: ${item}`);
+  }
+  if (!fs.statSync(current).isFile()) throw new Error(`evidence is not a regular file: ${item}`);
+  return createHash('sha256').update(fs.readFileSync(current)).digest('hex');
+}
+
 // Record a structured project review at the current head and attempt. Browser artifacts live
 // under the Run folder so screenshots do not dirty the implementation worktree.
 function projectReviewRun(projectDir, id, axis, data) {
@@ -411,20 +431,29 @@ function projectReviewRun(projectDir, id, axis, data) {
     if (data.verdict === 'skipped' && plan.applicable) throw new Error(`${axis} is applicable and cannot be skipped`);
     if (data.verdict !== 'skipped' && !plan.applicable) throw new Error(`${axis} is not applicable; record skipped`);
     if (review.mode === 'interactive' && data.verdict === 'pass' && !data.evidence?.length) throw new Error(`${axis} needs browser evidence to pass`);
-    const folder = readRun(projectDir, id).dir;
-    for (const item of data.evidence ?? []) {
-      if (path.isAbsolute(item) || item.split(/[\\/]/).some(part => !part || part === '.' || part === '..')) throw new Error(`invalid evidence path: ${item}`);
-      let current = folder;
-      for (const part of item.split('/')) {
-        current = path.join(current, part);
-        const stat = fs.lstatSync(current);
-        if (stat.isSymbolicLink()) throw new Error(`evidence path contains a symlink: ${item}`);
-      }
-      if (!fs.statSync(current).isFile()) throw new Error(`evidence is not a regular file: ${item}`);
-    }
-    const result = { ...data, ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, attempt: attempt(old) };
+    const evidenceHashes = Object.fromEntries((data.evidence ?? []).map(item => [item, evidenceHash(old, item)]));
+    const result = { ...data, ...(data.evidence?.length ? { evidence_hashes: evidenceHashes } : {}), ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, attempt: attempt(old) };
     return { record: { ...old, project_results: { ...old.project_results, [axis]: result } }, activity: `${axis} verdict: ${data.verdict}` };
   });
+}
+
+// Materialize only captured files into a new private folder; never execute the live Skill.
+function materializeReview(projectDir, id, axis) {
+  const { dir, record } = readRun(projectDir, id);
+  const review = (record.project_reviews ?? []).find(r => r.id === axis);
+  if (!review) throw new Error(`unknown project review: ${axis}`);
+  const files = review.files;
+  if (!files || typeof files !== 'object' || Array.isArray(files) || !Object.hasOwn(files, 'SKILL.md')) throw new Error('frozen Skill is invalid');
+  for (const [name, data] of Object.entries(files)) {
+    if (!name || path.isAbsolute(name) || name.split(/[\\/]/).some(part => !part || part === '.' || part === '..') || typeof data !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)) throw new Error(`invalid frozen Skill file: ${name}`);
+  }
+  const output = fs.mkdtempSync(path.join(dir, 'review-skill-'));
+  for (const [name, data] of Object.entries(files)) {
+    const dest = path.join(output, ...name.split('/'));
+    fs.mkdirSync(path.dirname(dest), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(dest, Buffer.from(data, 'base64'), { flag: 'wx', mode: 0o600 | ((review.modes?.[name] ?? 0) & 0o111) });
+  }
+  return output;
 }
 
 // Only worktrees at the store's own paths can be recovered.
@@ -583,7 +612,7 @@ async function inspectRuns(projectDir, runsDir, only) {
         try {
           const { head, dirty } = worktreeState(record);
           if (dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
-          const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head)].filter(Boolean);
+          const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head), ...Object.values(record.project_results ?? {}).map((r) => r?.head)].filter(Boolean);
           if (active && ['check', 'finish'].includes(record.stage) && seen.some((h) => h !== head)) add('stale-evidence', 'Evidence was recorded for an earlier head than the current one');
         } catch (err) { add('worktree-unreadable', err.message); }
       }
@@ -820,6 +849,7 @@ export function openRunStore(callerDir) {
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
     reviews: (id) => reviewPlan(readRun(projectDir, id).record),
     review: (id, axis, data) => projectReviewRun(projectDir, id, axis, data),
+    materializeReview: (id, axis) => materializeReview(projectDir, id, axis),
     mergeEligibility: (id) => {
       const { record } = readRun(projectDir, id);
       const state = worktreeState(record);

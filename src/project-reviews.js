@@ -4,7 +4,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { targets } from './flow.js';
 
-const baseline = new Set(['standards', 'spec', 'security', 'infrastructure']);
+const baseline = new Set(['standards', 'spec', 'security', 'infrastructure', 'constructor', 'prototype']);
 const validId = /^[a-z][a-z0-9-]{0,63}$/;
 const text = (v) => typeof v === 'string' && !!v.trim() && !/[\x00-\x1f\x7f]/.test(v);
 const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -13,7 +13,7 @@ const inside = (root, candidate) => candidate === root || candidate.startsWith(r
 
 // Refuse links and special files: project input must not escape its configured Skill directory.
 function regularTree(dir) {
-  const files = {};
+  const files = {}, modes = {};
   let total = 0;
   function visit(current, relative = '') {
     const st = fs.lstatSync(current);
@@ -24,11 +24,12 @@ function regularTree(dir) {
       total += st.size;
       if (total > 10 * 1024 * 1024) throw new Error('Skill exceeds 10 MiB');
       files[relative] = fs.readFileSync(current).toString('base64');
+      modes[relative] = st.mode & 0o111;
     } else throw new Error(`Skill contains a non-regular file: ${current}`);
   }
   visit(dir);
   if (!Object.hasOwn(files, 'SKILL.md')) throw new Error(`missing SKILL.md in ${dir}`);
-  return files;
+  return { files, modes };
 }
 function safeDirectory(root, relative) {
   if (!text(relative) || path.isAbsolute(relative) || relative.split(/[\\/]/).some(s => !s || s === '.' || s === '..')) throw new Error(`invalid project Skill path: ${relative}`);
@@ -49,9 +50,10 @@ function skillDirectory(projectDir, agent, homeDir, skill) {
 }
 export function loadProjectReviews(projectDir, agent, homeDir = os.homedir()) {
   const config = path.join(projectDir, '.factory', 'reviews.json');
-  if (!fs.existsSync(config)) return [];
+  const configStat = fs.lstatSync(config, { throwIfNoEntry: false });
+  if (!configStat) return [];
   if (fs.lstatSync(path.dirname(config)).isSymbolicLink()) throw new Error('.factory must not be a symlink');
-  const stat = fs.lstatSync(config);
+  const stat = configStat;
   if (!stat.isFile() || stat.size > 1024 * 1024) throw new Error('reviews.json must be a regular file under 1 MiB');
   let data;
   try { data = JSON.parse(fs.readFileSync(config, 'utf8')); } catch (err) { throw new Error(`invalid reviews.json: ${err.message}`); }
@@ -67,10 +69,10 @@ export function loadProjectReviews(projectDir, agent, homeDir = os.homedir()) {
     if (patterns !== undefined && (!Array.isArray(patterns) || !patterns.length || patterns.some(p => !text(p) || p.startsWith('/') || p.split('/').includes('..') || /[\[\]{}!\\]/.test(p)))) throw new Error(`${id}: patterns must be nonempty relative globs using *, ** and ?`);
     if (mode === 'interactive' && (!plain(runtime) || !ownKeys(runtime, ['start', 'ready', 'setup']) || !text(runtime.start) || !text(runtime.ready) || !text(runtime.setup))) throw new Error(`${id}: interactive review needs runtime start, ready and setup`);
     if (mode === 'source' && runtime !== undefined) throw new Error(`${id}: runtime is only for interactive reviews`);
-    let files;
-    try { files = regularTree(skillDirectory(projectDir, agent, homeDir, skill)); }
+    let snapshot;
+    try { snapshot = regularTree(skillDirectory(projectDir, agent, homeDir, skill)); }
     catch (err) { throw new Error(`${id}: cannot load Skill: ${err.message}`); }
-    return { id, name, mode, skill, ...(patterns ? { patterns } : {}), ...(runtime ? { runtime } : {}), files };
+    return { id, name, mode, skill, ...(patterns ? { patterns } : {}), ...(runtime ? { runtime } : {}), ...snapshot };
   });
 }
 function globRegex(pattern) {
@@ -92,6 +94,6 @@ export function reviewPlan(record) {
   return (record.project_reviews ?? []).map(review => {
     const matched = review.patterns ? changed.filter(file => review.patterns.some(p => globRegex(p).test(file))) : changed;
     const applicable = !review.patterns || matched.length > 0;
-    return { ...review, encoded_files: review.files, files: Object.fromEntries(Object.entries(review.files).map(([name, data]) => [name, Buffer.from(data, 'base64').toString('utf8')])), applicable, matched, ...(applicable ? {} : { reason: 'No changed file matches the review patterns' }) };
+    return { ...review, encoded_files: review.files, files: Object.fromEntries(Object.entries(review.files).flatMap(([name, data]) => { const bytes = Buffer.from(data, 'base64'); const decoded = bytes.toString('utf8'); return !bytes.includes(0) && Buffer.from(decoded, 'utf8').equals(bytes) ? [[name, decoded]] : []; })), applicable, matched, ...(applicable ? {} : { reason: 'No changed file matches the review patterns' }) };
   });
 }

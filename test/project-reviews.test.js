@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -164,4 +164,47 @@ test('interactive reviews require browser artifacts kept in the Run folder', () 
   result = run('review', '--axis', 'angular', '--data', JSON.stringify(report)); assert.equal(result.status, 0, result.stderr);
   report.evidence = ['../escape.png'];
   assert.notEqual(run('review', '--axis', 'angular', '--data', JSON.stringify(report)).status, 0);
+});
+
+test('a reviewer can materialize the original bundled Skill after the live Skill changes', () => {
+  const cwd = setup(), created = start(cwd); assert.equal(created.status, 0, created.stderr);
+  const id = created.stdout.trim();
+  writeFileSync(join(cwd, 'review/angular/SKILL.md'), 'new content');
+  const result = invoke(cwd, 'run', 'materialize-review', '--id', id, '--axis', 'angular');
+  assert.equal(result.status, 0, result.stderr);
+  const dir = result.stdout.trim();
+  assert.equal(readFileSync(join(dir, 'SKILL.md'), 'utf8'), 'Review Angular v1');
+  assert.equal(readFileSync(join(dir, 'references/rules.md'), 'utf8'), 'Rules v1');
+});
+
+test('Run inspection reports stale project review Evidence after a new commit', () => {
+  const cwd = setup(), { run, wt } = checking(cwd);
+  assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify({ verdict: 'pass', inspected: ['src/app.ts'], findings: [] })).status, 0);
+  git(wt, 'commit', '--allow-empty', '-qm', 'new code');
+  const result = run('inspect', '--json'); assert.equal(result.status, 0, result.stderr);
+  assert.ok(JSON.parse(result.stdout)[0].problems.some(p => p.code === 'stale-evidence'));
+});
+
+
+test('missing browser evidence prevents a clean Check after an interactive pass', () => {
+  const cwd = setup(), changed = structuredClone(config);
+  changed.reviews[0].mode = 'interactive'; changed.reviews[0].runtime = { start: 'npm start', ready: 'localhost:4200', setup: 'No account' };
+  writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify(changed));
+  git(cwd, 'add', '.'); git(cwd, 'commit', '-qm', 'interactive');
+  const { id, run } = checking(cwd);
+  const dir = join(cwd, '.factory/runs', id, 'evidence'); mkdirSync(dir); writeFileSync(join(dir, 'screen.png'), 'picture');
+  const report = { verdict: 'pass', inspected: ['home'], findings: [], evidence: ['evidence/screen.png'] };
+  assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify(report)).status, 0);
+  assert.equal(run('verify').status, 0);
+  for (const [axis, value] of [['standards','pass'], ['spec','pass'], ['security','pass'], ['infrastructure','skipped']]) assert.equal(run('verdict', '--axis', axis, '--value', value).status, 0);
+  rmSync(join(dir, 'screen.png'));
+  const result = run('transition', '--to', 'finish'); assert.notEqual(result.status, 0); assert.match(result.stderr, /angular.*evidence/i);
+});
+
+test('a passing required project review allows Finish after baseline and Verify pass', () => {
+  const cwd = setup(), { run } = checking(cwd);
+  assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify({ verdict: 'pass', inspected: ['src/app.ts'], findings: [] })).status, 0);
+  assert.equal(run('verify').status, 0);
+  for (const [axis, value] of [['standards','pass'], ['spec','pass'], ['security','pass'], ['infrastructure','skipped']]) assert.equal(run('verdict', '--axis', axis, '--value', value).status, 0);
+  const result = run('transition', '--to', 'finish'); assert.equal(result.status, 0, result.stderr);
 });

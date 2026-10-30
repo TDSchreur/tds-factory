@@ -4,4 +4,4 @@ The project-review design adds project-supplied Check axes alongside the Factory
 
 Reading live configuration and Skills at each Check would make updates immediately available, but could remove required reviews or change their meaning after Evidence was collected. Freezing them costs storage and means updates apply to new Runs. Runtime dependencies and browser capabilities remain prerequisites to check explicitly, rather than resources the snapshot promises to reproduce.
 
-This records an agreed design; implementation is pending. See [the project reviews Spec](../specs/project-reviews.md).
+See [the project reviews Spec](../specs/project-reviews.md).

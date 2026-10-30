@@ -48,7 +48,7 @@ The `tds-factory run clean` command, which removes the worktree and local branch
 _Avoid_: Clean (alone)
 
 **Clean**:
-A Check whose every Check axis is `pass`, with Infrastructure allowed to be `skipped`, backed by current Evidence: a passing Verify result and every verdict recorded for the code as it is now, with nothing uncommitted. Only a clean Check continues to Finish without asking the user.
+A Check whose every Check axis is `pass`, with Infrastructure and nonmatching Project reviews allowed to be `skipped`, backed by current Evidence: a passing Verify result and every verdict recorded for the code as it is now, with nothing uncommitted. Only a clean Check continues to Finish without asking the user.
 
 **Verify command**:
 The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
