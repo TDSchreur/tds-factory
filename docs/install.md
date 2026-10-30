@@ -75,9 +75,9 @@ Add `--project` to install into the current project instead of your home folder.
 
 Run `tds-factory update`. It looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and then runs `tds-factory install --force` so the skills and agents match the CLI. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades.
 
-`--force` replaces agent files you edited (for example your model choices) with the defaults, and also a skill folder of the same name that `tds-factory` did not install. To keep them, run `tds-factory update --no-force`.
+`--force` replaces agent files and skills you edited (for example your model choices) with the defaults, and any skill folder of the same name that `tds-factory` did not install. To keep them, run `tds-factory update --no-force`.
 
-Running the one-line install from part 2 again also updates, and keeps edited agent files unless you set `TDS_FACTORY_FORCE=1`. The manual way still works too:
+Running the one-line install from part 2 again also updates, and keeps your edited agent files and skills unless you set `TDS_FACTORY_FORCE=1`. The manual way still works too:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
@@ -112,7 +112,7 @@ Commit the new files. Now `/factory` can start; the [usage guide](usage.md) show
 
 **`tds-factory: command not found` (or "not recognized").** The folder where npm puts global commands is not on your PATH. Find it with `npm prefix -g`, add its `bin` folder (on Windows the folder itself) to PATH, and open a new terminal.
 
-**`EACCES: permission denied` while installing.** npm cannot write to its global folder. Do not use `sudo`. Make npm install into your home folder instead, and put `~/.local/bin` on your PATH. Setting the prefix once also keeps `tds-factory update` and the one-line install working later:
+**`EACCES: permission denied` while installing.** npm cannot write to its global folder. Do not use `sudo`. Make npm install into your home folder instead, and put `~/.local/bin` on your PATH. Setting the prefix once also keeps `tds-factory update` and the one-line install working later. (nvm refuses to work while a prefix is set: use nvm or the prefix, not both.)
 
 ```sh
 npm config set prefix ~/.local

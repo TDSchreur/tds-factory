@@ -81,7 +81,7 @@ tds-factory install
 
 The `--allow-remote=root` flag is needed because npm 12 refuses URL installs by default. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`; `tds-factory install` does that, and it has to run again after every update, because the installed `factory` Skill must use the same Run commands as the CLI. `tds-factory update` and the one-line scripts do both steps for you.
 
-To update, run `tds-factory update`. It installs the latest Release when yours is older, checks the download against the Release's checksum, and then runs `tds-factory install --force`, which replaces agent files you edited with the defaults, and also a skill folder of the same name that `tds-factory` did not install. Use `tds-factory update --no-force` to keep them. The one-line scripts keep edited agent files too; set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
+To update, run `tds-factory update`. It installs the latest Release when yours is older, checks the download against the Release's checksum, and then runs `tds-factory install --force`, which replaces agent files and skills you edited with the defaults, and any skill folder of the same name that `tds-factory` did not install. Use `tds-factory update --no-force` to keep them. The one-line scripts keep them too; set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI. Maintainers publish Releases manually; see the [release guide](docs/releasing.md).
 
 ### Working from a checkout
 
