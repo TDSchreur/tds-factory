@@ -100,6 +100,35 @@ test('clean from a subfolder of the Run worktree is refused, also when the folde
   assert.match(openRunStore(join(wt, '..notes')).clean(id, { prState }).reason, /main checkout/);
 });
 
+test('clean removes a clean worktree that has an initialised submodule', () => {
+  const sub = repo();
+  git(sub, 'commit', '-q', '--allow-empty', '-m', 'second');
+  const main = repo();
+  git(main, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sub, 'vendor');
+  git(main, 'commit', '-q', '-m', 'add submodule');
+  const { id, wt, store, prState } = finished(main);
+  git(wt, '-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '-q');
+  assert.equal(store.clean(id, { prState }).outcome, 'cleaned');
+  assert.ok(!existsSync(wt) && !branches(main).includes(id));
+  // A dirty submodule still keeps the worktree.
+  const dirty = finished(main);
+  git(dirty.wt, '-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '-q');
+  writeFileSync(join(dirty.wt, 'vendor', 'new.txt'), 'x');
+  assert.match(dirty.store.clean(dirty.id, { prState: dirty.prState }).reason, /uncommitted/);
+  assert.ok(existsSync(dirty.wt));
+});
+
+test('clean keeps a branch that is checked out in another worktree', () => {
+  const main = repo();
+  const { id, wt, prState, store } = finished(main);
+  git(main, 'worktree', 'remove', '--force', wt);
+  git(main, 'checkout', '-q', id);
+  const result = store.clean(id, { prState });
+  assert.equal(result.outcome, 'kept');
+  assert.match(result.reason, /checked out/);
+  assert.ok(branches(main).includes(id));
+});
+
 test('clean refuses to run from inside the worktree it would remove', () => {
   const main = repo();
   const { id, wt, prState } = finished(main);
@@ -135,6 +164,7 @@ test('the CLI clean needs --id or --all, and reports a Run without a PR as kept'
   const bare = runCli(main, 'clean');
   assert.equal(bare.status, 1);
   assert.match(bare.stderr, /--id.*--all/);
+  assert.match(runCli(main, 'clean', '--id', id, '--all').stderr, /not both/);
 });
 
 test('run complete tells the user how to clean up once the PR is merged', () => {

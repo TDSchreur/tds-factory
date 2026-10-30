@@ -566,6 +566,12 @@ async function readRunFile(runsDir, rawPath) {
   }
 }
 
+// Uncommitted work in a worktree, as Git reports it with untracked files shown and submodules inspected; undefined when Git cannot say.
+const worktreeChanges = (dir) => {
+  const status = spawnSync('git', ['-c', 'status.showUntrackedFiles=normal', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '--ignore-submodules=none'], { cwd: dir, encoding: 'utf8' });
+  return status.status === 0 ? status.stdout.trim() : undefined;
+};
+
 // Deletes a readable Run in the project's own, unlinked storage.
 function removeRun(projectDir, id, why = () => {}, { discardChanges = false, doneOnly = false } = {}) {
   if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
@@ -590,9 +596,9 @@ function removeRun(projectDir, id, why = () => {}, { discardChanges = false, don
         }
         if (ownStat) {
           // Pin untracked file visibility and inspect submodules before Git's required force removal.
-          const status = spawnSync('git', ['-c', 'status.showUntrackedFiles=normal', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '--ignore-submodules=none'], { cwd: own, encoding: 'utf8' });
-          if (status.status === 0 && status.stdout.trim() && discardChanges !== true) { why('the Run worktree has uncommitted changes'); return 'dirty-worktree'; }
-          const removal = status.status === 0 ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' }) : status;
+          const changes = worktreeChanges(own);
+          if (changes && discardChanges !== true) { why('the Run worktree has uncommitted changes'); return 'dirty-worktree'; }
+          const removal = changes !== undefined ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' }) : { status: 1, stderr: 'cannot read the Run worktree status' };
           if (removal.status !== 0) { why('git could not remove the Run worktree: ' + (removal.stderr || removal.error?.message || '').trim()); return 'worktree-refused'; }
         }
       }
@@ -640,11 +646,14 @@ function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
     // The lookup above can take seconds; a commit made meanwhile must keep the branch.
     const now = git('rev-parse', '--verify', '-q', `refs/heads/${id}`).stdout.trim();
     if (head && now !== head) return kept('the branch has commits that are not in the merged PR');
+    const elsewhere = git('worktree', 'list', '--porcelain').stdout.split('\n\n').some((part) => new RegExp(`^branch refs/heads/${id}$`, 'm').test(part) && !(own && part.startsWith(`worktree ${own.dir}\n`)));
+    if (elsewhere) return kept('the branch is checked out in another worktree');
     if (own) {
-      const status = spawnSync('git', ['-c', 'status.showUntrackedFiles=normal', '-c', 'core.fsmonitor=false', 'status', '--porcelain', '--ignore-submodules=none'], { cwd: own.dir, encoding: 'utf8' });
-      if (status.status !== 0) return kept('cannot read the Run worktree status');
-      if (status.stdout.trim()) return kept('the Run worktree has uncommitted changes');
-      const removal = git('worktree', 'remove', own.dir);
+      const changes = worktreeChanges(own.dir);
+      if (changes === undefined) return kept('cannot read the Run worktree status');
+      if (changes) return kept('the Run worktree has uncommitted changes');
+      // Git refuses a plain remove when a submodule is initialised; the status above already showed nothing to lose.
+      const removal = git('worktree', 'remove', '--force', own.dir);
       if (removal.status !== 0) return kept(`git could not remove the Run worktree: ${removal.stderr.trim()}`);
     }
     // A squash merge leaves the branch unmerged as far as git knows, so it goes only if its tip is still the merged PR head.
@@ -667,7 +676,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
     try {
       const { record } = readRun(projectDir, id);
       const left = trees.has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
-      return left && !!record.pr && prState(record.pr)?.state === 'MERGED';
+      return left && record.status === 'done' && !!record.pr && prState(record.pr)?.state === 'MERGED';
     } catch { return false; }
   });
 }

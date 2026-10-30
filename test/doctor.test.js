@@ -176,6 +176,9 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   assert.match(before.notes[0], new RegExp(merged));
   assert.match(before.notes[0], /tds-factory run clean --all/);
   assert.ok(!before.notes[0].includes(open));
+  const going = store.start({ title: 'Going', agent: 'claude', commands: 'npm test', conventions: [] });
+  store.update(going, { pr: 'https://github.com/o/r/pull/1' });
+  assert.ok(!run({ projectDir: dir, homeDir: home, prState }).notes[0].includes(going), 'a Run that is not done is not named: clean would keep it');
   assert.equal(before.ok, run({ projectDir: dir, homeDir: home, prState: () => undefined }).ok, 'notes do not change ok');
   store.clean(merged, { prState });
   assert.deepEqual(run({ projectDir: dir, homeDir: home, prState }).notes, []);

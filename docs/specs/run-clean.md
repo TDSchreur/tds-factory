@@ -22,13 +22,13 @@ A Run leaves its worktree under `.factory/worktrees/` and its local branch behin
 ## Implementation Decisions
 
 - A Run counts as merged when its recorded `pr` link is in state `MERGED` according to `gh pr view`. The lookup is injectable so tests need no network; when `gh` fails, the Run is skipped with the reason.
-- The branch is deleted with `git branch -D` (a squash merge leaves it unmerged to git) only when its head equals the merged PR's head commit. Any other head is kept and reported.
-- Only a Run whose status is `done` is cleaned, so that `inspect` does not report a missing worktree for a Run still going. The branch is deleted by compare-and-delete on its tip, and its head is checked again under the lock.
-- The worktree is removed without `--force`, after the same status check `remove` uses (untracked files visible, submodules inspected). Only the store's own worktree path is touched, never a symlinked or adopted one.
+- The branch is deleted by compare-and-delete of its tip (`git update-ref -d`; a squash merge leaves it unmerged to git) only when its head equals the merged PR's head commit and no other worktree has it checked out. Any other head is kept and reported.
+- Only a Run whose status is `done` is cleaned, so that `inspect` does not report a missing worktree for a Run still going. The branch head is checked again under the lock.
+- The worktree is removed after the same status check `remove` uses (untracked files visible, submodules inspected). Git needs `--force` for a worktree with an initialised submodule, as in this repository; the check has already shown nothing to lose. Only the store's own worktree path is touched, never a symlinked or adopted one.
 - `clean` takes the Run lock, keeps `run.json` and the summaries, and is idempotent: a Run already cleaned reports `already clean`.
-- Each Run yields one line: `cleaned`, `kept: <reason>` or `already clean`. `--all` goes through every Run folder with a `pr` (a Run without one is not listed).
+- Each Run yields one line: `cleaned <id>`, `kept <id>: <reason>` or `already clean <id>`. `--all` goes through every Run folder with a `pr` (a Run without one is not listed).
 - `run complete` prints the hint; it does not clean, because the PR is not merged yet at that point. The Dashboard merge button is out of scope.
-- Doctor gets a `notes` array in its report beside `checks`; `ok` ignores it. `doctor` prints each note after the checks. It looks only at Runs that still have a worktree or branch and a `pr`.
+- Doctor gets a `notes` array in its report beside `checks`; `ok` ignores it. `doctor` prints each note after the checks. It looks only at Runs that are `done`, still have a worktree or branch and record a `pr`, the Runs `run clean` can take; it calls `gh` once per such Run.
 - `skills/factory/SKILL.md` lists `run clean` among the progress commands and tells Finish to run it from the main checkout after the merge. The README or usage docs describe the command.
 
 ## Testing Decisions
