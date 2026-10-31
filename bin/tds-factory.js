@@ -134,9 +134,16 @@ try {
   else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
   else if (command === 'doctor') {
     const report = doctor({ projectDir: process.cwd(), agent: values.agent });
+    const clean = (text) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?');
     if (values.json) console.log(JSON.stringify(report, null, 2));
-    else for (const { id, status, message } of report.checks) console.log(`${status.padEnd(7)} ${id}: ${message.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?')}`);
-    if (!values.json) for (const note of report.notes) console.log(`note    ${note.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?')}`);
+    else {
+      for (const { id, status, message } of report.checks) console.log(`${status.padEnd(7)} ${id}: ${clean(message)}`);
+      for (const { id, usable, checks } of report.agents) {
+        console.log(`${id}: ${usable ? 'usable' : 'not usable'}`);
+        for (const check of checks) console.log(`  ${check.status.padEnd(7)} ${check.id}: ${clean(check.message)}`);
+      }
+      for (const note of report.notes) console.log(`note    ${clean(note)}`);
+    }
     if (!report.ok) process.exitCode = 1;
   }
   else if (command === 'dashboard') {

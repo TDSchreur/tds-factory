@@ -8,7 +8,7 @@ import { repo, git } from './git-repo.js';
 const cli = resolve('bin/tds-factory.js');
 const invoke = (cwd, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
 const runFile = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
-const doctorConfig = (cwd) => JSON.parse(invoke(cwd, 'doctor', '--json', '--agent', 'codex').stdout).checks.find((c) => c.id === 'config');
+const doctorConfig = (cwd) => JSON.parse(invoke(cwd, 'doctor', '--json', '--agent', 'codex').stdout).agents[0].checks.find((c) => c.id === 'config');
 function project(config) {
   const cwd = repo();
   mkdirSync(join(cwd, '.factory'), { recursive: true });

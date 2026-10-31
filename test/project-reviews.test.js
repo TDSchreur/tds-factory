@@ -46,7 +46,7 @@ test('Doctor rejects duplicate and reserved review IDs with an actionable error'
   for (const reviews of [[config.reviews[0], config.reviews[0]], [{ ...config.reviews[0], id: 'security' }]]) {
     writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify({ reviews }));
     const result = invoke(cwd, 'doctor', '--json', '--agent', 'codex');
-    const review = JSON.parse(result.stdout).checks.find(check => check.id === 'review');
+    const review = JSON.parse(result.stdout).agents[0].checks.find(check => check.id === 'review');
     assert.equal(review.status, 'fail');
     assert.match(review.message, /review ID/);
   }
@@ -72,7 +72,7 @@ test('Doctor fails when a referenced project Skill is missing', () => {
   const changed = structuredClone(config); changed.reviews[0].skill.path = 'review/missing';
   writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify(changed));
   const result = invoke(cwd, 'doctor', '--json', '--agent', 'codex');
-  const review = JSON.parse(result.stdout).checks.find(check => check.id === 'review');
+  const review = JSON.parse(result.stdout).agents[0].checks.find(check => check.id === 'review');
   assert.equal(review.status, 'fail'); assert.match(review.message, /angular.*cannot load Skill/);
 });
 
