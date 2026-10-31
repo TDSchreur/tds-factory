@@ -74,13 +74,17 @@ function verifyCommandCheck(projectDir) {
 const requiredSkills = () => ['factory', ...invokedByFactory(SKILLS_DIR)];
 // Copilot CLI also reads the Claude and Codex Skill folders, and the default install writes only those.
 const skillTargets = (agent) => (agent === 'copilot' ? ['copilot', 'claude', 'codex'] : [agent]);
-const isInstalled = (agent, projectDir, homeDir) => (name) => skillTargets(agent)
+const isInstalled = (agent, projectDir, homeDir) => (name, file = 'SKILL.md') => skillTargets(agent)
   .flatMap((a) => [path.join(projectDir, targets[a].project), path.join(homeDir, targets[a].global)])
-  .some((dir) => fs.existsSync(path.join(dir, name, 'SKILL.md')));
+  .some((dir) => fs.existsSync(path.join(dir, name, file)));
 
 function skillsCheck(has) {
   const missing = requiredSkills().filter((name) => !has(name));
-  return missing.length ? ['fail', `required Skills not installed: ${missing.join(', ')}`] : ['pass', 'all required Skills are installed'];
+  if (missing.length) return ['fail', `required Skills not installed: ${missing.join(', ')}`];
+  // The factory Skill names reference files next to it; an install from before they existed leaves them out.
+  const shipped = fs.readdirSync(path.join(SKILLS_DIR, 'factory', 'references')).filter((f) => f.endsWith('.md'));
+  const absent = shipped.filter((f) => !has('factory', `references/${f}`));
+  return absent.length ? ['fail', `the factory Skill is missing its reference files: ${absent.join(', ')}; run tds-factory install`] : ['pass', 'all required Skills are installed'];
 }
 
 // Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.

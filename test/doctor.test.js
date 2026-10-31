@@ -370,3 +370,14 @@ test('doctor reports the optional Verify-fast command like the Verify command', 
   // The full Verify line is still the one `verify-command` reads.
   assert.match(check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-command').message, /Verify command: npm test$/);
 });
+
+test('doctor fails the skills check when the installed factory Skill lacks its reference files', () => {
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'claude');
+  assert.equal(check(doctorAt(home, project(), '--agent', 'claude').report, 'skills').status, 'pass');
+  rmSync(join(home, targets.claude.global, 'factory', 'references', 'check.md'));
+  const skills = check(doctorAt(home, project(), '--agent', 'claude').report, 'skills');
+  assert.equal(skills.status, 'fail');
+  assert.match(skills.message, /factory Skill is missing its reference files: check\.md/);
+  assert.match(skills.message, /tds-factory install/);
+});
