@@ -50,6 +50,60 @@ test('doctor passes the project checks of a ready project and changes nothing', 
   assert.equal(git(dir, 'status', '--porcelain'), before);
 });
 
+test('doctor discovers the project from a nested directory', () => {
+  const dir = project(`${AGENTS}- Verify-fast: \`npm run test:unit\`\n`);
+  const nested = join(dir, 'deep', 'nested');
+  mkdirSync(nested, { recursive: true });
+  install(dir, 'codex');
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const root = doctorAt(home, dir, '--agent', 'codex');
+  const child = doctorAt(home, nested, '--agent', 'codex');
+  assert.deepEqual(child, root);
+});
+
+test('doctor uses the linked worktree rather than the main checkout', () => {
+  const main = repo();
+  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-worktree-')), 'linked');
+  git(main, 'worktree', 'add', '-b', 'doctor-test', linked);
+  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+  const nested = join(linked, 'nested');
+  mkdirSync(nested);
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  assert.deepEqual(doctorAt(home, nested, '--agent', 'codex'), doctorAt(home, linked, '--agent', 'codex'));
+  assert.equal(check(doctorAt(home, nested, '--agent', 'codex').report, 'tracker').status, 'pass');
+});
+
+test('doctor preserves spaces at the end of the worktree path', () => {
+  const main = repo();
+  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-space-')), 'project ');
+  git(main, 'worktree', 'add', '-b', 'doctor-space', linked);
+  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+  const nested = join(linked, 'nested');
+  mkdirSync(nested);
+  assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
+});
+
+test('doctor preserves a trailing carriage return in a POSIX worktree path', { skip: process.platform === 'win32' }, () => {
+  const main = repo();
+  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-cr-')), 'project\r');
+  git(main, 'worktree', 'add', '-b', 'doctor-cr', linked);
+  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+  assert.equal(check(doctor(linked, '--agent', 'codex').report, 'tracker').status, 'pass');
+});
+
+test('doctor tells a user outside Git why it cannot pass', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'doctor-outside-'));
+  const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /fail +git: not a git repository/);
+});
+
 test('doctor names the missing tracker setup without naming a setup command', () => {
   const dir = mkdtempSync(join(tmpdir(), 'doctor-bare-'));
   writeFileSync(join(dir, 'AGENTS.md'), '# Agents\n');
