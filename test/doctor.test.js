@@ -121,6 +121,18 @@ test('doctor passes skills and review for every Agent target once the Factory is
   assert.equal(check(doctor(dir, '--agent', 'codex').report, 'skills').status, 'pass');
 });
 
+test('doctor for Copilot finds Skills in the Claude and Codex folders, where the default install puts them', () => {
+  for (const skillsFrom of ['claude', 'codex']) {
+    const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+    install(home, skillsFrom);
+    install(home, 'copilot', ['factory']); // Copilot's own folders hold the Stage agents, not the Skills
+    rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
+    const { report } = doctorAt(home, project(), '--agent', 'copilot');
+    assert.equal(check(report, 'skills').status, 'pass', skillsFrom);
+    assert.equal(check(report, 'review').status, 'pass', skillsFrom);
+  }
+});
+
 test('doctor reports review as unavailable without the review Skills or the factory-check agent', () => {
   const skills = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   install(skills, 'claude', ['code-review']);

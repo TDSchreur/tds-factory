@@ -58,7 +58,10 @@ function verifyCommandCheck(projectDir) {
 
 // Every Skill the factory Skill invokes, found by the phrasing sync and the skills test rely on.
 const requiredSkills = () => ['factory', ...invokedByFactory(SKILLS_DIR)];
-const isInstalled = (agent, projectDir, homeDir) => (name) => [path.join(projectDir, targets[agent].project), path.join(homeDir, targets[agent].global)]
+// Copilot CLI also reads the Claude and Codex Skill folders, and the default install writes only those.
+const skillTargets = (agent) => (agent === 'copilot' ? ['copilot', 'claude', 'codex'] : [agent]);
+const isInstalled = (agent, projectDir, homeDir) => (name) => skillTargets(agent)
+  .flatMap((a) => [path.join(projectDir, targets[a].project), path.join(homeDir, targets[a].global)])
   .some((dir) => fs.existsSync(path.join(dir, name, 'SKILL.md')));
 
 function skillsCheck(has) {
