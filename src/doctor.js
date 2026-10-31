@@ -130,7 +130,8 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
   if (agent !== undefined && !Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
   // Git resolves the current worktree (including linked worktrees), not the shared main checkout.
   const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: projectDir, encoding: 'utf8' });
-  if (root.status === 0 && root.stdout.trim()) projectDir = root.stdout.trim();
+  const worktreeRoot = root.stdout?.replace(/\r?\n$/, '');
+  if (root.status === 0 && worktreeRoot) projectDir = worktreeRoot;
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
   const attempt = ([id, check]) => { let result; try { result = check(); } catch (err) { result = ['fail', err.message]; } return { id, status: result[0], message: result[1] }; };
   const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)], ['verify-fast', () => verifyFastCheck(projectDir)]].map(attempt);

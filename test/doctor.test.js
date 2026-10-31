@@ -75,6 +75,18 @@ test('doctor uses the linked worktree rather than the main checkout', () => {
   assert.equal(check(doctorAt(home, nested, '--agent', 'codex').report, 'tracker').status, 'pass');
 });
 
+test('doctor preserves spaces at the end of the worktree path', () => {
+  const main = repo();
+  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-space-')), 'project ');
+  git(main, 'worktree', 'add', '-b', 'doctor-space', linked);
+  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+  const nested = join(linked, 'nested');
+  mkdirSync(nested);
+  assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
+});
+
 test('doctor tells a user outside Git why it cannot pass', () => {
   const dir = mkdtempSync(join(tmpdir(), 'doctor-outside-'));
   const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
