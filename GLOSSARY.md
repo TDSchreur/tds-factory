@@ -140,8 +140,12 @@ One pass of the Flow for one piece of work, from idea to pull request.
 _Avoid_: Job, Pipeline
 
 **Run record**:
-The status file a Run keeps up to date as it moves through the Stages, read by the Dashboard.
+The status file a Run keeps up to date as it moves through the Stages, read by the Dashboard. It also holds the model the agent was asked to use and reported, and when the Run was last seen.
 _Avoid_: Log, State file
+
+**Event log**:
+The append-only `events.jsonl` in a Run folder, one line for each Stage change, Ticket done, Verify start and finish, wait and release, and Rework. It describes what happened and never feeds a gate or Evidence. See ADR 0021.
+_Avoid_: Audit trail
 
 **Run metrics**:
 Observed Stage time, Reworks and Check history for a Run. Missing observations are unknown rather than zero.
