@@ -10,7 +10,7 @@ export const defaultLabels = { ticket: 'ready-for-agent' };
 const topKeys = ['models', 'max_check_loops', 'labels', 'reviews'];
 const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 const modelName = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:\/@-]{0,99}$/.test(v);
-const labelName = (v) => typeof v === 'string' && !!v.trim() && v.length <= 50 && !/[\x00-\x1f\x7f,]/.test(v);
+const labelName = (v) => typeof v === 'string' && !!v.trim() && v.length <= 50 && /^[\w .:\/-]+$/.test(v) && !!v.trim();
 
 // The line of the last key in `keys`, searched in order so a repeated name resolves to the right object.
 function lineOf(source, keys) {
@@ -46,7 +46,7 @@ export function configProblems(source, data) {
     if (!plain(data.labels)) add(['labels'], '"labels" must be an object');
     else for (const [key, value] of Object.entries(data.labels)) {
       if (!labelKeys.includes(key)) add(['labels', key], `unknown label "${key}" (use ${labelKeys.join(', ')})`);
-      else if (!labelName(value)) add(['labels', key], `the "${key}" label must be a nonempty name of at most 50 characters`);
+      else if (!labelName(value)) add(['labels', key], `the "${key}" label must be 1 to 50 letters, digits, spaces or . : _ / -`);
     }
   }
   if ('reviews' in data && !Array.isArray(data.reviews)) add(['reviews'], '"reviews" must be an array');
