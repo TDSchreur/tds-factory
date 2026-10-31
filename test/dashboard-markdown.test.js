@@ -13,6 +13,14 @@ test('headings, paragraphs and rules become blocks', () => {
   ]);
 });
 
+test('an indented heading in a diff renders and parsing continues', () => {
+  assert.deepEqual(parse('+Added line\n ## Switching between releases\n\n Next line'), [
+    { type: 'paragraph', inline: [t('+Added line')] },
+    { type: 'heading', level: 2, inline: [t('Switching between releases')] },
+    { type: 'paragraph', inline: [t('Next line')] },
+  ]);
+});
+
 test('bullet and numbered lists keep their kind', () => {
   assert.deepEqual(parse('- a\n- b'), [{ type: 'list', ordered: false, items: [{ inline: [t('a')] }, { inline: [t('b')] }] }]);
   assert.deepEqual(parse('1. a\n2. b'), [{ type: 'list', ordered: true, items: [{ inline: [t('a')] }, { inline: [t('b')] }] }]);
