@@ -125,12 +125,41 @@ test('doctor for Copilot finds Skills in the Claude and Codex folders, where the
   for (const skillsFrom of ['claude', 'codex']) {
     const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
     install(home, skillsFrom);
-    install(home, 'copilot', ['factory']); // Copilot's own folders hold the Stage agents, not the Skills
+    install(home, 'copilot'); // Copilot's own folders hold the Stage agents, not the Skills
     rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
     const { report } = doctorAt(home, project(), '--agent', 'copilot');
     assert.equal(check(report, 'skills').status, 'pass', skillsFrom);
     assert.equal(check(report, 'review').status, 'pass', skillsFrom);
   }
+});
+
+test('doctor for Copilot also finds Skills in the project Claude and Codex folders', () => {
+  for (const skillsFrom of ['claude', 'codex']) {
+    const dir = project(), home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+    install(dir, skillsFrom);
+    install(home, 'copilot');
+    rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
+    const { report } = doctorAt(home, dir, '--agent', 'copilot');
+    assert.equal(check(report, 'skills').status, 'pass', skillsFrom);
+    assert.equal(check(report, 'review').status, 'pass', skillsFrom);
+  }
+});
+
+test('doctor for Claude and Codex ignores Skills that are only in another Agent target folder', () => {
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'claude');
+  install(home, 'codex');
+  install(home, 'copilot');
+  rmSync(join(home, targets.copilot.agents), { recursive: true, force: true });
+  rmSync(join(home, targets.claude.global), { recursive: true, force: true });
+  rmSync(join(home, targets.codex.global), { recursive: true, force: true });
+  // Skills now exist only in the Copilot folder, so Claude and Codex must still report them missing.
+  for (const agent of ['claude', 'codex']) assert.equal(check(doctorAt(home, project(), '--agent', agent).report, 'skills').status, 'fail', agent);
+  // And the Copilot folder alone does satisfy Copilot itself.
+  assert.equal(check(doctorAt(home, project(), '--agent', 'copilot').report, 'skills').status, 'pass');
+  const other = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(other, 'claude');
+  assert.equal(check(doctorAt(other, project(), '--agent', 'codex').report, 'skills').status, 'fail');
 });
 
 test('doctor reports review as unavailable without the review Skills or the factory-check agent', () => {
