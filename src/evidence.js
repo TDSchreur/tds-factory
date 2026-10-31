@@ -125,7 +125,7 @@ function carriedFrom(record, axis, value, head, worktree) {
     const [oldMode, newMode] = parts[i].slice(1).split(' ');
     if (!textOnly(parts[i + 1]) || ![oldMode, newMode].every((mode) => ['000000', '100644'].includes(mode))) refused.push(parts[i + 1]);
   }
-  if (refused.length) throw new Error(`a carried verdict needs a text-only Rework (plain documents only, never code, tests, Skills, agents or instruction files; see Carried-over verdict in GLOSSARY.md); these changed since the earlier ${axis} verdict: ${refused.slice(0, 10).join(', ')}${refused.length > 10 ? ', ...' : ''}`);
+  if (refused.length) throw new Error(`a carried verdict needs a text-only Rework (plain documents only, never code, tests, Skills, agents, instruction files, hidden files or links); these changed since the earlier ${axis} verdict: ${refused.slice(0, 10).join(', ')}${refused.length > 10 ? ', ...' : ''}`);
   return earlier.head;
 }
 export function verdictRun(projectDir, id, axis, value, { carried = false } = {}) {

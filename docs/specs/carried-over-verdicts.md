@@ -9,7 +9,7 @@
 3. As the coordinator, I want `tds-factory run verdict --id ID --axis security|infrastructure --value pass|skipped --carried` to record the verdict for the current head only when it is allowed, so that I cannot carry something I should not.
 4. As a user, I want the command to refuse unless the axis passed before with the same value, so that a carried verdict never invents a pass.
 5. As a user, I want it to refuse after `run sync` rebased the branch (the earlier head is no longer an ancestor), so that changed code underneath is reviewed.
-6. As a user, I want it to refuse when the worktree is dirty or any file changed since the earlier head is outside a fixed allowlist, so that code, tests, Skills, agents, instruction files, renames, links and executables are always reviewed.
+6. As a user, I want it to refuse when the worktree is dirty or any file changed since the earlier head is outside a fixed allowlist, so that code, tests, Skills, agents, instruction files, links and executables, and a rename of any of them, are always reviewed.
 7. As a user, I want the carried verdict to record the head it came from in the Run record and the verdict history, so that it can be audited.
 8. As a user, I want Finish and the Dashboard to see a carried verdict like any verdict for the current head, so that Evidence rules are unchanged.
 9. As a reviewer of an axis that is reviewed again, I want the previous findings and the rework diff in my assignment, so that I can confirm each is fixed and review what changed.
