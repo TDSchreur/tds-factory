@@ -35,6 +35,12 @@ The `ci-ok` job succeeds only when all the other jobs do. The `main` ruleset req
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
 
+## JavaScript quality checks
+
+For the development tools, use Node 20.19 or later (or Node 22.13 or later), then run `npm ci`. The CLI itself still supports Node 20. Run `npm run lint` to check the project's JavaScript with ESLint. Vendored files are excluded. Run `npm run format:check` to check the ESLint configuration and package manifest; this limited scope avoids rewriting existing files. Run `npm run format -- <paths>` to format selected files with Prettier. Expand the checked formatting scope as files are adopted.
+
+CI runs both checks. ESLint uses recommended correctness rules with a few existing-code exceptions in its configuration. The project already checks workflows with actionlint, shell scripts with ShellCheck, PowerShell with PSScriptAnalyzer, and documentation with its own tests. Incremental JavaScript type checking is a possible follow-up once interfaces have type annotations; adding a second overlapping linter now would add maintenance without a clear benefit. `npm audit` can identify dependency advisories; development dependencies are not shipped as runtime dependencies.
+
 ## Run store modules
 
 `src/run-store.js` is the only module the CLI, the Dashboard and Doctor import. It exposes `openRunStore` and delegates to modules split by seam: `run-record.js` (field rules and the atomic write), `run-folder.js` (Run folders, locks, listing), `worktrees.js` (worktree and origin facts), `evidence.js` (Verify, verdicts, project reviews and the Finish gate), `run-lifecycle.js` (start, update, transition, accept, sync, rework, complete), `run-events.js` (the append-only Event log of a Run, its bounded reader and the events a change stands for), `run-repair.js` and `run-clean.js`. Tests go through `openRunStore`. See [ADR 0012](adr/0012-run-store-is-split-by-seam.md).

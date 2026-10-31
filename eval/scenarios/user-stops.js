@@ -1,5 +1,5 @@
 import { runAt } from '../lib/fixture.js';
-import { ghWrites, pushes } from '../lib/artifacts.js';
+import { pushes } from '../lib/artifacts.js';
 
 export const name = 'user-stops';
 export const description = 'The user tells the agent to stop: the Run is abandoned and nothing is pushed or published.';
