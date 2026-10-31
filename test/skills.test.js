@@ -6,13 +6,7 @@ import { join } from 'node:path';
 import { install } from '../src/install.js';
 import { SKILLS_DIR, MARKER } from '../src/paths.js';
 
-const flow = readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8');
-
-function section(name) {
-  const found = flow.split(/^## /m).find((s) => s.startsWith(`${name}\n`));
-  if (!found) throw new Error(`SKILL.md has no "## ${name}" section`);
-  return found;
-}
+import { flow, main, references, section } from './skill-text.js';
 
 const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
@@ -72,7 +66,8 @@ test('Build ends with an Exit checklist of five steps, run after the last Ticket
   assert.match(checklist, /`build\.md`/);
   assert.match(checklist, /Universal safeguards/);
   assert.match(checklist, /changelog fragment/);
-  assert.match(build, /run the Exit checklist below, then run `tds-factory run sync/);
+  assert.match(build, /run the Exit checklist \(read `references\/exit-checklist\.md`/);
+  assert.match(build, /then run `tds-factory run sync/);
 });
 
 test('the Exit checklist self-check is inline and records no verdict, and the contract says it is not the closing review', () => {
@@ -352,4 +347,28 @@ test('after a Rework the reviewers get the previous findings, and only Security 
   assert.match(check, /its refusal names the files that changed/);
   assert.match(check, /Standards and Spec are always reviewed again/);
   assert.match(flow, /`--carried` keeps an earlier Security or Infrastructure verdict after a text-only Rework/);
+});
+
+test('the main file stays small and names every reference file where it is needed', () => {
+  assert.ok(Buffer.byteLength(main) < 21_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`);
+  assert.deepEqual(Object.keys(references), ['check.md', 'exit-checklist.md', 'follow-up.md', 'progress-commands.md', 'run-schema.md', 'stage-agents.md']);
+  for (const name of Object.keys(references)) assert.ok(main.includes(`references/${name}`), `${name} is named in SKILL.md`);
+  // The contract every Run needs stays in the main file.
+  for (const heading of ['Preflight', 'Run record', 'Waiting on the user', 'Invoked Skills', 'Tracks', 'Define', 'Build', 'Check', 'Finish']) assert.match(main, new RegExp(`^## ${heading}$`, 'm'));
+  assert.match(main, /go back at most 4 times/);
+  assert.match(main, /Only a clean Check|only a clean Check continues to Finish/);
+});
+
+test('install ships the reference files with the factory Skill', () => {
+  const project = mkdtempSync(join(tmpdir(), 'skill-refs-'));
+  const cwd = process.cwd();
+  process.chdir(project);
+  try { install({ agent: 'claude', project: true, force: false }); } finally { process.chdir(cwd); }
+  for (const name of Object.keys(references)) assert.ok(existsSync(join(project, '.claude', 'skills', 'factory', 'references', name)), name);
+});
+
+test('on the Fast track build.md is three lines and the story trace and security check depend on a trust boundary', () => {
+  const checklist = references['exit-checklist.md'];
+  assert.match(checklist, /On the Fast track `build\.md` is three lines/);
+  assert.match(checklist, /written only when the diff touches a trust boundary/);
 });

@@ -4,8 +4,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENTS_DIR, SKILLS_DIR } from '../src/paths.js';
 
-const flow = readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8');
-const check = flow.split(/^## /m).find((s) => s.startsWith('Check\n'));
+import { section } from './skill-text.js';
+
+const check = section('Check');
 
 test('the coordinator passes the diff, the file list and the Verify summary inline to every reviewer', () => {
   assert.match(check, /\*\*Inline assignment\.\*\*/);
