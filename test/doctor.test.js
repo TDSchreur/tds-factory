@@ -280,6 +280,7 @@ test('a missing agent binary is missing, never fail, and a usable agent keeps th
 test('an agent whose command is on PATH but whose Skills are missing is not usable', () => {
   const { report } = doctorOn(pathWith('claude'), project());
   assert.equal(check(report, 'binary', 'claude').status, 'pass');
+  assert.equal(check(report, 'skills', 'claude').status, 'fail');
   assert.equal(entry(report, 'claude').usable, false);
 });
 

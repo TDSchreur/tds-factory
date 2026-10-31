@@ -41,7 +41,7 @@ Patterns are case-sensitive, repository-relative globs: `*` matches within one p
 
 For interactive reviews, `runtime.start`, `runtime.ready` and `runtime.setup` are required strings. `start` describes how to start a local/test application, `ready` how to detect readiness, and `setup` how to provision or use test data and accounts. Never store credentials or secrets in the configuration or Skill folder: the Factory snapshots the entire referenced Skill folder, including bundled scripts and binary assets, in the local Run record. Avoid sensitive material there and protect access to `.factory/runs/`.
 
-Run `tds-factory doctor --json --agent codex` (or `claude`/`copilot`) and inspect the `review` check before starting. It reports invalid definitions and missing Skills. A Run uses definitions and Skill contents captured at its start. Later configuration or installed-Skill edits affect new Runs only; missing runtime dependencies still need to be installed.
+Run `tds-factory doctor --json --agent codex` (or `claude`/`copilot`) and inspect the `review` check in its `agents` entry before starting. It reports invalid definitions and missing Skills. A Run uses definitions and Skill contents captured at its start. Later configuration or installed-Skill edits affect new Runs only; missing runtime dependencies still need to be installed.
 
 ## Author a review Skill
 
