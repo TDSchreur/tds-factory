@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
+### Added
+- The Dashboard has new actions: buttons for `run sync`, `run clean` and accepting a Check that is not clean, and a "Needs you" browser notification when a Run starts waiting on you. Starting a Run stays in the agent.
+- A Fast track for bug fixes and tiny changes: one confirmation in Define, a one-paragraph Spec and a single Ticket, with Standards and Security still required in Check. The user chooses it, or confirms Define's recommendation, with `tds-factory run track`. The track is recorded in `run.json`, shown on the Dashboard and used to split `run stats` by track.
+- `tds-factory run follow-up` collects PR CI failures and unresolved review threads into scoped Rework under the shared Check loop limit.
+- An optional committed `.factory/config.json` sets the model per Stage, a Check loop cap (never above 4), the Ticket label and extra Project reviews, without editing agent files or running `install --force`. `tds-factory doctor` validates it and names the line to fix, a Run freezes it, and `tds-factory run config` prints it. `.factory/reviews.json` keeps working.
+- Run metrics record Stage visits and Check verdict history, with `tds-factory run stats` and a Dashboard Run detail summary.
+
+### Changed
+- The Run store is split into smaller modules behind the same interface, with no change to the CLI, `run.json` or the Dashboard API.
+- `docs/evaluation.md` records the first live baseline on Claude (Haiku 5.5, all seven scenarios pass), and `docs/capabilities.md` marks the Claude cells that the run proved.
+
+### Fixed
+- The Factory Skill and the install guide now say how to check for a needed label: `gh label list --search <name> --json name`, matching the exact name. The agent asks the user only when the label is absent and treats "already exists" from `gh label create` as present, so it no longer asks for a label the repository already has.
+- `tds-factory doctor --agent copilot` (and `/factory` in Copilot) now finds Skills in the Claude and Codex folders, where the default `install` puts them, instead of reporting them missing.
+- The offline `gh` in the evaluation answers `repo view` and `label list` for its fixture repository, and the `approval-resolved` grader no longer requires the Spec to be committed.
+
+### Security
+- Every Dashboard write route (`DELETE` and `POST`) now needs the page's own Origin and a per-session token, and the server sends no CORS headers. See ADR 0017.
+
 ## [0.4.0] - 2026-10-30
 
 ### Added
