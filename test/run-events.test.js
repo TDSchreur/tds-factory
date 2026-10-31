@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openRunStore } from '../src/run-store.js';
 import { readEvents } from '../src/run-events.js';
