@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 const exec = promisify(execFile);
@@ -67,8 +67,13 @@ export function interpretRun(entry) {
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
-export async function startDashboard({ projectDir = process.cwd(), port, prState = ghPrState, prMerge = ghPrMerge, dashboardDir = DASHBOARD_DIR } = {}) {
+// prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
+export async function startDashboard({ projectDir = process.cwd(), port, prState = ghPrState, prMerge = ghPrMerge, prInfo, dashboardDir = DASHBOARD_DIR } = {}) {
   const store = openRunStore(projectDir);
+  // Clean-up must run from the main checkout, also when the Dashboard was started inside a Run worktree.
+  const mainStore = openRunStore(store.projectDir);
+  const token = randomBytes(32).toString('hex');
+  const tokenOk = (given) => typeof given === 'string' && given.length === token.length && timingSafeEqual(Buffer.from(given), Buffer.from(token));
   const prCache = new Map();
   const lookup = (url) => {
     const hit = prCache.get(url);
@@ -91,9 +96,10 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
     const { port: own } = server.address();
     if (![`127.0.0.1:${own}`, `localhost:${own}`].includes(req.headers.host)) return send(403, 'text/plain', 'forbidden');
     const path = (req.url ?? '/').split('?')[0];
+    // Every write passes the same guard (ADR 0017): own Origin and a per-session token; the Host check above covers all routes.
+    if (req.method !== 'GET' && req.method !== 'HEAD' && (req.headers.origin !== `http://${req.headers.host}` || !tokenOk(req.headers['x-factory-token']))) return send(403, 'text/plain', 'forbidden');
     try {
       if (req.method === 'DELETE' && path.startsWith('/api/runs/')) {
-        if (req.headers.origin !== `http://${req.headers.host}`) return send(403, 'text/plain', 'forbidden');
         let id;
         try { id = decodeURIComponent(path.slice('/api/runs/'.length)); } catch { return send(400, 'text/plain', 'invalid id'); }
         const query = new URL(req.url, 'http://localhost').searchParams;
@@ -108,7 +114,6 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
       }
       const merge = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/merge$/);
       if (merge) {
-        if (req.headers.origin !== `http://${req.headers.host}`) return send(403, 'text/plain', 'forbidden');
         let id;
         try { id = decodeURIComponent(merge[1]); } catch { return send(400, 'text/plain', 'invalid id'); }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -130,6 +135,34 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         if (details.headRefOid.toLowerCase() !== eligibility.head.toLowerCase()) return send(409, 'text/plain', 'the PR head does not match the Run Evidence');
         try { await prMerge(v.pr, eligibility.head); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); } finally { prCache.delete(v.pr); }
         return send(200, 'text/plain', 'merged');
+      }
+      const action = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/(sync|clean|accept)$/);
+      if (action) {
+        let id;
+        try { id = decodeURIComponent(action[1]); } catch { return send(400, 'text/plain', 'invalid id'); }
+        const entry = (await store.list()).find((e) => e.id === id);
+        if (!entry) return send(404, 'text/plain', 'not found');
+        const v = interpretRun(entry);
+        if (v.unreadable) return send(409, 'text/plain', 'the Run record cannot be read');
+        try {
+          if (action[2] === 'sync') {
+            store.sync(id);
+            return send(200, 'text/plain', 'synced');
+          }
+          if (action[2] === 'clean') {
+            const { outcome, reason } = mainStore.clean(id, { prState: prInfo });
+            return send(outcome === 'kept' ? 409 : 200, 'text/plain', reason ? `${outcome}: ${reason}` : outcome);
+          }
+          if (!v.waiting || v.column !== 'check') return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
+          const { problems } = store.mergeEligibility(id);
+          if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
+          // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.
+          const reason = v.reason || 'accept the Check or send it back to Build';
+          store.update(id, { status: 'running', activity: 'The user accepted the Check on the Dashboard' });
+          try { store.accept(id, { findings: problems.join('; '), decision: 'Continue to Finish with the open findings. Accepted by the user on the Dashboard.' }); }
+          catch (err) { store.update(id, { status: 'waiting', waiting_reason: reason }); throw err; }
+          return send(200, 'text/plain', 'accepted');
+        } catch (err) { return send(409, 'text/plain', String(err.message).replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')); }
       }
       const checks = req.method === 'GET' && path.match(/^\/api\/runs\/([^/]+)\/merge-checks$/);
       if (checks) {
@@ -153,7 +186,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
       }
       if (path === '/api/info') {
         const version = await readFile(new URL('../package.json', import.meta.url), 'utf8').then((data) => str(JSON.parse(data).version)).catch(() => '');
-        return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir), ...(version ? { version } : {}) }));
+        return send(200, 'application/json', JSON.stringify({ project: resolve(projectDir), token, ...(version ? { version } : {}) }));
       }
       if (path === '/api/views') return send(200, 'application/json', JSON.stringify(await Promise.all((await store.list()).map(view))));
       if (path === '/api/runs') return send(200, 'application/json', JSON.stringify(await store.list()));

@@ -1,3 +1,4 @@
+import { writeHeaders } from './dashboard-token.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -126,9 +127,11 @@ test('info route names the project directory the Dashboard serves', async () => 
   const res = await get(dash, '/api/info');
   assert.equal(res.status, 200);
   const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
-  assert.deepEqual(JSON.parse(res.body), { project, version });
+  const info = JSON.parse(res.body);
+  assert.match(info.token, /^[0-9a-f]{64}$/);
+  assert.deepEqual({ ...info, token: undefined }, { project, version, token: undefined });
   assert.notEqual(version, '99.88.77');
-  assert.deepEqual(JSON.parse((await get(emptyDash, '/api/info')).body), { project: empty, version });
+  assert.deepEqual({ ...JSON.parse((await get(emptyDash, '/api/info')).body), token: undefined }, { project: empty, version, token: undefined });
 });
 
 const getAs = (d, path, host) =>
@@ -168,21 +171,44 @@ test('server listens on loopback only', () => {
 
 test('unsupported methods are rejected', async () => {
   for (const path of ['/api/runs', '/api/info']) {
-    const status = await new Promise((resolve) => {
-      const req = http.request({ host: '127.0.0.1', port: dash.port, path, method: 'POST' }, (res) => {
-        res.resume();
-        resolve(res.statusCode);
-      });
-      req.end();
-    });
-    assert.equal(status, 405, path);
+    assert.equal((await fetch(`${dash.url}${path}`, { method: 'POST', headers: await writeHeaders(dash) })).status, 405, path);
   }
+});
+
+test('every write needs the same Origin and the session token', async () => {
+  const paths = [['DELETE', '/api/runs/x'], ['POST', '/api/runs/x/merge'], ['POST', '/api/runs/x/sync'], ['POST', '/api/runs/x/clean'], ['POST', '/api/runs/x/accept'], ['POST', '/api/runs']];
+  const good = await writeHeaders(dash);
+  for (const [method, path] of paths) {
+    for (const [name, headers] of [['no headers', {}], ['no token', { Origin: dash.url }], ['no origin', { 'X-Factory-Token': good['X-Factory-Token'] }],
+      ['wrong token', { ...good, 'X-Factory-Token': 'x'.repeat(64) }], ['foreign origin', { ...good, Origin: 'http://evil.example' }]]) {
+      assert.equal((await fetch(`${dash.url}${path}`, { method, headers })).status, 403, `${method} ${path} with ${name}`);
+    }
+  }
+  assert.equal((await fetch(`${dash.url}/api/runs/x/sync`, { method: 'POST', headers: good })).status, 404);
+});
+
+test('the server sends no CORS headers and does not answer a preflight', async () => {
+  const get = await fetch(`${dash.url}/api/info`, { headers: { Origin: 'http://evil.example' } });
+  assert.equal([...get.headers.keys()].some((name) => name.startsWith('access-control-')), false);
+  const options = await fetch(`${dash.url}/api/runs/x/sync`, { method: 'OPTIONS', headers: { Origin: 'http://evil.example', 'Access-Control-Request-Method': 'POST' } });
+  assert.equal(options.status, 403);
+  assert.equal([...options.headers.keys()].some((name) => name.startsWith('access-control-')), false);
+});
+
+test('the session token differs between servers and stays the same within one', async () => {
+  const other = await startDashboard({ projectDir: project, port: 0 });
+  try {
+    const a = (await writeHeaders(dash))['X-Factory-Token'], b = (await writeHeaders(other))['X-Factory-Token'];
+    assert.match(a, /^[0-9a-f]{64}$/);
+    assert.equal(a, (await writeHeaders(dash))['X-Factory-Token']);
+    assert.notEqual(a, b);
+  } finally { await other.close(); }
 });
 
 test('deletion removes completed and active Runs', async () => {
   run('2026-02-01-finished', { 'run.json': JSON.stringify({ status: 'done' }), 'finish.md': 'history' });
   run('active-to-delete', { 'run.json': JSON.stringify({ status: 'running' }) });
-  const request = (id) => fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  const request = async (id) => fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
   assert.equal((await request('2026-02-01-finished')).status, 200);
   assert.equal((await request('active-to-delete')).status, 200);
   assert.equal((await get(dash, '/files/2026-02-01-finished/finish.md')).status, 404);
@@ -191,7 +217,7 @@ test('deletion removes completed and active Runs', async () => {
 
 test('deletion rejects foreign origins and traversal', async () => {
   run('2026-02-02-abandoned', { 'run.json': JSON.stringify({ status: 'abandoned' }) });
-  const request = (path, origin = dash.url) => fetch(`${dash.url}${path}`, { method: 'DELETE', headers: { Origin: origin } });
+  const request = async (path, origin = dash.url) => fetch(`${dash.url}${path}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
   assert.equal((await request('/api/runs/2026-02-02-abandoned', 'http://evil.example')).status, 403);
   assert.equal((await request('/api/runs/%2e%2e%2fsecret')).status, 400);
   assert.equal((await request('/api/runs/2026-02-02-abandoned')).status, 200);
@@ -199,7 +225,7 @@ test('deletion rejects foreign origins and traversal', async () => {
 
 test('terminal Runs with older directory names can be deleted', async () => {
   run('2026-02-03_Ünicode legacy!.run', { 'run.json': JSON.stringify({ status: 'done' }) });
-  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, { method: 'DELETE', headers: await writeHeaders(dash) });
   assert.equal(response.status, 200);
 });
 
@@ -209,7 +235,7 @@ test('deleting a Run with a whitespace-padded ID preserves the similarly named R
   const views = JSON.parse((await get(dash, '/api/views')).body);
   const padded = views.find((r) => r.title === 'Padded');
   assert.equal(padded.id, ' padded ');
-  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, { method: 'DELETE', headers: { Origin: dash.url } });
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, { method: 'DELETE', headers: await writeHeaders(dash) });
   assert.equal(response.status, 200);
   assert.ok((await list()).some((r) => r.id === 'padded'));
   assert.ok(!(await list()).some((r) => r.id === ' padded '));

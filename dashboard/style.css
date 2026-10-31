@@ -135,10 +135,10 @@
     header { padding: .6rem 1rem; }
     #status { order: 1; }
     #project { order: 2; }
-    #theme, #older { order: 3; }
+    #theme, #older, #notify { order: 3; }
     #status { min-width: 0; overflow-wrap: anywhere; }
     #project { max-width: min(16rem, 100%); }
-    #theme, #older, .column > button, .tickets a, .card .toggle, .actions button, #intro summary, .dialog-actions button { min-height: 44px; }
+    #theme, #older, #notify, .column > button, .tickets a, .card .toggle, .actions button, #intro summary, .dialog-actions button { min-height: 44px; }
     .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; }
     #intro summary { padding: .625rem 0; }
     .stage-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .5rem; padding: 1rem 1rem 0; }

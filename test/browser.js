@@ -46,6 +46,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     return null;
   }
   const calls = [];
+  const tokens = []; // the X-Factory-Token header of each write
   state.runs ??= [];
   state.files ??= {};
   const server = createServer((req, res) => {
@@ -53,13 +54,14 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     const send = (status, type, body, headers = {}) => { res.writeHead(status, { 'content-type': type, ...headers }); res.end(body); };
     if (req.method !== 'GET') {
       calls.push(`${req.method} ${req.url}`);
+      tokens.push(req.headers['x-factory-token']);
       const answer = state.respond?.(req) ?? { status: 200, body: '' };
       return send(answer.status, 'text/plain', answer.body, answer.headers);
     }
     if (path === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(path)) return send(200, TYPES[path.split('.').pop()], readFileSync(new URL(path.slice(1), DASHBOARD)));
     if (/^\/api\/runs\/[^/]+\/merge-checks$/.test(path)) return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
-    if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: state.project ?? 'test', version: state.version }));
+    if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: state.project ?? 'test', version: state.version, token: 'test-token' }));
     if (path === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
     if (path === '/api/views') return send(200, 'application/json', JSON.stringify(state.runs));
     if (path.startsWith('/files/')) {
@@ -107,7 +109,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     await request('POST', base + '/goog/cdp/execute', { cmd: 'Emulation.setDeviceMetricsOverride', params: { width, height, deviceScaleFactor: 1, mobile: false } });
     const execute = (script, scriptArgs = []) => request('POST', base + '/execute/sync', { script, args: scriptArgs });
     Object.assign(page, {
-      state, calls, execute, close,
+      state, calls, tokens, execute, close,
       screenshot: () => request('GET', base + '/screenshot'),
       // Resolves when the script returns something truthy; fails with the script after five seconds.
       async waitFor(script) {
