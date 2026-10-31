@@ -14,7 +14,7 @@ Without `--agent`, the Doctor checks and reports all three Agent targets: claude
 2. As a user with only Codex installed, I want the Doctor to pass when Codex is ready, so that the missing Claude and Copilot do not block me.
 3. As a user with no supported agent installed, I want the Doctor to fail and tell me to install one and run `tds-factory install`, so that I know what to do first.
 4. As a user, I want each agent's lines grouped under its name, so that I can tell which agent a `missing` belongs to.
-5. As a user, I want an agent whose binary is on PATH but whose Skills are not installed to show that line as `missing`, so that I know to run `tds-factory install`.
+5. As a user, I want an agent whose binary is on PATH but whose Skills are not installed to show that line as `fail`, so that I know to run `tds-factory install`.
 6. As a user, I want a missing agent binary reported as `missing`, never `fail`, so that an agent I do not use reads as optional.
 7. As a user, I want the failing lines of a non-usable agent to stay visible when another agent is usable, so that nothing is hidden.
 8. As a user, I want the shared checks shown once, so that the report stays short.

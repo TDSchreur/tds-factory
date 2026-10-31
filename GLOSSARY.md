@@ -53,7 +53,7 @@ The read-only `tds-factory doctor` command that runs the Preflight checks and re
 _Avoid_: Linter, Health check
 
 **Usable agent**:
-An Agent target whose command is found on PATH and whose per-target Doctor checks all pass. The Doctor fails only when no Agent target is usable. Named with `--agent`, a target is held to its checks alone, because the caller already runs inside it.
+An Agent target whose command is found on PATH and whose per-target Doctor checks all pass. The Doctor fails only when no Agent target is usable. Named with `--agent`, a target is held to its Skills, Project config and review checks alone, because the caller already runs inside it.
 
 **Project config**:
 The optional committed `.factory/config.json` with a project's settings: the model per Stage, the Check loop cap (at most the Factory maximum), the Ticket label and extra Project reviews. A Run freezes it when it starts, and the Doctor validates it.

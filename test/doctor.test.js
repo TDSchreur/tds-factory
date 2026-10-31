@@ -101,8 +101,10 @@ test('doctor prints one line per check and exits non-zero while a check is not p
   assert.match(result.stdout, /^pass +cli: /m);
 });
 
-test('doctor rejects an unknown Agent target', () => {
-  assert.equal(doctor(project(), '--agent', 'nope').status, 1);
+test('doctor rejects an unknown Agent target and lists the valid ones', () => {
+  const result = doctor(project(), '--agent', 'nope');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /claude, codex, copilot/);
 });
 
 // Installs the shipped Skills and Stage agents the way `install` lays them out, minus the ones named in `skip`.
@@ -282,7 +284,7 @@ test('an agent whose command is on PATH but whose Skills are missing is not usab
 });
 
 test('doctor fails when no agent is usable and says what to do', () => {
-  const { report, status, stdout } = doctorOn(pathWith(), project());
+  const { report, status } = doctorOn(pathWith(), project());
   assert.equal(report.ok, false);
   assert.equal(status, 1);
   const line = report.checks.find((c) => c.id === 'agents');

@@ -118,8 +118,9 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
   });
   let ok = checks.every((c) => c.status === 'pass');
   if (agent === undefined) {
-    if (!agents.some((a) => a.usable)) checks.push({ id: 'agents', status: 'fail', message: NO_AGENT });
-    ok = ok && agents.some((a) => a.usable);
+    const anyUsable = agents.some((a) => a.usable);
+    if (!anyUsable) checks.push({ id: 'agents', status: 'fail', message: NO_AGENT });
+    ok = ok && anyUsable;
   } else ok = ok && agents[0].checks.every((c) => c.id === 'binary' || c.status === 'pass');
   // Not a check: merged Runs that kept a worktree or branch never stop a Run, they only deserve a hint.
   const left = checks.find((c) => c.id === 'git')?.status === 'pass' ? mergedLeftovers(projectDir, prState) : [];
