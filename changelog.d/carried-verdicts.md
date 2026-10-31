@@ -1,0 +1,2 @@
+### Added
+- `tds-factory run verdict --axis security|infrastructure --value pass|skipped --carried` keeps an earlier Security or Infrastructure verdict for the current code after a text-only Rework, so those axes need no new review. The command allows it only when the axis passed before with the same value, that earlier revision is still an ancestor, the worktree is clean and every file changed since is Markdown outside `skills/` and `agents/`; it records the revision the verdict was carried from. Standards and Spec are always reviewed again (ADR 0019).

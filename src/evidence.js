@@ -95,7 +95,23 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   });
   return result;
 }
-export function verdictRun(projectDir, id, axis, value) {
+// A Rework keeps a Security or Infrastructure verdict only for a text-only change: see ADR 0019.
+const carriable = ['security', 'infrastructure'];
+function carriedFrom(record, axis, value, head, worktree) {
+  if (!carriable.includes(axis)) throw new Error('only security and infrastructure verdicts can be carried over; review the other axes again');
+  if (value === 'fail') throw new Error('a fail is never carried over');
+  const earlier = [...(record.metrics?.verdicts ?? [])].reverse().find((event) => event.axis === axis && event.head && event.head !== head);
+  if (!earlier) throw new Error(`there is no earlier ${axis} verdict to carry over; review the axis`);
+  if (earlier.value !== value) throw new Error(`the earlier ${axis} verdict was ${earlier.value}; a carried verdict needs the same value`);
+  const git = (...args) => spawnSync('git', args, { cwd: worktree, encoding: 'utf8' });
+  if (git('merge-base', '--is-ancestor', earlier.head, head).status !== 0) throw new Error(`the earlier ${axis} head is not an ancestor of the current head (the branch was rebased or rewritten); review the axis`);
+  const diff = git('diff', '-z', '--name-only', '--no-ext-diff', earlier.head, head);
+  if (diff.status !== 0) throw new Error(`cannot read the changes since the earlier ${axis} head: ${diff.stderr.trim()}`);
+  const files = diff.stdout.split('\0').filter(Boolean).filter((name) => !name.endsWith('.md') || name.startsWith('skills/') || name.startsWith('agents/'));
+  if (files.length) throw new Error(`a carried verdict needs a text-only Rework (Markdown outside skills/ and agents/); these files changed since the earlier ${axis} verdict: ${files.slice(0, 10).join(', ')}${files.length > 10 ? ', ...' : ''}`);
+  return earlier.head;
+}
+export function verdictRun(projectDir, id, axis, value, { carried = false } = {}) {
   if (!verdicts.includes(axis)) throw new Error(`unknown Check axis: ${axis}`);
   validate({ [axis]: value });
   changeRunning(projectDir, id, {}, (old) => {
@@ -103,7 +119,9 @@ export function verdictRun(projectDir, id, axis, value) {
     if (value === 'skipped' && !skippable(axis, old)) throw new Error(`${axis} cannot be skipped on the ${trackOf(old)} track`);
     const { head, dirty } = worktreeState(old);
     if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
-    return { record: recordVerdict({ ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, { axis, value, head, attempt: attempt(old) }), activity: `${axis} verdict: ${value}` };
+    const from = carried ? carriedFrom(old, axis, value, head, old.worktree) : undefined;
+    const stamp = { head, attempt: attempt(old), ...(from ? { carried_from: from } : {}) };
+    return { record: recordVerdict({ ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: stamp } }, { axis, value, ...stamp }), activity: `${axis} verdict: ${value}${from ? ' (carried over)' : ''}` };
   });
 }
 
