@@ -113,7 +113,7 @@ stateDiagram-v2
 
 (`verification_unavailable` is `verification-unavailable` in `run.json`; Mermaid does not allow the hyphen.)
 
-The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
+The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting. If you press **Accept Check** on the Dashboard instead, also tell the agent in the chat; it sees the recorded decision for the current code and continues.
 
 If the project does not have a verify command in `AGENTS.md` (or `CLAUDE.md`) under `## Commands`, the agent asks for it once, at the very start of the Run, and records it. The command cannot be changed later; start a new Run for that. The Run shows as "Needs you" while it waits.
 
@@ -132,10 +132,10 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 - The **chips** show the Ticket progress, baseline and project Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
 - Click a card to open the **Run detail** with its links, Tickets, Stage summaries and Run metrics. On compact screens it fills the screen; use **Back to stages** or Esc to return to the same Run. On wider screens it opens on the right; click the card again, press Esc or use the close button to close it.
-- Done cards start collapsed. Press **Show details** on a Done card to see its pull request link and actions. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** is available on every Run. Stop an unfinished Run's agent first. Delete removes its record and Factory-created worktree while keeping the branch. If the worktree has uncommitted changes, a separate confirmation lets you discard them or cancel. **Delete all** applies only to Done Runs and asks separately about each dirty worktree.
+- Done cards start collapsed. Press **Show details** on a Done card to see its pull request link and actions. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Clean up** appears once the pull request is merged and removes the Run worktree and branch. **Sync** (a running Run in Build or Check) rebases the Run onto the default branch of `origin`, and **Accept Check** (a Check waiting on you) continues to Finish with a Check that is not clean. Each asks first. Press **Notify me** to get a browser notification when a Run starts waiting on you. **Delete** is available on every Run. Stop an unfinished Run's agent first. Delete removes its record and Factory-created worktree while keeping the branch. If the worktree has uncommitted changes, a separate confirmation lets you discard them or cancel. **Delete all** applies only to Done Runs and asks separately about each dirty worktree.
 - Older Runs are folded away; "Show older" brings them back.
 
-Leave the Dashboard open while you work. It refreshes every two seconds. The routes and the rules for deleting a Run are in the [Dashboard guide](dashboard.md).
+Leave the Dashboard open while you work. It refreshes every two seconds. The routes, the actions and the rules for deleting a Run are in the [Dashboard guide](dashboard.md).
 
 ### Run metrics
 

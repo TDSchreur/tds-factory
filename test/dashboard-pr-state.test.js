@@ -1,3 +1,4 @@
+import { writeHeaders } from './dashboard-token.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -80,7 +81,7 @@ if (args[1] === 'view') {
   const previousPath = process.env.PATH;
   process.env.PATH = bin + ':' + previousPath;
   const dash = await startDashboard({ projectDir: project, port: 0 });
-  const post = (id = '2026-01-01-r', origin = dash.url) => fetch(`${dash.url}/api/runs/${id}/merge`, { method: 'POST', headers: { origin } });
+  const post = async (id = '2026-01-01-r', origin = dash.url) => fetch(`${dash.url}/api/runs/${id}/merge`, { method: 'POST', headers: await writeHeaders(dash, origin) });
   const checks = () => fetch(`${dash.url}/api/runs/2026-01-01-r/merge-checks`);
   const readCalls = () => JSON.parse(readFileSync(calls, 'utf8'));
   const close = async () => { await dash.close(); process.env.PATH = previousPath; };

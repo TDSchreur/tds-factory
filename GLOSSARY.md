@@ -70,6 +70,9 @@ _Avoid_: Clean (alone)
 **Clean**:
 A Check whose every Check axis is `pass`, with Infrastructure and nonmatching Project reviews allowed to be `skipped`, backed by current Evidence: a passing Verify result and every verdict recorded for the code as it is now, with nothing uncommitted. Only a clean Check continues to Finish without asking the user.
 
+**Session token**:
+The random value a Dashboard server makes when it starts. The Dashboard page reads it from `/api/info` and sends it with every write, so a request from another web page, which cannot read it, is refused. See ADR 0017.
+
 **Verify command**:
 The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
 _Avoid_: Test command

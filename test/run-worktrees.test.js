@@ -1,3 +1,4 @@
+import { writeHeaders } from './dashboard-token.js';
 import { test } from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -255,7 +256,7 @@ test('Dashboard requires an explicit discard option before deleting dirty work',
   const { worktree } = record(main, id);
   writeFileSync(join(worktree, 'unsaved.txt'), 'work');
   const dash = await startDashboard({ projectDir: main, port: 0 });
-  const request = (query, origin = dash.url) => fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: { Origin: origin } });
+  const request = async (query, origin = dash.url) => fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
   try {
     const refused = await request('');
     assert.equal(refused.status, 409);
@@ -277,7 +278,7 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
   finish(store, id);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dashboard) });
     assert.equal(res.status, 409);
     assert.match(await res.text(), /uncommitted changes/);
     assert.deepEqual((await (await fetch(`${dashboard.url}/api/runs`)).json()).map((r) => r.id), [id]);
@@ -294,13 +295,13 @@ test('the Dashboard shows git\'s error when it cannot remove a clean worktree', 
   finish(store, id);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dashboard) });
     assert.equal(res.status, 409);
     const body = await res.text();
     assert.match(body, /git could not remove the Run worktree: .*locked/);
     assert.doesNotMatch(body, /uncommitted changes/);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
-    const override = await fetch(`${dashboard.url}/api/runs/${id}?discardChanges=true`, { method: 'DELETE', headers: { Origin: dashboard.url } });
+    const override = await fetch(`${dashboard.url}/api/runs/${id}?discardChanges=true`, { method: 'DELETE', headers: await writeHeaders(dashboard) });
     assert.equal(override.status, 409);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
   } finally {

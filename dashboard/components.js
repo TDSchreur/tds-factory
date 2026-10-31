@@ -60,7 +60,7 @@ function Tickets({ run }) {
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
 const pauseLabel = (run) => run.waiting ? 'Needs you' : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
 
-export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onDelete }) {
+export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onSync, onClean, onAccept, onDelete }) {
   const done = run.column === 'done';
   const age = ageMs(run.updated);
   const stale = age !== null && !done && !run.unreadable && age > STALE_MS;
@@ -72,6 +72,9 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onD
     done && run.pr && html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
     (done || (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) && html`<div class="actions">
       ${run.pr && run.prState === 'open' && run.status === 'done' && html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(e) => { stop(e); onMerge(run); }} onKeyDown=${stop}>Merge</button>`}
+      ${!run.unreadable && ['build', 'check'].includes(run.column) && run.status === 'running' && html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(e) => { stop(e); onSync(run); }} onKeyDown=${stop}>Sync</button>`}
+      ${!run.unreadable && run.column === 'check' && run.status === 'waiting' && html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(e) => { stop(e); onAccept(run); }} onKeyDown=${stop}>Accept Check</button>`}
+      ${run.status === 'done' && run.prState === 'merged' && html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(e) => { stop(e); onClean(run); }} onKeyDown=${stop}>Clean up</button>`}
       ${!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) && html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => { stop(e); onDelete(run); }} onKeyDown=${stop}>Delete</button>`}
     </div>`,
   ];
@@ -102,7 +105,7 @@ export function Board({ runs, stage, onStage, selectedId, expandedIds, doneCount
     return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
       <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
       ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
-      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onMerge=${actions.merge} onDelete=${actions.remove} />`)}</ul>
+      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
       ${!mine.length && html`<div class="empty">No runs</div>`}
     </section>`;
   })}</main></div>`;
@@ -153,12 +156,13 @@ function Logo() {
 }
 
 // The pill shows the last segment of the project path; the full path is its tooltip.
-export function Header({ project, version, status, olderLabel, onOlder }) {
+export function Header({ project, version, status, olderLabel, onOlder, canNotify, onNotify }) {
   return html`<header>
     <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
     <${ThemeSelect} />
+    ${canNotify && html`<button id="notify" type="button" onClick=${onNotify}>Notify me</button>`}
     <button id="older" type="button" hidden=${!olderLabel} onClick=${onOlder}>${olderLabel}</button>
   </header>`;
 }

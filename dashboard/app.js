@@ -7,6 +7,9 @@ import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
 const BRAND = 'TDS Factory';
 const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media query in style.css
 
+// 'default' while the user can still be asked, 'unsupported' without the Notification API.
+const notifyPermission = () => typeof window.Notification === 'function' ? window.Notification.permission : 'unsupported';
+
 function App() {
   const [entries, setEntries] = useState([]);
   const [project, setProject] = useState('');
@@ -21,6 +24,9 @@ function App() {
   const [request, setRequest] = useState(null);
   const queue = useRef(Promise.resolve());
   const current = useRef(null);
+  const token = useRef(null);
+  const known = useRef(null); // ids of Runs that were waiting at the last poll; null before the first one
+  const [, setAsked] = useState(0); // re-render after the permission question; the permission itself is read at render time
   const returnFocus = useRef(null);
   const shown = useRef(null); // the Run whose detail is open, as of the last render; the Escape handler outlives renders
   current.current = request;
@@ -77,6 +83,27 @@ function App() {
     if (open) open.resolve(confirmed);
   };
 
+  // Every write carries the session token the server gave this page (ADR 0017).
+  const write = async (method, url) => {
+    token.current ??= (await (await fetch('/api/info', { cache: 'no-store' })).json()).token;
+    return fetch(url, { method, headers: { 'x-factory-token': token.current } });
+  };
+  const runAction = async (run, name, title, message, action, done, query = '') => {
+    if (!await ask(title, message, action, false)) return;
+    try {
+      const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/' + name + query);
+      const text = await response.text();
+      await ask(response.ok ? done : 'Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : 'accept the Check'), response.ok ? (name === 'clean' ? text : done + '.') : text, 'Close', false, true);
+    } catch (err) { await ask('Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : 'accept the Check'), run.title, 'Close', false, true); }
+    poll();
+  };
+  const syncRun = (run) => runAction(run, 'sync', 'Sync with origin?', 'Rebase the branch of "' + run.title + '" onto the default branch of origin. Evidence is cleared when the code or the base changes. Conflicts leave the branch unchanged.', 'Sync', 'Synced');
+  const cleanRun = (run) => runAction(run, 'clean', 'Clean up Run?', 'Remove the Run worktree and local branch of "' + run.title + '". The Run record stays. This is refused unless its pull request is merged.', 'Clean up', 'Cleaned up');
+  const acceptRun = (run) => {
+    const open = [['Standards', run.standards], ['Spec', run.spec], ['Security', run.security], ['Infrastructure', run.infrastructure]].map(([name, verdict]) => name + ': ' + (verdict || 'no verdict')).join(', ');
+    return runAction(run, 'accept', 'Accept this Check?', 'Continue "' + run.title + '" to Finish with a Check that is not clean. ' + open + '. Only the current code is accepted; a new commit voids this.', 'Accept and continue', 'Accepted', '?updated=' + encodeURIComponent(run.updated));
+  };
+
   const removeRuns = async (runs, message, doneOnly = false) => {
     if (!await ask(runs.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true)) return;
     const failed = [];
@@ -84,10 +111,10 @@ function App() {
       try {
         const url = '/api/runs/' + encodeURIComponent(run.id);
         const query = doneOnly ? '?doneOnly=true' : '';
-        let response = await fetch(url + query, { method: 'DELETE' });
+        let response = await write('DELETE', url + query);
         if (response.status === 409 && response.headers.get('x-factory-error') === 'dirty-worktree') {
           if (!await ask('Discard uncommitted changes?', 'The Run \"' + run.title + '\" has uncommitted changes. They will be permanently lost and its Run worktree removed. Continue?', 'Discard and delete', true)) continue;
-          response = await fetch(url + (query ? query + '&' : '?') + 'discardChanges=true', { method: 'DELETE' });
+          response = await write('DELETE', url + (query ? query + '&' : '?') + 'discardChanges=true');
         }
         if (!response.ok) failed.push(run.title + ' (' + (await response.text()) + ')');
       } catch (err) { failed.push(run.title); }
@@ -104,7 +131,7 @@ function App() {
     } catch {}
     if (!await ask('Squash and merge?', 'Merge the pull request for "' + run.title + '"?\n' + run.pr + '\n\n' + checks, 'Squash and merge', false)) return;
     try {
-      const response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge', { method: 'POST' });
+      const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/merge');
       if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
     } catch (err) { await ask('Could not merge', run.title, 'Close', false, true); }
     poll();
@@ -134,6 +161,16 @@ function App() {
     }
   }, [!!openRun]);
   const waiting = entries.filter((r) => r.waiting).length;
+  // A browser notification for each Run that starts waiting on the user while the page is open; Runs already waiting at the first poll only count in the title.
+  useEffect(() => {
+    if (!loaded) return;
+    const now = new Set(entries.filter((r) => r.waiting).map((r) => r.id));
+    if (known.current && notifyPermission() === 'granted') {
+      for (const r of entries) if (r.waiting && !known.current.has(r.id)) { try { new Notification('Needs you: ' + r.title, { body: r.reason || 'This Run is waiting on you.', tag: r.id }); } catch {} }
+    }
+    known.current = now;
+  }, [entries, loaded]);
+  const enableNotify = async () => { try { await Notification.requestPermission(); } catch {} setAsked((n) => n + 1); };
   useEffect(() => { const name = folderName(project); document.title = (waiting ? '(' + waiting + ') ' : '') + (name ? name + ' · ' : '') + BRAND; }, [waiting, project]);
 
   const actions = {
@@ -144,12 +181,15 @@ function App() {
     },
     toggle: (id) => setExpandedIds((now) => { const next = new Set(now); if (!next.delete(id)) next.add(id); return next; }),
     merge: mergeRun,
+    sync: syncRun,
+    clean: cleanRun,
+    accept: acceptRun,
     remove: (run) => removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?' + (!['done', 'abandoned'].includes(run.status) ? ' Stop its agent before deleting this Run.' : '')),
     deleteAll: () => removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records, summaries, and Factory-created Run worktrees, including hidden older Runs?', true),
   };
   const olderLabel = older.length ? (showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')') : '';
 
-  return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} />
+  return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} />
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
       <${Board} runs=${runs} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
