@@ -139,6 +139,15 @@ export async function inspectRuns(projectDir, runsDir, only) {
         try {
           const { head, dirty } = worktreeState(record);
           if (dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
+          // A cheap sign that the Flow was bypassed: project files committed while the Run never left Define. Define may only add its own documents.
+          if (active && record.stage === 'define' && record.base_sha) {
+            // base_sha comes from a file an agent can edit: only a plain commit id may reach git, never something it would read as an option.
+            if (!/^[0-9a-f]{40,64}$/.test(record.base_sha)) throw new Error('base_sha is not a commit id');
+            const diff = spawnSync('git', ['diff', '--name-only', '--no-renames', '-z', record.base_sha, 'HEAD', '--'], { cwd: record.worktree, encoding: 'utf8' });
+            if (diff.status !== 0) throw new Error(`cannot compare the Run branch with its base: ${(diff.stderr ?? '').trim()}`);
+            const outside = diff.stdout.split('\0').filter((f) => f && !/^(docs\/|changelog\.d\/|GLOSSARY\.md$)/.test(f));
+            if (outside.length) add('stage-skipped', `the Run is still in Define but its branch changes ${outside.slice(0, 3).join(', ')}${outside.length > 3 ? ' and more' : ''}; a Stage may have been skipped`);
+          }
           const seen = [record.verify?.head, record.accepted?.head, ...Object.values(record.reviewed ?? {}).map((r) => r?.head), ...Object.values(record.project_results ?? {}).map((r) => r?.head)].filter(Boolean);
           const staleBase = Object.values(record.project_results ?? {}).some((r) => r?.base_sha !== record.base_sha);
           if (active && ['check', 'finish'].includes(record.stage) && (seen.some((h) => h !== head) || staleBase)) add('stale-evidence', 'Evidence was recorded for an earlier head or base than the current one');
