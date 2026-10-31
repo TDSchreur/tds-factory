@@ -1,8 +1,8 @@
 ---
 name: factory-check
 description: Factory check Stage worker
-model: opus
-effort: high
+model: sonnet
+effort: medium
 tools: Read, Grep, Glob
 ---
 
