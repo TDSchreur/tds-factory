@@ -11,7 +11,7 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 1. As a phone user, I want the Dashboard to fit 320, 375 and 390 CSS pixels, so that I can read and operate it without sideways page scrolling.
 2. As a tablet user, I want readable Run cards at 768 CSS pixels, so that unused width and long Stage stacks do not obstruct my work.
 3. As a small laptop user, I want readable cards at 1024 CSS pixels, so that narrow desktop columns do not hide important information.
-4. As a user, I want to move directly between Define, Build, Check, Finish and Done, so that reaching later Stages does not require scrolling through earlier Runs.
+4. As a user, I want to move directly between Define, Build, Check, Finish, Follow-up and Done, so that reaching later Stages does not require scrolling through earlier Runs.
 5. As a user, I want each Stage control to show its Run count and whether a Run needs me, so that compact navigation does not hide waiting work.
 6. As a user, I want my chosen Stage to remain selected during polling, so that refreshes do not interrupt my reading.
 7. As a user, I want to browse an empty Stage, so that I can distinguish no Runs from a missing Stage.
@@ -28,7 +28,7 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 
 ## Implementation Decisions
 
-- Navigation covers exactly the five Dashboard columns: Define, Build, Check, Finish and Done. The desktop board uses these five columns without an unused sixth track.
+- Navigation covers the six Dashboard columns: Define, Build, Check, Finish, Follow-up and Done. The desktop board uses these six columns without an unused track.
 - The compact breakpoint is inclusive: at 1024 CSS pixels and below, display one selected Stage; above it, display the existing multi-column board. Stage controls fit or wrap within available width and have accessible names, selection state, counts and waiting markers.
 - The initial compact Stage favors work waiting on the user, otherwise the first nonempty Stage in Flow order, otherwise Define. Explicit selection remains stable during polling, including when that Stage becomes empty. Counts reflect visible Runs after the existing older-Run filter; waiting Runs remain visible under that filter.
 - Preserve Stage selection when moving between compact and desktop sizes. Filtering and polling continue using existing behavior and do not unexpectedly change the selected Stage.

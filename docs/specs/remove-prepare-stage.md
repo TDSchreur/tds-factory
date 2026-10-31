@@ -4,13 +4,13 @@ The Prepare Stage has no work of its own since the smaller-option instruction mo
 
 ## Solution
 
-The Flow has four Stages: Define, Build, Check and Finish. A Run moves from Define straight to Build, the Dashboard has no Prepare column, and the skill, agents, README and guides no longer mention Prepare. A Run recorded before this change at `prepare` is read as `define`, so it still moves on and shows in a column.
+The Flow now has five Stages: Define, Build, Check, Finish and Follow-up (see [Follow-up](follow-up-stage.md)). A Run moves from Define straight to Build, the Dashboard has no Prepare column, and the skill, agents, README and guides no longer mention Prepare. A Run recorded before this change at `prepare` is read as `define`, so it still moves on and shows in a column.
 
 ## User Stories
 
 1. As a Factory user, I want the Flow to have only Stages that do work, so that I do not wait on or explain an empty Stage.
 2. As an agent following the `factory` Skill, I want to move from Define to Build with one transition, so that no step is a no-op.
-3. As a Factory user watching the Dashboard, I want columns Define, Build, Check, Finish and Done, so that every column means something.
+3. As a Factory user watching the Dashboard, I want columns Define, Build, Check, Finish, Follow-up and Done, so that every column means something.
 4. As a Factory user with an older Run recorded at `prepare`, I want it to keep working, so that I do not repair records by hand.
 5. As a Factory user, I want `run transition --to prepare` refused as an unknown Stage, so that I do not move a Run into a Stage that no longer exists.
 6. As a reader of the README and guides, I want the Stage list, diagram and model table to match the Flow, so that the docs are not stale.
@@ -24,7 +24,7 @@ The Flow has four Stages: Define, Build, Check and Finish. A Run moves from Defi
 - The `factory` Skill drops the Prepare section and Prepare from its description, transition usage, stage field values and Stage agents text. The CLI usage line drops `prepare`.
 - The `factory-define` agent descriptions and the README model table say Define only. Models and efforts do not change.
 - The Dashboard drops the Prepare column help text and the Prepare entry in its explanations.
-- The Glossary Stage definition is already updated to Define, Build, Check or Finish.
+- The Glossary Stage definition now includes Define, Build, Check, Finish and Follow-up.
 - The README diagram, Stage results text and table, and the usage guide's diagram, Stage list, Dashboard columns and glossary table drop Prepare. Where the guide says Prepare leaves no summary, that sentence goes.
 - No ADR: the change is easy to undo and has no real trade-off. `docs/specs/archive/` is not edited.
 

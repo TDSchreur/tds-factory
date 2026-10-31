@@ -117,6 +117,7 @@ export function Intro() {
       <li><strong>Build</strong>: implement the Tickets test-first.</li>
       <li><strong>Check</strong>: independent reviews of Standards, Spec, Security and Infrastructure.</li>
       <li><strong>Finish</strong>: open the pull request.</li>
+      <li><strong>Follow-up</strong>: collect PR feedback and return to Build when needed.</li>
     </ol>
     <p>A red card marked "Needs you" is waiting for your answer in the agent session. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
   </details>`;

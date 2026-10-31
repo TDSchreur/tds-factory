@@ -25,6 +25,7 @@ The fixture directory is left in place and printed, so you can inspect it. Agent
 | `head-changes` | No Finish or PR on Evidence for an older head |
 | `user-stops` | Run `abandoned`, no push, no GitHub write |
 | `restart-after-pr` | No second `gh pr create`, the existing PR linked, Run `done` |
+| `follow-up` | Failed CI and unresolved thread scope produce the fourth shared Rework, clear Evidence and retain the existing PR |
 | `spec-missing` | Run stays in Define, no Ticket done |
 | `approval-resolved` | Spec is a file in `docs/specs/`, no issue holds the Spec, Tickets carry `ready-for-agent`, Run not waiting |
 
@@ -51,4 +52,4 @@ The first `approval-resolved` run failed two checks, and the agent was not at fa
 - The grader required the Spec in `git diff`, but Define leaves its files uncommitted until Build starts. The grader now looks at `docs/specs/` in the worktree.
 - The offline `gh` answered `repo view` and `label list` with an empty list, so the agent saw no GitHub repository and wrote its Ticket as a local file. The shim now answers both for a fixture repository. `test/eval-harness.test.js` covers the new answers.
 
-No scenario showed the agent ignoring the `## Invoked Skills` section, so that section is unchanged. Run the suite again on your usual model before you rely on the Flow with it. There is no CI workflow for it, because the eval needs a Claude login and the project has no API key; run it locally.
+The `follow-up` scenario was added after this baseline and has not been run against a live agent. No baseline scenario showed the agent ignoring the `## Invoked Skills` section, so that section is unchanged. Run the suite again on your usual model before you rely on the Flow with it. There is no CI workflow for it, because the eval needs a Claude login and the project has no API key; run it locally.

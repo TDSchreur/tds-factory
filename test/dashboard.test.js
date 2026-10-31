@@ -289,3 +289,8 @@ test('project review outcomes, findings and skip reasons are visible in the Dash
   assert.equal(view.projectReviews[0].findings[0].description, 'Bad label');
   assert.match(view.projectReviews[1].reason, /No changed file/);
 });
+
+test('numbered Follow-up summaries follow Finish and are sorted by observation', async () => {
+  run('2026-01-05-follow-up', { 'run.json': JSON.stringify({ stage: 'follow-up', status: 'running' }), 'follow-up-10.md': '10', 'follow-up-2.md': '2', 'finish.md': 'finish' });
+  assert.deepEqual((await list()).find((r) => r.id === '2026-01-05-follow-up').files, ['finish.md', 'follow-up-2.md', 'follow-up-10.md']);
+});

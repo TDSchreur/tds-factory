@@ -10,8 +10,8 @@ const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
-export const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha'];
-// How many times Check may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
+export const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
+// How many times Check and Follow-up may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
 export const MAX_CHECK_LOOPS = 4;
 export const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
@@ -32,6 +32,7 @@ export function validate(data) {
       : lists.includes(key) ? Array.isArray(value) && value.every((v) => typeof v === 'string')
       : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0 && (key !== 'check_loops' || value <= MAX_CHECK_LOOPS)
       : verdicts.includes(key) ? ['pass', 'fail', ...(key === 'infrastructure' ? ['skipped'] : [])].includes(value)
+      : key === 'follow_up' ? value !== null && typeof value === 'object' && !Array.isArray(value)
       : key === 'stage' ? stages.includes(value)
       : key === 'status' ? statuses.includes(value)
       : key === 'agent' ? typeof value === 'string' && Object.hasOwn(targets, value)

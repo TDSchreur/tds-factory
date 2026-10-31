@@ -86,6 +86,7 @@ export function transitionRun(projectDir, id, to, data = {}) {
       if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
     }
     if (to === 'check' && (!old.tickets_total || old.tickets_done !== old.tickets_total)) throw new Error(`Check needs every Ticket done (${old.tickets_done} of ${old.tickets_total})`);
+    if (to === 'follow-up' && !old.pr) throw new Error('Follow-up needs a PR link');
     if (to === 'finish') {
       const problems = finishProblems(old);
       if (problems.length) throw new Error(`Finish needs a clean or Accepted Check: ${problems.join('; ')}`);
@@ -149,7 +150,7 @@ export function reworkRun(projectDir, id, data = {}) {
 }
 export function completeRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
-    if (old.stage !== 'finish') throw new Error('only a Run in Finish can be completed');
+    if (!['finish', 'follow-up'].includes(old.stage)) throw new Error('only a Run in Finish or Follow-up can be completed');
     if (!old.pr) throw new Error('completing a Run needs a PR link');
     if (old.tickets_done > old.tickets_total) throw new Error(`more Tickets done (${old.tickets_done}) than counted (${old.tickets_total})`);
     return { record: { ...moveVisit(old, null), status: 'done', waiting_on_human: false, waiting_reason: '' }, activity: 'Done' };

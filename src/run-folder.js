@@ -85,12 +85,12 @@ export function changeRunning(projectDir, id, data, move) {
 
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-// Sort Stage summaries in Flow order, with numbered Check passes sorted numerically.
+// Sort Stage summaries in Flow order, with numbered Check and Follow-up summaries sorted numerically.
 function stageOrder(name) {
   const base = name.replace(/\.md$/, '');
-  const m = /^check-(\d+)$/.exec(base);
-  const index = stages.indexOf(m ? 'check' : base);
-  return [index < 0 ? stages.length : index, m ? Number(m[1]) : 0];
+  const m = /^(check|follow-up)-(\d+)$/.exec(base);
+  const index = stages.indexOf(m ? m[1] : base);
+  return [index < 0 ? stages.length : index, m ? Number(m[2]) : 0];
 }
 const byStage = (a, b) => {
   const [x, y] = [stageOrder(a), stageOrder(b)];

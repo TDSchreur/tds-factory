@@ -28,7 +28,7 @@ test('install writes the Stage and interactive review agents for each target', (
     const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
     installIn(project, agent);
     const names = readdirSync(join(project, dir)).filter((f) => !f.startsWith('.')).map((f) => f.split('.')[0]).sort();
-    assert.deepEqual(names, ['factory-build', 'factory-check', 'factory-define', 'factory-finish', 'factory-interactive-check'], agent);
+    assert.deepEqual(names, ['factory-build', 'factory-check', 'factory-define', 'factory-finish', 'factory-follow-up', 'factory-interactive-check'], agent);
   }
 });
 
@@ -59,7 +59,7 @@ test('the Check agent of every target is read-only', () => {
 test('install --agent all also writes the Copilot agents', () => {
   const project = mkdtempSync(join(tmpdir(), 'tds-agents-all-'));
   installIn(project, 'all');
-  assert.equal(readdirSync(join(project, '.github', 'agents')).filter((f) => !f.startsWith('.')).length, 5);
+  assert.equal(readdirSync(join(project, '.github', 'agents')).filter((f) => !f.startsWith('.')).length, 6);
 });
 
 test('install keeps a dangling agent symlink', () => {

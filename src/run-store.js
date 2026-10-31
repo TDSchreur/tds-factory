@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { followUpRun } from './run-follow-up.js';
 import { summarizeMetrics, formatMetrics, totalMetrics } from './run-metrics.js';
 import { reviewPlan } from './project-reviews.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
@@ -21,6 +22,7 @@ export function openRunStore(callerDir) {
     start: (data) => startRun(projectDir, data),
     update: (id, data) => updateRun(projectDir, id, data),
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
+    followUp: (id) => followUpRun(projectDir, id),
     rework: (id, data) => reworkRun(projectDir, id, data),
     sync: (id, data) => syncRun(projectDir, id, data),
     complete: (id, data) => completeRun(projectDir, id, data),

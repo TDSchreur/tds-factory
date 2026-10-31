@@ -1,3 +1,5 @@
+import { stages } from './flow.js';
+
 // Metrics record observations independently of current Evidence. Missing or damaged
 // metrics on an older record are never backfilled from its current state.
 export const newMetrics = (at) => ({ version: 1, visits: [{ stage: 'define', started: at }], verdicts: [], usage: { tokens: 'not tracked', cost: 'not tracked' } });
@@ -18,7 +20,6 @@ export function firstCheck(record, clean) {
   return { ...record, metrics: { ...record.metrics, first_check: clean ? 'clean' : 'unclean' } };
 }
 
-const stages = ['define', 'build', 'check', 'finish'];
 const date = (value) => typeof value === 'string' ? Date.parse(value) : NaN;
 const duration = (ms, ongoing = false) => {
   if (ms === null) return 'no data';
