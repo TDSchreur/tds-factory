@@ -13,7 +13,7 @@ test('the coordinator passes the diff, the file list and the Verify summary inli
   assert.match(check, /`git diff <base_sha>\.\.\.HEAD`/);
   assert.match(check, /changed file list/);
   assert.match(check, /Verify summary/);
-  assert.match(check, /in each reviewer's assignment/);
+  assert.match(check, /in each reviewer's assignment \(inline, or in one file in the Run folder, named in the assignment, that the reviewer reads first/);
   assert.match(check, /open other files only to follow a reference/);
   // A large diff: the file list and per-file diffs up to a limit, and the files left out are named.
   assert.match(check, /larger than about 40 KB/);
