@@ -68,6 +68,8 @@ flowchart TB
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
+Work runs on the Full track by default. The Fast track is a lighter Flow for bug fixes and tiny changes: Define asks one confirmation (a bug goes through `diagnosing-bugs`), writes a one-paragraph Spec and cuts a single Ticket, and Check still requires Standards and Security. You choose the track, or confirm Define's recommendation; it is never applied silently. The track is recorded in `run.json`, shown on the Dashboard and splits `tds-factory run stats`.
+
 Each Stage produces one result.
 
 - Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker.
@@ -78,7 +80,7 @@ Each Stage produces one result.
 
 Projects can add required review Skills for their own stack, UI or UX; see [project reviews](docs/project-reviews.md).
 
-The rules for each Stage are in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). Only a clean Check goes on to Finish without asking, and Check and Follow-up together send the Run back to Build at most four times.
+The rules for each Stage are in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). Only a clean Check goes on to Finish without asking, on both tracks, and Check and Follow-up together send the Run back to Build at most four times.
 
 Agents need `tds-factory` on PATH to create and update the Run record. The record is `run.json` in `.factory/runs/<id>/`, plus a Markdown summary per Stage. Every Run works in its own Run worktree in `.factory/worktrees/<run id>`, on a branch named after the Run id and cut from the freshly fetched default branch of `origin`. Agents in separate tabs therefore never share files. Run records always live in the main checkout, so one Dashboard shows every Run. The Factory does not install dependencies. Run the project's normal setup in the worktree.
 

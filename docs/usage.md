@@ -58,6 +58,8 @@ flowchart TB
 
 ## 2. Define: answer the questions
 
+Work on a Run is on the Full track unless you choose the Fast track. The Fast track is for bug fixes and tiny changes. Say "fast track" when you start the Run, or let Define recommend it and answer yes; the Factory never applies it silently. On the Fast track Define skips the interview: for a bug the agent first diagnoses the cause with `diagnosing-bugs`, then asks you one confirmation of what it understood, the one-paragraph Spec and the single Ticket. Build makes one commit, and Check still requires Standards and Security (the Spec review may be skipped). The rule is unchanged: only a clean Check goes on to Finish without asking. The rest of this section describes the Full track.
+
 The agent interviews you to settle what has to be done. It asks in rounds. Each question is numbered and comes with the answer the agent recommends, written so that "yes" accepts it. An example:
 
 ```text
@@ -137,6 +139,8 @@ Leave the Dashboard open while you work. It refreshes every two seconds. The rou
 
 ### Run metrics
 
+The Run record keeps the track (`fast` or `full`; a Run without one is Full). It shows as a Fast or Full chip on the card and in Run detail, and `tds-factory run stats --all` adds totals per track.
+
 Run `tds-factory run stats --id ID` for one Run or `tds-factory run stats --all` for every Run and observed totals. Run detail shows the same per-Run summary. Stage time is elapsed wall-clock time, including waiting. Repeated visits are summed, and an open visit is labeled ongoing. Completion or abandonment stops the clock. A missing observation is `no data`; totals report observed values and identify missing or unreadable records.
 
 First-pass clean rate is clean first Checks divided by observed first Check outcomes. Rework and an Accepted nonclean Check count as unsuccessful; unfinished and unknown outcomes are excluded. The output shows the numerator and denominator, or `no data` when there are no outcomes. The Run record keeps prior Check verdicts for history; they do not count as current Evidence. Current Agent targets expose no token or cost measurements to the Factory, so both are reported as `not tracked`.
@@ -164,6 +168,7 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Word | Meaning |
 |---|---|
 | Run | One pass of the Flow for one piece of work, from idea to pull request. One card on the Dashboard. |
+| Track | The weight of the Flow: Fast (bug fixes and tiny changes: one confirmation, a one-paragraph Spec, one Ticket) or Full (the default). You choose it, or confirm Define's recommendation. |
 | Stage | One step of the Flow: Define, Build, Check, Finish or Follow-up. |
 | Spec | The written definition of what to build, a Markdown file in `docs/specs/`. |
 | Ticket | One small unit of work cut from the Spec, an issue in GitHub. |

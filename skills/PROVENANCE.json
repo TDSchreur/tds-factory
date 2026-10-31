@@ -16,6 +16,14 @@
       "license": "MIT",
       "attribution": "Copyright (c) 2026 Matt Pocock"
     },
+    "diagnosing-bugs": {
+      "source": "vendor/mattpocock-skills/skills/engineering/diagnosing-bugs",
+      "upstream": "https://github.com/mattpocock/skills",
+      "commit": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "transformations": [],
+      "license": "MIT",
+      "attribution": "Copyright (c) 2026 Matt Pocock"
+    },
     "domain-modeling": {
       "source": "vendor/mattpocock-skills/skills/engineering/domain-modeling",
       "upstream": "https://github.com/mattpocock/skills",
