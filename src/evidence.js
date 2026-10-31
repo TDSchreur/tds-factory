@@ -98,12 +98,17 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
 // A Rework keeps a Security or Infrastructure verdict only for a text-only change: see ADR 0019.
 // The allowed files are an allowlist: Markdown documents that carry no instructions for agents or code.
 const carriable = ['security', 'infrastructure'];
-const textOnly = (name) => /^docs\/(?!agents\/)[^\0\n]+\.md$/.test(name) || /^changelog\.d\/[^/\0\n]+\.md$/.test(name) || /^(?:README|GLOSSARY|CONTRIBUTING|SECURITY)\.md$/.test(name);
+// A path is never text-only if an agent could load it as instructions: hidden folders, folders named like agent or Skill folders at any depth, and instruction file names.
+const instruction = (name) => {
+  const parts = name.split('/');
+  return parts.some((part) => part.startsWith('.') || /^(?:agents|skills|commands|prompts|instructions)$/i.test(part)) || /^(?:agents|claude|gemini|skill|copilot-instructions)\.md$|\.(?:agent|prompt|instructions)\.md$/i.test(parts.at(-1));
+};
+const textOnly = (name) => !instruction(name) && (/^docs\/[^\0\n]+\.md$/.test(name) || /^changelog\.d\/[^/\0\n]+\.md$/.test(name) || /^(?:README|GLOSSARY|CONTRIBUTING|SECURITY)\.md$/.test(name));
 function carriedFrom(record, axis, value, head, worktree) {
   if (!carriable.includes(axis)) throw new Error('only security and infrastructure verdicts can be carried over; review the other axes again');
   if (value === 'fail') throw new Error('a fail is never carried over');
   const latest = [...(record.metrics?.verdicts ?? [])].reverse().find((event) => event.axis === axis);
-  if (latest?.head === head && latest.value === 'fail') throw new Error(`${axis} already failed at this head; review the axis`);
+  if ((latest?.head === head && latest.value === 'fail') || (record[axis] === 'fail' && record.reviewed?.[axis]?.head === head)) throw new Error(`${axis} already failed at this head; review the axis`);
   const earlier = [...(record.metrics?.verdicts ?? [])].reverse().find((event) => event.axis === axis && event.head && event.head !== head);
   if (!earlier) throw new Error(`there is no earlier ${axis} verdict to carry over; review the axis`);
   if (!/^[0-9a-f]{40,64}$/.test(earlier.head)) throw new Error(`the earlier ${axis} verdict has no usable head; review the axis`);
@@ -114,6 +119,7 @@ function carriedFrom(record, axis, value, head, worktree) {
   const diff = git('diff', '--raw', '-z', '--no-renames', '--no-ext-diff', earlier.head, head);
   if (diff.status !== 0) throw new Error(`cannot read the changes since the earlier ${axis} head: ${diff.stderr.trim()}`);
   const parts = diff.stdout.split('\0').filter(Boolean);
+  if (parts.length % 2 !== 0 || parts.some((part, i) => i % 2 === 0 && !/^:\d{6} \d{6} [0-9a-f]+ [0-9a-f]+ [AMDT]$/.test(part))) throw new Error(`cannot read the changes since the earlier ${axis} head; review the axis`);
   const refused = [];
   for (let i = 0; i + 1 < parts.length; i += 2) {
     const [oldMode, newMode] = parts[i].slice(1).split(' ');

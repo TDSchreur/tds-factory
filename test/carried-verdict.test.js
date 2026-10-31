@@ -97,7 +97,7 @@ test('the allowed files are an allowlist: README, GLOSSARY, docs outside docs/ag
 });
 
 test('instruction files and every Skill or agent folder are refused, in this repository and in an installed project', () => {
-  for (const name of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md', 'docs/agents/domain.md', '.claude/skills/x/SKILL.md', '.agents/skills/x/SKILL.md', '.github/skills/x/SKILL.md', '.claude/agents/y.md', '.github/agents/y.agent.md', 'Skills/x.md', 'docs/Skills/x.MD']) {
+  for (const name of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md', 'docs/agents/domain.md', '.claude/skills/x/SKILL.md', '.agents/skills/x/SKILL.md', '.github/skills/x/SKILL.md', '.claude/agents/y.md', '.github/agents/y.agent.md', 'Skills/x.md', 'docs/Skills/x.MD', 'docs/CLAUDE.md', 'docs/AGENTS.md', 'docs/.claude/skills/x/SKILL.md', 'docs/Agents/x.md', 'docs/agents.md', 'docs/x/agents/y.md', 'docs/x.prompt.md']) {
     const { cwd, id, change } = afterRework();
     change(name);
     const result = verdict(cwd, id, 'security', 'pass', '--carried');
@@ -147,4 +147,15 @@ test('a fail recorded at the current head is not replaced by a carried pass', ()
   const result = verdict(cwd, id, 'security', 'pass', '--carried');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /already failed at this head/);
+});
+
+test('a rename between two allowlisted documents still carries, and a fail on the record also blocks a carry', () => {
+  const { cwd, id, worktree } = afterRework({ 'docs/a.md': 'text\n' });
+  git(worktree, 'mv', 'docs/a.md', 'docs/b.md');
+  git(worktree, 'commit', '-q', '-m', 'rename a document');
+  assert.equal(verdict(cwd, id, 'security', 'pass', '--carried').status, 0);
+  const again = afterRework();
+  again.change('docs/guide.md');
+  force(again.cwd, again.id, { security: 'fail', reviewed: { ...read(again.cwd, again.id).reviewed, security: { head: git(again.worktree, 'rev-parse', 'HEAD'), attempt: 2 } } });
+  assert.match(verdict(again.cwd, again.id, 'security', 'pass', '--carried').stderr, /already failed at this head/);
 });
