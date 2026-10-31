@@ -101,7 +101,7 @@ const carriable = ['security', 'infrastructure'];
 // A path is never text-only if an agent could load it as instructions: hidden folders, folders named like agent or Skill folders at any depth, and instruction file names.
 const instruction = (name) => {
   const parts = name.split('/');
-  return parts.some((part) => part.startsWith('.') || /^(?:agents|skills|commands|prompts|instructions)$/i.test(part)) || /^(?:agents|claude|gemini|skill|copilot-instructions)\.md$|\.(?:agent|prompt|instructions)\.md$/i.test(parts.at(-1));
+  return parts.some((part) => part.startsWith('.') || /^(?:agents|skills|commands|prompts|instructions)$/i.test(part)) || /^(?:agents?|claude|gemini|skills?|copilot-instructions)(?:\.[^/]+)?\.md$|\.(?:agent|prompt|instructions|chatmode)\.md$/i.test(parts.at(-1));
 };
 const textOnly = (name) => !instruction(name) && (/^docs\/[^\0\n]+\.md$/.test(name) || /^changelog\.d\/[^/\0\n]+\.md$/.test(name) || /^(?:README|GLOSSARY|CONTRIBUTING|SECURITY)\.md$/.test(name));
 function carriedFrom(record, axis, value, head, worktree) {
@@ -116,7 +116,7 @@ function carriedFrom(record, axis, value, head, worktree) {
   const git = (...args) => spawnSync('git', args, { cwd: worktree, encoding: 'utf8' });
   if (git('merge-base', '--is-ancestor', earlier.head, head).status !== 0) throw new Error(`the earlier ${axis} head is not an ancestor of the current head (the branch was rebased or rewritten); review the axis`);
   // --no-renames lists both paths of a rename, and the raw form shows modes, so links, executables and submodules are caught.
-  const diff = git('diff', '--raw', '-z', '--no-renames', '--no-ext-diff', earlier.head, head);
+  const diff = git('diff', '--raw', '-z', '--no-renames', '--no-ext-diff', '--ignore-submodules=none', earlier.head, head);
   if (diff.status !== 0) throw new Error(`cannot read the changes since the earlier ${axis} head: ${diff.stderr.trim()}`);
   const parts = diff.stdout.split('\0').filter(Boolean);
   if (parts.length % 2 !== 0 || parts.some((part, i) => i % 2 === 0 && !/^:\d{6} \d{6} [0-9a-f]+ [0-9a-f]+ [AMDT]$/.test(part))) throw new Error(`cannot read the changes since the earlier ${axis} head; review the axis`);
@@ -125,7 +125,7 @@ function carriedFrom(record, axis, value, head, worktree) {
     const [oldMode, newMode] = parts[i].slice(1).split(' ');
     if (!textOnly(parts[i + 1]) || ![oldMode, newMode].every((mode) => ['000000', '100644'].includes(mode))) refused.push(parts[i + 1]);
   }
-  if (refused.length) throw new Error(`a carried verdict needs a text-only Rework (Markdown in docs/ outside docs/agents/, changelog fragments, README, GLOSSARY, CONTRIBUTING or SECURITY, plain files); these changed since the earlier ${axis} verdict: ${refused.slice(0, 10).join(', ')}${refused.length > 10 ? ', ...' : ''}`);
+  if (refused.length) throw new Error(`a carried verdict needs a text-only Rework (plain documents only, never code, tests, Skills, agents or instruction files; see Carried-over verdict in GLOSSARY.md); these changed since the earlier ${axis} verdict: ${refused.slice(0, 10).join(', ')}${refused.length > 10 ? ', ...' : ''}`);
   return earlier.head;
 }
 export function verdictRun(projectDir, id, axis, value, { carried = false } = {}) {
