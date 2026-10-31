@@ -13,7 +13,7 @@ const MAX_FILE = 1 << 20;
 const SKIP = new Set(['.git', 'node_modules', '.factory', 'vendor']);
 const ROOT_DOCS = ['README.md', 'CONTRIBUTING.md', 'GLOSSARY.md', 'AGENTS.md', 'CLAUDE.md', 'SECURITY.md'];
 const DOC_DIRS = ['docs', 'skills', 'agents', 'changelog.d'];
-const REPLACED_NOTE = /^_.*\b(?:replaced|changed|superseded) by\b/im;
+const REPLACED_NOTE = /^[_>].*\b(?:replaced|changed|superseded) by\b/im;
 const clean = (text) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?');
 
 const git = (cwd, ...args) => {
@@ -49,7 +49,7 @@ function documents(root) {
   const found = [];
   const take = (file) => {
     const stat = fs.lstatSync(file, { throwIfNoEntry: false });
-    if (!stat || !stat.isFile() || stat.size > MAX_FILE || !/\.(md|toml)$/.test(file)) return;
+    if (!stat || !stat.isFile() || stat.size >= MAX_FILE || !/\.(md|toml)$/.test(file)) return;
     found.push(file);
   };
   const walk = (dir) => {
@@ -70,8 +70,10 @@ export function sweepRun(projectDir, id, extra = []) {
   const { record } = readRun(projectDir, id);
   const root = record.worktree;
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
-  const diff = git(root, 'diff', record.base_sha);
-  const changed = new Set(git(root, 'diff', '--name-only', record.base_sha).split('\n').filter(Boolean));
+  if (!/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) throw new Error('the Run has no usable base commit');
+  const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
+  const diff = git(root, 'diff', ...plain, record.base_sha);
+  const changed = new Set(git(root, 'diff', ...plain, '--name-only', record.base_sha).split('\n').filter(Boolean));
   const fromDiff = termsFromDiff(diff);
   const given = [...new Set(extra.map((t) => t.trim()).filter(Boolean))];
   const terms = [...fromDiff, ...given.filter((t) => !fromDiff.some((d) => d.toLowerCase() === t.toLowerCase()))];
@@ -101,7 +103,7 @@ export function formatSweep(report) {
     budget -= take.length;
     const left = hits.length - take.length;
     cut += left;
-    return { lines: take.map((h) => `    ${h.file}:${h.line}: ${clean(h.text.trim().slice(0, LINE))}${h.changed ? ' [changed]' : ''}`), left };
+    return { lines: take.map((h) => `    ${clean(h.file)}:${h.line}: ${clean(h.text.trim().slice(0, LINE))}${h.changed ? ' [changed]' : ''}`), left };
   };
   for (const { term, current, replaced } of report.results) {
     out.push('', `== ${clean(term)}: ${current.length + replaced.length} hit(s) in ${new Set([...current, ...replaced].map((h) => h.file)).size} file(s)`);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
@@ -77,7 +77,7 @@ test('the output is bounded and says what was left out', () => {
   const out = sweep(p).stdout;
   const lines = out.split('\n').filter((l) => /^docs\/f\d+\.md:1/.test(l.trim()) || /^ +docs\/f\d+\.md:1/.test(l));
   assert.ok(lines.length <= 40, `${lines.length} hit lines for one term`);
-  assert.ok(lines.every((l) => l.length <= 200), 'lines are cut');
+  assert.ok(lines.every((l) => l.split(': ').slice(1).join(': ').length <= 160), 'the text of each hit is cut to 160 characters');
   assert.match(out, /\d+ more hit/);
 });
 
@@ -102,4 +102,35 @@ test('a term that occurs everywhere is not listed and says so', () => {
   assert.match(out, /== shared_word: 121 hit\(s\)/);
   assert.match(out, /too common to list \(121 hits\)/);
   assert.doesNotMatch(out, /docs\/g1\.md:1/);
+});
+
+test('the sweep never follows links, strips control characters from file names, and reads a blockquote replaced-by note', () => {
+  const p = project({ 'docs/real.md': 'unique_marker_xyz is here\n', 'docs/we\u001bird.md': 'unique_marker_xyz again\n', 'docs/old.md': '# Old\n\n> Historical: superseded by [new](new.md).\n\nunique_marker_xyz\n' }, { 'docs/z.md': 'adds `unique_marker_xyz`\n' });
+  symlinkSync(join(p.worktree, 'docs', 'real.md'), join(p.worktree, 'docs', 'link.md'));
+  git(p.worktree, 'add', '.'); git(p.worktree, 'commit', '-q', '-m', 'link');
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /\u001b/);
+  assert.doesNotMatch(out, /docs\/link\.md/);
+  assert.match(out, /docs\/we\?ird\.md:1/);
+  assert.match(out.split(/marked as replaced/i)[1], /docs\/old\.md:5/);
+});
+
+test('the total of listed hits is bounded and the rest is counted', () => {
+  const files = {};
+  for (let i = 0; i < 50; i += 1) files[`docs/t${i}.md`] = 'tm1_x tm2_x tm3_x tm4_x tm5_x tm6_x tm7_x tm8_x\n';
+  const p = project(files, { 'docs/z.md': 'adds `tm1_x` `tm2_x` `tm3_x` `tm4_x` `tm5_x` `tm6_x` `tm7_x` `tm8_x`\n' });
+  const out = sweep(p).stdout;
+  const listed = out.split('\n').filter((l) => /^ {4}docs\/t\d+\.md:1:/.test(l));
+  assert.ok(listed.length <= 250, `${listed.length} hits listed`);
+  assert.match(out, /\d+ hit\(s\) left out in total/);
+});
+
+test('a Run without a usable base commit is refused', () => {
+  const p = project({ 'docs/a.md': 'x\n' }, { 'docs/a.md': 'y `term_a`\n' });
+  const file = join(p.cwd, '.factory', 'runs', p.id, 'run.json');
+  const record = JSON.parse(readFileSync(file, 'utf8'));
+  writeFileSync(file, JSON.stringify({ ...record, base_sha: '--output=/tmp/x' }));
+  const result = sweep(p);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /no usable base commit/);
 });
