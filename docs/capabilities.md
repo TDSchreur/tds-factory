@@ -23,11 +23,11 @@ The rule for an unavailable reviewer is in the Check section of [`skills/factory
 
 | Stage | Claude | Codex | Copilot |
 |---|---|---|---|
-| Define | Sonnet, high | `gpt-6.1-sol`, medium | `claude-sonnet-5.5`, not set |
-| Build | Sonnet, medium | `gpt-6.1-terra`, medium | `gpt-5.3-codex`, not set |
-| Check | Opus, high | `gpt-6.1-sol`, high | `claude-sonnet-5.5`, not set |
-| Finish | Haiku, low | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set |
-| Follow-up | Haiku, low | `gpt-6-luna`, medium | `claude-haiku-4.5`, not set |
+| Define | Sonnet, medium | `gpt-6.1-terra`, low | `claude-haiku-4.5`, not set |
+| Build | Sonnet, low | `gpt-6-luna`, medium | `gpt-5.3-codex`, not set |
+| Check | Sonnet, medium | `gpt-6.1-sol`, medium | `claude-sonnet-5.5`, not set |
+| Finish | Haiku, low | `gpt-6-luna`, low | `claude-haiku-4.5`, not set |
+| Follow-up | Haiku, low | `gpt-6-luna`, low | `claude-haiku-4.5`, not set |
 
 Set a model for a project in `.factory/config.json` under `models` (see [Set project options](usage.md#set-project-options)); the coordinator passes it when it dispatches the agent. Editing the agent files still works for all projects. The Copilot agents set no `modelPolicy`, so a model your plan does not offer is replaced by the session model with a warning when you start the agent directly, but Copilot refuses to dispatch it as a subagent, which is how the Factory uses it. Check `/model` in Copilot CLI for the ids your plan offers and edit `model:` to match. Install updates agent files you have not edited and keeps ones you have; `--force` replaces those with the defaults too. Agent files from an install that predates this count as edited, so use `--force` once if you want the new defaults. Whether a model is available depends on your client, account and policy, and the client may substitute another or not report which one ran; the Factory reports such cases instead of assuming. The Copilot defaults were checked by dispatching against Copilot CLI 1.0.105 with one plan's model list, not against other Copilot environments or plans.
 
