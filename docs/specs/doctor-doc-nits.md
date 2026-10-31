@@ -1,0 +1,3 @@
+# Doctor doc nits
+
+Follow-up to [Doctor reports all three agents](doctor-all-agents.md) (PR #279, issue #273), whose Check was accepted with three low findings left open. Fast track, docs and a test title only, no behavior change. `docs/specs/doctor-copilot-skill-folders.md` gets a one-line note that the all-agent Doctor replaced its statement that plain `doctor` defaults to Claude; `docs/install.md` names all three agents (claude, codex and copilot) where it says how to check one agent with `--agent`; and the title of the Doctor test that still says it "exits non-zero while a check is not passing" states the current rule, that the report fails when a shared check is not `pass` or no agent is usable.
