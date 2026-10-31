@@ -39,6 +39,10 @@ Run these checks individually with `npm run test:unit`, `npm run test:browser` a
 
 `src/run-store.js` is the only module the CLI, the Dashboard and Doctor import. It exposes `openRunStore` and delegates to modules split by seam: `run-record.js` (field rules and the atomic write), `run-folder.js` (Run folders, locks, listing), `worktrees.js` (worktree and origin facts), `evidence.js` (Verify, verdicts, project reviews and the Finish gate), `run-lifecycle.js` (start, update, transition, accept, sync, rework, complete), `run-repair.js` and `run-clean.js`. Tests go through `openRunStore`. See [ADR 0012](adr/0012-run-store-is-split-by-seam.md).
 
+## PR providers
+
+Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter behind `src/pr-provider.js`. `providerFor(url)` returns the adapter for a PR link and `remoteRepo(remote)` the adapter and repository of a git remote URL. The Dashboard, Run clean-up, Follow-up and Run repair ask the provider and judge the answer themselves, and a test pins that no other file runs `gh`. A new host is one more adapter in that list. See [ADR 0020](adr/0020-pr-providers-sit-behind-one-seam.md).
+
 ## Switching between the Release and your checkout
 
 Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:

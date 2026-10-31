@@ -1,0 +1,2 @@
+### Changed
+- Every call of the `gh` command now sits behind one module, the PR provider (`src/pr-provider.js` with the GitHub adapter in `src/pr-github.js`), so the Dashboard, Run clean-up, Follow-up and Run repair share it. No CLI output, Run record or Dashboard API changes. A git remote URL is read by one pattern that accepts `http://`, `ssh://` with or without `git@`, and `git@host:` forms (ADR 0020).

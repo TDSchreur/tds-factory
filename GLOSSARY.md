@@ -152,6 +152,10 @@ One continuous stay in a Stage, including time waiting for a human. Rework start
 **First-pass clean rate**:
 The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.
 
+**PR provider**:
+The module that handles a pull request link for a hosting service: it reads a PR's state, head and checks, merges it and finds a Run's PR, so no other module runs a hosting command. GitHub, through the `gh` command, is the only provider today. See ADR 0020.
+_Avoid_: PR backend, Host adapter
+
 **Run store**:
 The single owner of every Run record and Run folder; the CLI and the Dashboard go through it.
 _Avoid_: Run database
