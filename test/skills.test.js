@@ -298,3 +298,12 @@ test('Check sends a Run back only for a Blocking finding and lists the rest as L
   assert.match(check, /severity \(CRITICAL, HIGH, MEDIUM, LOW or INFO\)/);
   assert.match(check, /the standard, Spec requirement or `judgement` it rests on/);
 });
+
+test('Left open items reach check-N.md, finish.md and the pull request description', () => {
+  assert.match(flow, /`check-N\.md` \(one per Check pass.*a Left open list/s);
+  const finish = section('Finish');
+  assert.match(finish, /"Left open" section/);
+  assert.match(finish, /from the `check-N\.md` of the last Check/);
+  assert.match(finish, /`finish\.md` repeats the list/);
+  assert.match(finish, /does not wait on the user/);
+});
