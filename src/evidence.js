@@ -9,6 +9,17 @@ import { worktreeState } from './worktrees.js';
 import { recordVerdict } from './run-metrics.js';
 import { appendEvent } from './run-events.js';
 
+// The one list of current Evidence: the fields finishProblems reads. Everything a transition has to forget when the code
+// under review changes lives here, so a new Evidence field is added in one place. Historical metrics are not Evidence (ADR 0013).
+const evidenceKeys = [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results'];
+
+// A copy of the record without its current Evidence. Run sync and both Reworks use it; other fields stay as they are.
+export function clearEvidence(record) {
+  const next = { ...record };
+  for (const key of evidenceKeys) delete next[key];
+  return next;
+}
+
 // Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
 export function finishProblems(record, { head, dirty } = worktreeState(record)) {
   if (dirty) return ['the Run worktree has uncommitted changes'];

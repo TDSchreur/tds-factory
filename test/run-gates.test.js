@@ -144,9 +144,12 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   const cwd = repo();
   const id = defined(cwd);
   assert.notEqual(run(cwd, 'rework', '--id', id).status, 0, 'not in Check');
-  force(cwd, id, { stage: 'check', tickets_done: 2, standards: 'fail', spec: 'pass', security: 'pass', infrastructure: 'skipped', verify: { exit_code: 0 }, reviewed: { standards: { head: 'a', attempt: 1 } }, accepted: { decision: 'ok' } });
+  force(cwd, id, { stage: 'check', tickets_done: 2, standards: 'fail', spec: 'pass', security: 'pass', infrastructure: 'skipped', verify: { exit_code: 0 }, reviewed: { standards: { head: 'a', attempt: 1 } }, accepted: { decision: 'ok' }, project_results: { a11y: { head: 'a' } } });
+  const before = read(cwd, id);
   assert.equal(run(cwd, 'rework', '--id', id).status, 0);
   const after = read(cwd, id);
+  assert.equal(after.title, before.title);
+  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.check_loops, 1);
   for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted']) assert.equal(key in after, false, key);

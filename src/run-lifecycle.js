@@ -3,10 +3,10 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stages } from './flow.js';
 import { loadProjectConfig, frozenSettings } from './project-config.js';
-import { loopCap, tracks, trackOf, gated, verdicts, validate, apply, write, checkCommands, fastCommandProblem, verifyCommandProblem, loops } from './run-record.js';
+import { loopCap, tracks, trackOf, gated, validate, apply, write, checkCommands, fastCommandProblem, verifyCommandProblem, loops } from './run-record.js';
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
-import { finishProblems } from './evidence.js';
+import { finishProblems, clearEvidence } from './evidence.js';
 import { newMetrics, moveVisit, firstCheck } from './run-metrics.js';
 
 export function startRun(projectDir, data) {
@@ -149,8 +149,7 @@ export function syncRun(projectDir, id, data = {}) {
     }
     const moved = worktreeState(old).head !== head;
     const changed = moved || old.base_sha !== base;
-    const record = { ...old, base_sha: base };
-    if (changed) for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
+    const record = changed ? clearEvidence({ ...old, base_sha: base }) : { ...old, base_sha: base };
     return { record, activity: changed ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
   });
 }
@@ -159,8 +158,7 @@ export function reworkRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
     if (loops(old) >= loopCap(old)) throw new Error(`the Check loop limit of ${loopCap(old)} is reached`);
-    const record = { ...moveVisit(firstCheck(old, false), 'build'), stage: 'build', check_loops: loops(old) + 1 };
-    for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
+    const record = clearEvidence({ ...moveVisit(firstCheck(old, false), 'build'), stage: 'build', check_loops: loops(old) + 1 });
     return { record, activity: 'Rework: back to Build' };
   });
 }

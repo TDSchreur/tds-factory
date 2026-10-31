@@ -44,20 +44,26 @@ const advance = (cwd, file, text, message) => {
 test('sync rebases onto the moved base, records it and clears the Evidence', () => {
   const { cwd, id, wt } = checked();
   review(cwd, id);
+  const before = read(cwd, id);
   advance(cwd, 'other.txt', 'other\n', 'other work');
   ok(run(cwd, 'sync', '--id', id));
   const after = read(cwd, id);
   assert.equal(after.base_sha, git(cwd, 'rev-parse', 'main'));
   assert.equal(git(wt, 'rev-parse', 'HEAD~1'), after.base_sha);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed']) assert.equal(key in after, false, key);
+  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted', 'project_results']) assert.equal(key in after, false, key);
   assert.equal(after.check_loops, 0);
+  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
+  assert.equal(after.title, before.title);
+  assert.notEqual(run(cwd, 'transition', '--id', id, '--to', 'finish').status, 0, 'cleared Evidence cannot authorize Finish');
 });
 
 test('sync keeps the Evidence when the base has not moved', () => {
   const { cwd, id } = checked();
   review(cwd, id);
+  const before = read(cwd, id);
   ok(run(cwd, 'sync', '--id', id));
-  assert.equal(read(cwd, id).security, 'pass');
+  const after = read(cwd, id);
+  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed']) assert.deepEqual(after[key], before[key], key);
 });
 
 test('sync names the conflicting files and leaves the branch alone', () => {

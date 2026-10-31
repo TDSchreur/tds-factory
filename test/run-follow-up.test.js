@@ -31,9 +31,12 @@ function fixture() {
 
 test('follow-up turns failing CI and unresolved review comments into scoped Rework with fresh Evidence', () => {
   const f = fixture();
+  const before = f.read();
   const result = run(f.cwd, 'follow-up', '--id', f.id);
   assert.equal(result.status, 0, result.stderr);
   const after = f.read();
+  assert.equal(after.title, before.title);
+  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.status, 'running');
   assert.equal(after.check_loops, 1);
