@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stages } from './flow.js';
 import { loadProjectReviews } from './project-reviews.js';
-import { MAX_CHECK_LOOPS, gated, verdicts, validate, apply, write, checkCommands, verifyCommandProblem, loops } from './run-record.js';
+import { MAX_CHECK_LOOPS, tracks, trackOf, gated, verdicts, validate, apply, write, checkCommands, verifyCommandProblem, loops } from './run-record.js';
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
 import { finishProblems } from './evidence.js';
@@ -85,6 +85,9 @@ export function transitionRun(projectDir, id, to, data = {}) {
       const missing = [!old.spec_link && 'a Spec link', !(old.tickets?.length > 0) && 'Tickets'].filter(Boolean);
       if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
     }
+    if (['build', 'check'].includes(to) && trackOf(old) === 'fast' && old.tickets?.length !== 1) {
+      throw new Error(`the Fast track needs exactly one Ticket, not ${old.tickets?.length ?? 0}`);
+    }
     if (to === 'check' && (!old.tickets_total || old.tickets_done !== old.tickets_total)) throw new Error(`Check needs every Ticket done (${old.tickets_done} of ${old.tickets_total})`);
     if (to === 'follow-up' && !old.pr) throw new Error('Follow-up needs a PR link');
     if (to === 'finish') {
@@ -97,6 +100,15 @@ export function transitionRun(projectDir, id, to, data = {}) {
     if (to === 'finish') record = firstCheck(record, finishProblems({ ...old, accepted: undefined }).length === 0);
     record = moveVisit(record, to);
     return { record: { ...record, stage: to }, activity: `Starting ${to}` };
+  });
+}
+
+// The user's choice of Track, recorded only in Define; a record without one is a Full track Run.
+export function trackRun(projectDir, id, value) {
+  if (!tracks.includes(value)) throw new Error(`track must be ${tracks.join(' or ')}`);
+  changeRunning(projectDir, id, {}, (old) => {
+    if (!['define', 'prepare'].includes(old.stage)) throw new Error('the track is chosen in Define');
+    return { record: { ...old, track: value }, activity: `${value === 'fast' ? 'Fast' : 'Full'} track chosen` };
   });
 }
 

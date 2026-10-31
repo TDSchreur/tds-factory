@@ -11,7 +11,8 @@ export const COLUMNS = [
 export const CHIP_HELP = {
   tickets: 'Tickets finished out of the Tickets cut from the Spec.',
   standards: 'Check verdict: does the code follow the project conventions?',
-  spec: 'Check verdict: does the code match what the Spec asked for?',
+  track: 'The track of this Run: Fast (bug fixes and tiny changes, one Ticket) or Full.',
+  spec: 'Check verdict: does the code match what the Spec asked for? Skipped on the Fast track.',
   security: 'Check verdict: no open critical, high or medium security findings.',
   infrastructure: 'Check verdict for Bicep and pipeline changes; skipped when none changed.',
   loops: 'Times Check or Follow-up sent the Run back to Build to fix problems. The maximum is 4.',
@@ -47,6 +48,7 @@ export function safeUrl(v) {
 // The chips of a card, in display order: { key, cls, text, tip }.
 export function chipsOf(run) {
   const chips = [];
+  if (run.track) chips.push({ key: 'track', cls: '', text: run.track === 'fast' ? 'Fast' : 'Full', tip: CHIP_HELP.track });
   if (run.ticketsTotal) chips.push({ key: 'tickets', cls: '', text: `${Math.min(run.ticketsDone || 0, run.ticketsTotal)}/${run.ticketsTotal} tickets`, tip: CHIP_HELP.tickets });
   for (const [key, label] of [['standards', 'Standards'], ['spec', 'Spec'], ['security', 'Security'], ['infrastructure', 'Infrastructure']]) {
     if (run[key]) chips.push({ key, cls: run[key], text: `${label} ${run[key]}`, tip: CHIP_HELP[key] });

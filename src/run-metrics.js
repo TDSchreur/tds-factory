@@ -1,4 +1,5 @@
 import { stages } from './flow.js';
+import { trackOf } from './run-record.js';
 
 // Metrics record observations independently of current Evidence. Missing or damaged
 // metrics on an older record are never backfilled from its current state.
@@ -42,11 +43,12 @@ export function summarizeMetrics(record, now = Date.now()) {
   }
   const reworks = Number.isSafeInteger(record?.check_loops) && record.check_loops >= 0 ? record.check_loops : null;
   const outcome = usable(metrics) && ['clean', 'unclean'].includes(metrics.first_check) ? metrics.first_check : null;
-  return { stages: values, reworks, clean: outcome === 'clean' ? 1 : 0, observed: outcome ? 1 : 0 };
+  return { track: trackOf(record), stages: values, reworks, clean: outcome === 'clean' ? 1 : 0, observed: outcome ? 1 : 0 };
 }
 export function formatMetrics(summary) {
   return {
     stages: Object.fromEntries(stages.map(stage => [stage, duration(summary.stages[stage].ms, summary.stages[stage].ongoing)])),
+    ...(summary.track ? { track: summary.track === 'fast' ? 'Fast' : 'Full' } : {}),
     reworks: summary.reworks === null ? 'no data' : String(summary.reworks),
     firstPass: rate(summary.clean, summary.observed), tokens: 'not tracked', cost: 'not tracked',
   };

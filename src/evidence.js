@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { reviewPlan } from './project-reviews.js';
-import { verdicts, apply, validate, loops, attempt, verifyCommandProblem } from './run-record.js';
+import { verdicts, skippable, trackOf, apply, validate, loops, attempt, verifyCommandProblem } from './run-record.js';
 import { readRun, changeRun, changeRunning } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
 import { recordVerdict } from './run-metrics.js';
@@ -18,6 +18,7 @@ export function finishProblems(record, { head, dirty } = worktreeState(record)) 
     if (record[axis] === undefined) problems.push(`${axis} has no verdict`);
     else if (seen?.head !== head || seen?.attempt !== attempt(record)) problems.push(`${axis} was not reviewed at the current head in this Check attempt`);
     else if (record[axis] === 'fail') problems.push(`${axis} failed`);
+    else if (record[axis] === 'skipped' && !skippable(axis, record)) problems.push(`${axis} cannot be skipped on this track`);
   }
   for (const review of record.project_reviews ?? []) {
     const result = record.project_results?.[review.id];
@@ -80,6 +81,7 @@ export function verdictRun(projectDir, id, axis, value) {
   validate({ [axis]: value });
   changeRunning(projectDir, id, {}, (old) => {
     if (old.stage !== 'check') throw new Error('verdicts are recorded in Check');
+    if (value === 'skipped' && !skippable(axis, old)) throw new Error(`${axis} cannot be skipped on the ${trackOf(old)} track`);
     const { head, dirty } = worktreeState(old);
     if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
     return { record: recordVerdict({ ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, { axis, value, head, attempt: attempt(old) }), activity: `${axis} verdict: ${value}` };

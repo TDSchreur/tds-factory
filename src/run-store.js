@@ -2,15 +2,16 @@ import path from 'node:path';
 import { followUpRun } from './run-follow-up.js';
 import { summarizeMetrics, formatMetrics, totalMetrics } from './run-metrics.js';
 import { reviewPlan } from './project-reviews.js';
+import { tracks } from './run-record.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
 import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeReview } from './evidence.js';
-import { startRun, updateRun, transitionRun, acceptRun, syncRun, reworkRun, completeRun } from './run-lifecycle.js';
+import { startRun, trackRun, updateRun, transitionRun, acceptRun, syncRun, reworkRun, completeRun } from './run-lifecycle.js';
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
-export { MAX_CHECK_LOOPS, verifyCommandProblem } from './run-record.js';
+export { MAX_CHECK_LOOPS, verifyCommandProblem, trackOf } from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
 
 // The one interface to the modules that touch .factory/runs. remove(id, why, options) reports dirty work separately from other refusals.
@@ -21,6 +22,7 @@ export function openRunStore(callerDir) {
     projectDir,
     start: (data) => startRun(projectDir, data),
     update: (id, data) => updateRun(projectDir, id, data),
+    track: (id, value) => trackRun(projectDir, id, value),
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     followUp: (id) => followUpRun(projectDir, id),
     rework: (id, data) => reworkRun(projectDir, id, data),
@@ -44,7 +46,9 @@ export function openRunStore(callerDir) {
       const selected = id ? entries.filter(entry => entry.id === id) : entries;
       const now = Date.now();
       const runs = selected.map(entry => ({ id: entry.id, unreadable: entry.unreadable, summary: entry.unreadable ? null : summarizeMetrics(entry.record, now) }));
-      return { runs, total: totalMetrics(runs.filter(run => run.summary).map(run => run.summary)) };
+      const readable = runs.filter(run => run.summary).map(run => run.summary);
+      const byTrack = Object.fromEntries(tracks.map(track => [track, { runs: readable.filter(summary => summary.track === track).length, total: totalMetrics(readable.filter(summary => summary.track === track)) }]));
+      return { runs, total: totalMetrics(readable), byTrack };
     },
     inspect: (id) => inspectRuns(projectDir, runsDir, id),
     repairPlan: (id) => repairPlan(projectDir, runsDir, id),
