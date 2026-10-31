@@ -1,5 +1,7 @@
 # Doctor finds Copilot Skills in the Claude and Codex folders
 
+_The Doctor no longer defaults to Claude: [Doctor reports all three agents](doctor-all-agents.md) made it report every agent unless `--agent` names one. This Spec describes the situation before that change._
+
 ## Problem Statement
 
 `tds-factory install` with no `--agent` writes the Skills to `~/.claude/skills` and `~/.agents/skills`, and the install guide says that is enough for Copilot because Copilot CLI reads both. But `tds-factory doctor --agent copilot` only looks in Copilot's own folders (`.github/skills`, `~/.copilot/skills`). A Copilot user who followed the guide gets `skills` and `review` failures, and `/factory` stops in Preflight, while plain `doctor` (which defaults to Claude) passes.

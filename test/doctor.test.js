@@ -93,7 +93,7 @@ test('doctor tells a missing Verify command from a malformed or unusable one', (
   assert.equal(check(doctor(project('## Commands\n\n- Verify: `cd app && no-such-tool-xyz`\n')).report, 'verify-command').status, 'pass');
 });
 
-test('doctor prints one line per check and exits non-zero while a check is not passing', () => {
+test('doctor prints one line per check and exits non-zero when a shared check is not pass or no agent is usable', () => {
   const dir = project('# A\n');
   const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
   assert.equal(result.status, 1);
