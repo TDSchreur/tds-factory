@@ -7,6 +7,7 @@ import { verdicts, skippable, trackOf, apply, validate, loops, attempt, verifyCo
 import { readRun, changeRun, changeRunning } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
 import { recordVerdict } from './run-metrics.js';
+import { appendEvent } from './run-events.js';
 
 // Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
 export function finishProblems(record, { head, dirty } = worktreeState(record)) {
@@ -42,12 +43,16 @@ export function finishProblems(record, { head, dirty } = worktreeState(record)) 
 
 // Runs the Run's fast Verify command in its worktree. It is quick feedback while building and never Evidence:
 // nothing is recorded in the Run, and the Run keeps no Verify result from it.
+// The finish event of a Verify run, with how long it took.
+const verifyEvent = (r) => ({ type: 'verify', fast: r.fast === true, exit_code: r.exit_code, head: r.head, duration_ms: Math.max(0, Date.parse(r.ended) - Date.parse(r.started)), ...(r.signal ? { signal: r.signal } : {}) });
+
 function verifyFast(dir, record) {
   if (!record.fast_commands) throw new Error('no fast Verify command: the Run has none; run verify --id <id> for the full Verify');
   const problem = fastCommandProblem(record.fast_commands);
   if (problem) throw new Error(problem);
   const { head, dirty } = worktreeState(record);
   const started = new Date().toISOString();
+  appendEvent(dir, { type: 'verify-start', fast: true, command: record.fast_commands });
   const log = path.join(dir, 'verify-fast.log');
   fs.rmSync(log, { force: true });
   const fd = fs.openSync(log, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
@@ -55,7 +60,9 @@ function verifyFast(dir, record) {
   try { ran = spawnSync(record.fast_commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] }); }
   finally { fs.closeSync(fd); }
   if (ran.error) throw new Error(`the fast Verify command could not run: ${ran.error.message}`);
-  return { command: record.fast_commands, cwd: record.worktree, head, dirty, exit_code: ran.status, started, ended: new Date().toISOString(), log: 'verify-fast.log', fast: true, ...(ran.signal ? { signal: ran.signal } : {}) };
+  const result = { command: record.fast_commands, cwd: record.worktree, head, dirty, exit_code: ran.status, started, ended: new Date().toISOString(), log: 'verify-fast.log', fast: true, ...(ran.signal ? { signal: ran.signal } : {}) };
+  appendEvent(dir, verifyEvent(result));
+  return result;
 }
 
 // Runs the Verify command outside the Run lock, since it can take minutes, and records the result under it.
@@ -77,6 +84,7 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   }
   const { head, dirty } = state;
   const started = new Date().toISOString();
+  appendEvent(dir, { type: 'verify-start', fast: false, command: record.commands });
   // Replace rather than reuse the log, so a planted link is never written through.
   const log = path.join(dir, 'verify.log');
   fs.rmSync(log, { force: true });
@@ -89,6 +97,7 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   const pause = ran.signal ? { status: 'interrupted', status_reason: `Verify interrupted by ${ran.signal}` }
     : unavailable ? { status: 'verification-unavailable', status_reason: `Verify unavailable: ${ran.error?.message ?? output.trim()}` } : null;
   const result = { command: record.commands, cwd: record.worktree, head, dirty, exit_code: ran.status, started, ended: new Date().toISOString(), log: 'verify.log', ...(ran.signal ? { signal: ran.signal } : {}) };
+  appendEvent(dir, verifyEvent(result));
   changeRun(projectDir, id, (old) => {
     if (old.status !== 'running' || old.commands !== record.commands || loops(old) !== loops(record)) throw new Error('the Run changed while the Verify command ran, so its result was not recorded');
     return { ...old, verify: result, ...(pause ? { ...pause, waiting_on_human: false, waiting_reason: '' } : {}), updated: new Date().toISOString() };

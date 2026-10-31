@@ -41,7 +41,7 @@ export function startRun(projectDir, data) {
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     created = true;
     const { reviews: projectReviews, ...settings } = loadProjectConfig(worktree, data.agent);
-    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews, project_config: frozenSettings(settings), metrics: newMetrics(now) });
+    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now, last_seen: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews, project_config: frozenSettings(settings), metrics: newMetrics(now) });
   } catch (err) {
     const failures = [];
     if (created) {
@@ -102,7 +102,12 @@ export function transitionRun(projectDir, id, to, data = {}) {
     let record = old;
     if (to === 'finish') record = firstCheck(record, finishProblems({ ...old, accepted: undefined }).length === 0);
     record = moveVisit(record, to);
-    return { record: { ...record, stage: to }, activity: `Starting ${to}` };
+    // A model belongs to the Stage worker that was asked for or reported it, so none carries over to the next Stage.
+    record = { ...record, stage: to };
+    for (const key of ['requested_model', 'requested_effort', 'observed_model']) delete record[key];
+    const configured = old.project_config?.models?.[to];
+    if (typeof configured === 'string' && configured) record.requested_model = configured;
+    return { record, activity: `Starting ${to}` };
   });
 }
 

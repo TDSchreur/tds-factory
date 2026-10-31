@@ -1,6 +1,6 @@
 # The Run record carries model, last seen and an event log
 
-The Dashboard needs to say which model runs a job, how far it is and whether the agent went quiet ([issue #275](https://github.com/TDSchreur/tds-factory/issues/275)). The Run record gets three kinds of data, all through the Run store ([ADR 0006](0006-run-progress-goes-through-named-transitions.md), [ADR 0012](0012-split-the-run-store-by-seam.md)).
+The Dashboard needs to say which model runs a job, how far it is and whether the agent went quiet ([issue #275](https://github.com/TDSchreur/tds-factory/issues/275)). The Run record gets three kinds of data, all through the Run store ([ADR 0006](0006-run-progress-goes-through-named-transitions.md), [ADR 0012](0012-run-store-is-split-by-seam.md)).
 
 **Model fields.** `requested_model`, `requested_effort` and `observed_model` are plain strings that `run update` accepts, because the agent is the only one that knows its model and effort. A transition sets `requested_model` from the frozen project settings for the new Stage or clears all three, so a value never outlives the Stage worker it described. The names keep apart what was asked for and what was seen: a requested model is a request, never a confirmation, and only `observed_model` says what an agent reported. We did not read the agent files for the requested model, since the coordinator already passes the configured model when it dispatches and the user may edit the files.
 

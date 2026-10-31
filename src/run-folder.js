@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { stages } from './flow.js';
 import { validId, validate, write } from './run-record.js';
+import { appendEvent, deriveEvents, readEvents } from './run-events.js';
 
 export function runRoot(projectDir, create) {
   const project = fs.realpathSync(projectDir);
@@ -68,7 +69,9 @@ export function changeRun(projectDir, id, change) {
   if (!validId(id)) throw new Error('invalid Run id');
   return withRunLock(runRoot(projectDir, false), id, () => {
     const { dir, record } = readRun(projectDir, id);
-    write(dir, change(record));
+    const next = { ...change(record), last_seen: new Date().toISOString() };
+    write(dir, next);
+    for (const event of deriveEvents(record, next)) appendEvent(dir, event);
   });
 }
 
@@ -121,7 +124,7 @@ export async function listRuns(runsDir) {
     try {
       const record = JSON.parse(await fs.promises.readFile(path.join(runsDir, entry.name, 'run.json'), 'utf8'));
       if (record === null || typeof record !== 'object' || Array.isArray(record)) throw new Error('not an object');
-      runs.push({ id: entry.name, unreadable: false, record, files });
+      runs.push({ id: entry.name, unreadable: false, record, files, events: readEvents(path.join(runsDir, entry.name)) });
     } catch {
       runs.push({ id: entry.name, unreadable: true, record: null, files });
     }

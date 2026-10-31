@@ -5,7 +5,7 @@ import { stages, targets } from './flow.js';
 
 export const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 export const paused = ['verification-unavailable', 'interrupted'];
-const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
+const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha', 'requested_model', 'requested_effort', 'observed_model'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
