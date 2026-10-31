@@ -113,13 +113,13 @@ test('Check continues to Finish only when clean, otherwise it asks the user firs
   assert.match(check, /clean/i);
   assert.match(check, /`pass`/);
   assert.match(check, /`skipped`/);
-  assert.match(check, /LOW and INFO/);
+  assert.match(check, /LOW, INFO and judgement/);
   assert.match(check, /no verdict/i);
   assert.match(check, /not validated/i);
   assert.match(check, /loop cap/i);
   assert.match(check, /go back at most 4 times/);
-  assert.match(check, /no problem worth fixing is left/i);
-  assert.match(check, /not clean or problems worth fixing are still open/);
+  assert.match(check, /no Blocking finding is left/i);
+  assert.match(check, /not clean or Blocking findings are still open/);
   assert.match(check, /no verdict, or .*not validated.*counts as `fail`/);
   assert.match(check, /`waiting`/);
   assert.match(check, /explicit yes/i);
@@ -275,4 +275,26 @@ test('the factory and the install guide check a label by exact name before askin
     assert.match(text, /exact name/, `${name} matches the exact name`);
     assert.match(text, /already exists/, `${name} treats "already exists" as present`);
   }
+});
+
+test('Check sends a Run back only for a Blocking finding and lists the rest as Left open', () => {
+  assert.doesNotMatch(flow, /worth fixing/i);
+  // The three classes of Blocking finding.
+  assert.match(check, /\*\*Blocking finding\*\*/);
+  assert.match(check, /violation of a documented standard that names the rule/);
+  assert.match(check, /CRITICAL, HIGH or MEDIUM security, infrastructure or project review finding/);
+  assert.match(check, /Spec requirement that is missing or wrong/);
+  // Stale text: current-behavior documents block, a historical Spec that is not canonical does not.
+  assert.match(check, /stale statement in a document that describes current behavior/);
+  assert.match(check, /historical Spec in `docs\/specs\/` that is not canonical/);
+  assert.match(check, /Behavior the Spec did not ask for is Left open unless it contradicts a requirement or an "Out of scope" statement/);
+  // Everything else is Left open and cannot block.
+  assert.match(check, /\*\*Left open\*\*/);
+  assert.match(check, /LOW, INFO and judgement items/);
+  assert.match(check, /never go above LOW/);
+  assert.match(check, /never raise a LOW to a Blocking finding/);
+  assert.match(check, /An axis verdict is `fail` only with a Blocking finding/);
+  // Reviewers say how serious a finding is and what it rests on.
+  assert.match(check, /severity \(CRITICAL, HIGH, MEDIUM, LOW or INFO\)/);
+  assert.match(check, /the standard, Spec requirement or `judgement` it rests on/);
 });

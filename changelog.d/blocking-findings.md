@@ -1,0 +1,2 @@
+### Changed
+- Check sends a Run back to Build only for a Blocking finding: a violation of a documented standard, a CRITICAL, HIGH or MEDIUM security, infrastructure or project review finding, or a Spec requirement that is missing or wrong. LOW, INFO and judgement items are Left open: they are listed but never cause a Rework. Reviewers report a severity and the standard or requirement behind each finding.
