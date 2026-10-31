@@ -1,0 +1,2 @@
+### Added
+- An optional `- Verify-fast: <command>` line under `## Commands` gives a Run a quicker check. Build runs it after each Ticket with `tds-factory run verify --id ID --fast`; its result is quick feedback and never Evidence, and the full Verify command still runs after the last Ticket, after `run sync` and before every Check pass. `tds-factory doctor` reports it as `verify-fast`, and this repository's fast command runs the unit tests only.

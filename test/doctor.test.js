@@ -199,7 +199,7 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   const { status, report } = doctor(huge);
   assert.equal(status, 1);
   assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
-  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 4);
+  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 5);
   for (const a of report.agents) assert.equal(a.checks.length, 4, a.id);
   // A link to a regular file is fine.
   const shared = project();
@@ -260,7 +260,7 @@ test('Doctor requires an interactive review agent when an interactive project re
 test('doctor reports claude, codex and copilot in that order by default, shared checks once', () => {
   const { report } = doctorOn(pathWith('claude'), project());
   assert.deepEqual(report.agents.map((a) => a.id), ['claude', 'codex', 'copilot']);
-  assert.deepEqual(report.checks.map((c) => c.id).filter((id) => id !== 'agents'), ['cli', 'tracker', 'git', 'verify-command']);
+  assert.deepEqual(report.checks.map((c) => c.id).filter((id) => id !== 'agents'), ['cli', 'tracker', 'git', 'verify-command', 'verify-fast']);
   for (const a of report.agents) assert.deepEqual(a.checks.map((c) => c.id), ['binary', 'skills', 'config', 'review'], a.id);
 });
 
@@ -347,4 +347,26 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
     if (saved.path === undefined) delete process.env.PATH; else process.env.PATH = saved.path;
     if (saved.ext === undefined) delete process.env.PATHEXT; else process.env.PATHEXT = saved.ext;
   }
+});
+
+test('doctor reports the optional Verify-fast command like the Verify command', () => {
+  const project_ = (line) => project(`## Agent skills\n\nsee docs\n\n## Commands\n\n- Verify: \`npm test\`\n${line}`);
+  const none = check(doctor(project_('')).report, 'verify-fast');
+  assert.equal(none.status, 'pass');
+  assert.match(none.message, /no Verify-fast command/);
+  const set = check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-fast');
+  assert.equal(set.status, 'pass');
+  assert.match(set.message, /Verify-fast command: npm run test:unit/);
+  const missing = check(doctor(project_('- Verify-fast: `no-such-tool-xyz --quick`\n')).report, 'verify-fast');
+  assert.equal(missing.status, 'fail');
+  assert.match(missing.message, /no-such-tool-xyz.*not found/);
+  // An unusable optional command is shown but never fails the report.
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'claude');
+  const shown = doctorOn(pathWith('claude'), project_('- Verify-fast: `no-such-tool-xyz --quick`\n'), home);
+  assert.equal(check(shown.report, 'verify-fast').status, 'fail');
+  assert.equal(shown.report.ok, true);
+  assert.equal(shown.status, 0);
+  // The full Verify line is still the one `verify-command` reads.
+  assert.match(check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-command').message, /Verify command: npm test$/);
 });

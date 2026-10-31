@@ -24,7 +24,7 @@ const USAGE = `Usage:
   tds-factory run sync --id ID [--data JSON]   (rebases the Run branch onto origin's default branch)
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
-  tds-factory run verify --id ID
+  tds-factory run verify --id ID [--fast]
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
@@ -56,6 +56,7 @@ const { values, positionals } = parseArgs({
     json: { type: 'boolean', default: false },
     apply: { type: 'boolean', default: false },
     all: { type: 'boolean', default: false },
+    fast: { type: 'boolean', default: false },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
   },
@@ -118,8 +119,10 @@ try {
       if (values.apply) { store.repairApply(values.id, plan); console.log('Repair applied.'); }
     }
     else if (op === 'verify') {
-      const result = store.verify(values.id);
-      console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
+      const result = store.verify(values.id, { fast: values.fast });
+      if (result.fast) {
+        console.log(`fast verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}; not Evidence: run the full verify before Check`);
+      } else console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
     else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
