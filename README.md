@@ -68,7 +68,7 @@ flowchart TB
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
-Work runs on the Full track by default. The Fast track is a lighter Flow for bug fixes and tiny changes: Define asks one confirmation (a bug goes through `diagnosing-bugs`), writes a one-paragraph Spec and cuts a single Ticket, and Check still requires Standards and Security. You choose the track, or confirm Define's recommendation; it is never applied silently. The track is recorded in `run.json`, shown on the Dashboard and splits `tds-factory run stats`.
+Work runs on the Full track by default. The Fast track is a lighter Flow for bug fixes and tiny changes: Define asks one confirmation (a bug goes through `diagnosing-bugs`), writes a one-paragraph Spec and cuts a single Ticket, and Check still requires Standards and Security. Define recommends it for a bug fix, a documentation or test-title change, or a diff of at most about five files without a new public interface, schema or dependency, and names the criterion. You choose the track, or confirm the recommendation; it is never applied silently. The track is recorded in `run.json`, shown on the Dashboard and splits `tds-factory run stats`.
 
 Each Stage produces one result.
 
