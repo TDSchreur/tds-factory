@@ -2,7 +2,7 @@
 export const COLUMNS = [
   { key: 'define', label: 'Define', help: 'Settle what has to be done: the agent interviews you, writes a Spec and cuts it into Tickets.' },
   { key: 'build', label: 'Build', help: 'Implement the Tickets test-first, one commit per Ticket, running the verify command after each, then work through the Exit checklist.' },
-  { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Problems send the Run back to Build, at most four times.' },
+  { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Only Blocking findings send the Run back to Build, at most four times.' },
   { key: 'finish', label: 'Finish', help: 'Write the pull request description, push the branch and open the pull request.' },
   { key: 'follow-up', label: 'Follow-up', help: 'Read PR checks and unresolved review threads; scoped Rework returns to Build under the shared loop limit.' },
   { key: 'done', label: 'Done', help: 'The Run is finished: its pull request is open, merged or closed, or the Run was abandoned.' },
@@ -15,7 +15,7 @@ export const CHIP_HELP = {
   spec: 'Check verdict: does the code match what the Spec asked for? Skipped on the Fast track.',
   security: 'Check verdict: no open critical, high or medium security findings.',
   infrastructure: 'Check verdict for Bicep and pipeline changes; skipped when none changed.',
-  loops: 'Times Check or Follow-up sent the Run back to Build to fix problems. The maximum is 4, or the lower cap the project set.',
+  loops: 'Times Check or Follow-up sent the Run back to Build to fix Blocking findings or feedback. The maximum is 4, or the lower cap the project set.',
 };
 
 export const POLL_MS = 2000;
