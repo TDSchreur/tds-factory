@@ -1,0 +1,2 @@
+### Added
+- `tds-factory run sweep --id ID [--term TEXT]...` lists, read-only, every place in the README, docs, Specs, ADRs, glossary, Skills and agents that still holds a term the Run's diff changed (backticked terms, flags, quoted phrases and identifiers) plus the wordings you add with `--term`, with file and line. Hits in files the Run changed are tagged, and hits in files marked as replaced come apart. The Exit checklist uses it and Check passes its output to the Standards reviewer.

@@ -333,3 +333,12 @@ test('Build runs the fast Verify after each Ticket and the full Verify before Ch
   assert.match(flow, /^\| `fast_commands` \|/m);
   assert.match(section('Preflight'), /`verify-command` and `verify-fast`/);
 });
+
+test('the Exit checklist sweeps terms with the sweep command and the Standards reviewer gets its output', () => {
+  const checklist = section('Build').slice(section('Build').indexOf('### Exit checklist'), section('Build').indexOf('### After a Rework'));
+  assert.match(checklist, /Run `tds-factory run sweep --id <id>`/);
+  assert.match(checklist, /add each older or other wording of a changed term with `--term`/);
+  assert.match(checklist, /A hit marked as replaced is history and needs no change/);
+  assert.match(check, /the output of `tds-factory run sweep --id <id>` for the Standards reviewer/);
+  assert.match(flow, /`tds-factory run sweep --id <id> \[--term TEXT\]\.\.\.` lists, read-only/);
+});
