@@ -360,6 +360,13 @@ test('doctor reports the optional Verify-fast command like the Verify command', 
   const missing = check(doctor(project_('- Verify-fast: `no-such-tool-xyz --quick`\n')).report, 'verify-fast');
   assert.equal(missing.status, 'fail');
   assert.match(missing.message, /no-such-tool-xyz.*not found/);
+  // An unusable optional command is shown but never fails the report.
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'claude');
+  const shown = doctorOn(pathWith('claude'), project_('- Verify-fast: `no-such-tool-xyz --quick`\n'), home);
+  assert.equal(check(shown.report, 'verify-fast').status, 'fail');
+  assert.equal(shown.report.ok, true);
+  assert.equal(shown.status, 0);
   // The full Verify line is still the one `verify-command` reads.
   assert.match(check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-command').message, /Verify command: npm test$/);
 });

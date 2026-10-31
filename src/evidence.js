@@ -43,8 +43,9 @@ export function finishProblems(record, { head, dirty } = worktreeState(record)) 
 // Runs the Run's fast Verify command in its worktree. It is quick feedback while building and never Evidence:
 // nothing is recorded in the Run, and the Run keeps no Verify result from it.
 function verifyFast(dir, record) {
-  const problem = fastCommandProblem(record.fast_commands) ?? (record.fast_commands ? undefined : 'the Run has no fast Verify command; run verify --id <id> for the full Verify');
-  if (problem) throw new Error(`no fast Verify command: ${problem}`);
+  if (!record.fast_commands) throw new Error('no fast Verify command: the Run has none; run verify --id <id> for the full Verify');
+  const problem = fastCommandProblem(record.fast_commands);
+  if (problem) throw new Error(problem);
   const { head, dirty } = worktreeState(record);
   const started = new Date().toISOString();
   const log = path.join(dir, 'verify-fast.log');
@@ -53,6 +54,7 @@ function verifyFast(dir, record) {
   let ran;
   try { ran = spawnSync(record.fast_commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] }); }
   finally { fs.closeSync(fd); }
+  if (ran.error) throw new Error(`the fast Verify command could not run: ${ran.error.message}`);
   return { command: record.fast_commands, cwd: record.worktree, head, dirty, exit_code: ran.status, started, ended: new Date().toISOString(), log: 'verify-fast.log', fast: true, ...(ran.signal ? { signal: ran.signal } : {}) };
 }
 

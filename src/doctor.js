@@ -132,7 +132,8 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
     const list = [['binary', () => binaryCheck(id)], ['skills', () => skillsCheck(has)], ['config', () => configCheck(id, projectDir, homeDir)], ['review', () => reviewCheck(id, projectDir, homeDir, has)]].map(attempt);
     return { id, usable: list.every((c) => c.status === 'pass'), checks: list };
   });
-  let ok = checks.every((c) => c.status === 'pass');
+  // The optional Verify-fast command is shown when unusable but never fails the report.
+  let ok = checks.every((c) => c.status === 'pass' || c.id === 'verify-fast');
   if (agent === undefined) {
     const anyUsable = agents.some((a) => a.usable);
     if (!anyUsable) checks.push({ id: 'agents', status: 'fail', message: NO_AGENT });

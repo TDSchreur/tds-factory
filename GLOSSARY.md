@@ -49,7 +49,7 @@ _Avoid_: Reviewer, Gate
 An additional Check axis supplied by a project through a Skill, alongside the Factory's baseline reviews. Its Blocking findings can send a Run back to Build for Rework.
 
 **Doctor**:
-The read-only `tds-factory doctor` command that runs the Preflight checks and reports each as `pass`, `missing` or `fail`. The shared checks (CLI version, tracker setup, Git origin and default branch, Verify command) are reported once; the per-Agent-target checks (binary, required Skills, Project config, review capabilities) are reported for each Agent target. It may add non-blocking notes, such as merged Runs that still hold a worktree.
+The read-only `tds-factory doctor` command that runs the Preflight checks and reports each as `pass`, `missing` or `fail`. The shared checks (CLI version, tracker setup, Git origin and default branch, Verify command and the optional Verify-fast command) are reported once; the per-Agent-target checks (binary, required Skills, Project config, review capabilities) are reported for each Agent target. It may add non-blocking notes, such as merged Runs that still hold a worktree.
 _Avoid_: Linter, Health check
 
 **Usable agent**:

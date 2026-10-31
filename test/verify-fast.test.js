@@ -60,3 +60,12 @@ test('the full Verify is unchanged and still records the Evidence', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(record(cwd, id).verify.exit_code, 0);
 });
+
+test('run update cannot set the fast command after the Run has started', () => {
+  const cwd = repo();
+  const id = start(cwd);
+  const result = run(cwd, 'update', '--id', id, '--data', JSON.stringify({ fast_commands: 'npm run test:unit' }));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /fast Verify command is set when the Run starts/);
+  assert.equal(record(cwd, id).fast_commands, undefined);
+});
