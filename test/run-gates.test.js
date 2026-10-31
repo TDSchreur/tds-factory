@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -452,6 +452,30 @@ test('inspect flags project code committed while the Run is still in Define, and
   assert.deepEqual(problems(cwd, id), ['stage-skipped']);
   force(cwd, id, { stage: 'build' });
   assert.deepEqual(problems(cwd, id), []);
+});
+
+test('inspect does not pass a hand-edited base_sha to git as an option, and reports an unreadable base', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  const target = join(cwd, 'written-by-git.txt');
+  force(cwd, id, { base_sha: `--output=${target}` });
+  assert.deepEqual(problems(cwd, id), ['worktree-unreadable']);
+  assert.equal(existsSync(target), false, 'git must not have written the file');
+  force(cwd, id, { base_sha: 'f'.repeat(40) });
+  assert.deepEqual(problems(cwd, id), ['worktree-unreadable']);
+});
+
+test('inspect flags a project file renamed into docs/ while the Run is in Define', () => {
+  const cwd = repo();
+  writeFileSync(join(cwd, 'code.js'), 'export const x = 1;\n'.repeat(20));
+  git(cwd, 'add', '-A');
+  git(cwd, 'commit', '-q', '-m', 'code');
+  const id = startRun(cwd);
+  const wt = read(cwd, id).worktree;
+  mkdirSync(join(wt, 'docs'), { recursive: true });
+  git(wt, 'mv', 'code.js', 'docs/code.js');
+  git(wt, 'commit', '-q', '-m', 'rename');
+  assert.deepEqual(problems(cwd, id), ['stage-skipped']);
 });
 
 test('inspect leaves finished Runs without a worktree alone and changes nothing on disk', () => {

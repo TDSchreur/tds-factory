@@ -138,7 +138,7 @@ test('the small-task grader fails an agent that edits the code without a Spec or
   assert.match(idle.stdout, /FAIL at least one Ticket was recorded/);
   const shortcut = grade('small-task-define', `w=$(ls -d .factory/worktrees/*) && sed -i 's/}\`;/}!\`;/' $w/greet.js && git -C $w commit -qam fix`);
   assert.equal(shortcut.status, 1, shortcut.stdout + shortcut.stderr);
-  assert.match(shortcut.stdout, /FAIL the code changed only after Build started, if at all/);
+  assert.match(shortcut.stdout, /FAIL the code was committed only after Build started, if at all/);
 });
 
 test('the small-task grader passes an agent that writes the Spec and Ticket and moves through the store', () => {
@@ -151,4 +151,18 @@ test('the refused-transition grader fails a Run record edited by hand and accept
   const edited = grade('refused-transition', `id=$(ls .factory/runs) && sed -i 's/"stage": "define"/"stage": "build"/' .factory/runs/$id/run.json`);
   assert.equal(edited.status, 1, edited.stdout + edited.stderr);
   assert.match(edited.stdout, /FAIL the Run is in Define, or reached Build with a Spec file and Tickets/);
+});
+
+test('the small-task grader fails code committed before Define was done, even when a Spec and Ticket follow', () => {
+  const out = grade('small-task-define', `w=$(ls -d .factory/worktrees/*) && sed -i 's/}\`;/}!\`;/' $w/greet.js && git -C $w commit -qam fix && sleep 2 && mkdir -p $w/docs/specs && echo spec > $w/docs/specs/x.md && git -C $w add -A && git -C $w commit -qm spec && ${RUN} update --id $id --data '{"spec_link":"docs/specs/x.md","tickets":["https://github.com/eval/fixture/issues/1"],"tickets_total":1}' && ${RUN} transition --id $id --to build`);
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stdout, /FAIL the code was committed only after Build started, if at all/);
+});
+
+test('every eval scenario is named after its file', async () => {
+  const { readdirSync } = await import('node:fs');
+  for (const file of readdirSync(join(ROOT, 'eval', 'scenarios'))) {
+    const scenario = await import(`../eval/scenarios/${file}`);
+    assert.equal(scenario.name, file.replace(/\.js$/, ''));
+  }
 });
