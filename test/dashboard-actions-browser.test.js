@@ -38,7 +38,7 @@ test('a refused Sync shows the reason', async (t) => {
   if (!page) return;
   try {
     await confirmed(page, '[aria-label="Sync Building with origin"]', 'Sync with origin?');
-    assert.deepEqual(await answer(page, 'Could not sync'), ['Could not sync', 'cannot sync while the Run worktree has uncommitted changes']);
+    assert.deepEqual(await answer(page, 'Could not sync the Run'), ['Could not sync the Run', 'cannot sync while the Run worktree has uncommitted changes']);
   } finally { await page.close(); }
 });
 
@@ -54,7 +54,9 @@ test('Accept Check is offered only to a Check that waits on you, and names the v
     await confirmed(page, '[aria-label^="Accept the Check"]', 'Accept this Check?');
     assert.match((await dialog(page))[1], /Security: fail/);
     assert.deepEqual(await answer(page, 'Accepted'), ['Accepted', 'Accepted.']);
-    assert.deepEqual(page.calls, ['POST /api/runs/w/accept']);
+    assert.equal(page.calls.length, 1);
+    assert.match(page.calls[0], /^POST \/api\/runs\/w\/accept\?updated=/);
+    assert.equal(await page.execute("return document.querySelectorAll('[aria-label$=\"with origin\"]').length"), 1);
   } finally { await page.close(); }
 });
 
@@ -66,7 +68,7 @@ test('Clean up is offered for a merged Done Run and shows why a clean-up is refu
     await page.execute("document.querySelectorAll('[aria-expanded]').forEach(b => b.click())");
     assert.equal(await page.execute("return document.querySelectorAll('[aria-label^=\"Clean up\"]').length"), 1);
     await confirmed(page, '[aria-label="Clean up merged"]', 'Clean up Run?');
-    assert.deepEqual(await answer(page, 'Could not clean'), ['Could not clean', 'kept: the branch has commits that are not in the merged PR']);
+    assert.deepEqual(await answer(page, 'Could not clean up the Run'), ['Could not clean up the Run', 'kept: the branch has commits that are not in the merged PR']);
     assert.deepEqual(page.calls, ['POST /api/runs/merged/clean']);
   } finally { await page.close(); }
 });

@@ -73,7 +73,8 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
   // Clean-up must run from the main checkout, also when the Dashboard was started inside a Run worktree.
   const mainStore = openRunStore(store.projectDir);
   const token = randomBytes(32).toString('hex');
-  const tokenOk = (given) => typeof given === 'string' && given.length === token.length && timingSafeEqual(Buffer.from(given), Buffer.from(token));
+  const digest = (value) => createHash('sha256').update(value).digest();
+  const tokenOk = (given) => typeof given === 'string' && timingSafeEqual(digest(given), digest(token)); // equal-length digests, so any header value compares safely
   const prCache = new Map();
   const lookup = (url) => {
     const hit = prCache.get(url);
@@ -154,6 +155,8 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
             return send(outcome === 'kept' ? 409 : 200, 'text/plain', reason ? `${outcome}: ${reason}` : outcome);
           }
           if (!v.waiting || v.column !== 'check') return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
+          // The user decided on the Run as the page showed it; a change since then needs a new look.
+          if (new URL(req.url, 'http://localhost').searchParams.get('updated') !== v.updated) return send(409, 'text/plain', 'the Run changed since you looked at it; reload and look again');
           const { problems } = store.mergeEligibility(id);
           if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
           // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.

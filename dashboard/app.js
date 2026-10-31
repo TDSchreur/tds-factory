@@ -88,20 +88,20 @@ function App() {
     token.current ??= (await (await fetch('/api/info', { cache: 'no-store' })).json()).token;
     return fetch(url, { method, headers: { 'x-factory-token': token.current } });
   };
-  const runAction = async (run, name, title, message, action, done) => {
+  const runAction = async (run, name, title, message, action, done, query = '') => {
     if (!await ask(title, message, action, false)) return;
     try {
-      const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/' + name);
+      const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/' + name + query);
       const text = await response.text();
-      await ask(response.ok ? done : 'Could not ' + name, response.ok ? (name === 'clean' ? text : done + '.') : text, 'Close', false, true);
-    } catch (err) { await ask('Could not ' + name, run.title, 'Close', false, true); }
+      await ask(response.ok ? done : 'Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : 'accept the Check'), response.ok ? (name === 'clean' ? text : done + '.') : text, 'Close', false, true);
+    } catch (err) { await ask('Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : 'accept the Check'), run.title, 'Close', false, true); }
     poll();
   };
   const syncRun = (run) => runAction(run, 'sync', 'Sync with origin?', 'Rebase the branch of "' + run.title + '" onto the default branch of origin. Evidence is cleared when the code or the base changes. Conflicts leave the branch unchanged.', 'Sync', 'Synced');
   const cleanRun = (run) => runAction(run, 'clean', 'Clean up Run?', 'Remove the Run worktree and local branch of "' + run.title + '". The Run record stays. This is refused unless its pull request is merged.', 'Clean up', 'Cleaned up');
   const acceptRun = (run) => {
     const open = [['Standards', run.standards], ['Spec', run.spec], ['Security', run.security], ['Infrastructure', run.infrastructure]].map(([name, verdict]) => name + ': ' + (verdict || 'no verdict')).join(', ');
-    return runAction(run, 'accept', 'Accept this Check?', 'Continue "' + run.title + '" to Finish with a Check that is not clean. ' + open + '. Only the current code is accepted; a new commit voids this.', 'Accept and continue', 'Accepted');
+    return runAction(run, 'accept', 'Accept this Check?', 'Continue "' + run.title + '" to Finish with a Check that is not clean. ' + open + '. Only the current code is accepted; a new commit voids this.', 'Accept and continue', 'Accepted', '?updated=' + encodeURIComponent(run.updated));
   };
 
   const removeRuns = async (runs, message, doneOnly = false) => {

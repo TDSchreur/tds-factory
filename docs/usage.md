@@ -113,7 +113,7 @@ stateDiagram-v2
 
 (`verification_unavailable` is `verification-unavailable` in `run.json`; Mermaid does not allow the hyphen.)
 
-The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting.
+The same moment shows on the Dashboard as a red card marked "Needs you" and a number in the browser tab title. Answer in the chat where the agent is waiting. If you press **Accept Check** on the Dashboard instead, also tell the agent in the chat; it sees the recorded decision for the current code and continues.
 
 If the project does not have a verify command in `AGENTS.md` (or `CLAUDE.md`) under `## Commands`, the agent asks for it once, at the very start of the Run, and records it. The command cannot be changed later; start a new Run for that. The Run shows as "Needs you" while it waits.
 

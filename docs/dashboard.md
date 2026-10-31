@@ -27,14 +27,14 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 | `POST /api/runs/<run-id>/merge` | Squash-merges the Run's pull request. A write route. |
 | `POST /api/runs/<run-id>/sync` | Runs `tds-factory run sync` for the Run: rebases its branch onto the default branch of `origin`. A refusal (uncommitted changes, a conflict, a Run outside Build and Check) is HTTP 409 with the message. A write route. |
 | `POST /api/runs/<run-id>/clean` | Runs `tds-factory run clean` for the Run from the main checkout. A Run that is kept (PR not merged, uncommitted changes, extra commits) is HTTP 409 with the reason. A write route. |
-| `POST /api/runs/<run-id>/accept` | Accepts a Check that is not clean for the Run's current head. Only for a Run in Check that waits on you, and refused with HTTP 409 when the Check is already clean or accepted. A write route. |
+| `POST /api/runs/<run-id>/accept` | Accepts a Check that is not clean for the Run's current head. Only for a Run in Check that waits on you, with `?updated=` naming the Run record time the page showed (a changed Run is refused), and refused with HTTP 409 when the Check is already clean or accepted. A write route. |
 
 ## Actions
 
-Cards carry buttons for the first Dashboard actions. Each asks for confirmation, then shows the result or the reason it was refused.
+Cards carry buttons for the Dashboard actions. Each asks for confirmation, then shows the result or the reason it was refused.
 
-- **Sync** appears on Runs in Build and Check. It rebases the Run branch onto the current default branch of `origin`. If the code or the base changes, the Evidence is cleared.
-- **Accept Check** appears on a Check that waits on you. The confirmation lists the four verdicts. It records that you continue to Finish with a Check that is not clean, for the current code only; a new commit voids it. The Run is released from waiting so its agent can go on to Finish.
+- **Sync** appears on running Runs in Build and Check (a Run waiting on you, or paused, cannot change until it runs again). It rebases the Run branch onto the current default branch of `origin`. If the code or the base changes, the Evidence is cleared.
+- **Accept Check** appears on a Check that waits on you. The confirmation lists the four verdicts. It records that you continue to Finish with a Check that is not clean, for the current code only; a new commit voids it. The Run is released from waiting. Then tell the agent in its chat that you accepted: it finds the decision recorded for the current head and moves on to Finish.
 - **Clean up** appears on a Done Run whose pull request is merged. It removes the Run worktree and branch and keeps the Run record.
 
 Starting a Run stays in the agent: the Dashboard cannot start, resume, rework or complete a Run.
@@ -70,7 +70,7 @@ flowchart TB
     open -->|yes| merge["Squash-merge with gh"]
 ```
 
-If GitHub cannot be reached, returns no usable PR head, or `gh` cannot merge, the server answers 502 and merges nothing. An unknown Run gets 404, and a request from another origin gets 403.
+If GitHub cannot be reached, returns no usable PR head, or `gh` cannot merge, the server answers 502 and merges nothing. An unknown Run gets 404, and a write without the page's Origin and session token gets 403 (see [Write routes](#write-routes)).
 
 For how to read the cards, see the [usage guide](usage.md#5-follow-runs-on-the-dashboard).
 

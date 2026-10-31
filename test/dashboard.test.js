@@ -195,6 +195,21 @@ test('the server sends no CORS headers and does not answer a preflight', async (
   assert.equal([...options.headers.keys()].some((name) => name.startsWith('access-control-')), false);
 });
 
+test('a token header of the right length in other bytes is refused without crashing the server', async () => {
+  const good = await writeHeaders(dash);
+  const net = await import('node:net');
+  const status = await new Promise((resolve, reject) => {
+    const socket = net.connect(dash.port, '127.0.0.1');
+    let data = '';
+    socket.on('data', (c) => (data += c.toString('latin1')));
+    socket.on('end', () => resolve(data.split(' ')[1]));
+    socket.on('error', reject);
+    socket.write(Buffer.concat([Buffer.from(`POST /api/runs/x/sync HTTP/1.1\r\nHost: 127.0.0.1:${dash.port}\r\nOrigin: ${dash.url}\r\nConnection: close\r\nX-Factory-Token: `), Buffer.alloc(64, 0xe9), Buffer.from('\r\n\r\n')]));
+  });
+  assert.equal(status, '403');
+  assert.equal((await fetch(`${dash.url}/api/runs/x/sync`, { method: 'POST', headers: good })).status, 404);
+});
+
 test('the session token differs between servers and stays the same within one', async () => {
   const other = await startDashboard({ projectDir: project, port: 0 });
   try {

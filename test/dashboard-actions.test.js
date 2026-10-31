@@ -36,8 +36,10 @@ const review = (cwd, id, security = 'pass') => {
   for (const [axis, value] of [['standards', 'pass'], ['spec', 'pass'], ['security', security], ['infrastructure', 'skipped']]) ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
 const waiting = (cwd, id) => ok(run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
-async function post(dash, id, action) {
-  const response = await fetch(`${dash.url}/api/runs/${id}/${action}`, { method: 'POST', headers: await writeHeaders(dash) });
+async function post(dash, id, action, updated) {
+  if (action === 'accept' && updated === undefined) updated = (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
+  const query = action === 'accept' ? `?updated=${encodeURIComponent(updated)}` : '';
+  const response = await fetch(`${dash.url}/api/runs/${id}/${action}${query}`, { method: 'POST', headers: await writeHeaders(dash) });
   return { status: response.status, text: await response.text() };
 }
 
@@ -55,6 +57,10 @@ test('accepting a not-clean Check records the decision for the current head', as
     assert.match(accepted.decision, /Dashboard/);
     assert.equal(read(cwd, id).status, 'running');
     assert.equal((await post(dash, id, 'accept')).status, 409);
+    waiting(cwd, id);
+    const again = await post(dash, id, 'accept');
+    assert.equal(again.status, 409);
+    assert.match(again.text, /already clean or accepted/);
   } finally { await dash.close(); }
 });
 
@@ -118,5 +124,49 @@ test('clean-up keeps a Run whose PR is not merged and removes one whose PR is me
     assert.deepEqual(await post(dash, id, 'clean'), { status: 200, text: 'cleaned' });
     assert.equal(existsSync(wt), false);
     assert.ok(existsSync(join(cwd, '.factory', 'runs', id, 'run.json')));
+  } finally { await dash.close(); }
+});
+
+test('accepting is refused when the Run changed since the page showed it', async () => {
+  const { cwd, id } = checked();
+  review(cwd, id, 'fail');
+  waiting(cwd, id);
+  const dash = await startDashboard({ projectDir: cwd, port: 0 });
+  try {
+    const stale = await post(dash, id, 'accept', '2000-01-01T00:00:00.000Z');
+    assert.equal(stale.status, 409);
+    assert.match(stale.text, /changed since/);
+    assert.equal(read(cwd, id).accepted, undefined);
+    assert.equal(read(cwd, id).status, 'waiting');
+  } finally { await dash.close(); }
+});
+
+test('a failed accept puts the Run back to waiting with its reason', async () => {
+  const { cwd, id, wt } = checked();
+  review(cwd, id, 'fail');
+  waiting(cwd, id);
+  writeFileSync(join(wt, 'dirty.txt'), 'x\n');
+  const dash = await startDashboard({ projectDir: cwd, port: 0 });
+  try {
+    const result = await post(dash, id, 'accept');
+    assert.equal(result.status, 409);
+    const record = read(cwd, id);
+    assert.equal(record.status, 'waiting');
+    assert.equal(record.waiting_reason, 'accept the Check');
+    assert.equal(record.accepted, undefined);
+  } finally { await dash.close(); }
+});
+
+test('clean-up works when the Dashboard was started inside a Run worktree', async () => {
+  const { cwd, id, wt } = checked();
+  review(cwd, id);
+  ok(run(cwd, 'transition', '--id', id, '--to', 'finish'));
+  ok(run(cwd, 'update', '--id', id, '--data', data({ pr: PR })));
+  ok(run(cwd, 'complete', '--id', id));
+  const tip = git(wt, 'rev-parse', 'HEAD');
+  const dash = await startDashboard({ projectDir: wt, port: 0, prInfo: () => ({ state: 'MERGED', head: tip }) });
+  try {
+    assert.deepEqual(await post(dash, id, 'clean'), { status: 200, text: 'cleaned' });
+    assert.equal(existsSync(wt), false);
   } finally { await dash.close(); }
 });
