@@ -22,6 +22,16 @@ The ordered Stages a piece of work moves through, encoded in the `factory` Skill
 One step of the Flow: Define, Build, Check, Finish or Follow-up.
 _Avoid_: Phase, step
 
+**Track**:
+The weight of the Flow a Run uses, either Fast or Full. The user chooses it in Define, or confirms Define's recommendation; it is never applied silently. A Run with no recorded track is a Full track Run.
+_Avoid_: Mode, Lane
+
+**Fast track**:
+The lighter Track for bug fixes and tiny changes: one confirmation in Define, a one-paragraph Spec, a single Ticket, and Check keeping at least Standards and Security. Only a clean Check goes on to Finish without asking, as on the Full track.
+
+**Full track**:
+The default Track: the full Define interview, a Spec and as many Tickets as the work needs.
+
 **Follow-up**:
 The Stage after Finish that observes the Run's pull request and scopes Rework to failing checks and unresolved review comments. It is entered explicitly and can reopen a delivered Run.
 
