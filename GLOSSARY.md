@@ -19,8 +19,14 @@ _Avoid_: Backend, platform
 The ordered Stages a piece of work moves through, encoded in the `factory` Skill.
 
 **Stage**:
-One step of the Flow: Define, Build, Check or Finish.
+One step of the Flow: Define, Build, Check, Finish or Follow-up.
 _Avoid_: Phase, step
+
+**Follow-up**:
+The Stage after Finish that observes the Run's pull request and scopes Rework to failing checks and unresolved review comments. It is entered explicitly and can reopen a delivered Run.
+
+**Done**:
+A Run that has delivered its current revision for review or whose pull request has merged. Done ends the current work; explicit Follow-up may resume observation of an open pull request.
 
 **Preflight**:
 The checks before the first Stage: project setup and Conventions, run with the Doctor. Not a Stage.
@@ -76,7 +82,7 @@ The inline steps Build runs after the last Ticket and after every Rework, before
 _Avoid_: Self-review
 
 **Rework**:
-Sending a Run back from Check to Build to fix problems. Each Rework counts against the loop limit and makes the earlier Evidence stale.
+Sending a Run back from Check or Follow-up to Build to fix problems. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
 _Avoid_: Retry, Loop back
 
 **Conventions**:
