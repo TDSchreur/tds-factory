@@ -1,9 +1,11 @@
+// @ts-check
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { MARKER } from './paths.js';
 
 // Hash of a folder's relative paths and file contents; the marker is left out because it stores the hash.
+/** @param {string} dir */
 export function hashTree(dir) {
   const hash = crypto.createHash('sha256');
   const files = fs
@@ -16,10 +18,12 @@ export function hashTree(dir) {
   return hash.digest('hex');
 }
 
+/** @param {string} dir */
 export const hashLine = (dir) => `sha256:${hashTree(dir)}\n`;
 
 // True when the folder's marker records a hash and the contents no longer match it.
 // A marker without a hash comes from an older version and counts as unmodified.
+/** @param {string} dir */
 export function modifiedLocally(dir) {
   const recorded = fs.readFileSync(path.join(dir, MARKER), 'utf8').match(/^sha256:([0-9a-f]{64})$/m)?.[1];
   return recorded !== undefined && recorded !== hashTree(dir);
