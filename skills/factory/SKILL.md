@@ -60,7 +60,7 @@ When the user answers and the Run continues, set `status` back to `running` befo
 
 ## Invoked Skills
 
-The Skills named in Define and Build have upstream defaults that conflict with the Flow. This section is the invocation contract: where it and an upstream step disagree, follow this section. Do not ask the user for an approval, confirmation or review that this section or a Stage below already resolved. Each `Overrides "..."` quotes the upstream sentence it replaces.
+The Skills named in Define and Build have upstream defaults that conflict with the Flow. This section is the invocation contract: where it and an upstream step disagree, follow this section. Do not ask the user for an approval, confirmation or review that this section or a Stage below already resolved. Follow the Flow through: detailed instructions do not replace Define, never skip a Stage, never work around a refused transition or edit `run.json` directly, and if something blocks a Stage, stop and tell the user. Each `Overrides "..."` quotes the upstream sentence it replaces.
 
 - **to-spec.** Overrides "Check with the user that these seams match their expectations." Choose the seams yourself. Overrides "then publish it to the project issue tracker." The Spec is a Markdown file in `docs/specs/`; do not publish it as an issue and apply no triage label to it.
 - **to-tickets.** Overrides "Ask the user:" and "Iterate until the user approves the breakdown." Publish the breakdown without the quiz; the tracker comes from `docs/agents/issue-tracker.md`.
