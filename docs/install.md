@@ -92,7 +92,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 Run `tds-factory update`. It looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and then runs `tds-factory install --force` so the skills and agents match the CLI. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades.
 
-`--force` replaces agent files and skills you edited (for example your model choices) with the defaults, and any skill folder of the same name that `tds-factory` did not install. To keep them, run `tds-factory update --no-force`.
+`--force` replaces agent files and skills you edited with the defaults, and any skill folder of the same name that `tds-factory` did not install. To keep them, run `tds-factory update --no-force`. To change the model of a Stage you do not need `--force` or edits to agent files: set it in the project's `.factory/config.json` (see [Set project options](usage.md#set-project-options)).
 
 Running the one-line install from part 2 again also updates, and keeps your edited agent files and skills unless you set `TDS_FACTORY_FORCE=1`. The manual way still works too:
 

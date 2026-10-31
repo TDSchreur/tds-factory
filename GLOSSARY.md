@@ -49,8 +49,12 @@ _Avoid_: Reviewer, Gate
 An additional Check axis supplied by a project through a Skill, alongside the Factory's baseline reviews. Its findings can send a Run back to Build for Rework.
 
 **Doctor**:
-The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`. It may add non-blocking notes, such as merged Runs that still hold a worktree.
+The read-only `tds-factory doctor` command that runs the Preflight checks (CLI version, required Skills, tracker setup, Git origin and default branch, Project config, review capabilities, Verify command) and reports each as `pass`, `missing` or `fail`. It may add non-blocking notes, such as merged Runs that still hold a worktree.
 _Avoid_: Linter, Health check
+
+**Project config**:
+The optional committed `.factory/config.json` with a project's settings: the model per Stage, the Check loop cap (at most the Factory maximum), the Ticket label and extra Project reviews. A Run freezes it when it starts, and the Doctor validates it.
+_Avoid_: Settings file
 
 **Run sync**:
 The `tds-factory run sync` command, which rebases a Run branch onto the current default branch of `origin` so conflicts surface during the Run. Finish refuses a branch that would not merge cleanly.

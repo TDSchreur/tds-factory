@@ -11,7 +11,7 @@ import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
-export { MAX_CHECK_LOOPS, verifyCommandProblem, trackOf } from './run-record.js';
+export { MAX_CHECK_LOOPS, loopCap, verifyCommandProblem, trackOf } from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
 
 // The one interface to the modules that touch .factory/runs. remove(id, why, options) reports dirty work separately from other refusals.
@@ -31,6 +31,7 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id) => verifyRun(projectDir, id),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
+    config: (id) => readRun(projectDir, id).record.project_config ?? null,
     reviews: (id) => reviewPlan(readRun(projectDir, id).record),
     review: (id, axis, data) => projectReviewRun(projectDir, id, axis, data),
     materializeReview: (id, axis) => materializeReview(projectDir, id, axis),

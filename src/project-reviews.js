@@ -48,32 +48,38 @@ function skillDirectory(projectDir, agent, homeDir, skill) {
   if (skill.source === 'installed' && text(skill.name) && /^[a-z0-9][a-z0-9-]*$/.test(skill.name) && skill.path === undefined) return safeDirectory(path.join(homeDir, targets[agent].global), skill.name);
   throw new Error('Skill must be {source: "project", path: "..."} or {source: "installed", name: "..."}');
 }
+function readProjectJson(projectDir, name) {
+  const file = path.join(projectDir, '.factory', name);
+  const stat = fs.lstatSync(file, { throwIfNoEntry: false });
+  if (!stat) return undefined;
+  if (fs.lstatSync(path.dirname(file)).isSymbolicLink()) throw new Error('.factory must not be a symlink');
+  if (!stat.isFile() || stat.size > 1024 * 1024) throw new Error(`${name} must be a regular file under 1 MiB`);
+  const source = fs.readFileSync(file, 'utf8');
+  try { return { source, data: JSON.parse(source) }; } catch (err) { throw new Error(`invalid ${name}: ${err.message}`); }
+}
+// .factory/reviews.json keeps working; the same reviews may also sit under "reviews" in .factory/config.json. IDs are unique across both.
 export function loadProjectReviews(projectDir, agent, homeDir = os.homedir()) {
-  const config = path.join(projectDir, '.factory', 'reviews.json');
-  const configStat = fs.lstatSync(config, { throwIfNoEntry: false });
-  if (!configStat) return [];
-  if (fs.lstatSync(path.dirname(config)).isSymbolicLink()) throw new Error('.factory must not be a symlink');
-  const stat = configStat;
-  if (!stat.isFile() || stat.size > 1024 * 1024) throw new Error('reviews.json must be a regular file under 1 MiB');
-  let data;
-  try { data = JSON.parse(fs.readFileSync(config, 'utf8')); } catch (err) { throw new Error(`invalid reviews.json: ${err.message}`); }
-  if (!plain(data) || !ownKeys(data, ['reviews']) || !Array.isArray(data.reviews)) throw new Error('reviews.json must contain a reviews array');
+  const legacy = readProjectJson(projectDir, 'reviews.json');
+  if (legacy && (!plain(legacy.data) || !ownKeys(legacy.data, ['reviews']) || !Array.isArray(legacy.data.reviews))) throw new Error('reviews.json must contain a reviews array');
+  const config = readProjectJson(projectDir, 'config.json');
+  const configured = config && plain(config.data) && Array.isArray(config.data.reviews) ? config.data.reviews : [];
   const ids = new Set();
-  return data.reviews.map(review => {
-    if (!plain(review) || !ownKeys(review, ['id', 'name', 'mode', 'skill', 'patterns', 'runtime'])) throw new Error('invalid project review fields');
-    const { id, name, mode, skill, patterns, runtime } = review;
-    if (!text(id) || !validId.test(id) || baseline.has(id) || ids.has(id)) throw new Error(`invalid, duplicate or reserved review ID: ${id}`);
-    ids.add(id);
-    if (!text(name)) throw new Error(`${id}: review needs a name`);
-    if (!['source', 'interactive'].includes(mode)) throw new Error(`${id}: mode must be source or interactive`);
-    if (patterns !== undefined && (!Array.isArray(patterns) || !patterns.length || patterns.some(p => !text(p) || p.startsWith('/') || p.split('/').includes('..') || /[\[\]{}!\\]/.test(p)))) throw new Error(`${id}: patterns must be nonempty relative globs using *, ** and ?`);
-    if (mode === 'interactive' && (!plain(runtime) || !ownKeys(runtime, ['start', 'ready', 'setup']) || !text(runtime.start) || !text(runtime.ready) || !text(runtime.setup))) throw new Error(`${id}: interactive review needs runtime start, ready and setup`);
-    if (mode === 'source' && runtime !== undefined) throw new Error(`${id}: runtime is only for interactive reviews`);
-    let snapshot;
-    try { snapshot = regularTree(skillDirectory(projectDir, agent, homeDir, skill)); }
-    catch (err) { throw new Error(`${id}: cannot load Skill: ${err.message}`); }
-    return { id, name, mode, skill, ...(patterns ? { patterns } : {}), ...(runtime ? { runtime } : {}), ...snapshot };
-  });
+  return [...(legacy?.data.reviews ?? []), ...configured].map(review => parseReview(review, ids, projectDir, agent, homeDir));
+}
+function parseReview(review, ids, projectDir, agent, homeDir) {
+  if (!plain(review) || !ownKeys(review, ['id', 'name', 'mode', 'skill', 'patterns', 'runtime'])) throw new Error('invalid project review fields');
+  const { id, name, mode, skill, patterns, runtime } = review;
+  if (!text(id) || !validId.test(id) || baseline.has(id) || ids.has(id)) throw new Error(`invalid, duplicate or reserved review ID: ${id}`);
+  ids.add(id);
+  if (!text(name)) throw new Error(`${id}: review needs a name`);
+  if (!['source', 'interactive'].includes(mode)) throw new Error(`${id}: mode must be source or interactive`);
+  if (patterns !== undefined && (!Array.isArray(patterns) || !patterns.length || patterns.some(p => !text(p) || p.startsWith('/') || p.split('/').includes('..') || /[\[\]{}!\\]/.test(p)))) throw new Error(`${id}: patterns must be nonempty relative globs using *, ** and ?`);
+  if (mode === 'interactive' && (!plain(runtime) || !ownKeys(runtime, ['start', 'ready', 'setup']) || !text(runtime.start) || !text(runtime.ready) || !text(runtime.setup))) throw new Error(`${id}: interactive review needs runtime start, ready and setup`);
+  if (mode === 'source' && runtime !== undefined) throw new Error(`${id}: runtime is only for interactive reviews`);
+  let snapshot;
+  try { snapshot = regularTree(skillDirectory(projectDir, agent, homeDir, skill)); }
+  catch (err) { throw new Error(`${id}: cannot load Skill: ${err.message}`); }
+  return { id, name, mode, skill, ...(patterns ? { patterns } : {}), ...(runtime ? { runtime } : {}), ...snapshot };
 }
 function globRegex(pattern) {
   let result = '^';
@@ -97,3 +103,5 @@ export function reviewPlan(record) {
     return { ...review, encoded_files: review.files, files: Object.fromEntries(Object.entries(review.files).flatMap(([name, data]) => { const bytes = Buffer.from(data, 'base64'); const decoded = bytes.toString('utf8'); return !bytes.includes(0) && Buffer.from(decoded, 'utf8').equals(bytes) ? [[name, decoded]] : []; })), applicable, matched, ...(applicable ? {} : { reason: 'No changed file matches the review patterns' }) };
   });
 }
+
+export { readProjectJson };
