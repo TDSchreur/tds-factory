@@ -128,6 +128,10 @@ function binaryCheck(agent) {
 // Without `agent` every Agent target is reported and one usable target is enough; with `agent` only that target is, and its command need not be on PATH.
 export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
   if (agent !== undefined && !Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
+  // Git resolves the current worktree (including linked worktrees), not the shared main checkout.
+  const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: projectDir, encoding: 'utf8' });
+  const worktreeRoot = root.stdout?.replace(process.platform === 'win32' ? /\r?\n$/ : /\n$/, '');
+  if (root.status === 0 && worktreeRoot) projectDir = worktreeRoot;
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
   const attempt = ([id, check]) => { let result; try { result = check(); } catch (err) { result = ['fail', err.message]; } return { id, status: result[0], message: result[1] }; };
   const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)], ['verify-fast', () => verifyFastCheck(projectDir)]].map(attempt);
