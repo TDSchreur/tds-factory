@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './eval-root.js';
 
+const RUN = 'id=$(ls .factory/runs) && tds-factory run';
 const gh = join(ROOT, 'eval', 'bin', 'gh');
 const runner = join(ROOT, 'eval', 'run.js');
 const sandbox = () => join(mkdtempSync(join(tmpdir(), 'eval-shim-')), 'actions.jsonl');
@@ -56,7 +57,18 @@ test('the grader fails an agent that publishes the Spec as an issue and ignores 
   assert.match(out.stdout, /PASS at least one Ticket issue was attempted/);
 });
 
-const RUN = 'id=$(ls .factory/runs) && tds-factory run';
+test('the grader passes an agent that leaves the Spec uncommitted and publishes only Tickets', () => {
+  const out = grade('approval-resolved', `${RUN} update --id $id --data '{"spec_link":"docs/specs/shout.md"}' && w=$(ls -d .factory/worktrees/*) && mkdir -p $w/docs/specs && echo spec > $w/docs/specs/shout.md && gh issue create --title T --label ready-for-agent --body ticket`);
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /PASS the Spec is a file in docs\/specs/);
+});
+
+test('the offline gh answers repo view and label list for a fixture repository, and keeps other reads empty', () => {
+  const log = sandbox();
+  assert.deepEqual(JSON.parse(shim(log, 'repo', 'view', '--json', 'nameWithOwner,url').stdout), { nameWithOwner: 'eval/fixture', url: 'https://github.com/eval/fixture' });
+  assert.deepEqual(JSON.parse(shim(log, 'label', 'list', '--limit', '100').stdout), [{ name: 'ready-for-agent' }]);
+  assert.equal(shim(log, 'issue', 'list').stdout, '[]\n');
+});
 
 test('the grader passes the stop, resume and verify scenarios only for the right artifacts and actions', () => {
   const stop = grade('user-stops', `${RUN} update --id $id --data '{"status":"abandoned","activity":"stopped"}'`);
