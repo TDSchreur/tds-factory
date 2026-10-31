@@ -10,6 +10,8 @@ At widths up to 1024 CSS pixels, the Dashboard shows one Stage at a time. Use th
 
 Selecting a Run opens its detail across the screen at compact widths. Use **Back to stages** or Escape to return to the Run's card in its Stage. The Dashboard remains beside the detail on wider screens, where you can select another Run without closing it.
 
+Run detail shows Stage time, Reworks and first-pass clean rate using the same calculations as `tds-factory run stats --id ID`. Time includes waiting and repeated visits; an active visit is labeled ongoing. Old or missing observations show `no data`. Tokens and cost are `not tracked` for current Agent targets. See [Run metrics in the usage guide](usage.md#run-metrics) for the rate and totals.
+
 The page is built with Preact and htm, committed in `dashboard/vendor/` (see `dashboard/vendor/README.md` for versions and how to update them) and loaded as ES modules, so there is no build step. See `docs/adr/0003-preact-htm-dashboard.md`.
 
 | Route | Returns |

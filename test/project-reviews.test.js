@@ -147,6 +147,7 @@ test('medium findings cannot pass and Rework clears project review Evidence', ()
   assert.equal(run('rework').status, 0);
   const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
   assert.equal(record.project_results, undefined); assert.equal(record.check_loops, 1);
+  assert.deepEqual(record.metrics.verdicts.map(({ axis, value, attempt, base_sha }) => ({ axis, value, attempt, base_sha })), [{ axis: 'angular', value: 'fail', attempt: 1, base_sha: record.base_sha }]);
 });
 
 test('interactive reviews require browser artifacts kept in the Run folder', () => {
@@ -220,6 +221,9 @@ test('sync clears project review Evidence when rebasing onto an advanced base', 
   const result = run('sync'); assert.equal(result.status, 0, result.stderr);
   const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
   assert.equal(record.project_results, undefined);
+  assert.equal(record.metrics.verdicts[0].axis, 'angular');
+  assert.equal(record.metrics.verdicts[0].value, 'pass');
+  assert.notEqual(record.metrics.verdicts[0].base_sha, record.base_sha);
   assert.equal(record.check_loops, 0);
 });
 

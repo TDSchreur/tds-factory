@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { openRunStore } from './run-store.js';
+import { openRunStore, summarizeMetrics, formatMetrics } from './run-store.js';
 import { stages } from './flow.js';
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -61,7 +61,7 @@ export function interpretRun(entry) {
   });
   const links = [];
   for (const [label, values] of [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]]) for (const value of Array.isArray(values) ? values : [values]) if (str(value)) links.push({ label, href: str(value) });
-  return { id, unreadable: false, projectReviews, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
+  return { id, unreadable: false, metrics: formatMetrics(summarizeMetrics(r)), projectReviews, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
 }
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
