@@ -19,10 +19,19 @@
     "test:unit": "node scripts/with-temp-dir.js node scripts/test-unit.js",
     "test:browser": "node scripts/with-temp-dir.js node --test test/*-browser.test.js",
     "test:package": "node scripts/with-temp-dir.js node scripts/test-package.js",
-    "eval": "node scripts/with-temp-dir.js node eval/run.js"
+    "eval": "node scripts/with-temp-dir.js node eval/run.js",
+    "lint": "eslint .",
+    "format:check": "prettier --check eslint.config.js package.json",
+    "format": "prettier --write"
   },
   "engines": {
     "node": ">=20"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10"
+  }
 }
