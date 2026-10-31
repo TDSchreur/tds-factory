@@ -1,0 +1,2 @@
+### Changed
+- Lower the default models and reasoning effort of the Stage agents to make a Run cheaper and faster. Claude: Define medium, Build low, Check and the interactive check on Sonnet at medium. Codex: Define on `gpt-6.1-terra` low, Build on `gpt-6-luna`, Check and the interactive check at medium, Finish and Follow-up low. Copilot: Define on `claude-haiku-4.5`. `install` keeps agent files you have edited; use `--force` once to take the new defaults.
