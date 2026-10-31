@@ -22,7 +22,8 @@
     "eval": "node scripts/with-temp-dir.js node eval/run.js",
     "lint": "eslint .",
     "format:check": "prettier --check eslint.config.js package.json",
-    "format": "prettier --write"
+    "format": "prettier --write",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "engines": {
     "node": ">=20"
@@ -30,8 +31,10 @@
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^20.19.43",
     "eslint": "^10.14.0",
     "globals": "^17.13.0",
-    "prettier": "^3.9.10"
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2"
   }
 }

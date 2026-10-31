@@ -48,6 +48,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run format:check
+      - run: npm run typecheck
 
   browser:
     runs-on: ubuntu-latest
