@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { statuses } from './run-record.js';
+import { providerFor } from './pr-provider.js';
 import { runRoot, withRunLock, readRun, runIds, mainCheckout } from './run-folder.js';
 import { ownWorktrees, worktreeChanges, submoduleLocalWork } from './worktrees.js';
 
@@ -45,13 +46,12 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
   }
 }
 
-// State and head commit of a PR as GitHub reports them; undefined when gh cannot say. Only a GitHub PR link is passed to gh.
+// State and head commit of a PR as its host reports them; undefined when the host cannot say or no provider handles the link.
 function ghPrInfo(url) {
-  if (typeof url !== 'string' || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url)) return undefined;
-  const out = spawnSync('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { encoding: 'utf8', timeout: 10000 });
-  if (out.status !== 0) return undefined;
+  const provider = providerFor(url);
+  if (!provider) return undefined;
   try {
-    const { state, headRefOid } = JSON.parse(out.stdout);
+    const { state, headRefOid } = provider.view(url);
     return typeof state === 'string' ? { state, head: headRefOid } : undefined;
   } catch { return undefined; }
 }

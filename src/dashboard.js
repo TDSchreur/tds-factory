@@ -7,28 +7,21 @@ import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { providerFor, remoteRepo } from './pr-provider.js';
 
-const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 const exec = promisify(execFile);
-const ghPrMerge = (url, head) => exec('gh', ['pr', 'merge', url, '--squash', '--match-head-commit', head], { timeout: 30_000 });
-const ghPrDetails = async (url) => JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { timeout: 10_000 })).stdout);
-const ghChecks = async (url) => {
-  let stdout;
-  try { ({ stdout } = await exec('gh', ['pr', 'checks', url, '--json', 'name,bucket,state'], { timeout: 10_000 })); }
-  catch (err) { if (!err.stdout) throw err; stdout = err.stdout; }
-  const checks = JSON.parse(stdout);
-  if (!Array.isArray(checks) || checks.some((c) => !c || typeof c.name !== 'string' || !['pass', 'fail', 'pending', 'skipping', 'cancel'].includes(c.bucket))) throw new Error('invalid check data');
-  const problems = checks.filter((c) => ['fail', 'pending', 'cancel'].includes(c.bucket)).map((c) => `${c.name}: ${c.bucket === 'fail' ? 'failing' : c.bucket === 'cancel' ? 'cancelled' : 'pending'}`);
-  return problems.length ? `GitHub checks: ${problems.join('; ')}` : checks.length ? 'GitHub checks: passing' : 'GitHub checks: none reported';
-};
+// The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
 const expectedRepo = async (worktree) => {
   const origin = (await exec('git', ['remote', 'get-url', 'origin'], { cwd: worktree, timeout: 10_000 })).stdout.trim();
-  const match = origin.match(/^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?$/i);
-  if (!match) throw new Error('cannot resolve the Run repository from origin');
-  return `${match[1]}/${match[2]}`.toLowerCase();
+  const repo = remoteRepo(origin);
+  if (!repo) throw new Error('cannot resolve the Run repository from origin');
+  return `${repo.owner}/${repo.name}`.toLowerCase();
 };
 const PR_CACHE_MS = 60_000;
-const ghPrState = async (url) => JSON.parse((await promisify(execFile)('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
+const ghPrState = (url) => providerFor(url).stateAsync(url);
+const ghPrMerge = (url, head) => providerFor(url).merge(url, head);
+const ghPrDetails = (url) => providerFor(url).viewAsync(url);
+const ghChecks = (url) => providerFor(url).checksSummary(url);
 const HOST = '127.0.0.1';
 // Each repo gets its own stable port in 4300-4999, derived from its main checkout path.
 const repoPort = (dir) => 4300 + createHash('sha1').update(dir).digest().readUInt32BE(0) % 700;
@@ -85,7 +78,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
   };
   const view = async (entry) => {
     const v = interpretRun(entry);
-    return { ...v, prState: v.column === 'done' && PR_URL.test(v.pr) ? await lookup(v.pr) : '' };
+    return { ...v, prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '' };
   };
 
   const server = http.createServer(async (req, res) => {
@@ -120,7 +113,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         const entry = (await store.list()).find((e) => e.id === id);
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
-        if (v.status !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
+        if (v.status !== 'done' || !providerFor(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
         let eligibility;
         try { eligibility = store.mergeEligibility(id); } catch (err) { return send(409, 'text/plain', `cannot check Run Evidence: ${err.message}`); }
         if (eligibility.problems.length) return send(409, 'text/plain', `Run needs a clean or Accepted Check: ${eligibility.problems.join('; ')}`);
@@ -174,7 +167,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         const entry = (await store.list()).find((e) => e.id === id);
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
-        if (v.status !== 'done' || !PR_URL.test(v.pr)) return send(409, 'text/plain', 'cannot check this Run');
+        if (v.status !== 'done' || !providerFor(v.pr)) return send(409, 'text/plain', 'cannot check this Run');
         let status;
         try { status = await ghChecks(v.pr); } catch { status = 'GitHub checks: unavailable'; }
         return send(200, 'text/plain', status);

@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { validId, paused, write } from './run-record.js';
 import { runRoot, lockFile, repairLockFile, pathExists, lockOwner, withLock, withRunLock, readRun, listRuns } from './run-folder.js';
 import { ownWorktrees, worktreeState } from './worktrees.js';
+import { remoteRepo } from './pr-provider.js';
 
 // Produce a reviewable plan from current git, Run and GitHub facts. No writes occur here.
 export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
@@ -47,16 +48,13 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
   if (wt?.safe && wt.branch === id) {
     const remote = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: projectDir, encoding: 'utf8' });
     const url = remote.status === 0 ? remote.stdout.trim() : '';
-    const match = /^(?:https?:\/\/github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/.exec(url);
-    if (!match) notes.push('GitHub origin unresolved or not GitHub; reconcile any PR manually before repeating work');
+    const host = remoteRepo(url);
+    if (!host) notes.push('GitHub origin unresolved or not GitHub; reconcile any PR manually before repeating work');
     else {
-      const repo = `${match[1]}/${match[2]}`;
-      const gh = spawnSync('gh', ['pr', 'list', '--repo', repo, '--head', id, '--state', 'all', '--json', 'url,headRefName,headRepository,headRepositoryOwner'], { cwd: projectDir, encoding: 'utf8', timeout: 10000 });
+      const repo = `${host.owner}/${host.name}`;
       try {
-        if (gh.status !== 0) throw new Error(gh.error?.message || gh.stderr.trim() || 'GitHub lookup failed');
-        const all = JSON.parse(gh.stdout);
-        if (!Array.isArray(all) || all.some((pr) => !pr || typeof pr.url !== 'string' || typeof pr.headRefName !== 'string' || typeof pr.headRepositoryOwner?.login !== 'string' || typeof pr.headRepository?.name !== 'string')) throw new Error('incomplete GitHub PR response');
-        const prs = all.filter((pr) => pr.headRefName === id && pr.headRepositoryOwner?.login?.toLowerCase() === match[1].toLowerCase() && pr.headRepository?.name?.toLowerCase() === match[2].toLowerCase() && typeof pr.url === 'string' && pr.url.toLowerCase().startsWith(`https://github.com/${repo.toLowerCase()}/pull/`) && /^[0-9]+$/.test(pr.url.slice(`https://github.com/${repo}/pull/`.length)));
+        const all = host.provider.listByHead(repo, id, projectDir);
+        const prs = all.filter((pr) => pr.headRefName === id && pr.headRepositoryOwner?.login?.toLowerCase() === host.owner.toLowerCase() && pr.headRepository?.name?.toLowerCase() === host.name.toLowerCase() && typeof pr.url === 'string' && pr.url.toLowerCase().startsWith(`https://github.com/${repo.toLowerCase()}/pull/`) && /^[0-9]+$/.test(pr.url.slice(`https://github.com/${repo}/pull/`.length)));
         if (prs.length > 1) notes.push('GitHub PR lookup is ambiguous; reconcile manually');
         else if (prs.length === 1 && record?.pr && record.pr !== prs[0].url) notes.push('recorded PR conflicts with GitHub; reconcile manually');
         else if (prs.length === 1 && !record?.pr) { actions.push(`adopt existing PR ${prs[0].url}`); notes.push(`GitHub PR found: ${prs[0].url}`); }
