@@ -106,7 +106,7 @@ The read-only `tds-factory run sweep` command, step one of the Exit checklist: i
 _Avoid_: Grep pass
 
 **Exit checklist**:
-The inline steps Build runs after the last Ticket and after every Rework, before moving on: a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
+The inline steps Build runs after the last Ticket and after every Rework, before moving on: a term sweep (`tds-factory run sweep`), the required artifacts, a story trace, a security check and a self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
 _Avoid_: Self-review
 
 **Blocking finding**:
