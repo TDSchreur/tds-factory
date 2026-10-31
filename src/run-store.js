@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { summarizeMetrics, formatMetrics, totalMetrics } from './run-metrics.js';
 import { reviewPlan } from './project-reviews.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
@@ -7,6 +8,7 @@ import { startRun, updateRun, transitionRun, acceptRun, syncRun, reworkRun, comp
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 
+export { summarizeMetrics, formatMetrics } from './run-metrics.js';
 export { MAX_CHECK_LOOPS, verifyCommandProblem } from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
 
@@ -34,6 +36,14 @@ export function openRunStore(callerDir) {
       return { ...state, problems: finishProblems(record, state), worktree: record.worktree };
     },
     list: () => listRuns(runsDir),
+    stats: async (id) => {
+      const entries = await listRuns(runsDir);
+      if (id && !entries.some(entry => entry.id === id)) throw new Error(`Run not found: ${id}`);
+      const selected = id ? entries.filter(entry => entry.id === id) : entries;
+      const now = Date.now();
+      const runs = selected.map(entry => ({ id: entry.id, unreadable: entry.unreadable, summary: entry.unreadable ? null : summarizeMetrics(entry.record, now) }));
+      return { runs, total: totalMetrics(runs.filter(run => run.summary).map(run => run.summary)) };
+    },
     inspect: (id) => inspectRuns(projectDir, runsDir, id),
     repairPlan: (id) => repairPlan(projectDir, runsDir, id),
     repairApply: (id, plan) => repairApply(projectDir, runsDir, id, plan),

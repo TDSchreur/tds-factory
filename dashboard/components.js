@@ -239,6 +239,11 @@ export function Detail({ run, compact, onClose }) {
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
     </header>
+    ${run.metrics && html`<section aria-label="Run metrics"><h3>Run metrics</h3>
+      ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}
+      <div>Reworks: ${run.metrics.reworks}</div><div>First-pass clean rate: ${run.metrics.firstPass}</div>
+      <div>Tokens: ${run.metrics.tokens}</div><div>Cost: ${run.metrics.cost}</div>
+    </section>`}
     ${(run.projectReviews ?? []).length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${run.projectReviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}

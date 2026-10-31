@@ -7,6 +7,7 @@ import { MAX_CHECK_LOOPS, gated, verdicts, validate, apply, write, checkCommands
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
 import { finishProblems } from './evidence.js';
+import { newMetrics, moveVisit, firstCheck } from './run-metrics.js';
 
 export function startRun(projectDir, data) {
   validate(data);
@@ -38,7 +39,7 @@ export function startRun(projectDir, data) {
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     created = true;
     const projectReviews = loadProjectReviews(worktree, data.agent);
-    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews });
+    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews, metrics: newMetrics(now) });
   } catch (err) {
     const failures = [];
     if (created) {
@@ -66,7 +67,8 @@ export function updateRun(projectDir, id, data) {
     if ('commands' in data) checkCommands(data.commands);
     if (data.status === 'done') throw new Error('a Run is completed with run complete');
     if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
-    return apply(old, data);
+    const next = apply(old, data);
+    return data.status === 'abandoned' ? moveVisit(next, null) : next;
   });
 }
 
@@ -90,7 +92,10 @@ export function transitionRun(projectDir, id, to, data = {}) {
       const conflict = mergeProblem(projectDir, old);
       if (conflict) throw new Error(`Finish needs a branch that merges cleanly: ${conflict}`);
     }
-    return { record: { ...old, stage: to }, activity: `Starting ${to}` };
+    let record = old;
+    if (to === 'finish') record = firstCheck(record, finishProblems({ ...old, accepted: undefined }).length === 0);
+    record = moveVisit(record, to);
+    return { record: { ...record, stage: to }, activity: `Starting ${to}` };
   });
 }
 
@@ -137,7 +142,7 @@ export function reworkRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
     if (loops(old) >= MAX_CHECK_LOOPS) throw new Error(`the Check loop limit of ${MAX_CHECK_LOOPS} is reached`);
-    const record = { ...old, stage: 'build', check_loops: loops(old) + 1 };
+    const record = { ...moveVisit(firstCheck(old, false), 'build'), stage: 'build', check_loops: loops(old) + 1 };
     for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
     return { record, activity: 'Rework: back to Build' };
   });
@@ -147,6 +152,6 @@ export function completeRun(projectDir, id, data = {}) {
     if (old.stage !== 'finish') throw new Error('only a Run in Finish can be completed');
     if (!old.pr) throw new Error('completing a Run needs a PR link');
     if (old.tickets_done > old.tickets_total) throw new Error(`more Tickets done (${old.tickets_done}) than counted (${old.tickets_total})`);
-    return { record: { ...old, status: 'done', waiting_on_human: false, waiting_reason: '' }, activity: 'Done' };
+    return { record: { ...moveVisit(old, null), status: 'done', waiting_on_human: false, waiting_reason: '' }, activity: 'Done' };
   });
 }

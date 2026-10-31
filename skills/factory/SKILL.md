@@ -37,6 +37,7 @@ Every Run keeps a Run record that the Dashboard reads. Keep it up to date yourse
 - `tds-factory run accept --id <id> --data '{"findings":"...","decision":"..."}'` records the user's decision to continue to Finish with a Check that is not clean, for the current head only.
 - `tds-factory run complete --id <id>` ends a Run in Finish that has a `pr` link and sets `status` to `done`.
 - `tds-factory run clean --id <id> | --all` removes the worktree and local branch of a Run whose recorded PR is merged, from the main checkout only. It keeps the Run record, and leaves a Run that is not done, has an unmerged PR, uncommitted changes, submodule work that exists nowhere else, or branch commits outside the merged PR in place, saying why.
+- `tds-factory run stats --id <id> | --all` reports observed Stage time, Reworks and first-pass clean rate. It does not change records.
 - `tds-factory run inspect [--id <id>] [--json]` reports records that cannot be read, lock ownership, orphaned, missing, unknown or dirty worktrees, and stale Evidence without changing anything.
 - `tds-factory run repair --id <id>` prints a repair proposal; add `--apply` only after reviewing it. It reconciles git and GitHub, preserves dirty worktrees, may reconstruct missing records and only clears a lock whose same-host owner is demonstrably dead. It never clears a lock because of age. Inspect a reported repair coordination lock and resolve it manually.
 
@@ -71,6 +72,7 @@ After changing this skill, re-run `tds-factory install` so the installed copy is
 | `project_reviews` | Frozen project review definitions, Skill content and bundled file modes captured at Run start. Set by `run start`; older Runs may omit this field |
 | `project_results` | Project review reports, verdicts, findings, artifact paths, head, base and Check attempt. Set by `run review` and cleared by Rework |
 | `check_loops` | Number of times Check has sent the Run back to Build, `0` to `4`. Starts at `0`; `run rework` raises it by 1 on each return to Build |
+| `metrics` | Versioned observations maintained by named operations: Stage visits with UTC start and end, historical Check verdict events with head and attempt (and base for Project reviews), first Check outcome, and usage availability. Track may be added later. Older Runs may omit it; never supply it with `run update` |
 | `worktree` | Path of the Run worktree the Run works in. Set by `run start` |
 | `base_sha` | The fetched `origin` default branch head the Run is based on. Set by `run start` and `run sync` |
 | `verify` | The latest Verify result, an object. Set by `run verify` |

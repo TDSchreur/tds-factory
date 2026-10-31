@@ -1,0 +1,11 @@
+# Run metrics preserve observed history separately from Evidence
+
+[ADR 0006](0006-run-progress-goes-through-named-transitions.md) makes named operations the owners of Run progress. Metrics use the same operations and atomic record writes: a successful transition records its Stage boundary, Rework preserves the previous visit while opening the next, and verdict recording appends a historical event. Ordinary activity updates cannot rewrite metrics. Abandonment closes the active visit through its existing status update.
+
+We preserve Stage visits and verdict events rather than deriving history from the current Stage, `updated`, or the latest Evidence. Rework and Run sync deliberately clear current Evidence, and a later passing verdict can replace a failing one. Deriving history afterwards would lose those facts. History remains descriptive: it cannot satisfy a review gate. This extends ADR 0006 without changing its prerequisites or the Run store seams in [ADR 0012](0012-run-store-is-split-by-seam.md).
+
+Stage time is elapsed wall-clock time, including waiting and interruption, summed over all visits. The active visit is labeled ongoing; completion and abandonment close it. This is observable from named boundaries without pretending to measure Agent working time.
+
+First-pass clean rate uses Runs whose first Check has an observed outcome: clean Finish succeeds; Rework or an Accepted nonclean Finish fails. Unfinished first Checks and unknown legacy outcomes are excluded. Persisting that outcome avoids changing a past result when a later Check passes. A zero denominator means `no data`.
+
+Missing old measurements remain unknown. We do not backfill timestamps from creation or update times, and we do not invent token or cost measurements. Current integrations expose neither to the Run store, so output explicitly says they are not tracked. The metrics representation is versioned and leaves an optional track dimension unspecified until track support exists. The trade-off is extra historical data in each record in exchange for reproducible statistics and an honest distinction between zero and unknown. See [the Run metrics Spec](../specs/run-metrics.md).

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { install } from '../src/install.js';
-import { openRunStore } from '../src/run-store.js';
+import { openRunStore, formatMetrics } from '../src/run-store.js';
 import { sync } from '../src/sync.js';
 import { startDashboard } from '../src/dashboard.js';
 import { doctor } from '../src/doctor.js';
@@ -23,6 +23,7 @@ const USAGE = `Usage:
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID
+  tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
   tds-factory run reviews --id ID
@@ -77,6 +78,24 @@ try {
     else if (op === 'clean') {
       if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all, not both');
       for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)]) console.log((reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'));
+    }
+    else if (op === 'stats') {
+      if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
+      const report = await store.stats(values.id);
+      const print = (label, summary) => {
+        const formatted = formatMetrics(summary);
+        console.log(`${label}\n${Object.entries(formatted.stages).map(([stage, value]) => `  ${stage[0].toUpperCase()}${stage.slice(1)}: ${value}`).join('\n')}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`);
+      };
+      for (const run of report.runs) {
+        const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
+        if (run.unreadable) console.log(`${name}: unreadable (no data)`);
+        else print(name, run.summary);
+      }
+      if (values.all) {
+        print('Total observed', report.total);
+        const missing = report.runs.filter(run => !run.summary || Object.values(run.summary.stages).some(value => value.ms === null) || run.summary.reworks === null).length;
+        if (missing) console.log(`${missing} Run(s) have missing or unreadable data; totals include observed values only.`);
+      }
     }
     else if (op === 'accept') store.accept(values.id, data);
     else if (op === 'inspect') {

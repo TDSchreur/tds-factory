@@ -6,6 +6,7 @@ import { reviewPlan } from './project-reviews.js';
 import { verdicts, apply, validate, loops, attempt, verifyCommandProblem } from './run-record.js';
 import { readRun, changeRun, changeRunning } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
+import { recordVerdict } from './run-metrics.js';
 
 // Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
 export function finishProblems(record, { head, dirty } = worktreeState(record)) {
@@ -81,7 +82,7 @@ export function verdictRun(projectDir, id, axis, value) {
     if (old.stage !== 'check') throw new Error('verdicts are recorded in Check');
     const { head, dirty } = worktreeState(old);
     if (value !== 'fail' && dirty) throw new Error(`cannot record ${value} for ${axis}: the Run worktree has uncommitted changes`);
-    return { record: { ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, activity: `${axis} verdict: ${value}` };
+    return { record: recordVerdict({ ...old, [axis]: value, reviewed: { ...old.reviewed, [axis]: { head, attempt: attempt(old) } } }, { axis, value, head, attempt: attempt(old) }), activity: `${axis} verdict: ${value}` };
   });
 }
 
@@ -125,7 +126,7 @@ export function projectReviewRun(projectDir, id, axis, data) {
     if (review.mode === 'interactive' && data.verdict === 'pass' && !data.evidence?.length) throw new Error(`${axis} needs browser evidence to pass`);
     const evidenceHashes = Object.fromEntries((data.evidence ?? []).map(item => [item, evidenceHash(old, item)]));
     const result = { ...data, ...(data.evidence?.length ? { evidence_hashes: evidenceHashes } : {}), ...(data.verdict === 'skipped' ? { reason: plan.reason } : {}), head, base_sha: old.base_sha, attempt: attempt(old) };
-    return { record: { ...old, project_results: { ...old.project_results, [axis]: result } }, activity: `${axis} verdict: ${data.verdict}` };
+    return { record: recordVerdict({ ...old, project_results: { ...old.project_results, [axis]: result } }, { axis, value: data.verdict, head, base_sha: old.base_sha, attempt: attempt(old) }), activity: `${axis} verdict: ${data.verdict}` };
   });
 }
 

@@ -126,11 +126,17 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 - On screens up to 1024 CSS pixels wide, use the Stage buttons to show one column at a time. The buttons show visible Run counts and mark Stages with Runs that need you.
 - The **chips** show the Ticket progress, baseline and project Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
-- Click a card to open the **Run detail** with its links, Tickets and Stage summaries. On compact screens it fills the screen; use **Back to stages** or Esc to return to the same Run. On wider screens it opens on the right; click the card again, press Esc or use the close button to close it.
+- Click a card to open the **Run detail** with its links, Tickets, Stage summaries and Run metrics. On compact screens it fills the screen; use **Back to stages** or Esc to return to the same Run. On wider screens it opens on the right; click the card again, press Esc or use the close button to close it.
 - Done cards start collapsed. Press **Show details** on a Done card to see its pull request link and actions. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Delete** is available on every Run. Stop an unfinished Run's agent first. Delete removes its record and Factory-created worktree while keeping the branch. If the worktree has uncommitted changes, a separate confirmation lets you discard them or cancel. **Delete all** applies only to Done Runs and asks separately about each dirty worktree.
 - Older Runs are folded away; "Show older" brings them back.
 
 Leave the Dashboard open while you work. It refreshes every two seconds. The routes and the rules for deleting a Run are in the [Dashboard guide](dashboard.md).
+
+### Run metrics
+
+Run `tds-factory run stats --id ID` for one Run or `tds-factory run stats --all` for every Run and observed totals. Run detail shows the same per-Run summary. Stage time is elapsed wall-clock time, including waiting. Repeated visits are summed, and an open visit is labeled ongoing. Completion or abandonment stops the clock. A missing observation is `no data`; totals report observed values and identify missing or unreadable records.
+
+First-pass clean rate is clean first Checks divided by observed first Check outcomes. Rework and an Accepted nonclean Check count as unsuccessful; unfinished and unknown outcomes are excluded. The output shows the numerator and denominator, or `no data` when there are no outcomes. The Run record keeps prior Check verdicts for history; they do not count as current Evidence. Current Agent targets expose no token or cost measurements to the Factory, so both are reported as `not tracked`.
 
 ## 6. Stop or redirect a Run
 
