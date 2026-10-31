@@ -121,3 +121,13 @@ test('install updates an unedited agent file but keeps an edited one', () => {
   assert.equal(readFileSync(build, 'utf8'), readFileSync(join(AGENTS_DIR, 'claude', 'factory-build.md'), 'utf8'));
   assert.equal(readFileSync(define, 'utf8'), 'model: mine\n');
 });
+
+test('the Skill and every Stage agent of every target state the follow-through rule', () => {
+  const root = join(import.meta.dirname, '..');
+  assert.match(readFileSync(join(root, 'skills', 'factory', 'SKILL.md'), 'utf8'), /Follow the Flow through: detailed instructions do not replace Define, never skip a Stage, never work around a refused transition or edit `run\.json` directly, and if something blocks a Stage, stop and tell the user/);
+  for (const dir of ['claude', 'codex', 'copilot']) {
+    const files = readdirSync(join(root, 'agents', dir));
+    assert.equal(files.length, 6, dir);
+    for (const file of files) assert.match(readFileSync(join(root, 'agents', dir, file), 'utf8'), /Follow the Flow through: never skip a Stage or its reviewers, never work around a refused transition or edit `run\.json` directly, and if something blocks you, stop and tell the coordinator/, `${dir}/${file}`);
+  }
+});

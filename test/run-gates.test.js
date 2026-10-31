@@ -436,6 +436,24 @@ test('inspect reports Evidence that no longer matches the head', () => {
   assert.deepEqual(problems(cwd, id), ['stale-evidence']);
 });
 
+test('inspect flags project code committed while the Run is still in Define, and not Define artifacts', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  const wt = read(cwd, id).worktree;
+  mkdirSync(join(wt, 'docs', 'specs'), { recursive: true });
+  writeFileSync(join(wt, 'docs', 'specs', 'x.md'), 'spec');
+  writeFileSync(join(wt, 'GLOSSARY.md'), 'g');
+  git(wt, 'add', '-A');
+  git(wt, 'commit', '-q', '-m', 'define artifacts');
+  assert.deepEqual(problems(cwd, id), []);
+  writeFileSync(join(wt, 'code.js'), 'x');
+  git(wt, 'add', '-A');
+  git(wt, 'commit', '-q', '-m', 'code without Build');
+  assert.deepEqual(problems(cwd, id), ['stage-skipped']);
+  force(cwd, id, { stage: 'build' });
+  assert.deepEqual(problems(cwd, id), []);
+});
+
 test('inspect leaves finished Runs without a worktree alone and changes nothing on disk', () => {
   const cwd = repo();
   const id = startRun(cwd);

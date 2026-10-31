@@ -18,7 +18,7 @@ Read this when you need the exact form or the rules of a `tds-factory run` comma
 - `tds-factory run complete --id <id>` ends a Run in Finish or Follow-up that has a `pr` link and sets `status` to `done`.
 - `tds-factory run clean --id <id> | --all` removes the worktree and local branch of a Run whose recorded PR is merged, from the main checkout only. It keeps the Run record, and leaves a Run that is not done, has an unmerged PR, uncommitted changes, submodule work that exists nowhere else, or branch commits outside the merged PR in place, saying why.
 - `tds-factory run stats --id <id> | --all` reports observed Stage time, Reworks and first-pass clean rate. It does not change records.
-- `tds-factory run inspect [--id <id>] [--json]` reports records that cannot be read, lock ownership, orphaned, missing, unknown or dirty worktrees, and stale Evidence without changing anything.
+- `tds-factory run inspect [--id <id>] [--json]` reports records that cannot be read, lock ownership, orphaned, missing, unknown or dirty worktrees, stale Evidence, and project files committed while the Run is still in Define (`stage-skipped`) without changing anything.
 - `tds-factory run repair --id <id>` prints a repair proposal; add `--apply` only after reviewing it. It reconciles git and GitHub, preserves dirty worktrees, may reconstruct missing records and only clears a lock whose same-host owner is demonstrably dead. It never clears a lock because of age. Inspect a reported repair coordination lock and resolve it manually.
 
 Evidence is the Verify result and the verdicts, each tied to the head commit it was recorded for. Project review verdicts are also tied to the recorded base. A commit made afterwards makes Evidence stale, and Finish only accepts current Evidence.
