@@ -9,6 +9,7 @@ import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeRev
 import { startRun, trackRun, updateRun, transitionRun, acceptRun, syncRun, reworkRun, completeRun } from './run-lifecycle.js';
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
+import { sweepRun } from './run-sweep.js';
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
 export { MAX_CHECK_LOOPS, loopCap, verifyCommandProblem, fastCommandProblem, trackOf } from './run-record.js';
@@ -31,6 +32,7 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id, options) => verifyRun(projectDir, id, options),
     verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
+    sweep: (id, terms) => sweepRun(projectDir, id, terms),
     config: (id) => readRun(projectDir, id).record.project_config ?? null,
     reviews: (id) => reviewPlan(readRun(projectDir, id).record),
     review: (id, axis, data) => projectReviewRun(projectDir, id, axis, data),

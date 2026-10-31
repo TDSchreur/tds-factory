@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { install } from '../src/install.js';
 import { openRunStore, formatMetrics } from '../src/run-store.js';
+import { formatSweep } from '../src/run-sweep.js';
 import { sync } from '../src/sync.js';
 import { startDashboard } from '../src/dashboard.js';
 import { doctor } from '../src/doctor.js';
@@ -25,6 +26,7 @@ const USAGE = `Usage:
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID [--fast]
+  tds-factory run sweep --id ID [--term TEXT]...
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
@@ -57,6 +59,7 @@ const { values, positionals } = parseArgs({
     apply: { type: 'boolean', default: false },
     all: { type: 'boolean', default: false },
     fast: { type: 'boolean', default: false },
+    term: { type: 'string', multiple: true },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
   },
@@ -125,12 +128,13 @@ try {
       } else console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
       if (result.exit_code !== 0) process.exitCode = 1;
     }
+    else if (op === 'sweep') console.log(formatSweep(store.sweep(values.id, values.term ?? [])));
     else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
     else if (op === 'review') store.review(values.id, values.axis, data);
     else if (op === 'config') console.log(JSON.stringify(store.config(values.id), null, 2));
     else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
-    else throw new Error('expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, verdict, inspect, repair or clean');
+    else throw new Error('expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, sweep, verdict, inspect, repair or clean');
   }
   else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
   else if (command === 'sync') sync({ force: values.force });
