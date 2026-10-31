@@ -335,3 +335,18 @@ test('numbered Follow-up summaries follow Finish and are sorted by observation',
   run('2026-01-05-follow-up', { 'run.json': JSON.stringify({ stage: 'follow-up', status: 'running' }), 'follow-up-10.md': '10', 'follow-up-2.md': '2', 'finish.md': 'finish' });
   assert.deepEqual((await list()).find((r) => r.id === '2026-01-05-follow-up').files, ['finish.md', 'follow-up-2.md', 'follow-up-10.md']);
 });
+
+test('/api/views returns the model, last seen and the event log of a Run, and skips damaged lines', async () => {
+  run('2026-01-09-events', {
+    'run.json': JSON.stringify({ title: 'Events', stage: 'build', status: 'running', requested_model: 'claude-sonnet-5.5', requested_effort: 'high', last_seen: '2026-01-09T10:00:00.000Z' }),
+    'events.jsonl': `${JSON.stringify({ at: '2026-01-09T09:00:00.000Z', type: 'stage', from: 'define', to: 'build', secret: { nested: 1 } })}\nnot json\n`,
+  });
+  const view = JSON.parse((await get(dash, '/api/views')).body).find((v) => v.id === '2026-01-09-events');
+  assert.deepEqual(view.model, { requested: 'claude-sonnet-5.5', effort: 'high', observed: '' });
+  assert.equal(view.lastSeen, '2026-01-09T10:00:00.000Z');
+  assert.deepEqual(view.events, [{ at: '2026-01-09T09:00:00.000Z', type: 'stage', from: 'define', to: 'build' }]);
+  assert.equal(view.eventsDamaged, 1);
+  const old = JSON.parse((await get(dash, '/api/views')).body).find((v) => v.id === '2026-01-01-good');
+  assert.deepEqual(old.events, []);
+  assert.equal(old.lastSeen, '');
+});

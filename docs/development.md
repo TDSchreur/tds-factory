@@ -43,7 +43,7 @@ CI runs the lint, formatting and type checks. ESLint uses recommended correctnes
 
 ## Run store modules
 
-`src/run-store.js` is the only module the CLI, the Dashboard and Doctor import. It exposes `openRunStore` and delegates to modules split by seam: `run-record.js` (field rules and the atomic write), `run-folder.js` (Run folders, locks, listing), `worktrees.js` (worktree and origin facts), `evidence.js` (Verify, verdicts, project reviews and the Finish gate), `run-lifecycle.js` (start, update, transition, accept, sync, rework, complete), `run-repair.js` and `run-clean.js`. Tests go through `openRunStore`. See [ADR 0012](adr/0012-run-store-is-split-by-seam.md).
+`src/run-store.js` is the only module the CLI, the Dashboard and Doctor import. It exposes `openRunStore` and delegates to modules split by seam: `run-record.js` (field rules and the atomic write), `run-folder.js` (Run folders, locks, listing), `worktrees.js` (worktree and origin facts), `evidence.js` (Verify, verdicts, project reviews and the Finish gate), `run-lifecycle.js` (start, update, transition, accept, sync, rework, complete), `run-events.js` (the append-only Event log of a Run, its bounded reader and the events a change stands for), `run-repair.js` and `run-clean.js`. Tests go through `openRunStore`. See [ADR 0012](adr/0012-run-store-is-split-by-seam.md).
 
 ## PR providers
 
