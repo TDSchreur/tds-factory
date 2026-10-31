@@ -1,6 +1,7 @@
 import { changeRun } from './run-folder.js';
 import { ownWorktrees, worktreeState } from './worktrees.js';
-import { loops, loopCap, verdicts } from './run-record.js';
+import { loops, loopCap } from './run-record.js';
+import { clearEvidence } from './evidence.js';
 import { moveVisit } from './run-metrics.js';
 import { providerFor } from './pr-provider.js';
 
@@ -38,8 +39,7 @@ export function followUpRun(projectDir, id) {
     if (snapshot.failures.length || snapshot.threads.length) {
       if (loops(record) >= loopCap(record)) result = `Check loop limit of ${loopCap(record)} reached; Follow-up scope retained`;
       else {
-        record = { ...moveVisit(record, 'build'), stage: 'build', check_loops: loops(record) + 1 };
-        for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
+        record = clearEvidence({ ...moveVisit(record, 'build'), stage: 'build', check_loops: loops(record) + 1 });
         result = 'Follow-up scoped Rework: back to Build';
       }
     } else result = snapshot.pending ? 'Follow-up: CI pending' : 'Follow-up: no actionable feedback';

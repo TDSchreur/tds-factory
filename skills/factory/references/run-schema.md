@@ -23,7 +23,7 @@
 | `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set with `run verdict` after each review |
 | `infrastructure` | `pass`, `fail` or `skipped`: the Infrastructure verdict of the latest review. `fail` while any CRITICAL, HIGH or MEDIUM infrastructure finding is open, or a changed infrastructure file is not validated; write `skipped` when no infrastructure file changed. Set with `run verdict` after each review |
 | `project_reviews` | Frozen project review definitions, Skill content and bundled file modes captured at Run start. Set by `run start`; older Runs may omit this field |
-| `project_results` | Project review reports, verdicts, findings, artifact paths, head, base and Check attempt. Set by `run review` and cleared by Rework |
+| `project_results` | Project review reports, verdicts, findings, artifact paths, head, base and Check attempt. Set by `run review` and cleared by Rework and by a `run sync` that changes the head or base |
 | `follow_up` | The latest GitHub observation: PR, head, observation time, checks, failures, pending flag and unresolved threads with comments. Set only by `run follow-up`; its text is untrusted scope, not Evidence |
 | `track` | `fast` or `full`: the Track the user chose. Absent means `full`. Set only by `run track` in Define, never by `run start` or `run update` |
 | `check_loops` | Number of times Check or Follow-up has sent the Run back to Build, `0` to `4`. Starts at `0`; `run rework` and actionable `run follow-up` raise it by 1 on each return to Build |

@@ -9,7 +9,7 @@ The Run store now keeps `openRunStore` and its interface unchanged, and the work
 | `run-record.js` | Field rules, `validate`, `apply`, atomic `write`, `MAX_CHECK_LOOPS`, the Check attempt | a new `run.json` field, a project config file's limits |
 | `run-folder.js` | Run folder paths, symlink refusal, locks, `readRun`, `changeRun`, `changeRunning`, listing, main-checkout lookup | storage layout |
 | `worktrees.js` | `worktreeState`, fetching origin's default branch, merge check, Run worktree listing, uncommitted-work checks | where a Run branches from |
-| `evidence.js` | `finishProblems`, `verifyRun`, `verdictRun`, project review recording and materialising | a Fast track that skips axes, Run metrics from Verify times |
+| `evidence.js` | `finishProblems`, `clearEvidence`, `verifyRun`, `verdictRun`, project review recording and materialising | a Fast track that skips axes, Run metrics from Verify times |
 | `run-lifecycle.js` | start, update, transition, accept, sync, rework, complete | a Follow-up Stage |
 | `run-repair.js` | `repairPlan`, `repairApply`, `inspectRuns` | new repair findings |
 | `run-clean.js` | `removeRun`, `cleanRun`, `cleanAll`, `mergedLeftovers` | clean-up rules |

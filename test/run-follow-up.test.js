@@ -1,3 +1,4 @@
+import { finishProblems } from '../src/evidence.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, chmodSync } from 'node:fs';
@@ -31,9 +32,12 @@ function fixture() {
 
 test('follow-up turns failing CI and unresolved review comments into scoped Rework with fresh Evidence', () => {
   const f = fixture();
+  const before = f.read();
   const result = run(f.cwd, 'follow-up', '--id', f.id);
   assert.equal(result.status, 0, result.stderr);
   const after = f.read();
+  assert.equal(after.title, before.title);
+  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.status, 'running');
   assert.equal(after.check_loops, 1);
@@ -42,6 +46,7 @@ test('follow-up turns failing CI and unresolved review comments into scoped Rewo
   assert.equal(after.follow_up.failures[0].name, 'unit');
   assert.equal(after.follow_up.threads[0].comments[0].body, 'Fix this');
   for (const key of ['verify', 'reviewed', 'accepted', 'standards', 'spec', 'security', 'infrastructure', 'project_results']) assert.equal(key in after, false, key);
+  assert.ok(finishProblems(after, { head: f.head, dirty: false }).length > 0, 'cleared Evidence cannot authorize Finish');
 });
 
 test('follow-up reads every page and excludes resolved threads and nonfailing checks', () => {
