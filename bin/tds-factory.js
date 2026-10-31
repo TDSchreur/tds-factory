@@ -17,7 +17,8 @@ const USAGE = `Usage:
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
-  tds-factory run transition --id ID --to build|check|finish [--data JSON]
+  tds-factory run transition --id ID --to build|check|finish|follow-up [--data JSON]
+  tds-factory run follow-up --id ID
   tds-factory run rework --id ID [--data JSON]
   tds-factory run sync --id ID [--data JSON]   (rebases the Run branch onto origin's default branch)
   tds-factory run complete --id ID [--data JSON]
@@ -69,6 +70,7 @@ try {
     if (op === 'start') console.log(store.start(data));
     else if (op === 'update') store.update(values.id, data);
     else if (op === 'transition') store.transition(values.id, values.to, data);
+    else if (op === 'follow-up') console.log(store.followUp(values.id));
     else if (op === 'rework') store.rework(values.id, data);
     else if (op === 'sync') store.sync(values.id, data);
     else if (op === 'complete') {
@@ -120,7 +122,7 @@ try {
     else if (op === 'review') store.review(values.id, values.axis, data);
     else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
-    else throw new Error('expected run start, update, transition, rework, sync, complete, accept, verify, verdict, inspect, repair or clean');
+    else throw new Error('expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, verdict, inspect, repair or clean');
   }
   else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
   else if (command === 'sync') sync({ force: values.force });

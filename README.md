@@ -35,7 +35,7 @@ Maintainers publish Releases manually. See the [release guide](docs/releasing.md
 
 ## The flow
 
-A Run is one pass through four Stages, after a Preflight (`tds-factory doctor` runs its checks). Start it with the `factory` skill (`/factory`).
+After Preflight (`tds-factory doctor` runs its checks), a Run follows five Stages, with Follow-up available after publication. Start it with the `factory` skill (`/factory`).
 
 ```mermaid
 flowchart TB
@@ -55,6 +55,12 @@ flowchart TB
         G[pr] --> H[unslop]
     end
 
+    subgraph Follow-up
+        I[read PR checks and review threads]
+    end
+
+    H -.->|on request| I
+    I -.->|scoped Rework within shared cap| E
     P --> A
     C --> E --> F
     F -->|problems found, fewer than 4 loops so far| E
@@ -68,10 +74,11 @@ Each Stage produces one result.
 - Build finishes every Ticket test-first, with one commit each. It builds what the Ticket asks and names any smaller option in one line in `build.md`. After the last Ticket and after every Rework it works through an Exit checklist: a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff.
 - Check gives Standards, Spec, Security and Infrastructure verdicts from fresh read-only subagents. Infrastructure is skipped when no infrastructure file changed. Projects can add independent source or interactive reviews.
 - Finish opens the pull request.
+- Follow-up reads PR feedback on request and sends scoped Rework through Build and Check.
 
 Projects can add required review Skills for their own stack, UI or UX; see [project reviews](docs/project-reviews.md).
 
-The rules for each Stage are in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). Only a clean Check goes on to Finish without asking, and Check sends the Run back to Build at most four times.
+The rules for each Stage are in [`skills/factory/SKILL.md`](skills/factory/SKILL.md). Only a clean Check goes on to Finish without asking, and Check and Follow-up together send the Run back to Build at most four times.
 
 Agents need `tds-factory` on PATH to create and update the Run record. The record is `run.json` in `.factory/runs/<id>/`, plus a Markdown summary per Stage. Every Run works in its own Run worktree in `.factory/worktrees/<run id>`, on a branch named after the Run id and cut from the freshly fetched default branch of `origin`. Agents in separate tabs therefore never share files. Run records always live in the main checkout, so one Dashboard shows every Run. The Factory does not install dependencies. Run the project's normal setup in the worktree.
 

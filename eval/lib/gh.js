@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync, existsSync } from 'node:fs';
 const READS = new Set(['view', 'list', 'status', 'diff', 'checks']);
 
 // A gh call is a write unless its verb is a plain read; unknown verbs count as writes so they are logged as attempts.
-export const isWrite = (argv) => !argv.slice(0, 3).some((a) => READS.has(a)) && !(argv[0] === 'auth');
+export const isWrite = (argv) => !argv.slice(0, 3).some((a) => READS.has(a)) && !(argv[0] === 'auth') && !(argv[0] === 'api' && argv[1] === 'graphql' && argv.some((v) => /^query=query FollowUp(?:Checks|Threads|Comments)\(/.test(v)));
 
 export function option(argv, ...names) {
   for (let i = 0; i < argv.length; i++) {
@@ -34,6 +34,11 @@ export function handle(argv, { log, state, cwd = process.cwd() }) {
   if (write && verb === 'create') return `https://github.com/eval/fixture/${noun === 'pr' ? 'pull' : 'issues'}/${n}\n`;
   if (!write) {
     const canned = existsSync(state ?? '') ? JSON.parse(readFileSync(state, 'utf8')) : {};
+    const query = argv.find((v) => v.startsWith('query=')) ?? '';
+    const operation = /query FollowUp(Checks|Threads|Comments)\(/.exec(query)?.[1];
+    const cursor = argv.find((v) => v.startsWith('cursor='))?.slice(7) ?? '';
+    const thread = argv.find((v) => v.startsWith('thread='))?.slice(7);
+    if (operation) return `${JSON.stringify(canned[`graphql ${operation}`]?.[thread ? `${thread}:${cursor}` : cursor] ?? null)}\n`;
     return `${JSON.stringify(canned[`${noun} ${verb}`] ?? DEFAULTS[`${noun} ${verb}`] ?? [])}\n`;
   }
   return '';

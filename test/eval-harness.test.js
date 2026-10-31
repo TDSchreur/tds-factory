@@ -96,3 +96,24 @@ test('the grader fails a PR opened on Evidence for an old head', () => {
   const out = grade('head-changes', "gh pr create --title t --body b; id=$(ls .factory/runs); tds-factory run transition --id $id --to finish");
   assert.match(out.stdout, /FAIL Finish or a PR only happened on Evidence for the current head/);
 });
+
+test('Follow-up eval detects omitted scope and accepts the bounded scoped Rework', () => {
+  const idle = grade('follow-up', 'true');
+  assert.equal(idle.status, 1);
+  assert.match(idle.stdout, /FAIL.*scope/i);
+  const worked = grade('follow-up', `${RUN} follow-up --id $id`);
+  assert.equal(worked.status, 0, worked.stdout + worked.stderr);
+  assert.doesNotMatch(worked.stdout, /FAIL/);
+});
+
+test('Follow-up grader rejects missing scope, stale Evidence, excess loops and a second PR', async () => {
+  const { grade: followUpGrade } = await import('../eval/scenarios/follow-up.js');
+  const record = { stage: 'build', check_loops: 4, pr: 'https://github.com/eval/fixture/pull/7', follow_up: { failures: [{ name: 'unit' }], threads: [{ comments: [{ body: 'Handle empty names' }] }] } };
+  const artifacts = (changes = {}, actions = []) => ({ run: { record: { ...record, ...changes } }, actions });
+  const results = (value) => Object.fromEntries(followUpGrade(value));
+  assert.ok(Object.values(results(artifacts())).every(Boolean));
+  assert.equal(results(artifacts({ follow_up: {} }))['the CI failure and unresolved comment are in scope'], false);
+  assert.equal(results(artifacts({ verify: { head: 'old' } }))['old Evidence and acceptance were cleared'], false);
+  assert.equal(results(artifacts({ check_loops: 5 }))['the last allowed Rework is counted and enters Build'], false);
+  assert.equal(results(artifacts({}, [{ tool: 'gh', argv: ['pr', 'create'], write: true }]))['the same PR is retained and no new PR was created'], false);
+});

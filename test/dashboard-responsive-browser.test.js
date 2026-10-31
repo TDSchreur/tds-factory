@@ -12,7 +12,7 @@ test('compact users can select a Stage and find waiting Runs after polling', asy
   try {
     await page.waitFor("return document.querySelectorAll('.card').length === 2");
     assert.deepEqual(await page.execute(visibleStages), ['build']);
-    assert.equal(await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button')].length"), 5);
+    assert.equal(await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button')].length"), 6);
     assert.match(await page.execute("return document.querySelector('nav[aria-label=\"Stages\"]').textContent"), /Needs you/);
     assert.equal(await page.execute(clickStage, ['Finish']), true);
     assert.deepEqual(await page.execute(visibleStages), ['finish']);
@@ -64,7 +64,7 @@ test('Stage choice survives older-Run filtering and crossing the desktop breakpo
     await page.waitFor("return !!document.querySelector('.card[data-id=old]')");
     assert.deepEqual(await page.execute(visibleStages), ['finish']);
     await page.resize(1200, 800);
-    assert.deepEqual(await page.execute(visibleStages), ['define', 'build', 'check', 'finish', 'done']);
+    assert.deepEqual(await page.execute(visibleStages), ['define', 'build', 'check', 'finish', 'follow-up', 'done']);
     await page.resize(768, 800);
     assert.deepEqual(await page.execute(visibleStages), ['finish']);
   } finally { await page.close(); }
@@ -93,10 +93,10 @@ test('Stage buttons count the visible Runs and mark the Stage that needs the use
   try {
     const buttons = "return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button')].map((b) => b.textContent.replace(/\\s+/g, ' ').trim())";
     await page.waitFor("return document.querySelectorAll('.card').length > 0");
-    assert.deepEqual(await page.execute(buttons), ['Define (1)', 'Build (2) Needs you', 'Check (0)', 'Finish (0)', 'Done (1)']);
+    assert.deepEqual(await page.execute(buttons), ['Define (1)', 'Build (2) Needs you', 'Check (0)', 'Finish (0)', 'Follow-up (0)', 'Done (1)']);
     await page.execute("document.getElementById('older').click()");
     await page.waitFor("return document.getElementById('older').textContent === 'Hide older runs'");
-    assert.deepEqual(await page.execute(buttons), ['Define (1)', 'Build (3) Needs you', 'Check (0)', 'Finish (0)', 'Done (1)']);
+    assert.deepEqual(await page.execute(buttons), ['Define (1)', 'Build (3) Needs you', 'Check (0)', 'Finish (0)', 'Follow-up (0)', 'Done (1)']);
   } finally { await page.close(); }
 });
 

@@ -14,6 +14,8 @@ flowchart TB
     check -->|"clean"| finish["Finish: push the branch, open the pull request"]
     check -.->|"not clean: you decide"| finish
     finish --> review(["You: review and merge"])
+    finish -.->|"on request"| followup["Follow-up: collect PR feedback"]
+    followup -.->|"scoped Rework within shared cap"| build
 ```
 
 The Run waits for you in Define, in Preflight when the Verify command is missing, and at the dotted line from Check.
@@ -75,8 +77,9 @@ The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHu
 - **Build:** the agent writes a failing test, makes it pass, runs the project's verify command and commits, one Ticket at a time. After the last Ticket and after every Rework it works through an Exit checklist (a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff), so that Check finds less to send back.
 - **Check:** the Factory asks for four baseline reviews separately (three when no infrastructure file changed), each in a fresh read-only subagent that did not write the code. Projects may add source or interactive reviews, each with its own independent reviewer. How your agent runs subagents is up to the agent; the Factory does not control it. Standards: does the code follow the project's rules. Spec: does it do what the Spec asked. Security: does it introduce a vulnerability. Infrastructure: are Bicep and pipeline files valid (skipped when none changed). Problems worth fixing send the Run back to Build, at most four times.
 - **Finish:** the agent writes the pull request, pushes the branch and opens it. Its description lists `Closes #N` for every Ticket.
+- **Follow-up:** on request, `tds-factory run follow-up --id ID` reads failing CI and unresolved review threads and starts scoped Rework under the shared four-loop limit. New code needs fresh Verify and Check Evidence. Clean or pending feedback stays in Follow-up; a merged PR ends Done.
 
-Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md` and the pull request text in `pr.md`. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
+Most Stages leave a short summary in `.factory/runs/<run id>/`: `define.md`, `build.md`, `check-1.md` (one per Check pass), `finish.md`, `follow-up-N.md` for each observation and the pull request text in `pr.md`. `run.json` in the same folder is the status file the Dashboard reads. Read the summaries when you want to know what was decided.
 
 ## 4. When the Run needs you
 
@@ -122,7 +125,7 @@ tds-factory dashboard
 
 It prints an address such as `http://127.0.0.1:4521`. Each repository gets its own port, and normally keeps it; if that port is busy, the Dashboard takes a free one and prints it. Open the address in a browser.
 
-- Each **card** is one Run. It moves left to right through the columns Define, Build, Check, Finish and Done.
+- Each **card** is one Run. It moves left to right through the columns Define, Build, Check, Finish, Follow-up and Done.
 - On screens up to 1024 CSS pixels wide, use the Stage buttons to show one column at a time. The buttons show visible Run counts and mark Stages with Runs that need you.
 - The **chips** show the Ticket progress, baseline and project Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
 - A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
@@ -161,7 +164,7 @@ Merge in GitHub, or press **Merge** on the Dashboard card. The `Closes #N` lines
 | Word | Meaning |
 |---|---|
 | Run | One pass of the Flow for one piece of work, from idea to pull request. One card on the Dashboard. |
-| Stage | One step of the Flow: Define, Build, Check or Finish. |
+| Stage | One step of the Flow: Define, Build, Check, Finish or Follow-up. |
 | Spec | The written definition of what to build, a Markdown file in `docs/specs/`. |
 | Ticket | One small unit of work cut from the Spec, an issue in GitHub. |
 | Check axis | One of the independent reviews in Check: Standards, Spec, Security, Infrastructure. |
