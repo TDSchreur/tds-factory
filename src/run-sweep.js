@@ -7,6 +7,7 @@ import { readRun } from './run-folder.js';
 const MAX_TERMS = 25;
 const PER_TERM = 40;
 const TOTAL = 250;
+const TOO_COMMON = 100;
 const LINE = 160;
 const MAX_FILE = 1 << 20;
 const SKIP = new Set(['.git', 'node_modules', '.factory', 'vendor']);
@@ -26,7 +27,7 @@ function termsFromDiff(diff) {
   const counts = new Map();
   const add = (raw) => {
     const term = raw.trim();
-    if (term.length < 3) return;
+    if (term.length < 3 || term.endsWith('/')) return;
     const key = term.toLowerCase();
     const seen = counts.get(key);
     if (seen) seen.n += 1; else counts.set(key, { term, n: 1, order: counts.size });
@@ -104,6 +105,7 @@ export function formatSweep(report) {
   };
   for (const { term, current, replaced } of report.results) {
     out.push('', `== ${clean(term)}: ${current.length + replaced.length} hit(s) in ${new Set([...current, ...replaced].map((h) => h.file)).size} file(s)`);
+    if (current.length + replaced.length > TOO_COMMON) { out.push(`    too common to list (${current.length + replaced.length} hits); search a narrower wording with --term`); continue; }
     const a = show(current, PER_TERM);
     out.push(...a.lines);
     if (a.left) out.push(`    ${a.left} more hits left out`);

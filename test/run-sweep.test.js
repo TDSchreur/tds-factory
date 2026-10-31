@@ -93,3 +93,13 @@ test('an unknown Run is refused', () => {
   const result = run(cwd, 'sweep', '--id', 'no-such-run');
   assert.notEqual(result.status, 0);
 });
+
+test('a term that occurs everywhere is not listed and says so', () => {
+  const files = {};
+  for (let i = 0; i < 120; i += 1) files[`docs/g${i}.md`] = 'shared_word appears here\n';
+  const p = project(files, { 'docs/z.md': 'uses `shared_word`\n' });
+  const out = sweep(p).stdout;
+  assert.match(out, /== shared_word: 121 hit\(s\)/);
+  assert.match(out, /too common to list \(121 hits\)/);
+  assert.doesNotMatch(out, /docs\/g1\.md:1/);
+});
