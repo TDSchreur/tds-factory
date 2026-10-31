@@ -1,3 +1,4 @@
+import { finishProblems } from '../src/evidence.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -152,7 +153,8 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.check_loops, 1);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted']) assert.equal(key in after, false, key);
+  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted', 'project_results']) assert.equal(key in after, false, key);
+  assert.ok(finishProblems(after, { head: 'a', dirty: false }).length > 0, 'cleared Evidence cannot authorize Finish');
   for (const loops of [2, 3]) {
     force(cwd, id, { stage: 'check', check_loops: loops });
     assert.equal(run(cwd, 'rework', '--id', id).status, 0, `loop ${loops + 1} of 4 is allowed`);

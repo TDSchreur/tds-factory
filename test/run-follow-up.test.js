@@ -1,3 +1,4 @@
+import { finishProblems } from '../src/evidence.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync, chmodSync } from 'node:fs';
@@ -45,6 +46,7 @@ test('follow-up turns failing CI and unresolved review comments into scoped Rewo
   assert.equal(after.follow_up.failures[0].name, 'unit');
   assert.equal(after.follow_up.threads[0].comments[0].body, 'Fix this');
   for (const key of ['verify', 'reviewed', 'accepted', 'standards', 'spec', 'security', 'infrastructure', 'project_results']) assert.equal(key in after, false, key);
+  assert.ok(finishProblems(after, { head: f.head, dirty: false }).length > 0, 'cleared Evidence cannot authorize Finish');
 });
 
 test('follow-up reads every page and excludes resolved threads and nonfailing checks', () => {
