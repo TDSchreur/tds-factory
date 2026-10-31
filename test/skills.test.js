@@ -309,3 +309,16 @@ test('Left open items reach check-N.md, finish.md and the pull request descripti
   assert.match(finish, /does not wait on the user/);
   assert.match(finish, /summarise a security item without exploit details or secret values/);
 });
+
+test('Define recommends the Fast track by stated criteria and the user still confirms', () => {
+  const tracks = section('Tracks');
+  const define = section('Define');
+  for (const text of [tracks, define]) {
+    assert.match(text, /a bug fix/);
+    assert.match(text, /a documentation or test-title change/);
+    assert.match(text, /at most about five files with no new public interface, schema or dependency/);
+  }
+  assert.match(tracks, /Define recommends the Fast track whenever the work meets any of these criteria/);
+  assert.match(tracks, /names the criterion it meets/);
+  assert.match(tracks, /Never apply the Fast track silently/);
+});
