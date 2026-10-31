@@ -97,17 +97,35 @@ function which(name, cwd) {
   return (process.env.PATH ?? '').split(path.delimiter).some((dir) => dir && fs.existsSync(path.join(dir, name)));
 }
 
+const NO_AGENT = 'no agent is usable: install claude, codex or copilot and run tds-factory install';
+
+// The command an Agent target is started with is its name. On Windows a command is found with any of the PATHEXT extensions (claude.exe, claude.cmd).
+function binaryCheck(agent) {
+  const extensions = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((ext) => /^\.\w+$/.test(ext))] : [''];
+  const found = extensions.some((ext) => which(agent + ext));
+  return found ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
+}
+
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
-export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir(), prState }) {
-  if (!Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
-  const has = isInstalled(agent, projectDir, homeDir);
+// Without `agent` every Agent target is reported and one usable target is enough; with `agent` only that target is, and its command need not be on PATH.
+export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
+  if (agent !== undefined && !Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
-  const attempt = (check) => { try { return check(); } catch (err) { return ['fail', err.message]; } };
-  const checks = [['cli', cliCheck], ['skills', () => skillsCheck(has)], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['config', () => configCheck(agent, projectDir, homeDir)], ['review', () => reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', () => verifyCommandCheck(projectDir)]]
-    .map(([id, check]) => [id, attempt(check)])
-    .map(([id, [status, message]]) => ({ id, status, message }));
+  const attempt = ([id, check]) => { let result; try { result = check(); } catch (err) { result = ['fail', err.message]; } return { id, status: result[0], message: result[1] }; };
+  const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)]].map(attempt);
+  const agents = (agent === undefined ? Object.keys(targets) : [agent]).map((id) => {
+    const has = isInstalled(id, projectDir, homeDir);
+    const list = [['binary', () => binaryCheck(id)], ['skills', () => skillsCheck(has)], ['config', () => configCheck(id, projectDir, homeDir)], ['review', () => reviewCheck(id, projectDir, homeDir, has)]].map(attempt);
+    return { id, usable: list.every((c) => c.status === 'pass'), checks: list };
+  });
+  let ok = checks.every((c) => c.status === 'pass');
+  if (agent === undefined) {
+    const anyUsable = agents.some((a) => a.usable);
+    if (!anyUsable) checks.push({ id: 'agents', status: 'fail', message: NO_AGENT });
+    ok = ok && anyUsable;
+  } else ok = ok && agents[0].checks.every((c) => c.id === 'binary' || c.status === 'pass');
   // Not a check: merged Runs that kept a worktree or branch never stop a Run, they only deserve a hint.
   const left = checks.find((c) => c.id === 'git')?.status === 'pass' ? mergedLeftovers(projectDir, prState) : [];
   const notes = left.length ? [`${left.length} Run${left.length === 1 ? ' is' : 's are'} merged but still hold a worktree or branch (${left.join(', ')}); run \`tds-factory run clean --all\` from the main checkout`] : [];
-  return { ok: checks.every((c) => c.status === 'pass'), checks, notes };
+  return { ok, checks, agents, notes };
 }

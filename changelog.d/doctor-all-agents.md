@@ -1,0 +1,2 @@
+### Changed
+- `tds-factory doctor` reports Claude, Codex and Copilot by default. The shared checks are reported once and each agent gets its own `binary`, `skills`, `config` and `review` checks. The report fails when a shared check is not `pass` or no agent is usable. `--agent` with one agent still reports only that agent. In the JSON report, `checks` now holds only the shared checks and `agents` holds the per-agent checks.

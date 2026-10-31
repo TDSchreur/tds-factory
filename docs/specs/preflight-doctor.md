@@ -21,6 +21,8 @@ A read-only `tds-factory doctor` command that checks, in one pass and without ch
 
 ## Implementation decisions
 
+_The report shape and exit rule below were changed by [Doctor reports all three agents](doctor-all-agents.md): `checks` now holds only the shared checks, `agents` holds the per-agent checks, `--agent` has no default, and the report fails when a shared check is not `pass` or no agent is usable (with `--agent`, when that agent's `skills`, `config` or `review` check is not `pass`). The exit status is 1 exactly when the report fails; the "every check passes" wording in this spec is the old rule._
+
 - `src/doctor.js` exports `doctor({ projectDir, agent })` returning `{ ok, checks: [{ id, status, message }], notes: [string] }` (`notes` are non-blocking hints; an optional `prState` replaces the `gh` lookup in tests). `status` is `pass`, `missing` (the user can supply it) or `fail`. Check ids: `cli`, `skills`, `tracker`, `git`, `review`, `verify-command`.
 - `tds-factory doctor [--agent claude|codex|copilot] [--json]` prints one line per check, or the object as JSON. `--agent` defaults to `claude`. Exit status is 1 unless every check is `pass`. It is read-only: it fetches nothing and writes nothing. It runs `git ls-remote`, and `gh pr view` for each done Run that records a PR and still has a worktree or branch, to add a note.
 - **cli:** reports the `package.json` version and fails when the Node version is below `engines.node`.

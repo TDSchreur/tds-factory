@@ -119,7 +119,7 @@ Do this once per project you want to build with the Factory.
    tds-factory doctor
    ```
 
-   It changes nothing and prints one line per check, for example `pass    tracker: issue tracker and domain docs are configured`. Every line should say `pass`. A line that says `missing` or `fail` names what to fix, and the command exits with 1 until nothing is left. The checks are the CLI version, the installed Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities and the Verify command. Add `--agent codex` or `--agent copilot` if you do not use Claude.
+   It changes nothing and prints one line per check, for example `pass    tracker: issue tracker and domain docs are configured`, then a block for each of Claude, Codex and Copilot. The shared checks should all say `pass`. A line that says `missing` or `fail` names what to fix. You need only one agent to be usable (`usable` in its block); the others may show `missing` or `fail` lines. The command exits with 1 when a shared check is not `pass` or no agent is usable. The checks are the CLI version, the tracker setup, the Git `origin` and its default branch and the Verify command, and for each agent its command on PATH, the installed Skills, the Project config and the review capabilities. Add `--agent codex` or `--agent copilot` to check one agent only.
 
 Commit the new files. Now `/factory` can start; the [usage guide](usage.md) shows how.
 
@@ -146,6 +146,6 @@ npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/rele
 
 **`/factory` does not appear in the chat.** Run `tds-factory install` again, then start a new chat session or restart the editor. In Copilot, `/skills` shows what it loaded.
 
-**`/factory` stops at Preflight.** Run `tds-factory doctor` in the project (part 5, step 6): it lists what is missing or unusable (Skills, tracker setup, `origin`, review agent, Verify command). For the project setup, do part 5.
+**`/factory` stops at Preflight.** Run `tds-factory doctor` in the project (part 5, step 6): it lists what is missing or unusable (tracker setup, `origin`, Verify command and, for your agent, its Skills and review agent). For the project setup, do part 5.
 
 **`tds-factory run start` fails.** The error says what is missing: the folder is not a git repository (run `git init`), the repository has no commit yet (make a first commit), or the `origin` default branch cannot be determined (check `git remote -v` and that you can reach the remote).
