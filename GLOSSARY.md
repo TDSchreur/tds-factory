@@ -101,8 +101,15 @@ The per-Agent-target table in `docs/capabilities.md` of how Skills and Stage age
 The inline steps Build runs after the last Ticket and after every Rework, before moving on: a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
 _Avoid_: Self-review
 
+**Blocking finding**:
+A finding of a Check axis that sends a Run back to Build: a violation of a documented standard (a stale statement in a document that describes current behavior counts), a CRITICAL, HIGH or MEDIUM security, infrastructure or Project review finding, or a Spec requirement that is missing or wrong. The reviewer gives every finding a severity and the standard or requirement it breaks; judgement items are never above LOW.
+_Avoid_: Blocker, Problem worth fixing
+
+**Left open**:
+A finding that is not a Blocking finding (LOW, INFO or judgement). It is listed in `check-N.md`, `finish.md` and the pull request description, and never causes a Rework or stops a Clean Check.
+
 **Rework**:
-Sending a Run back from Check or Follow-up to Build to fix problems. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
+Sending a Run back from Check or Follow-up to Build to fix Blocking findings or Follow-up feedback. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
 _Avoid_: Retry, Loop back
 
 **Conventions**:
