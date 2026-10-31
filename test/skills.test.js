@@ -322,3 +322,14 @@ test('Define recommends the Fast track by stated criteria and the user still con
   assert.match(tracks, /names the criterion it meets/);
   assert.match(tracks, /Never apply the Fast track silently/);
 });
+
+test('Build runs the fast Verify after each Ticket and the full Verify before Check, and a fast Verify is never Evidence', () => {
+  const build = section('Build');
+  assert.match(build, /run `tds-factory run verify --id <id> --fast` when the Run has a fast Verify command \(otherwise the full `tds-factory run verify --id <id>`\)/);
+  assert.match(build, /a fast Verify is not Evidence/);
+  assert.match(build, /run the full `tds-factory run verify --id <id>` \(never `--fast`\)/);
+  assert.match(check, /run the full `tds-factory run verify --id <id>` \(never `--fast`\)/);
+  assert.match(flow, /records nothing and is never Evidence/);
+  assert.match(flow, /^\| `fast_commands` \|/m);
+  assert.match(section('Preflight'), /`verify-command` and `verify-fast`/);
+});

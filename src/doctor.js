@@ -6,7 +6,7 @@ import { ROOT, SKILLS_DIR, AGENTS_DIR } from './paths.js';
 import { targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
-import { verifyCommandProblem, mergedLeftovers } from './run-store.js';
+import { verifyCommandProblem, fastCommandProblem, mergedLeftovers } from './run-store.js';
 import { loadProjectConfig } from './project-config.js';
 
 // The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
@@ -40,6 +40,20 @@ function gitCheck(projectDir) {
   if (git('remote', 'get-url', 'origin').status !== 0) return ['fail', 'there is no origin remote'];
   const { branch, error } = originDefaultBranch(projectDir);
   return branch ? ['pass', `origin default branch is ${branch}`] : ['fail', `cannot determine the origin default branch: ${error}`];
+}
+
+// The optional fast command under "## Commands": quick feedback while building, never Evidence. Absent is fine.
+function verifyFastCheck(projectDir) {
+  const file = conventionsFile(projectDir);
+  const commands = file && read(path.join(projectDir, file)).match(/^## Commands[^\n]*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1];
+  const found = commands?.match(/^[ \t]*[-*][ \t]*Verify-fast:[ \t]*(?:`([^`\n]*)`|(\S[^\n]*))/mi);
+  const command = found ? (found[1] ?? found[2].trim()) : undefined;
+  if (command === undefined) return ['pass', 'no Verify-fast command; every verification runs the full Verify command'];
+  const problem = fastCommandProblem(command) ?? (command.trim() ? undefined : 'the fast Verify command is empty');
+  if (problem) return ['fail', problem];
+  const words = command.trim().split(/\s+/);
+  if (words.every((w) => /^[\w.@+\/-]+$/.test(w)) && !which(words[0], projectDir)) return ['fail', `the Verify-fast command "${command.trim()}" starts with "${words[0]}", which was not found`];
+  return ['pass', `Verify-fast command: ${command.trim()}`];
 }
 
 function verifyCommandCheck(projectDir) {
@@ -112,7 +126,7 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
   if (agent !== undefined && !Object.hasOwn(targets, agent)) throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
   const attempt = ([id, check]) => { let result; try { result = check(); } catch (err) { result = ['fail', err.message]; } return { id, status: result[0], message: result[1] }; };
-  const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)]].map(attempt);
+  const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)], ['verify-fast', () => verifyFastCheck(projectDir)]].map(attempt);
   const agents = (agent === undefined ? Object.keys(targets) : [agent]).map((id) => {
     const has = isInstalled(id, projectDir, homeDir);
     const list = [['binary', () => binaryCheck(id)], ['skills', () => skillsCheck(has)], ['config', () => configCheck(id, projectDir, homeDir)], ['review', () => reviewCheck(id, projectDir, homeDir, has)]].map(attempt);

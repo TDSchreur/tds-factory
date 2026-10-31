@@ -77,8 +77,12 @@ A Check whose every Check axis is `pass`, with Infrastructure and nonmatching Pr
 The random value a Dashboard server makes when it starts. The Dashboard page reads it from `/api/info` and sends it with every write, so a request from another web page, which cannot read it, is refused. See ADR 0017.
 
 **Verify command**:
-The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run after each Ticket.
+The project's own command for checking that the code works, found in the `## Commands` section of its conventions file during Preflight and run in full after the last Ticket, after Run sync and before every Check pass.
 _Avoid_: Test command
+
+**Fast verify command**:
+The project's optional quicker check, a `Verify-fast:` line in the same `## Commands` section, run after each Ticket with `tds-factory run verify --fast`. Its result is quick feedback only: it is never Evidence and the Verify command still has to pass for the current code before Check and Finish.
+_Avoid_: Quick test
 
 **Verify result**:
 The recorded outcome of running the Verify command in a Run worktree: which code revision it ran on, whether it passed, and when. It only counts as evidence while the Run worktree is still at that revision and had no uncommitted changes.

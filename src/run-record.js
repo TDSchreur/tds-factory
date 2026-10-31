@@ -5,7 +5,7 @@ import { stages, targets } from './flow.js';
 
 export const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 export const paused = ['verification-unavailable', 'interrupted'];
-const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
+const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
@@ -24,6 +24,12 @@ export const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.
 export function verifyCommandProblem(commands) {
   if (typeof commands !== 'string' || !commands.trim()) return 'the Verify command is empty';
   if (commands.includes('\0')) return 'the Verify command contains a NUL byte';
+}
+// The fast Verify command is optional: empty or absent means the Run has none.
+export function fastCommandProblem(commands) {
+  if (commands === undefined || commands === '') return undefined;
+  const problem = verifyCommandProblem(commands);
+  return problem && problem.replace('the Verify command', 'the fast Verify command');
 }
 // An empty Verify command stands for one the user has not given yet; any other unusable one is rejected.
 export function checkCommands(commands) {

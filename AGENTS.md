@@ -18,4 +18,5 @@ Do not edit `CHANGELOG.md` for a change. Add a fragment `changelog.d/<name>.md`;
 
 ## Commands
 
+- Verify-fast: `npm run test:unit` (the unit tests only, without the browser tests, for quick feedback after each Ticket; never Evidence)
 - Verify: `npm test` (runs `node --test test/*.test.js` inside its own temporary directory, which `scripts/with-temp-dir.js` removes afterwards, and checks the skills, the guides, Markdown links, ADR numbers, the changelog fragment, the glossary's Avoid terms, the stated Check loop limit, the sync and dashboard code and the names of browser tests).

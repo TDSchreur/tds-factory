@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stages } from './flow.js';
 import { loadProjectConfig, frozenSettings } from './project-config.js';
-import { loopCap, tracks, trackOf, gated, verdicts, validate, apply, write, checkCommands, verifyCommandProblem, loops } from './run-record.js';
+import { loopCap, tracks, trackOf, gated, verdicts, validate, apply, write, checkCommands, fastCommandProblem, verifyCommandProblem, loops } from './run-record.js';
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
 import { finishProblems } from './evidence.js';
@@ -11,9 +11,11 @@ import { newMetrics, moveVisit, firstCheck } from './run-metrics.js';
 
 export function startRun(projectDir, data) {
   validate(data);
-  if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands and conventions');
+  if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'fast_commands', 'conventions'].includes(key))) throw new Error('start accepts only title, agent, commands, fast_commands and conventions');
   if (!data.title || !data.agent || typeof data.commands !== 'string' || !Array.isArray(data.conventions)) throw new Error('title, agent, commands and conventions are required');
   checkCommands(data.commands);
+  const fastProblem = fastCommandProblem(data.fast_commands);
+  if (fastProblem) throw new Error(fastProblem);
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   if (git('rev-parse', '--git-dir').status !== 0) throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) throw new Error('a Run worktree needs a git repository with at least one commit');
@@ -65,6 +67,7 @@ export function updateRun(projectDir, id, data) {
     // Evidence is only worth something if the command it came from cannot be swapped: set it once.
     if ('commands' in data && old.commands) throw new Error('the Verify command is already set; start a new Run to change it');
     if ('commands' in data) checkCommands(data.commands);
+    if ('fast_commands' in data) throw new Error('the fast Verify command is set when the Run starts');
     if (data.status === 'done') throw new Error('a Run is completed with run complete');
     if ('status' in data && ['done', 'abandoned'].includes(old.status)) throw new Error(`a ${old.status} Run cannot change status`);
     const next = apply(old, data);
