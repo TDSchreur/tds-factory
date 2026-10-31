@@ -70,7 +70,6 @@ test('the offline gh answers repo view and label list for a fixture repository, 
   assert.equal(shim(log, 'issue', 'list').stdout, '[]\n');
 });
 
-
 test('the grader passes the stop, resume and verify scenarios only for the right artifacts and actions', () => {
   const stop = grade('user-stops', `${RUN} update --id $id --data '{"status":"abandoned","activity":"stopped"}'`);
   assert.equal(stop.status, 0, stop.stdout + stop.stderr);

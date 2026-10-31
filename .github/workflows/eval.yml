@@ -46,10 +46,15 @@ jobs:
           EVAL_SCENARIOS: ${{ inputs.scenarios }}
           EVAL_MINUTES: ${{ inputs.timeout_minutes }}
         run: |
-          [[ "$EVAL_MODEL" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "invalid model"; exit 1; }
-          [[ "$EVAL_SCENARIOS" =~ ^[a-z -]*$ ]] || { echo "invalid scenarios"; exit 1; }
-          [[ "$EVAL_MINUTES" =~ ^([1-9]|1[0-5])$ ]] || { echo "invalid timeout"; exit 1; }
+          # The patterns sit in variables because bash reads an unquoted space inside [[ =~ ]] as a syntax error.
+          model='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          scenarios='^[a-z -]*$'
+          minutes='^([1-9]|1[0-5])$'
+          [[ "$EVAL_MODEL" =~ $model ]] || { echo "invalid model"; exit 1; }
+          [[ "$EVAL_SCENARIOS" =~ $scenarios ]] || { echo "invalid scenarios"; exit 1; }
+          [[ "$EVAL_MINUTES" =~ $minutes ]] || { echo "invalid timeout"; exit 1; }
       - name: Run the scenarios
+        # Do not add GH_TOKEN or GITHUB_TOKEN here: the agent runs with permissions off, and docs/evaluation.md promises it has no GitHub credential.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           EVAL_MODEL: ${{ inputs.model }}
