@@ -25,7 +25,7 @@ export function parseMarkdown(text) {
       for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
       i++;
       blocks.push({ type: 'code', text: code.join('\n') });
-    } else if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) {
+    } else if ((m = /^\s*(#{1,6})\s+(.*)$/.exec(line))) {
       blocks.push({ type: 'heading', level: m[1].length, inline: inline(m[2].trim()) });
       i++;
     } else if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
