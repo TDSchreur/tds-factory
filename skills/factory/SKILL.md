@@ -122,7 +122,7 @@ The Skills named in Define and Build have upstream defaults that conflict with t
 
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
 2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`. Choose the test seams yourself and proceed without asking for seam confirmation or Spec sign-off.
-3. Invoke `to-tickets` to cut the Spec into Tickets, published to the Issue tracker named in `docs/agents/issue-tracker.md`, local Markdown when that file names no tracker. Choose the breakdown and publish it without asking the user to review or approve it. If a label the tracker needs does not exist, ask the user before creating it.
+3. Invoke `to-tickets` to cut the Spec into Tickets, published to the Issue tracker named in `docs/agents/issue-tracker.md`, local Markdown when that file names no tracker. Choose the breakdown and publish it without asking the user to review or approve it. Before you ask about a label the tracker needs, look it up: on GitHub run `gh label list --search <name> --json name` and match the exact name in the output, because a search also returns labels that only resemble it. Ask the user to create the label only when no result matches the exact name, and never run `gh label create` before the lookup. If `gh label create` fails because the label already exists, treat the label as present and carry on. On another tracker, if a label it needs does not exist, ask the user before creating it.
 
 ## Build
 

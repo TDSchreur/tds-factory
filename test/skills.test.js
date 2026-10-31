@@ -267,3 +267,12 @@ test('Preflight runs the read-only doctor and stops on anything but a missing Ve
   assert.match(preflight, /other than `verify-command`/);
   assert.doesNotMatch(preflight, /\/setup-matt-pocock-skills/);
 });
+
+test('the factory and the install guide check a label by exact name before asking to create it', () => {
+  const guide = readFileSync(join(SKILLS_DIR, '..', 'docs', 'install.md'), 'utf8');
+  for (const [name, text] of [['SKILL.md', section('Define')], ['docs/install.md', guide]]) {
+    assert.ok(text.includes('gh label list --search <name> --json name'), `${name} names the lookup`);
+    assert.match(text, /exact name/, `${name} matches the exact name`);
+    assert.match(text, /already exists/, `${name} treats "already exists" as present`);
+  }
+});
