@@ -13,7 +13,8 @@ test('clearEvidence drops every current Evidence field and keeps the rest, inclu
   const before = record();
   const after = clearEvidence(before);
   for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted', 'project_results']) assert.equal(key in after, false, key);
-  const { standards, spec, security, infrastructure, verify, reviewed, accepted, project_results, ...rest } = record();
+  const rest = record();
+  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted', 'project_results']) delete rest[key];
   assert.deepEqual(after, rest);
   assert.equal(before.verify.head, 'h', 'the input is not changed');
 });
