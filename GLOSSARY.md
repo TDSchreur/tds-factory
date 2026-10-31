@@ -106,7 +106,7 @@ A finding of a Check axis that sends a Run back to Build: a violation of a docum
 _Avoid_: Blocker, Problem worth fixing
 
 **Left open**:
-A finding that is not a Blocking finding (LOW, INFO or judgement). It is listed in `check-N.md`, `finish.md` and the pull request description, and never causes a Rework or stops a Clean Check.
+A finding that is not a Blocking finding (LOW, INFO, a code smell or style judgement). It is listed in `check-N.md`, `finish.md` and the pull request description, and never causes a Rework or stops a Clean Check.
 
 **Rework**:
 Sending a Run back from Check or Follow-up to Build to fix Blocking findings or Follow-up feedback. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
