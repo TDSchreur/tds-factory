@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { followUpRun } from './run-follow-up.js';
-import { summarizeMetrics, formatMetrics, totalMetrics } from './run-metrics.js';
+import { summarizeMetrics, totalMetrics } from './run-metrics.js';
 import { reviewPlan } from './project-reviews.js';
 import { tracks } from './run-record.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';

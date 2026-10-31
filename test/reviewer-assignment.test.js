@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AGENTS_DIR, SKILLS_DIR } from '../src/paths.js';
+import { AGENTS_DIR } from '../src/paths.js';
 
 import { section } from './skill-text.js';
 
