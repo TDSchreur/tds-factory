@@ -15,18 +15,18 @@ Add the first Dashboard actions: a "Needs you" browser notification, and buttons
 3. As a user, I want a browser notification when a Run starts waiting on me, so that I notice without watching the tab.
 4. As a user, I want to enable notifications with a button, so that the browser asks for permission only when I choose.
 5. As a user, I want the tab title count of waiting Runs to keep working, so that I can see it without notifications.
-6. As a user, I want a Sync button on Runs in Build and Check that asks first, so that I can bring a Run up to date with origin and see a conflict or refusal.
+6. As a user, I want a Sync button on running Runs in Build and Check (a Run that waits or is paused cannot change) that asks first, so that I can bring a Run up to date with origin and see a conflict or refusal.
 7. As a user, I want a Clean up button on a Done Run whose PR is merged that asks first, so that I can remove its worktree and branch, and see why it was kept when it was.
 8. As a user, I want an Accept Check button on a Check that waits on me, showing the verdicts, so that I can continue to Finish with a Check that is not clean, for the current head only.
-9. As a user, I want Accept refused for a Check that is already clean or accepted, so that the Dashboard records no decision I was not shown.
+9. As a user, I want Accept refused for a Check that is already clean or accepted, or when the Run changed since the page showed it, so that the Dashboard records no decision about a Check I did not see.
 
 ## Implementation Decisions
 
-- `POST /api/runs/<id>/sync` runs the store's `sync`. `POST /api/runs/<id>/clean` runs `clean` from the main checkout, also when the Dashboard was started in a Run worktree; a Run that is kept answers 409 with the reason. `POST /api/runs/<id>/accept` builds the findings from the Run's unmet finish conditions, records `accept` and answers 409 unless the Run is in Check and waits on the user and the Check is not yet clean or accepted. The routes take no body.
+- `POST /api/runs/<id>/sync` runs the store's `sync`. `POST /api/runs/<id>/clean` runs `clean` from the main checkout, also when the Dashboard was started in a Run worktree; a Run that is kept answers 409 with the reason. `POST /api/runs/<id>/accept` builds the findings from the Run's unmet finish conditions, records `accept` and answers 409 unless the Run is in Check and waits on the user, the Check is not yet clean or accepted, and the query `?updated=` equals the Run record time the page showed. The routes take no body. After a Dashboard accept the user tells the agent in its chat, and the Factory Skill says the agent then treats the recorded decision as the yes.
 - `accept` first sets the waiting Run to `running`, as the Factory Skill does, because a Run changes only while running; if the accept fails it sets the Run back to `waiting` with its reason.
-- One guard runs before every non-GET route: Host (already global), Origin equal to the Host, and the header `X-Factory-Token` equal to a random token made at server start. The page reads the token from `/api/info`. No CORS headers are sent.
+- One guard runs before every route except GET and HEAD: Host (already global), Origin equal to the Host, and the header `X-Factory-Token` equal to a random token made at server start. The page reads the token from `/api/info`. No CORS headers are sent.
 - The notification uses the browser Notification API. A Run that starts waiting while the page is open raises one notification (`Needs you: <title>`, tag = Run id); Runs already waiting at the first poll only count in the tab title. The "Notify me" button appears only while permission is still undecided.
-- `docs/dashboard.md` documents the routes and the guard; `GLOSSARY.md` names the Dashboard session token; a changelog fragment is added.
+- `docs/dashboard.md` documents the routes and the guard; `GLOSSARY.md` names the Session token; a changelog fragment is added.
 - Out of scope: starting, resuming, reworking or completing a Run from the Dashboard, choosing the accepted findings text, bulk clean-up, persistent tokens.
 
 ## Testing Decisions

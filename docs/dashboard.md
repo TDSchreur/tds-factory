@@ -25,7 +25,7 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 | `DELETE /api/runs/<run-id>` | Deletes a Run. Dirty worktrees return HTTP 409 with `X-Factory-Error: dirty-worktree`. A separately confirmed `?discardChanges=true` discards changes. A write route: see [Write routes](#write-routes). |
 | `GET /api/runs/<run-id>/merge-checks` | The GitHub checks of the Run's pull request. |
 | `POST /api/runs/<run-id>/merge` | Squash-merges the Run's pull request. A write route. |
-| `POST /api/runs/<run-id>/sync` | Runs `tds-factory run sync` for the Run: rebases its branch onto the default branch of `origin`. A refusal (uncommitted changes, a conflict, a Run outside Build and Check) is HTTP 409 with the message. A write route. |
+| `POST /api/runs/<run-id>/sync` | Runs `tds-factory run sync` for the Run: rebases its branch onto the default branch of `origin`. A refusal (a Run that is not running, uncommitted changes, a rebase already in progress, a conflict, a Run outside Build and Check) is HTTP 409 with the message. A write route. |
 | `POST /api/runs/<run-id>/clean` | Runs `tds-factory run clean` for the Run from the main checkout. A Run that is kept (PR not merged, uncommitted changes, extra commits) is HTTP 409 with the reason. A write route. |
 | `POST /api/runs/<run-id>/accept` | Accepts a Check that is not clean for the Run's current head. Only for a Run in Check that waits on you, with `?updated=` naming the Run record time the page showed (a changed Run is refused), and refused with HTTP 409 when the Check is already clean or accepted. A write route. |
 
