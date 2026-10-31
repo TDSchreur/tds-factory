@@ -17,6 +17,8 @@ const PR = 'https://github.com/o/r/pull/1';
 // A Run in Check on top of `origin` (the same repository).
 function checked() {
   const cwd = repo();
+  git(cwd, 'config', 'user.name', 't'); // the rebase in sync commits, and CI has no global identity
+  git(cwd, 'config', 'user.email', 't@t');
   writeFileSync(join(cwd, '.gitignore'), '.factory/\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'ignore');
