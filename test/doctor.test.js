@@ -343,7 +343,7 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
     assert.equal(binary('claude'), 'missing', 'without Windows the extension is not tried');
   } finally {
     Object.defineProperty(process, 'platform', saved.platform);
-    process.env.PATH = saved.path;
+    if (saved.path === undefined) delete process.env.PATH; else process.env.PATH = saved.path;
     if (saved.ext === undefined) delete process.env.PATHEXT; else process.env.PATHEXT = saved.ext;
   }
 });

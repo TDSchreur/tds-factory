@@ -101,7 +101,7 @@ const NO_AGENT = 'no agent is usable: install claude, codex or copilot and run t
 
 // The command an Agent target is started with is its name. On Windows a command is found with any of the PATHEXT extensions (claude.exe, claude.cmd).
 function binaryCheck(agent) {
-  const extensions = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  const extensions = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((ext) => /^\.\w+$/.test(ext))] : [''];
   const found = extensions.some((ext) => which(agent + ext));
   return found ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
 }

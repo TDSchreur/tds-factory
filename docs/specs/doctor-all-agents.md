@@ -6,7 +6,7 @@
 
 ## Solution
 
-Without `--agent`, the Doctor checks and reports all three Agent targets: claude, codex and copilot. The shared checks (CLI version, tracker setup, Git origin and default branch, Verify command) are reported once; the per-target checks (binary, required Skills, Project config, review capabilities) are reported for each target. A missing agent never fails the report: the Doctor fails only when no Agent target is usable, because a user needs at least one. `--agent X` still narrows the report to one target, and the factory Skill keeps using it, held to the same strictness as before. See [ADR 0018](../adr/0018-doctor-reports-every-agent-target-and-needs-one-usable.md).
+Without `--agent`, the Doctor checks and reports all three Agent targets: claude, codex and copilot. The shared checks (CLI version, tracker setup, Git origin and default branch, Verify command) are reported once; the per-target checks (binary, required Skills, Project config, review capabilities) are reported for each target. A missing agent never fails the report on its own: besides the shared checks, the Doctor needs at least one usable Agent target, because a user needs at least one. `--agent X` still narrows the report to one target, and the factory Skill keeps using it, held to the same strictness as before. See [ADR 0018](../adr/0018-doctor-reports-every-agent-target-and-needs-one-usable.md).
 
 ## User Stories
 
@@ -30,7 +30,7 @@ Without `--agent`, the Doctor checks and reports all three Agent targets: claude
 ## Implementation Decisions
 
 - The Doctor module builds the shared checks once and the per-target checks for each selected target. The target list is claude, codex, copilot in that order, or the one named by `--agent`.
-- A new per-target `binary` check is `pass` when the target's command (`claude`, `codex`, `copilot`) is found on PATH by the same lookup the Verify command check uses, and `missing` otherwise. The command name is the target name.
+- A new per-target `binary` check is `pass` when the target's command (`claude`, `codex`, `copilot`) is found on PATH (the lookup the Verify command check uses, plus the PATHEXT extensions on Windows), and `missing` otherwise. The command name is the target name.
 - A target is a **Usable agent** when all four of its checks pass.
 - Without `--agent`, `ok` is true when every shared check passes and at least one target is usable. Targets that are not usable show their lines but do not change `ok`. When none is usable the report carries a top-level failing line: `no agent is usable: install claude, codex or copilot and run tds-factory install`.
 - With `--agent X`, only X is reported; `ok` needs X's `skills`, `config` and `review` to pass, and `binary` is shown but not counted.
