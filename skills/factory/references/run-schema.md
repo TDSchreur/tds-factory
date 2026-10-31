@@ -12,6 +12,10 @@
 | `status_reason` | Nonempty explanation when `verification-unavailable` or `interrupted`; empty when running or waiting |
 | `activity` | One short line on what is happening now, e.g. `implementing ticket #12` |
 | `agent` | Name of the writing agent: `claude`, `codex` or `copilot` |
+| `requested_model` | The model the Stage worker was asked to use. A change of Stage clears it and sets it from the frozen `project_config.models` entry for the new Stage when there is one; an agent may set it with `run update`. A request, never a confirmation |
+| `requested_effort` | The reasoning effort the Stage worker was asked to use. Set with `run update`; cleared by a change of Stage |
+| `observed_model` | The model the agent reports it is running on. Set with `run update`; cleared by a change of Stage. Only this field says what ran |
+| `last_seen` | ISO 8601 UTC timestamp of the latest write of the Run record by any operation. Maintained by the Run store; never supply it |
 | `tickets_total` | Number of Tickets cut from the Spec. Set once the Tickets exist |
 | `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build |
 | `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set with `run verdict` after each review |

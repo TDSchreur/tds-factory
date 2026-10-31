@@ -5,7 +5,7 @@ import { stages, targets } from './flow.js';
 
 export const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 export const paused = ['verification-unavailable', 'interrupted'];
-const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha'];
+const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha', 'requested_model', 'requested_effort', 'observed_model'];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
@@ -18,6 +18,15 @@ export const skippable = (axis, record) => axis === 'infrastructure' || (axis ==
 export const gated = ['stage', 'track', 'check_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
 // How many times Check and Follow-up may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
 export const MAX_CHECK_LOOPS = 4;
+// A model belongs to the Stage worker that was asked for or reported it, so a change of Stage clears the three fields and
+// asks again for the model the frozen project settings name for the new Stage.
+export function withStageModel(record) {
+  const next = { ...record };
+  for (const key of ['requested_model', 'requested_effort', 'observed_model']) delete next[key];
+  const configured = next.project_config?.models?.[next.stage];
+  if (typeof configured === 'string' && configured) next.requested_model = configured;
+  return next;
+}
 export const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
 // Why a Verify command cannot be run at all; undefined when it is usable. Doctor reports the same rule.

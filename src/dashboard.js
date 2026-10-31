@@ -43,7 +43,7 @@ const str = (v) => typeof v === 'string' ? v.trim() : '';
 const strList = (v) => Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
 export function interpretRun(entry) {
   const id = typeof entry?.id === 'string' ? entry.id : '', files = strList(entry?.files);
-  if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') return { id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files, links: [], status: '', pr: '' };
+  if (!entry || entry.unreadable || !entry.record || typeof entry.record !== 'object') return { id, unreadable: true, title: id || 'Unknown run', activity: '', agent: '', waiting: false, reason: '', column: 'define', updated: '', files, links: [], status: '', pr: '', model: { requested: '', effort: '', observed: '' }, lastSeen: '', events: [], eventsDamaged: 0 };
   const r = entry.record, status = str(r.status), stage = str(r.stage).toLowerCase();
   const num = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null;
   const verdict = (v, skip) => { v = str(v).toLowerCase(); return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : ''; };
@@ -54,7 +54,11 @@ export function interpretRun(entry) {
   });
   const links = [];
   for (const [label, values] of [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]]) for (const value of Array.isArray(values) ? values : [values]) if (str(value)) links.push({ label, href: str(value) });
-  return { id, unreadable: false, metrics: formatMetrics(summarizeMetrics(r)), track: trackOf(r), projectReviews, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec, true), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), loopCap: loopCap(r), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
+  // Only the plain, known fields of an event reach the page, and the last 50 of them.
+  const eventKeys = ['type', 'at', 'from', 'to', 'reason', 'status', 'done', 'total', 'loops', 'fast', 'exit_code', 'duration_ms', 'head', 'signal'];
+  const events = (Array.isArray(entry.events?.events) ? entry.events.events : []).filter((e) => e && typeof e === 'object').slice(-50).map((e) => Object.fromEntries(eventKeys.filter((k) => ['string', 'number', 'boolean'].includes(typeof e[k])).map((k) => [k, e[k]])));
+  const model = { requested: str(r.requested_model), effort: str(r.requested_effort), observed: str(r.observed_model) };
+  return { id, unreadable: false, model, lastSeen: str(r.last_seen), events, eventsDamaged: num(entry.events?.damaged) ?? 0, metrics: formatMetrics(summarizeMetrics(r)), track: trackOf(r), projectReviews, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec, true), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), loopCap: loopCap(r), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
 }
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
