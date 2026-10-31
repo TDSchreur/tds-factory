@@ -32,4 +32,27 @@ The fixture directory is left in place and printed, so you can inspect it. Agent
 
 ## Run so far
 
-No scenario has been run against a live Claude, Codex or Copilot client. Only the shim, the runner and the graders have been exercised, with scripted stand-ins. Record live results here, per scenario and Agent target, when you run the suite.
+Claude is the only Agent target that has been run live. Codex and Copilot have not been run; only the shim, the runner and the graders were exercised for them, with scripted stand-ins.
+
+Baseline on 2026-10-31 with Claude Code 2.1.314 and `--model claude-haiku-5-5` (set through `EVAL_AGENT_CMD`), one scenario at a time with `EVAL_TIMEOUT_MS=300000`. Haiku is the cheapest model, so this baseline shows that the Flow and the graders work, not how the model you use day to day behaves.
+
+| Scenario | Claude (Haiku 5.5) | Time |
+|---|---|---|
+| `spec-missing` | pass | 32 s |
+| `user-stops` | pass | 12 s |
+| `reviewer-missing` | pass | 44 s |
+| `verify-fails` | pass | 1 min 43 s |
+| `head-changes` | pass | part of one 4 min 26 s run with the next two |
+| `restart-after-pr` | pass | same run |
+| `approval-resolved` | pass after a fix, see below | 1 min 11 s |
+
+The first `approval-resolved` run failed two checks, and the agent was not at fault in either:
+
+- The grader required the Spec in `git diff`, but Define leaves its files uncommitted until Build starts. The grader now looks at `docs/specs/` in the worktree.
+- The offline `gh` answered `repo view` and `label list` with an empty list, so the agent saw no GitHub repository and wrote its Ticket as a local file. The shim now answers both for a fixture repository. `test/eval-harness.test.js` covers the new answers.
+
+No scenario showed the agent ignoring the `## Invoked Skills` section, so that section is unchanged. Run the suite again on your usual model before you rely on the Flow with it, and use the manual-dispatch workflow `eval` in the Actions tab to do that without a local setup.
+
+## Manual-dispatch workflow
+
+The `eval` workflow in `.github/workflows/eval.yml` runs `npm run eval -- claude` and has no trigger except `workflow_dispatch`. It takes the scenarios (empty means all), the model and a timeout in minutes, and needs the repository secret `ANTHROPIC_API_KEY`. Anything the agent does in the runner stays in the runner; the fixture repositories use the offline `gh` and a local origin.
