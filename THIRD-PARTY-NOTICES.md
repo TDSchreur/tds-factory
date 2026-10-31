@@ -6,7 +6,7 @@ The skills in `skills/` are committed copies of skills from the projects below, 
 
 Source: https://github.com/mattpocock/skills
 
-Skills: `grill-with-docs`, `to-spec`, `to-tickets`, `implement-spec`, `tdd`, `code-review`, `pr`, `setup-matt-pocock-skills`, `domain-modeling`, `codebase-design`, `grilling`
+Skills: `grill-with-docs`, `to-spec`, `to-tickets`, `implement-spec`, `tdd`, `diagnosing-bugs`, `code-review`, `pr`, `setup-matt-pocock-skills`, `domain-modeling`, `codebase-design`, `grilling`
 
 ```text
 MIT License

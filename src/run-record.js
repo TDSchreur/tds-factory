@@ -9,8 +9,13 @@ const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'comman
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
+export const tracks = ['fast', 'full'];
+// A record without a track is a Full track Run.
+export const trackOf = (record) => record?.track === 'fast' ? 'fast' : 'full';
+// Standards and Security are required on both tracks; the Spec axis may be skipped only on the Fast track.
+export const skippable = (axis, record) => axis === 'infrastructure' || (axis === 'spec' && trackOf(record) === 'fast');
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
-export const gated = ['stage', 'check_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
+export const gated = ['stage', 'track', 'check_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
 // How many times Check and Follow-up may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
 export const MAX_CHECK_LOOPS = 4;
 export const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
@@ -31,9 +36,10 @@ export function validate(data) {
     let ok = strings.includes(key) ? typeof value === 'string'
       : lists.includes(key) ? Array.isArray(value) && value.every((v) => typeof v === 'string')
       : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0 && (key !== 'check_loops' || value <= MAX_CHECK_LOOPS)
-      : verdicts.includes(key) ? ['pass', 'fail', ...(key === 'infrastructure' ? ['skipped'] : [])].includes(value)
+      : verdicts.includes(key) ? ['pass', 'fail', ...(['spec', 'infrastructure'].includes(key) ? ['skipped'] : [])].includes(value)
       : key === 'follow_up' ? value !== null && typeof value === 'object' && !Array.isArray(value)
       : key === 'stage' ? stages.includes(value)
+      : key === 'track' ? tracks.includes(value)
       : key === 'status' ? statuses.includes(value)
       : key === 'agent' ? typeof value === 'string' && Object.hasOwn(targets, value)
       : key === 'waiting_on_human' ? typeof value === 'boolean' : false;

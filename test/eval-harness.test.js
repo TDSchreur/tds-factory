@@ -117,3 +117,16 @@ test('Follow-up grader rejects missing scope, stale Evidence, excess loops and a
   assert.equal(results(artifacts({ check_loops: 5 }))['the last allowed Rework is counted and enters Build'], false);
   assert.equal(results(artifacts({}, [{ tool: 'gh', argv: ['pr', 'create'], write: true }]))['the same PR is retained and no new PR was created'], false);
 });
+
+test('the fast-track grader counts Define confirmations and checks the track and the single Ticket', () => {
+  const ask = `${RUN} update --id $id --data '{"status":"waiting","waiting_reason":"confirm","activity":"asking"}'; ${RUN} update --id $id --data '{"status":"running","activity":"go"}'`;
+  const idle = grade('fast-track', 'true');
+  assert.equal(idle.status, 1);
+  assert.match(idle.stdout, /FAIL the track is fast/);
+  assert.match(idle.stdout, /FAIL Define asked exactly one confirmation/);
+  const once = grade('fast-track', `${ask}; ${RUN} track --id $id --value fast`);
+  assert.match(once.stdout, /PASS the track is fast/);
+  assert.match(once.stdout, /PASS Define asked exactly one confirmation/);
+  const twice = grade('fast-track', `${ask}; ${ask}`);
+  assert.match(twice.stdout, /FAIL Define asked exactly one confirmation/);
+});

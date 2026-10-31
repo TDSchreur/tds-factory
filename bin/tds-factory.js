@@ -17,6 +17,7 @@ const USAGE = `Usage:
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
+  tds-factory run track --id ID --value fast|full   (in Define, after the user chose or confirmed the track)
   tds-factory run transition --id ID --to build|check|finish|follow-up [--data JSON]
   tds-factory run follow-up --id ID
   tds-factory run rework --id ID [--data JSON]
@@ -69,6 +70,7 @@ try {
     const [, op] = positionals;
     if (op === 'start') console.log(store.start(data));
     else if (op === 'update') store.update(values.id, data);
+    else if (op === 'track') store.track(values.id, values.value);
     else if (op === 'transition') store.transition(values.id, values.to, data);
     else if (op === 'follow-up') console.log(store.followUp(values.id));
     else if (op === 'rework') store.rework(values.id, data);
@@ -86,7 +88,7 @@ try {
       const report = await store.stats(values.id);
       const print = (label, summary) => {
         const formatted = formatMetrics(summary);
-        console.log(`${label}\n${Object.entries(formatted.stages).map(([stage, value]) => `  ${stage[0].toUpperCase()}${stage.slice(1)}: ${value}`).join('\n')}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`);
+        console.log(`${label}${formatted.track ? `\n  Track: ${formatted.track}` : ''}\n${Object.entries(formatted.stages).map(([stage, value]) => `  ${stage[0].toUpperCase()}${stage.slice(1)}: ${value}`).join('\n')}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`);
       };
       for (const run of report.runs) {
         const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
@@ -95,6 +97,7 @@ try {
       }
       if (values.all) {
         print('Total observed', report.total);
+        for (const [track, { runs, total }] of Object.entries(report.byTrack)) if (runs) print(`Total observed, ${track[0].toUpperCase()}${track.slice(1)} track (${runs} Run(s))`, total);
         const missing = report.runs.filter(run => !run.summary || Object.values(run.summary.stages).some(value => value.ms === null) || run.summary.reworks === null).length;
         if (missing) console.log(`${missing} Run(s) have missing or unreadable data; totals include observed values only.`);
       }
