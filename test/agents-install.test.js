@@ -44,7 +44,7 @@ test('install keeps an existing agent file you edited, unless forced', () => {
 });
 
 test('the Build agent of every target follows the Exit checklist and records no verdict', () => {
-  const sentence = 'After the last Ticket and after every Rework, follow the Exit checklist in the Build instructions: a term sweep, the required artifacts, a story trace and a security check in `build.md`, and one inline self-check of your own diff that records no verdict or Evidence.';
+  const sentence = 'After the last Ticket and after every Rework, follow the Exit checklist in the Build instructions: the static checks, a term sweep, the required artifacts, a story trace and a security check in `build.md`, and one inline self-check of your own diff that records no verdict or Evidence.';
   for (const file of ['claude/factory-build.md', 'codex/factory-build.toml', 'copilot/factory-build.agent.md']) {
     assert.ok(readFileSync(join(AGENTS_DIR, file), 'utf8').includes(sentence), file);
   }
