@@ -182,7 +182,7 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   const { status, report } = doctor(huge);
   assert.equal(status, 1);
   assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
-  assert.equal(report.checks.length, 6);
+  assert.equal(report.checks.length, 7);
   // A link to a regular file is fine.
   const shared = project();
   rmSync(join(shared, 'AGENTS.md'));

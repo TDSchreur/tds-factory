@@ -15,7 +15,7 @@ export const CHIP_HELP = {
   spec: 'Check verdict: does the code match what the Spec asked for? Skipped on the Fast track.',
   security: 'Check verdict: no open critical, high or medium security findings.',
   infrastructure: 'Check verdict for Bicep and pipeline changes; skipped when none changed.',
-  loops: 'Times Check or Follow-up sent the Run back to Build to fix problems. The maximum is 4.',
+  loops: 'Times Check or Follow-up sent the Run back to Build to fix problems. The maximum is 4, or the lower cap the project set.',
 };
 
 export const POLL_MS = 2000;
@@ -56,7 +56,7 @@ export function chipsOf(run) {
   for (const review of run.projectReviews ?? []) {
     if (review.verdict) chips.push({ key: `project-${review.id}`, cls: review.verdict, text: `${review.name} ${review.verdict}`, tip: review.reason || `Project review: ${review.name}` });
   }
-  if (typeof run.loops === 'number') chips.push({ key: 'loops', cls: '', text: `loop ${run.loops}/4`, tip: CHIP_HELP.loops });
+  if (typeof run.loops === 'number') chips.push({ key: 'loops', cls: '', text: `loop ${run.loops}/${Number.isSafeInteger(run.loopCap) ? run.loopCap : 4}`, tip: CHIP_HELP.loops });
   return chips;
 }
 

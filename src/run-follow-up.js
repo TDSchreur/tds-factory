@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { changeRun } from './run-folder.js';
 import { ownWorktrees, worktreeState } from './worktrees.js';
-import { loops, MAX_CHECK_LOOPS, verdicts } from './run-record.js';
+import { loops, loopCap, verdicts } from './run-record.js';
 import { moveVisit } from './run-metrics.js';
 
 // GitHub content is data: pass only validated identifiers as arguments, never shell text.
@@ -109,7 +109,7 @@ export function followUpRun(projectDir, id) {
     let record = old.stage === 'follow-up' && old.status === 'running' ? old : moveVisit(old, 'follow-up');
     record = { ...record, stage: 'follow-up', status: 'running', waiting_on_human: false, waiting_reason: '', status_reason: '', follow_up: snapshot };
     if (snapshot.failures.length || snapshot.threads.length) {
-      if (loops(record) >= MAX_CHECK_LOOPS) result = `Check loop limit of ${MAX_CHECK_LOOPS} reached; Follow-up scope retained`;
+      if (loops(record) >= loopCap(record)) result = `Check loop limit of ${loopCap(record)} reached; Follow-up scope retained`;
       else {
         record = { ...moveVisit(record, 'build'), stage: 'build', check_loops: loops(record) + 1 };
         for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];

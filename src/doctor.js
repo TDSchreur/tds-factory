@@ -7,7 +7,7 @@ import { targets } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
 import { verifyCommandProblem, mergedLeftovers } from './run-store.js';
-import { loadProjectReviews } from './project-reviews.js';
+import { loadProjectConfig } from './project-config.js';
 
 // The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
 const read = (file) => {
@@ -71,7 +71,7 @@ function skillsCheck(has) {
 
 // Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.
 function reviewCheck(agent, projectDir, homeDir, has) {
-  const reviews = loadProjectReviews(projectDir, agent, homeDir);
+  const { reviews } = loadProjectConfig(projectDir, agent, homeDir);
   const missing = ['code-review', 'security-scan'].filter((name) => !has(name));
   const file = fs.readdirSync(path.join(AGENTS_DIR, agent)).find((f) => f.startsWith('factory-check.'));
   const agentDirs = [path.join(projectDir, targets[agent].projectAgents), path.join(homeDir, targets[agent].agents)];
@@ -81,6 +81,15 @@ function reviewCheck(agent, projectDir, homeDir, has) {
     if (!interactive || !agentDirs.some(dir => fs.existsSync(path.join(dir, interactive)))) missing.push('the factory-interactive-check agent');
   }
   return missing.length ? ['fail', `review is not available, missing: ${missing.join(', ')}`] : ['pass', 'review Skills and the read-only factory-check agent are installed'];
+}
+
+// A project's .factory/config.json is optional; when present, a bad value is named with its line so it can be fixed before a Run freezes it.
+function configCheck(agent, projectDir, homeDir) {
+  const config = loadProjectConfig(projectDir, agent, homeDir);
+  const file = path.join(projectDir, '.factory', 'config.json');
+  if (!fs.existsSync(file)) return ['pass', 'no .factory/config.json; the Factory defaults apply'];
+  const set = [Object.keys(config.models).length && 'models', config.max_check_loops !== 4 && 'max_check_loops', JSON.stringify(config.labels) !== JSON.stringify({ ticket: 'ready-for-agent' }) && 'labels', config.reviews.length && 'reviews'].filter(Boolean);
+  return ['pass', `.factory/config.json is valid${set.length ? ` (${set.join(', ')})` : ''}`];
 }
 
 function which(name, cwd) {
@@ -94,7 +103,7 @@ export function doctor({ projectDir, agent = 'claude', homeDir = os.homedir(), p
   const has = isInstalled(agent, projectDir, homeDir);
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
   const attempt = (check) => { try { return check(); } catch (err) { return ['fail', err.message]; } };
-  const checks = [['cli', cliCheck], ['skills', () => skillsCheck(has)], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['review', () => reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', () => verifyCommandCheck(projectDir)]]
+  const checks = [['cli', cliCheck], ['skills', () => skillsCheck(has)], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['config', () => configCheck(agent, projectDir, homeDir)], ['review', () => reviewCheck(agent, projectDir, homeDir, has)], ['verify-command', () => verifyCommandCheck(projectDir)]]
     .map(([id, check]) => [id, attempt(check)])
     .map(([id, [status, message]]) => ({ id, status, message }));
   // Not a check: merged Runs that kept a worktree or branch never stop a Run, they only deserve a hint.

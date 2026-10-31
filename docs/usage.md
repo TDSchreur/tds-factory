@@ -182,7 +182,7 @@ The full list is in [GLOSSARY.md](../GLOSSARY.md). What each Agent target guaran
 
 ## Check readiness without starting a Run
 
-Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the review capabilities (the review Skills and the read-only `factory-check` agent) and the verify command. For Copilot it also counts Skills in the Claude and Codex folders (`.claude/skills`, `.agents/skills` and their `~/` versions), where the default `install` puts them. It exits with 1 until every check passes. `/factory` runs it first; a missing verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish. Doctor also prints a `note` (and a `notes` list with `--json`) when merged Runs still hold a worktree or branch; a note never makes it fail.
+Run `tds-factory doctor [--agent claude|codex|copilot] [--json]` in the project. It changes nothing and reports `pass`, `missing` or `fail` for the CLI version, the required Skills, the tracker setup, the Git `origin` and its default branch, the optional `.factory/config.json` (a bad setting fails with the line to fix), the review capabilities (the review Skills and the read-only `factory-check` agent) and the verify command. For Copilot it also counts Skills in the Claude and Codex folders (`.claude/skills`, `.agents/skills` and their `~/` versions), where the default `install` puts them. It exits with 1 until every check passes. `/factory` runs it first; a missing verify command is the one thing the agent asks you for, and a Run without a usable one cannot enter Build, Check or Finish. Doctor also prints a `note` (and a `notes` list with `--json`) when merged Runs still hold a worktree or branch; a note never makes it fail.
 
 ## Keep a Run up to date
 
@@ -199,3 +199,23 @@ Run `tds-factory run inspect --id ID` to diagnose its lock, worktree and stale E
 ## Add project reviews
 
 Projects can extend Check with source, UI or UX review Skills. Use the `add-project-review` Skill and see the [project review guide](project-reviews.md) for configuration, browser prerequisites and examples. Project review results participate in Rework and the Finish gate; each Run keeps its original configuration and Skill snapshot.
+
+## Set project options
+
+Put the project's settings in a committed `.factory/config.json`; every key is optional.
+
+```json
+{
+  "models": { "build": "gpt-5.3-codex", "check": "claude-sonnet-5.5" },
+  "max_check_loops": 2,
+  "labels": { "ticket": "ready-for-agent" },
+  "reviews": []
+}
+```
+
+- `models` names a model per Stage (`define`, `build`, `check`, `finish`, `follow-up`) or for `interactive-check`. The coordinator passes it when it dispatches the Stage agent, so you do not edit agent files or run `install --force`.
+- `max_check_loops` lowers how many times Check or Follow-up may send a Run back to Build. The Factory maximum is 4; a higher value fails.
+- `labels.ticket` is the label `to-tickets` puts on Tickets.
+- `reviews` holds [Project reviews](project-reviews.md), with the same entries as `.factory/reviews.json`, which keeps working.
+
+`.factory/` is ignored for Run records, so commit the file with `git add -f .factory/config.json`. A Run reads it from the default branch of `origin` and freezes it when it starts; `tds-factory run config --id <id>` prints what it froze. Edits apply to new Runs. `tds-factory doctor` reports a bad value as `fail` with the line to fix. See [ADR 0016](adr/0016-project-config-is-committed-and-frozen-per-run.md).

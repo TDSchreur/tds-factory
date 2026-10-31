@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stages } from './flow.js';
-import { loadProjectReviews } from './project-reviews.js';
-import { MAX_CHECK_LOOPS, tracks, trackOf, gated, verdicts, validate, apply, write, checkCommands, verifyCommandProblem, loops } from './run-record.js';
+import { loadProjectConfig, frozenSettings } from './project-config.js';
+import { loopCap, tracks, trackOf, gated, verdicts, validate, apply, write, checkCommands, verifyCommandProblem, loops } from './run-record.js';
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
 import { finishProblems } from './evidence.js';
@@ -38,8 +38,8 @@ export function startRun(projectDir, data) {
     const added = git('worktree', 'add', '-b', id, worktree, commit);
     if (added.status !== 0) throw new Error(`git worktree add failed: ${added.stderr.trim()}`);
     created = true;
-    const projectReviews = loadProjectReviews(worktree, data.agent);
-    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews, metrics: newMetrics(now) });
+    const { reviews: projectReviews, ...settings } = loadProjectConfig(worktree, data.agent);
+    write(path.join(root, id), { ...apply({ stage: 'define', status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'Starting Define', tickets_total: 0, tickets_done: 0, check_loops: 0, created: now }, { ...data, worktree, base_sha: commit }), project_reviews: projectReviews, project_config: frozenSettings(settings), metrics: newMetrics(now) });
   } catch (err) {
     const failures = [];
     if (created) {
@@ -154,7 +154,7 @@ export function syncRun(projectDir, id, data = {}) {
 export function reworkRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
-    if (loops(old) >= MAX_CHECK_LOOPS) throw new Error(`the Check loop limit of ${MAX_CHECK_LOOPS} is reached`);
+    if (loops(old) >= loopCap(old)) throw new Error(`the Check loop limit of ${loopCap(old)} is reached`);
     const record = { ...moveVisit(firstCheck(old, false), 'build'), stage: 'build', check_loops: loops(old) + 1 };
     for (const key of [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results']) delete record[key];
     return { record, activity: 'Rework: back to Build' };

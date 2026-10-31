@@ -75,4 +75,6 @@ export function apply(old, data) {
 
 // The Check attempt a Run is in: its first Check is attempt 1, each Rework starts the next.
 export const loops = (record) => record.check_loops ?? 0;
+// A Run freezes the project's cap at start; it is never above the Factory maximum. Older Runs have the maximum.
+export const loopCap = (record) => Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS);
 export const attempt = (record) => loops(record) + 1;
