@@ -119,7 +119,7 @@ Do this once per project you want to build with the Factory.
    tds-factory doctor
    ```
 
-   It changes nothing and prints one line per check, for example `pass    tracker: issue tracker and domain docs are configured`, then a block for each of Claude, Codex and Copilot. The shared checks should all say `pass`. A line that says `missing` or `fail` names what to fix. You need only one agent to be usable (`usable` in its block); the others may show `missing` or `fail` lines. The command exits with 1 when a shared check fails or no agent is usable. The checks are the CLI version, the tracker setup, the Git `origin` and its default branch and the Verify command, and for each agent its command on PATH, the installed Skills, the Project config and the review capabilities. Add `--agent codex` or `--agent copilot` to check one agent only.
+   It changes nothing and prints one line per check, for example `pass    tracker: issue tracker and domain docs are configured`, then a block for each of Claude, Codex and Copilot. The shared checks should all say `pass`. A line that says `missing` or `fail` names what to fix. You need only one agent to be usable (`usable` in its block); the others may show `missing` or `fail` lines. The command exits with 1 when a shared check is not `pass` or no agent is usable. The checks are the CLI version, the tracker setup, the Git `origin` and its default branch and the Verify command, and for each agent its command on PATH, the installed Skills, the Project config and the review capabilities. Add `--agent codex` or `--agent copilot` to check one agent only.
 
 Commit the new files. Now `/factory` can start; the [usage guide](usage.md) shows how.
 

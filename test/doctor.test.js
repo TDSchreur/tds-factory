@@ -327,3 +327,23 @@ test('doctor text output groups the checks under each agent', () => {
   assert.match(result.stdout, /^ +pass +binary: codex/m);
   assert.match(result.stdout, /^ +missing +binary: claude/m);
 });
+
+test('on Windows the agent command is found with a PATHEXT extension', async () => {
+  const { doctor: run } = await import('../src/doctor.js');
+  const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-')), dir = project();
+  writeFileSync(join(bin, 'claude.cmd'), '');
+  const saved = { path: process.env.PATH, ext: process.env.PATHEXT, platform: Object.getOwnPropertyDescriptor(process, 'platform') };
+  try {
+    process.env.PATH = bin; process.env.PATHEXT = '.EXE;.cmd';
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const binary = (agent) => run({ projectDir: dir, agent, homeDir: mkdtempSync(join(tmpdir(), 'doctor-home-')) }).agents[0].checks.find((c) => c.id === 'binary').status;
+    assert.equal(binary('claude'), 'pass');
+    assert.equal(binary('codex'), 'missing');
+    Object.defineProperty(process, 'platform', saved.platform);
+    assert.equal(binary('claude'), 'missing', 'without Windows the extension is not tried');
+  } finally {
+    Object.defineProperty(process, 'platform', saved.platform);
+    process.env.PATH = saved.path;
+    if (saved.ext === undefined) delete process.env.PATHEXT; else process.env.PATHEXT = saved.ext;
+  }
+});

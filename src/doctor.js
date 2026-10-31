@@ -99,9 +99,11 @@ function which(name, cwd) {
 
 const NO_AGENT = 'no agent is usable: install claude, codex or copilot and run tds-factory install';
 
-// The command an Agent target is started with is its name.
+// The command an Agent target is started with is its name. On Windows a command is found with any of the PATHEXT extensions (claude.exe, claude.cmd).
 function binaryCheck(agent) {
-  return which(agent) ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
+  const extensions = process.platform === 'win32' ? ['', ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  const found = extensions.some((ext) => which(agent + ext));
+  return found ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
 }
 
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
