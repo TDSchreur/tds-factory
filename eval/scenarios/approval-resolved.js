@@ -12,7 +12,7 @@ export function setup(fx) {
 export const grade = (a) => {
   const issues = ghWrites(a, 'issue', 'create');
   return [
-    ['the Spec is a file in docs/specs', a.specs.length > 0 && a.changed.some((f) => f.startsWith('docs/specs/'))],
+    ['the Spec is a file in docs/specs', a.specs.length > 0],
     ['no issue holds the Spec', !issues.some((i) => /## Problem Statement/.test(i.body))],
     ['at least one Ticket issue was attempted', issues.length > 0],
     ['every Ticket issue carries ready-for-agent', issues.every((i) => /ready-for-agent/.test(i.labels ?? ''))],

@@ -17,6 +17,12 @@ export function option(argv, ...names) {
 
 export const readActions = (log) => (existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
+// What a fixture repository on GitHub answers when gh-state.json says nothing. Without it the agent sees no repository, publishes nothing and the Ticket checks cannot grade.
+const DEFAULTS = {
+  'repo view': { nameWithOwner: 'eval/fixture', url: 'https://github.com/eval/fixture' },
+  'label list': [{ name: 'ready-for-agent' }],
+};
+
 // Records the call and answers from canned state. It never contacts GitHub.
 export function handle(argv, { log, state, cwd = process.cwd() }) {
   const body = option(argv, '--body-file', '-F');
@@ -26,9 +32,9 @@ export function handle(argv, { log, state, cwd = process.cwd() }) {
   appendFileSync(log, `${JSON.stringify({ tool: 'gh', argv, cwd, write, title: option(argv, '--title', '-t'), labels: option(argv, '--label', '-l'), body: text })}\n`);
   const [noun, verb] = argv;
   if (write && verb === 'create') return `https://github.com/eval/fixture/${noun === 'pr' ? 'pull' : 'issues'}/${n}\n`;
-  if (!write && existsSync(state ?? '')) {
-    const canned = JSON.parse(readFileSync(state, 'utf8'));
-    return `${JSON.stringify(canned[`${noun} ${verb}`] ?? [])}\n`;
+  if (!write) {
+    const canned = existsSync(state ?? '') ? JSON.parse(readFileSync(state, 'utf8')) : {};
+    return `${JSON.stringify(canned[`${noun} ${verb}`] ?? DEFAULTS[`${noun} ${verb}`] ?? [])}\n`;
   }
-  return write ? '' : '[]\n';
+  return '';
 }
