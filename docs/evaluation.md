@@ -1,6 +1,6 @@
 # Evaluate an agent against the Flow
 
-`npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` never runs it, and nothing runs it on a push or pull request. Only the manual `eval` workflow does. What each Agent target guarantees is in the [capability matrix](capabilities.md); the Flow being graded is in the [usage guide](usage.md).
+`npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` never runs it, and nothing runs it on a push or pull request. What each Agent target guarantees is in the [capability matrix](capabilities.md); the Flow being graded is in the [usage guide](usage.md).
 
 ```sh
 npm run eval -- <claude|codex|copilot> [scenario...]
@@ -51,8 +51,4 @@ The first `approval-resolved` run failed two checks, and the agent was not at fa
 - The grader required the Spec in `git diff`, but Define leaves its files uncommitted until Build starts. The grader now looks at `docs/specs/` in the worktree.
 - The offline `gh` answered `repo view` and `label list` with an empty list, so the agent saw no GitHub repository and wrote its Ticket as a local file. The shim now answers both for a fixture repository. `test/eval-harness.test.js` covers the new answers.
 
-No scenario showed the agent ignoring the `## Invoked Skills` section, so that section is unchanged. Run the suite again on your usual model before you rely on the Flow with it, and use the manual-dispatch workflow `eval` in the Actions tab to do that without a local setup.
-
-## Manual-dispatch workflow
-
-The `eval` workflow in `.github/workflows/eval.yml` runs `npm run eval -- claude` and has no trigger except `workflow_dispatch`. It takes the scenarios (empty means all), the model and a timeout in minutes, and needs the repository secret `ANTHROPIC_API_KEY`. GitHub and git writes stay in the runner: the fixtures use the offline `gh` and a local origin. The agent itself runs with permissions off and has network access and the API key, so dispatch it only on a repository you trust. The timeout is 1 to 15 minutes per scenario, and Claude Code is pinned to the version in the workflow.
+No scenario showed the agent ignoring the `## Invoked Skills` section, so that section is unchanged. Run the suite again on your usual model before you rely on the Flow with it. There is no CI workflow for it, because the eval needs a Claude login and the project has no API key; run it locally.
