@@ -15,11 +15,11 @@
     "THIRD-PARTY-NOTICES.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "test:unit": "node scripts/test-unit.js",
-    "test:browser": "node --test test/*-browser.test.js",
-    "test:package": "node scripts/test-package.js",
-    "eval": "node eval/run.js"
+    "test": "node scripts/with-temp-dir.js node --test test/*.test.js",
+    "test:unit": "node scripts/with-temp-dir.js node scripts/test-unit.js",
+    "test:browser": "node scripts/with-temp-dir.js node --test test/*-browser.test.js",
+    "test:package": "node scripts/with-temp-dir.js node scripts/test-package.js",
+    "eval": "node scripts/with-temp-dir.js node eval/run.js"
   },
   "engines": {
     "node": ">=20"
