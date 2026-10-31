@@ -4,7 +4,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { stages } from './flow.js';
-import { validId, validate, write } from './run-record.js';
+import { validId, validate, write, withStageModel } from './run-record.js';
 import { appendEvent, deriveEvents, readEvents } from './run-events.js';
 
 export function runRoot(projectDir, create) {
@@ -69,7 +69,9 @@ export function changeRun(projectDir, id, change) {
   if (!validId(id)) throw new Error('invalid Run id');
   return withRunLock(runRoot(projectDir, false), id, () => {
     const { dir, record } = readRun(projectDir, id);
-    const next = { ...change(record), last_seen: new Date().toISOString() };
+    const changed = change(record);
+    // Every Stage change passes here, whether it is a transition, a Rework or a Follow-up.
+    const next = { ...(changed.stage !== record.stage ? withStageModel(changed) : changed), last_seen: new Date().toISOString() };
     write(dir, next);
     for (const event of deriveEvents(record, next)) appendEvent(dir, event);
   });

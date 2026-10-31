@@ -144,7 +144,7 @@ The status file a Run keeps up to date as it moves through the Stages, read by t
 _Avoid_: Log, State file
 
 **Event log**:
-The append-only `events.jsonl` in a Run folder, one line for each Stage change, Ticket done, Verify start and finish, wait and release, and Rework. It describes what happened and never feeds a gate or Evidence. See ADR 0021.
+The append-only `events.jsonl` in a Run folder, one line for each Stage change, Ticket done, Verify start and finish, wait and release, other status change and Rework. It describes what happened and never feeds a gate or Evidence. See ADR 0021.
 _Avoid_: Audit trail
 
 **Run metrics**:

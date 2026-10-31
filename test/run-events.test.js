@@ -139,3 +139,73 @@ test('interpretRun exposes the model, last seen and events without calling a req
   assert.equal(view.events.length, 1);
   assert.equal(view.eventsDamaged, 2);
 });
+
+test('a Rework clears the model of the Check worker and asks for the configured one for Build', () => {
+  const cwd = repo(), store = openRunStore(cwd), id = begin(cwd);
+  toBuild(store, id);
+  const r = record(cwd, id);
+  writeFileSync(join(dirOf(cwd, id), 'run.json'), JSON.stringify({ ...r, project_config: { ...r.project_config, models: { build: 'claude-sonnet-5.5' } } }));
+  store.update(id, { tickets_done: 2 });
+  store.transition(id, 'check');
+  store.update(id, { requested_model: 'reviewer', requested_effort: 'high', observed_model: 'reviewer' });
+  store.rework(id);
+  const after = record(cwd, id);
+  assert.equal(after.stage, 'build');
+  assert.equal(after.requested_model, 'claude-sonnet-5.5');
+  assert.equal(after.requested_effort, undefined);
+  assert.equal(after.observed_model, undefined);
+});
+
+test('other status changes become status events and a release only follows a wait', () => {
+  const cwd = repo(), store = openRunStore(cwd), id = begin(cwd);
+  store.update(id, { status: 'interrupted', status_reason: 'closed laptop' });
+  store.update(id, { status: 'running' });
+  store.update(id, { status: 'abandoned' });
+  assert.deepEqual(events(cwd, id).events.map((e) => [e.type, e.status]), [['status', 'interrupted'], ['status', 'running'], ['status', 'abandoned']]);
+});
+
+test('a store operation works on an old record without last_seen or a log, and then adds them', () => {
+  const cwd = repo(), store = openRunStore(cwd), id = begin(cwd);
+  const old = record(cwd, id);
+  delete old.last_seen;
+  writeFileSync(join(dirOf(cwd, id), 'run.json'), JSON.stringify(old));
+  rmSync(join(dirOf(cwd, id), 'events.jsonl'), { force: true });
+  store.update(id, { activity: 'back' });
+  assert.ok(Date.parse(record(cwd, id).last_seen));
+  toBuild(store, id);
+  assert.equal(events(cwd, id).events[0].type, 'stage');
+});
+
+test('a FIFO or a hard link as the log is neither read nor written through', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { linkSync } = await import('node:fs');
+  const cwd = repo(), store = openRunStore(cwd), id = begin(cwd);
+  const log = join(dirOf(cwd, id), 'events.jsonl');
+  rmSync(log, { force: true });
+  execFileSync('mkfifo', [log]);
+  toBuild(store, id);
+  assert.equal(record(cwd, id).stage, 'build');
+  assert.equal(events(cwd, id).unreadable, true);
+  rmSync(log);
+  const target = join(cwd, 'other.txt');
+  writeFileSync(target, 'keep\n');
+  linkSync(target, log);
+  store.update(id, { tickets_done: 1 });
+  assert.equal(readFileSync(target, 'utf8'), 'keep\n');
+  assert.equal(events(cwd, id).unreadable, true);
+});
+
+test('the view keeps only the last 50 events', () => {
+  const all = Array.from({ length: 80 }, (_, i) => ({ at: '2026-01-01T00:00:00.000Z', type: 'ticket-done', done: i, total: 80 }));
+  const view = interpretRun({ id: 'r', files: [], record: { status: 'running', stage: 'build' }, events: { events: all, damaged: 0 } });
+  assert.equal(view.events.length, 50);
+  assert.equal(view.events[0].done, 30);
+});
+
+test('the Skill tells agents to report the model once per Stage, and the schema lists the new fields', () => {
+  const root = join(import.meta.dirname, '..', 'skills', 'factory');
+  const skill = readFileSync(join(root, 'SKILL.md'), 'utf8');
+  assert.match(skill, /Set `activity` on every update, and often\. Once per Stage report `requested_model`, `requested_effort` and, if you can see it, `observed_model`/);
+  const schema = readFileSync(join(root, 'references', 'run-schema.md'), 'utf8');
+  for (const field of ['requested_model', 'requested_effort', 'observed_model', 'last_seen']) assert.match(schema, new RegExp(`\\| \`${field}\` \\|`));
+});

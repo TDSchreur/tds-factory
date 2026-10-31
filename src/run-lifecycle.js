@@ -102,11 +102,7 @@ export function transitionRun(projectDir, id, to, data = {}) {
     let record = old;
     if (to === 'finish') record = firstCheck(record, finishProblems({ ...old, accepted: undefined }).length === 0);
     record = moveVisit(record, to);
-    // A model belongs to the Stage worker that was asked for or reported it, so none carries over to the next Stage.
     record = { ...record, stage: to };
-    for (const key of ['requested_model', 'requested_effort', 'observed_model']) delete record[key];
-    const configured = old.project_config?.models?.[to];
-    if (typeof configured === 'string' && configured) record.requested_model = configured;
     return { record, activity: `Starting ${to}` };
   });
 }

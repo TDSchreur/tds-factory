@@ -41,11 +41,11 @@ export function finishProblems(record, { head, dirty } = worktreeState(record)) 
   return problems;
 }
 
-// Runs the Run's fast Verify command in its worktree. It is quick feedback while building and never Evidence:
-// nothing is recorded in the Run, and the Run keeps no Verify result from it.
 // The finish event of a Verify run, with how long it took.
 const verifyEvent = (r) => ({ type: 'verify', fast: r.fast === true, exit_code: r.exit_code, head: r.head, duration_ms: Math.max(0, Date.parse(r.ended) - Date.parse(r.started)), ...(r.signal ? { signal: r.signal } : {}) });
 
+// Runs the Run's fast Verify command in its worktree. It is quick feedback while building and never Evidence:
+// nothing is recorded in the Run record (only the Event log), and the Run keeps no Verify result from it.
 function verifyFast(dir, record) {
   if (!record.fast_commands) throw new Error('no fast Verify command: the Run has none; run verify --id <id> for the full Verify');
   const problem = fastCommandProblem(record.fast_commands);

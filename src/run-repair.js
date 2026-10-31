@@ -91,11 +91,11 @@ export function repairApply(projectDir, runsDir, id, expected) {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir);
       if (fs.lstatSync(file, { throwIfNoEntry: false })) throw new Error('Run record appeared; inspect a new plan');
       const now = new Date().toISOString();
-      record = { title: id, stage: 'define', status: 'interrupted', status_reason: 'Recreated missing Run record; reconcile existing work before resuming', waiting_on_human: false, waiting_reason: '', activity: 'Reconcile existing work before continuing', tickets_total: 0, tickets_done: 0, check_loops: 0, worktree: path.join(projectDir, '.factory', 'worktrees', id), commands: '', conventions: [], created: now, updated: now };
+      record = { title: id, stage: 'define', status: 'interrupted', status_reason: 'Recreated missing Run record; reconcile existing work before resuming', waiting_on_human: false, waiting_reason: '', activity: 'Reconcile existing work before continuing', tickets_total: 0, tickets_done: 0, check_loops: 0, worktree: path.join(projectDir, '.factory', 'worktrees', id), commands: '', conventions: [], created: now, updated: now, last_seen: now };
     } else if (fresh.actions.some((a) => a.startsWith('adopt'))) record = readRun(projectDir, id).record;
     const pr = fresh.actions.find((a) => a.startsWith('adopt existing PR '));
     if (pr && record) record = { ...record, pr: pr.slice('adopt existing PR '.length), updated: new Date().toISOString() };
-    if (record) write(dir, record);
+    if (record) write(dir, { ...record, last_seen: new Date().toISOString() });
   });
   });
 }

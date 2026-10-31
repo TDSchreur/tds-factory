@@ -6,15 +6,21 @@ export const EVENTS_FILE = 'events.jsonl';
 const WINDOW = 256 * 1024;
 
 const isLink = (file) => { try { return fs.lstatSync(file).isSymbolicLink(); } catch { return false; } };
+// Only a plain file with one name: a FIFO would block the open, and a hard link would write through to another file.
+const plain = (fd) => { const st = fs.fstatSync(fd); return st.isFile() && st.nlink === 1; };
+const NONBLOCK = fs.constants.O_NONBLOCK ?? 0;
 
 // Appends one event. A failure is ignored: the Run record is the source of truth, and an operation must not fail over its history.
 export function appendEvent(dir, event) {
   const file = path.join(dir, EVENTS_FILE);
   if (isLink(file)) return false;
   try {
-    const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW, 0o600);
-    try { fs.writeSync(fd, `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`); } finally { fs.closeSync(fd); }
-    return true;
+    const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_NOFOLLOW | NONBLOCK, 0o600);
+    try {
+      if (!plain(fd)) return false;
+      fs.writeSync(fd, `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`);
+      return true;
+    } finally { fs.closeSync(fd); }
   } catch { return false; }
 }
 
@@ -24,8 +30,9 @@ export function readEvents(dir) {
   if (isLink(file)) return { events: [], damaged: 0, unreadable: true };
   let text;
   try {
-    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | NONBLOCK);
     try {
+      if (!plain(fd)) return { events: [], damaged: 0, unreadable: true };
       const { size } = fs.fstatSync(fd);
       const length = Math.min(size, WINDOW), buffer = Buffer.alloc(length);
       fs.readSync(fd, buffer, 0, length, size - length);
