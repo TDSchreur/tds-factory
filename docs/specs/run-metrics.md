@@ -1,5 +1,7 @@
 # Run metrics
 
+> Superseded in part by [ADR 0015](../adr/0015-fast-track-is-chosen-explicitly-and-keeps-the-check-gate.md) and [the Fast track Spec](fast-track.md): the track is now recorded in the Run record (absence means Full) and `run stats --all` splits by track. The statements below about leaving the track unspecified describe the original scope.
+
 ## Problem Statement
 
 The Run record shows current progress and Evidence but does not preserve Stage timings or Check verdicts that Rework and Run sync clear. A user cannot compare time per Stage, count Reworks alongside that time, or tell how often the first Check finishes clean. This is [GitHub issue #245](https://github.com/TDSchreur/tds-factory/issues/245), in milestone v0.5.0.

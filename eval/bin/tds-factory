@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const argv = process.argv.slice(2);
 const log = process.env.EVAL_ACTION_LOG;
 // A Run that waits on the user is a question to the user. Record which Stage asked, so scenarios can count the confirmations.
-if (log && argv[0] === 'run' && argv[1] === 'update' && /"status"\s*:\s*"waiting"/.test(argv[argv.indexOf('--data') + 1] ?? '')) {
+if (log && argv[0] === 'run' && argv[1] === 'update' && /^[a-z0-9][a-z0-9-]*$/.test(argv[argv.indexOf('--id') + 1] ?? '') && /"status"\s*:\s*"waiting"/.test(argv[argv.indexOf('--data') + 1] ?? '')) {
   try {
     const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim();
     const stage = JSON.parse(readFileSync(join(dirname(common), '.factory', 'runs', argv[argv.indexOf('--id') + 1], 'run.json'), 'utf8')).stage;

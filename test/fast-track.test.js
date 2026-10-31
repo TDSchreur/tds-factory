@@ -40,6 +40,8 @@ test('the track is chosen in Define only, by the named command, and a record wit
 test('a Fast track Run needs exactly one Ticket to build', () => {
   const cwd = repo(), id = start(cwd);
   ok(cwd, 'track', '--id', id, '--value', 'fast');
+  update(cwd, id, { spec_link: 'spec.md', tickets: [], tickets_total: 0 });
+  assert.match(run(cwd, 'transition', '--id', id, '--to', 'build').stderr, /Tickets/);
   update(cwd, id, { spec_link: 'spec.md', tickets: ['1', '2'], tickets_total: 2 });
   const r = run(cwd, 'transition', '--id', id, '--to', 'build');
   assert.notEqual(r.status, 0);
