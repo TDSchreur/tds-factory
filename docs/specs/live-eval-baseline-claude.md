@@ -21,7 +21,7 @@ Run the seven scenarios against live Claude, one at a time on the cheapest model
 ## Implementation Decisions
 
 - Cost: Haiku 5.5 through `EVAL_AGENT_CMD`, a 5-minute `EVAL_TIMEOUT_MS`, one scenario at a time, stop at the first failure. No rerun on a larger model in this issue; improving the baseline model is for 0.6.0.
-- Ticket 1 holds the live runs, grader and Skill fixes, the results and the capabilities cells. Ticket 2 holds the workflow. The workflow takes `workflow_dispatch` inputs `scenarios` and `timeout_minutes`, reads the Claude credential from a repository secret, and has no other trigger.
+- Ticket 1 holds the live runs, grader and Skill fixes, the results and the capabilities cells. Ticket 2 holds the workflow. The workflow takes `workflow_dispatch` inputs `scenarios`, `model` and `timeout_minutes`, reads the Claude credential from a repository secret, and has no other trigger.
 - Out of scope: Codex and Copilot (0.5.x), a full-suite rerun on a larger model, and changes outside the eval, the `factory` Skill's Invoked Skills section and the two docs.
 
 ## Testing Decisions

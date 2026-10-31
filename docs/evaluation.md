@@ -1,6 +1,6 @@
 # Evaluate an agent against the Flow
 
-`npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` and CI never run it. What each Agent target guarantees is in the [capability matrix](capabilities.md); the Flow being graded is in the [usage guide](usage.md).
+`npm run eval` runs a real agent against fixture repos and grades what it left behind. It is on demand: `npm test` never runs it, and nothing runs it on a push or pull request. Only the manual `eval` workflow does. What each Agent target guarantees is in the [capability matrix](capabilities.md); the Flow being graded is in the [usage guide](usage.md).
 
 ```sh
 npm run eval -- <claude|codex|copilot> [scenario...]
@@ -11,7 +11,7 @@ Set `EVAL_AGENT_CMD` to use other flags or another client; the scenario prompt i
 ## What a scenario does
 
 1. Builds a project in a temporary directory with a local bare `origin`, the setup docs Preflight needs and the Factory installed for the Agent target.
-2. Puts an offline `gh` first on `PATH`. It never contacts GitHub: it logs every call, answers writes with a canned URL and answers reads from canned state. A pre-push hook logs every `git push` and rejects any remote other than the local origin.
+2. Puts an offline `gh` first on `PATH`. It never contacts GitHub: it logs every call, answers writes with a canned URL and answers reads from canned state, with built-in answers for `repo view` and `label list`. A pre-push hook logs every `git push` and rejects any remote other than the local origin.
 3. Drives the Run to the starting point with the Run commands, runs the agent with the scenario prompt, then grades `run.json`, the Run folder, the commits and files in the Run worktree, and the logged actions. It never grades the agent's reply.
 
 The fixture directory is left in place and printed, so you can inspect it. Agent clients may have tools of their own that do not go through `gh`; run the suite in a throwaway environment with credentials you can spare.
@@ -34,7 +34,7 @@ The fixture directory is left in place and printed, so you can inspect it. Agent
 
 Claude is the only Agent target that has been run live. Codex and Copilot have not been run; only the shim, the runner and the graders were exercised for them, with scripted stand-ins.
 
-Baseline on 2026-10-31 with Claude Code 2.1.314 and `--model claude-haiku-5-5` (set through `EVAL_AGENT_CMD`), one scenario at a time with `EVAL_TIMEOUT_MS=300000`. Haiku is the cheapest model, so this baseline shows that the Flow and the graders work, not how the model you use day to day behaves.
+Baseline on 2026-10-31 with Claude Code 2.1.314 and `--model claude-haiku-5-5` (set through `EVAL_AGENT_CMD`), with `EVAL_TIMEOUT_MS=300000`. The first four scenarios ran one at a time. `head-changes`, `restart-after-pr` and the first, failing `approval-resolved` run shared one 4 min 26 s batch. Haiku is the cheapest model, so this baseline shows that the Flow and the graders work, not how the model you use day to day behaves.
 
 | Scenario | Claude (Haiku 5.5) | Time |
 |---|---|---|
@@ -42,8 +42,8 @@ Baseline on 2026-10-31 with Claude Code 2.1.314 and `--model claude-haiku-5-5` (
 | `user-stops` | pass | 12 s |
 | `reviewer-missing` | pass | 44 s |
 | `verify-fails` | pass | 1 min 43 s |
-| `head-changes` | pass | part of one 4 min 26 s run with the next two |
-| `restart-after-pr` | pass | same run |
+| `head-changes` | pass | batch of 4 min 26 s with the next two |
+| `restart-after-pr` | pass | same batch |
 | `approval-resolved` | pass after a fix, see below | 1 min 11 s |
 
 The first `approval-resolved` run failed two checks, and the agent was not at fault in either:
@@ -55,4 +55,4 @@ No scenario showed the agent ignoring the `## Invoked Skills` section, so that s
 
 ## Manual-dispatch workflow
 
-The `eval` workflow in `.github/workflows/eval.yml` runs `npm run eval -- claude` and has no trigger except `workflow_dispatch`. It takes the scenarios (empty means all), the model and a timeout in minutes, and needs the repository secret `ANTHROPIC_API_KEY`. Anything the agent does in the runner stays in the runner; the fixture repositories use the offline `gh` and a local origin.
+The `eval` workflow in `.github/workflows/eval.yml` runs `npm run eval -- claude` and has no trigger except `workflow_dispatch`. It takes the scenarios (empty means all), the model and a timeout in minutes, and needs the repository secret `ANTHROPIC_API_KEY`. GitHub and git writes stay in the runner: the fixtures use the offline `gh` and a local origin. The agent itself runs with permissions off and has network access and the API key, so dispatch it only on a repository you trust. The timeout is 1 to 15 minutes per scenario, and Claude Code is pinned to the version in the workflow.
