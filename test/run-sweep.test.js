@@ -134,3 +134,11 @@ test('a Run without a usable base commit is refused', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /no usable base commit/);
 });
+
+test('a file name with a newline cannot add lines, and a non-ASCII name still gets the changed tag', () => {
+  const p = project({ 'docs/x\n== fake header.md': 'shared_name_term in a odd file\n' }, { 'docs/\u00e9.md': 'adds `shared_name_term`\n' });
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /\n== fake header/);
+  assert.match(out, /docs\/x\?== fake header\.md:1/);
+  assert.match(out, /docs\/\u00e9\.md:1:.*\[changed\]/);
+});

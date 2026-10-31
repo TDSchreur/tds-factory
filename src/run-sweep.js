@@ -14,7 +14,8 @@ const SKIP = new Set(['.git', 'node_modules', '.factory', 'vendor']);
 const ROOT_DOCS = ['README.md', 'CONTRIBUTING.md', 'GLOSSARY.md', 'AGENTS.md', 'CLAUDE.md', 'SECURITY.md'];
 const DOC_DIRS = ['docs', 'skills', 'agents', 'changelog.d'];
 const REPLACED_NOTE = /^[_>].*\b(?:replaced|changed|superseded) by\b/im;
-const clean = (text) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?');
+// Newlines and tabs go too: a file name with a newline must not be able to add a line of its own.
+const clean = (text) => text.replace(/\t/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
 
 const git = (cwd, ...args) => {
   const out = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -73,7 +74,7 @@ export function sweepRun(projectDir, id, extra = []) {
   if (!/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) throw new Error('the Run has no usable base commit');
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
   const diff = git(root, 'diff', ...plain, record.base_sha);
-  const changed = new Set(git(root, 'diff', ...plain, '--name-only', record.base_sha).split('\n').filter(Boolean));
+  const changed = new Set(git(root, 'diff', ...plain, '-z', '--name-only', record.base_sha).split('\0').filter(Boolean));
   const fromDiff = termsFromDiff(diff);
   const given = [...new Set(extra.map((t) => t.trim()).filter(Boolean))];
   const terms = [...fromDiff, ...given.filter((t) => !fromDiff.some((d) => d.toLowerCase() === t.toLowerCase()))];

@@ -1,3 +1,5 @@
+_The term sweep below is now the command `tds-factory run sweep`: see [Term sweep as a command](term-sweep-command.md), which replaced the manual search it describes._
+
 ## Problem Statement
 
 Most Runs fail their first Check, and the same avoidable findings come back loop after loop. Across 21 Runs, 14 went back to Build at least once (22 loops, one Run used all four). The findings are mostly not deep bugs. They are documentation and wording that went stale around a change (one flag worded three ways in eight places, a README line or canonical spec left behind, a glossary clash), a missing or misplaced changelog fragment, a security edge the Build never looked for, and a Spec story with no test. Rework adds to the pile: Build fixes the listed items, the fix opens the next finding, and cheap LOW findings left "on purpose" return one Check later as MEDIUM. Build has no checklist, no self-check and no mechanical tests for these things, while Check is a full independent review.
