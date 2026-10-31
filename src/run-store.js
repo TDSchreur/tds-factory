@@ -31,7 +31,7 @@ export function openRunStore(callerDir) {
     complete: (id, data) => completeRun(projectDir, id, data),
     accept: (id, data) => acceptRun(projectDir, id, data),
     verify: (id, options) => verifyRun(projectDir, id, options),
-    verdict: (id, axis, value) => verdictRun(projectDir, id, axis, value),
+    verdict: (id, axis, value, options) => verdictRun(projectDir, id, axis, value, options),
     sweep: (id, terms) => sweepRun(projectDir, id, terms),
     config: (id) => readRun(projectDir, id).record.project_config ?? null,
     reviews: (id) => reviewPlan(readRun(projectDir, id).record),

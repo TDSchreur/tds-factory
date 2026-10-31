@@ -342,3 +342,14 @@ test('the Exit checklist sweeps terms with the sweep command and the Standards r
   assert.match(check, /the output of `tds-factory run sweep --id <id>` for the Standards reviewer/);
   assert.match(flow, /`tds-factory run sweep --id <id> \[--term TEXT\]\.\.\.` lists, read-only/);
 });
+
+test('after a Rework the reviewers get the previous findings, and only Security and Infrastructure can be carried over', () => {
+  assert.match(check, /the review of an earlier head no longer counts, except for a Carried-over verdict/);
+  assert.match(check, /give each reviewer the previous findings and the rework diff/);
+  assert.match(check, /For Security and Infrastructure first run `tds-factory run verdict --id <id> --axis <axis> --value <the earlier value> --carried`/);
+  assert.match(check, /only after a text-only Rework, and it alone decides: documents only/);
+  assert.match(check, /never code, tests, Skills, agents, instruction files, hidden files or links/);
+  assert.match(check, /its refusal names the files that changed/);
+  assert.match(check, /Standards and Spec are always reviewed again/);
+  assert.match(flow, /`--carried` keeps an earlier Security or Infrastructure verdict after a text-only Rework/);
+});

@@ -34,7 +34,7 @@ const USAGE = `Usage:
   tds-factory run reviews --id ID
   tds-factory run materialize-review --id ID --axis ID
   tds-factory run review --id ID --axis ID --data JSON
-  tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped
+  tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped [--carried]
   tds-factory run clean --id ID | --all     (after the PR is merged, from the main checkout: removes the Run worktree and branch)
 
 install defaults to the user-global directory; --project installs into the current directory.
@@ -59,6 +59,7 @@ const { values, positionals } = parseArgs({
     apply: { type: 'boolean', default: false },
     all: { type: 'boolean', default: false },
     fast: { type: 'boolean', default: false },
+    carried: { type: 'boolean', default: false },
     term: { type: 'string', multiple: true },
     port: { type: 'string' },
     version: { type: 'boolean', default: false },
@@ -133,7 +134,7 @@ try {
     else if (op === 'review') store.review(values.id, values.axis, data);
     else if (op === 'config') console.log(JSON.stringify(store.config(values.id), null, 2));
     else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
-    else if (op === 'verdict') store.verdict(values.id, values.axis, values.value);
+    else if (op === 'verdict') store.verdict(values.id, values.axis, values.value, { carried: values.carried });
     else throw new Error('expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, sweep, verdict, inspect, repair or clean');
   }
   else if (command === 'update') await update({ installed: version, force: !values['no-force'] });

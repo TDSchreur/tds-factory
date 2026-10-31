@@ -88,8 +88,12 @@ _Avoid_: Quick test
 The recorded outcome of running the Verify command in a Run worktree: which code revision it ran on, whether it passed, and when. It only counts as evidence while the Run worktree is still at that revision and had no uncommitted changes.
 
 **Evidence**:
-The Verify result and the Check axis verdicts of a Run, each tied to the code revision it was produced for. Evidence goes stale when new commits land after it was recorded.
+The Verify result and the Check axis verdicts of a Run, each tied to the code revision it was produced for. Evidence goes stale when new commits land after it was recorded, except for a Carried-over verdict.
 _Avoid_: Proof
+
+**Carried-over verdict**:
+A Security or Infrastructure verdict that a Rework keeps for the new code revision instead of a new review, recorded with `tds-factory run verdict --carried`. The command allows it only after a text-only Rework: the axis had the same verdict (`pass`, or `skipped` for Infrastructure) on an earlier revision that is still an ancestor of the current one, the worktree is clean, and every change since is a plain file on an allowlist of documents (Markdown in `docs/`, changelog fragments, README, GLOSSARY, CONTRIBUTING, SECURITY). A rename counts as both of its paths, and anything an agent could load as instructions never qualifies: hidden files and folders, folders named agents, skills, commands, prompts or instructions at any depth, and instruction file names (`AGENTS.md`, `CLAUDE.md`, `SKILL.md` and the like). It records the revision the verdict was carried from. Standards and Spec are always reviewed again.
+_Avoid_: Skipped review, Reused verdict
 
 **Accepted Check**:
 A Check that is not clean but that the user has explicitly allowed to continue to Finish, together with the open findings and the decision. It applies to one code revision only.
