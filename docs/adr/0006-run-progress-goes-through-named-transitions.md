@@ -1,3 +1,5 @@
 # Run progress goes through named transitions, not free-form updates
 
 `run update` used to accept any valid field, so a Run could enter Build without a Spec, enter Finish with a failed Check axis, or be reopened after `done`. Moving between Stages, recording verdicts, accepting a non-clean Check, Rework and completion are now separate Run store operations that check their prerequisites against Evidence tied to the current code revision; `run update` keeps only activity, links and counters. We chose this over making `update` itself rigid because the Dashboard and older records must stay readable and agents still need a cheap way to say what they are doing. The cost is that the Factory Skill and every installed copy must call the new commands, so old installed copies break until `tds-factory install` is run again.
+
+[ADR 0013](0013-run-metrics-preserve-observed-history.md) extends these operations with observed Stage boundaries, historical Check verdicts and first Check outcomes, while keeping that history separate from current Evidence.

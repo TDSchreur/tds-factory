@@ -98,6 +98,15 @@ _Avoid_: Job, Pipeline
 The status file a Run keeps up to date as it moves through the Stages, read by the Dashboard.
 _Avoid_: Log, State file
 
+**Run metrics**:
+Observed Stage time, Reworks and Check history for a Run. Missing observations are unknown rather than zero.
+
+**Stage visit**:
+One continuous stay in a Stage, including time waiting for a human. Rework starts another Build visit and can lead to another Check visit.
+
+**First-pass clean rate**:
+The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.
+
 **Run store**:
 The single owner of every Run record and Run folder; the CLI and the Dashboard go through it.
 _Avoid_: Run database
