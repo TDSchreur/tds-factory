@@ -16,7 +16,7 @@ Check sends a Run back to Build only for a **Blocking finding**. Everything else
 4. As a user, I want the same stale statement in an older Spec that is not canonical to be Left open, so that history does not cost loops.
 5. As a user, I want behavior the Spec did not ask for to be Left open unless it contradicts a requirement or an "Out of scope" statement, so that harmless extras do not block.
 6. As a reviewer, I want to report each finding with a severity (CRITICAL, HIGH, MEDIUM, LOW, INFO) and the standard, requirement or "judgement" it rests on, so that the coordinator can apply the rule.
-7. As a reviewer, I want every smell from the smell baseline to be at most LOW, so that judgement never blocks.
+7. As a reviewer, I want every smell from the smell baseline and every style or design judgement to be at most LOW, while a CRITICAL, HIGH or MEDIUM security, infrastructure or Project review finding blocks whatever its basis, so that judgement never blocks and a real vulnerability is never capped.
 8. As the coordinator, I want to apply the reviewer's severity and not raise a LOW to a Blocking finding, and to write down any disagreement in `check-N.md`, so that the outcome does not depend on me.
 9. As a user, I want an axis verdict to be `fail` only when it has a Blocking finding, so that a Check with only Left open items is clean.
 10. As a user, I want the Left open list in `check-N.md` (axis, severity and basis per item), in `finish.md` and in a "Left open" section of the pull request description, so that nothing is lost and nothing needs my approval.

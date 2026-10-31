@@ -15,7 +15,7 @@ test('the check agents of all three targets ask for a severity and the basis of 
       const text = readFileSync(join(AGENTS_DIR, target, file), 'utf8');
       assert.match(text, /severity \(CRITICAL, HIGH, MEDIUM, LOW or INFO\)/, `${target}/${file}`);
       assert.match(text, /the standard or Spec requirement it breaks, or `judgement`/, `${target}/${file}`);
-      assert.match(text, /judgement item is never above LOW/, `${target}/${file}`);
+      assert.match(text, /code smell or style judgement is never above LOW, and a security or infrastructure finding keeps its severity whatever its basis/, `${target}/${file}`);
     }
   }
 });
