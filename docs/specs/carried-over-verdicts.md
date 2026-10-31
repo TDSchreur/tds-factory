@@ -9,7 +9,7 @@
 3. As the coordinator, I want `tds-factory run verdict --id ID --axis security|infrastructure --value pass|skipped --carried` to record the verdict for the current head only when it is allowed, so that I cannot carry something I should not.
 4. As a user, I want the command to refuse unless the axis passed before with the same value, so that a carried verdict never invents a pass.
 5. As a user, I want it to refuse after `run sync` rebased the branch (the earlier head is no longer an ancestor), so that changed code underneath is reviewed.
-6. As a user, I want it to refuse when the worktree is dirty or any file changed since the earlier head is not Markdown outside `skills/` and `agents/`, so that code, tests, Skills and agents are always reviewed.
+6. As a user, I want it to refuse when the worktree is dirty or any file changed since the earlier head is outside a fixed allowlist, so that code, tests, Skills, agents, instruction files, renames, links and executables are always reviewed.
 7. As a user, I want the carried verdict to record the head it came from in the Run record and the verdict history, so that it can be audited.
 8. As a user, I want Finish and the Dashboard to see a carried verdict like any verdict for the current head, so that Evidence rules are unchanged.
 9. As a reviewer of an axis that is reviewed again, I want the previous findings and the rework diff in my assignment, so that I can confirm each is fixed and review what changed.
@@ -19,7 +19,7 @@
 
 - `run verdict` gets `--carried`, valid for the axes `security` and `infrastructure`, values `pass` (both) and `skipped` (infrastructure). The value must equal the earlier verdict's value.
 - The earlier verdict is the latest event of that axis in the Run's verdict history (which `run rework` does not clear), with value `pass` or `skipped`, recorded at a head different from the current one.
-- The command refuses unless that head is an ancestor of the current head (`git merge-base --is-ancestor`), the worktree is clean, and every path in `git diff --name-only -z <earlier head> HEAD` ends in `.md` and does not start with `skills/` or `agents/`. A refusal names the reason and the offending files.
+- The command refuses unless that head is an ancestor of the current head (`git merge-base --is-ancestor`), the worktree is clean, and every change in `git diff --raw -z --no-renames <earlier head> HEAD` is on an allowlisted path (Markdown in `docs/` outside `docs/agents/`, `changelog.d/*.md`, or `README.md`, `GLOSSARY.md`, `CONTRIBUTING.md`, `SECURITY.md`) with plain-file modes only, so both paths of a rename are checked and links, executables and submodules are refused; it also refuses when the axis already failed at the current head or the earlier head is not a hex commit id. A refusal names the reason and the offending files.
 - On success the axis verdict and `reviewed[axis]` are recorded for the current head and attempt as for any verdict, with `carried_from` (the earlier head) added to `reviewed[axis]` and to the verdict history event.
 - The Check section of the Skill: after a Rework, give each reviewer the previous findings and the rework diff; for Security and Infrastructure try `--carried` first and review the axis only if the command refuses; Standards and Spec are always reviewed. The Left open and Blocking rules are unchanged.
 - ADR 0019 records the decision; the glossary gets **Carried-over verdict**; `docs/usage.md` describes it; a changelog fragment is added.

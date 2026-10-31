@@ -348,7 +348,7 @@ test('after a Rework the reviewers get the previous findings, and only Security 
   assert.match(check, /give each reviewer the previous findings and the rework diff/);
   assert.match(check, /For Security and Infrastructure first run `tds-factory run verdict --id <id> --axis <axis> --value <the earlier value> --carried`/);
   assert.match(check, /only after a text-only Rework/);
-  assert.match(check, /Markdown outside `skills\/` and `agents\/`/);
+  assert.match(check, /a plain Markdown file in `docs\/` outside `docs\/agents\/`, a changelog fragment, or README, GLOSSARY, CONTRIBUTING or SECURITY/);
   assert.match(check, /Standards and Spec are always reviewed again/);
   assert.match(flow, /`--carried` keeps an earlier Security or Infrastructure verdict after a text-only Rework/);
 });

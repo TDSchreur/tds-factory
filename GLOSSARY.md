@@ -92,7 +92,7 @@ The Verify result and the Check axis verdicts of a Run, each tied to the code re
 _Avoid_: Proof
 
 **Carried-over verdict**:
-A Security or Infrastructure verdict that a Rework keeps for the new code revision instead of a new review, recorded with `tds-factory run verdict --carried`. The command allows it only when the axis passed on an earlier revision that is still an ancestor of the current one and every file changed since is Markdown outside `skills/` and `agents/`; it records the revision the verdict was carried from. Standards and Spec are always reviewed again.
+A Security or Infrastructure verdict that a Rework keeps for the new code revision instead of a new review, recorded with `tds-factory run verdict --carried`. The command allows it only when the axis had the same verdict (`pass`, or `skipped` for Infrastructure) on an earlier revision that is still an ancestor of the current one, the worktree is clean, and every change since is a plain Markdown file on an allowlist (documents in `docs/` outside `docs/agents/`, changelog fragments, README, GLOSSARY, CONTRIBUTING, SECURITY); it records the revision the verdict was carried from. Standards and Spec are always reviewed again.
 _Avoid_: Skipped review, Reused verdict
 
 **Accepted Check**:

@@ -96,19 +96,30 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   return result;
 }
 // A Rework keeps a Security or Infrastructure verdict only for a text-only change: see ADR 0019.
+// The allowed files are an allowlist: Markdown documents that carry no instructions for agents or code.
 const carriable = ['security', 'infrastructure'];
+const textOnly = (name) => /^docs\/(?!agents\/)[^\0\n]+\.md$/.test(name) || /^changelog\.d\/[^/\0\n]+\.md$/.test(name) || /^(?:README|GLOSSARY|CONTRIBUTING|SECURITY)\.md$/.test(name);
 function carriedFrom(record, axis, value, head, worktree) {
   if (!carriable.includes(axis)) throw new Error('only security and infrastructure verdicts can be carried over; review the other axes again');
   if (value === 'fail') throw new Error('a fail is never carried over');
+  const latest = [...(record.metrics?.verdicts ?? [])].reverse().find((event) => event.axis === axis);
+  if (latest?.head === head && latest.value === 'fail') throw new Error(`${axis} already failed at this head; review the axis`);
   const earlier = [...(record.metrics?.verdicts ?? [])].reverse().find((event) => event.axis === axis && event.head && event.head !== head);
   if (!earlier) throw new Error(`there is no earlier ${axis} verdict to carry over; review the axis`);
+  if (!/^[0-9a-f]{40,64}$/.test(earlier.head)) throw new Error(`the earlier ${axis} verdict has no usable head; review the axis`);
   if (earlier.value !== value) throw new Error(`the earlier ${axis} verdict was ${earlier.value}; a carried verdict needs the same value`);
   const git = (...args) => spawnSync('git', args, { cwd: worktree, encoding: 'utf8' });
   if (git('merge-base', '--is-ancestor', earlier.head, head).status !== 0) throw new Error(`the earlier ${axis} head is not an ancestor of the current head (the branch was rebased or rewritten); review the axis`);
-  const diff = git('diff', '-z', '--name-only', '--no-ext-diff', earlier.head, head);
+  // --no-renames lists both paths of a rename, and the raw form shows modes, so links, executables and submodules are caught.
+  const diff = git('diff', '--raw', '-z', '--no-renames', '--no-ext-diff', earlier.head, head);
   if (diff.status !== 0) throw new Error(`cannot read the changes since the earlier ${axis} head: ${diff.stderr.trim()}`);
-  const files = diff.stdout.split('\0').filter(Boolean).filter((name) => !name.endsWith('.md') || name.startsWith('skills/') || name.startsWith('agents/'));
-  if (files.length) throw new Error(`a carried verdict needs a text-only Rework (Markdown outside skills/ and agents/); these files changed since the earlier ${axis} verdict: ${files.slice(0, 10).join(', ')}${files.length > 10 ? ', ...' : ''}`);
+  const parts = diff.stdout.split('\0').filter(Boolean);
+  const refused = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const [oldMode, newMode] = parts[i].slice(1).split(' ');
+    if (!textOnly(parts[i + 1]) || ![oldMode, newMode].every((mode) => ['000000', '100644'].includes(mode))) refused.push(parts[i + 1]);
+  }
+  if (refused.length) throw new Error(`a carried verdict needs a text-only Rework (Markdown in docs/ outside docs/agents/, changelog fragments, README, GLOSSARY, CONTRIBUTING or SECURITY, plain files); these changed since the earlier ${axis} verdict: ${refused.slice(0, 10).join(', ')}${refused.length > 10 ? ', ...' : ''}`);
   return earlier.head;
 }
 export function verdictRun(projectDir, id, axis, value, { carried = false } = {}) {
