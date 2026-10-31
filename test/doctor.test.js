@@ -87,6 +87,16 @@ test('doctor preserves spaces at the end of the worktree path', () => {
   assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
 });
 
+test('doctor preserves a trailing carriage return in a POSIX worktree path', { skip: process.platform === 'win32' }, () => {
+  const main = repo();
+  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-cr-')), 'project\r');
+  git(main, 'worktree', 'add', '-b', 'doctor-cr', linked);
+  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+  assert.equal(check(doctor(linked, '--agent', 'codex').report, 'tracker').status, 'pass');
+});
+
 test('doctor tells a user outside Git why it cannot pass', () => {
   const dir = mkdtempSync(join(tmpdir(), 'doctor-outside-'));
   const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
