@@ -514,6 +514,7 @@ test('the Exit checklist asks for the whole Sweep output and a Sweep paragraph, 
     checklist,
     /Sweep paragraph.*files you changed because of the Sweep and the hits you judged unaffected/s,
   );
+  assert.match(checklist, /the command line help and the Dashboard help text \(hits there are tagged `code`\)/);
   assert.match(check, /the Sweep paragraph of `build\.md`/);
   assert.match(flow, /`--files` prints only the closing list of documents still to read/);
 });

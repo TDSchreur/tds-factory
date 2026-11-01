@@ -335,3 +335,36 @@ test('the closing list is empty-safe: a Run with nothing to read says so', () =>
   const out = sweep(p, '--files').stdout;
   assert.match(out, /no other document holds a changed term/i);
 });
+
+test('the sweep finds a changed term in the command line help and the Dashboard help, tagged as code, and in no other source file', () => {
+  const p = project(
+    {
+      'bin/tds-factory.js': 'const USAGE = `\n  tds-factory run thing --old_flag\n`;\n',
+      'dashboard/help.js': "export const help = [{ term: 'x', text: 'use old_flag' }];\n",
+      'src/other.js': "throw new Error('old_flag is gone');\n",
+      'docs/a.md': 'Use `old_flag`.\n',
+    },
+    { 'docs/a.md': 'Use `new_flag`.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /bin\/tds-factory\.js:2: .*old_flag.*\[code\]/);
+  assert.match(out, /dashboard\/help\.js:1: .*old_flag.*\[code\]/);
+  assert.doesNotMatch(out, /src\/other\.js/);
+  const list = toRead(out).join('\n');
+  assert.match(list, /bin\/tds-factory\.js: 1 hit\(s\)/);
+  assert.match(list, /dashboard\/help\.js: 1 hit\(s\)/);
+});
+
+test('an oversized or linked code file is skipped, and code lines never make a list hit', () => {
+  const p = project(
+    {
+      'bin/tds-factory.js': 'Checks: `cli`, `git`, `tracker`.\n',
+      'dashboard/help.js': `${'x'.repeat(1 << 20)} old_flag\n`,
+      'docs/a.md': 'Use `old_flag`.\n',
+    },
+    { 'docs/a.md': 'Use `new_flag`.\n', 'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /dashboard\/help\.js/);
+  assert.doesNotMatch(out.split('== lists that miss')[1] ?? '', /bin\/tds-factory\.js/);
+});
