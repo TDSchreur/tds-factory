@@ -173,3 +173,15 @@ test('a loop the user granted raises the shared limit for Follow-up too', () => 
   const again = run(f.cwd, 'follow-up', '--id', f.id);
   assert.match(again.stdout, /limit of 5/);
 });
+
+test('follow-up refuses an Azure DevOps PR and changes nothing, without calling gh or az', () => {
+  const f = fixture();
+  const record = f.read();
+  record.pr = 'https://dev.azure.com/o/p/_git/r/pullrequest/7';
+  writeFileSync(f.file, JSON.stringify(record));
+  const before = readFileSync(f.file, 'utf8');
+  const result = run(f.cwd, 'follow-up', '--id', f.id);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Follow-up does not support Azure DevOps yet/);
+  assert.equal(readFileSync(f.file, 'utf8'), before);
+});

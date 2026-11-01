@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { providerFor, remoteRepo } from './pr-provider.js';
+import { can, providerFor, remoteRepo } from './pr-provider.js';
 
 const exec = promisify(execFile);
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
@@ -21,7 +21,7 @@ const PR_CACHE_MS = 60_000;
 // PR status (ADR 0020): an open PR is looked up again after a minute, a merged or closed one after ten, a failed lookup after half a minute.
 // A refresh asked for by the user may not repeat a lookup more often than every few seconds.
 const PR_STATUS_MS = 60_000, PR_STATUS_FINAL_MS = 600_000, PR_STATUS_FAIL_MS = 30_000, PR_STATUS_REFRESH_MS = 5_000, PR_STATUS_MAX = 500;
-const STATUS_REASONS = ['gh-missing', 'not-signed-in', 'rate-limited', 'error'];
+const STATUS_REASONS = ['gh-missing', 'not-signed-in', 'rate-limited', 'az-missing', 'az-extension-missing', 'az-not-signed-in', 'error'];
 const ghPrState = (url) => providerFor(url).stateAsync(url);
 const ghPrMerge = (url, head) => providerFor(url).merge(url, head);
 const ghPrDetails = (url) => providerFor(url).viewAsync(url);
@@ -114,7 +114,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
   const hasStatus = (v) => !v.unreadable && v.status !== 'abandoned' && ['finish', 'follow-up', 'done'].includes(v.column) && !!providerFor(v.pr);
   const view = async (entry) => {
     const v = interpretRun(entry);
-    return { ...v, prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '', prStatus: hasStatus(v) ? statusOf(v.pr) : null };
+    return { ...v, prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '', prStatus: hasStatus(v) ? statusOf(v.pr) : null, prHost: providerFor(v.pr)?.name ?? '', prCanMerge: can(v.pr, 'merge') };
   };
 
   const server = http.createServer(async (req, res) => {
@@ -150,6 +150,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
         if (v.status !== 'done' || !providerFor(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
+        if (!can(v.pr, 'merge')) return send(409, 'text/plain', `${providerFor(v.pr).title} cannot merge from the Dashboard`);
         let eligibility;
         try { eligibility = store.mergeEligibility(id); } catch (err) { return send(409, 'text/plain', `cannot check Run Evidence: ${err.message}`); }
         if (eligibility.problems.length) return send(409, 'text/plain', `Run needs a clean or Accepted Check: ${eligibility.problems.join('; ')}`);
@@ -212,7 +213,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         const entry = (await store.list()).find((e) => e.id === id);
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
-        if (v.status !== 'done' || !providerFor(v.pr)) return send(409, 'text/plain', 'cannot check this Run');
+        if (v.status !== 'done' || !can(v.pr, 'checksSummary')) return send(409, 'text/plain', 'cannot check this Run');
         let status;
         try { status = await ghChecks(v.pr); } catch { status = 'GitHub checks: unavailable'; }
         return send(200, 'text/plain', status);

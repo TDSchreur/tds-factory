@@ -295,6 +295,7 @@
   .badge.closed { color: var(--colorPaletteRedForeground1); border-color: var(--colorPaletteRedBorder2); }
   .actions { display: flex; flex-wrap: wrap; gap: var(--spacingHorizontalS); margin-top: var(--spacingVerticalM); }
   .actions button { padding: var(--spacingVerticalXS) var(--spacingHorizontalL); }
+  .merge-note { align-self: center; font-size: var(--fontSizeBase200); color: var(--colorNeutralForeground2); }
   .actions .primary { background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); border-color: transparent; }
   .actions .primary:hover { background: var(--colorBrandBackgroundHover); }
   .actions .primary:active { background: var(--colorBrandBackgroundPressed); }

@@ -1,0 +1,56 @@
+[
+  {
+    "artifactId": "vstfs:///CodeReview/CodeReviewId/00000000-0000-4000-8000-000000000001%2F526",
+    "completedDate": null,
+    "configuration": {
+      "createdBy": {
+        "descriptor": "aad.REDACTED",
+        "directoryAlias": null,
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_api/_common/identityImage?id=00000000-0000-4000-8000-000000000003",
+        "inactive": null,
+        "isAadIdentity": null,
+        "isContainer": null,
+        "isDeletedInOrigin": null,
+        "profileUrl": null,
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "createdDate": "2026-11-01T12:39:18.938450+00:00",
+      "id": 93,
+      "isBlocking": true,
+      "isDeleted": false,
+      "isEnabled": true,
+      "isEnterpriseManaged": false,
+      "revision": 1,
+      "settings": {
+        "allowDownvotes": false,
+        "blockLastPusherVote": false,
+        "creatorVoteCounts": false,
+        "minimumApproverCount": 1,
+        "requireVoteOnEachIteration": false,
+        "requireVoteOnLastIteration": false,
+        "resetOnSourcePush": false,
+        "resetRejectionsOnSourcePush": false,
+        "scope": [
+          {
+            "matchKind": "Exact",
+            "refName": "refs/heads/factory-fixture/t-block",
+            "repositoryId": "00000000-0000-4000-8000-000000000002"
+          }
+        ]
+      },
+      "type": {
+        "displayName": "Minimum number of reviewers",
+        "id": "00000000-0000-4000-8000-000000000009",
+        "url": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/policy/types/00000000-0000-4000-8000-000000000009"
+      },
+      "url": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/policy/configurations/93"
+    },
+    "context": null,
+    "evaluationId": "00000000-0000-4000-8000-000000000010",
+    "startedDate": "2026-11-01T12:39:20.865329+00:00",
+    "status": "queued"
+  }
+]

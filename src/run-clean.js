@@ -70,7 +70,7 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
   const inside = (dir) => { const rel = path.relative(dir, fs.realpathSync(callerDir)); return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel); };
   if (own && !own.missing && inside(own.dir)) return kept('run clean from the main checkout, not from inside the Run worktree');
   const pr = prState(record.pr);
-  if (!pr) return kept('cannot read the PR state from GitHub');
+  if (!pr) return kept('cannot read the PR state from its host');
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
   if (head && head !== pr.head) return kept('the branch has commits that are not in the merged PR');
   if (own && (!own.safe || own.branch !== id)) return kept('the Run worktree is not the one this store created');

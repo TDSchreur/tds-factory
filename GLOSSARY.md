@@ -161,7 +161,7 @@ One continuous stay in a Stage, including time waiting for a human. Rework start
 The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.
 
 **PR provider**:
-The module that handles a pull request link for a hosting service: it reads a PR's state, head and checks, merges it and finds a Run's PR, so no other module runs a hosting command. GitHub, through the `gh` command, is the only provider today. See ADR 0020.
+The module that handles a pull request link for a hosting service: it reads a PR's state, head and checks, merges it and finds a Run's PR, so no other module runs a hosting command. GitHub, through the `gh` command, does all of that. Azure DevOps, through the `az` command, only reads a PR's status, state and head; it cannot merge or follow up. See ADR 0020.
 _Avoid_: PR backend, Host adapter
 
 **PR status**:

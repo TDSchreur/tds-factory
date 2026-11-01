@@ -9,6 +9,7 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 | Node 20 or newer | `node --version` | Installs from nodejs.org, your package manager or nvm. |
 | git (2.38 or later) | `git --version` | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote. |
 | GitHub CLI, signed in | `gh auth status` | Tickets and pull requests go through `gh`. Sign in with `gh auth login`. |
+| Azure CLI with the `azure-devops` extension, signed in (only for Azure DevOps pull requests) | `az extension list` and `az account show` | The Dashboard reads the status of an Azure DevOps pull request with `az`. Run `az extension add --name azure-devops` and `az login`. Nothing else needs it. |
 | One coding agent | | GitHub Copilot (VS Code or the Copilot CLI), Claude Code or Codex. |
 
 ## 2. Install the Factory

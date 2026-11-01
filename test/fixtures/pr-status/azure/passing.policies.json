@@ -1,0 +1,48 @@
+[
+  {
+    "artifactId": "vstfs:///CodeReview/CodeReviewId/00000000-0000-4000-8000-000000000001%2F525",
+    "completedDate": null,
+    "configuration": {
+      "createdBy": {
+        "descriptor": "aad.REDACTED",
+        "directoryAlias": null,
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_api/_common/identityImage?id=00000000-0000-4000-8000-000000000003",
+        "inactive": null,
+        "isAadIdentity": null,
+        "isContainer": null,
+        "isDeletedInOrigin": null,
+        "profileUrl": null,
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "createdDate": "2026-11-01T12:39:18.070599+00:00",
+      "id": 92,
+      "isBlocking": true,
+      "isDeleted": false,
+      "isEnabled": true,
+      "isEnterpriseManaged": false,
+      "revision": 1,
+      "settings": {
+        "scope": [
+          {
+            "matchKind": "Exact",
+            "refName": "refs/heads/factory-fixture/t-pass",
+            "repositoryId": "00000000-0000-4000-8000-000000000002"
+          }
+        ]
+      },
+      "type": {
+        "displayName": "Comment requirements",
+        "id": "00000000-0000-4000-8000-000000000006",
+        "url": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/policy/types/00000000-0000-4000-8000-000000000006"
+      },
+      "url": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/policy/configurations/92"
+    },
+    "context": null,
+    "evaluationId": "00000000-0000-4000-8000-000000000007",
+    "startedDate": "2026-11-01T12:39:19.772454+00:00",
+    "status": "approved"
+  }
+]

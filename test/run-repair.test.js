@@ -194,3 +194,15 @@ test('repair never reconstructs records for registered symlinked worktrees', () 
     assert.ok(fsLstat(worktree).isSymbolicLink());
   }
 });
+
+test('repair leaves an Azure DevOps origin to the user: it names no PR lookup and calls neither gh nor az', () => {
+  const cwd = repo(), id = start(cwd);
+  git(cwd, 'remote', 'set-url', 'origin', 'https://dev.azure.com/example/project/_git/project');
+  const tools = mkdtempSync(join(tmpdir(), 'repair-az-'));
+  const calls = join(tools, 'calls');
+  for (const tool of ['gh', 'az']) { writeFileSync(join(tools, tool), `#!/bin/sh\nprintf '%s\\n' "${tool} $*" >> '${calls}'\nexit 1\n`); chmodSync(join(tools, tool), 0o755); }
+  const plan = spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id], { cwd, encoding: 'utf8', env: { ...process.env, PATH: `${tools}:${process.env.PATH}` } });
+  assert.equal(plan.status, 0, plan.stderr);
+  assert.match(plan.stdout, /not GitHub; reconcile any PR manually/);
+  assert.equal(existsSync(calls), false);
+});
