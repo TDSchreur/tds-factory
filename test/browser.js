@@ -131,7 +131,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     });
     await page.load();
     assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), { width, height }, 'browser CSS viewport matches requested dimensions');
-    await page.waitFor("return !!document.querySelector('#board section')");
+    await page.waitFor("return !!document.querySelector('#board section, .welcome')");
     return page;
   } catch (err) {
     await close().catch(() => {});

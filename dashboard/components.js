@@ -132,6 +132,17 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, o
   </li>`;
 }
 
+// Shown instead of the Stages when there is no Run at all.
+export function Welcome({ onHelp }) {
+  return html`<div class="board-wrap"><section class="welcome" aria-labelledby="welcome-title">
+    <h2 id="welcome-title">No Runs yet</h2>
+    <p>A Run is one piece of work, from idea to pull request. Start one in your agent session:</p>
+    <p><code>/factory <em>what you want built</em></code></p>
+    <p>The Run appears here and moves through the Stages while the agent works. Whenever it needs an answer from you, it turns red and says so.</p>
+    <p><button type="button" class="link" onClick=${onHelp}>How does this work?</button></p>
+  </section></div>`;
+}
+
 export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
   return html`<div class="board-wrap">
   <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
@@ -174,6 +185,7 @@ export function HelpPanel({ open, onClose }) {
   const closed = () => {
     const back = opener.current && opener.current !== document.body && opener.current.isConnected ? opener.current : document.getElementById('help');
     back?.focus();
+    requestAnimationFrame(() => { if (back?.isConnected && document.activeElement !== back) back.focus(); }); // the browser may still be lifting the inert state
     onClose();
   };
   return html`<dialog id="help-panel" ref=${dialog} aria-labelledby="help-title" onKeyDown=${trap} onClose=${closed}>

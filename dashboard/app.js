@@ -1,7 +1,7 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
 import { render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { Board, ConfirmDialog, Detail, Header, HelpPanel, html } from './components.js';
+import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from './components.js';
 import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName, sortWaitingFirst } from './model.js';
 
 const BRAND = 'TDS Factory';
@@ -196,7 +196,7 @@ function App() {
 
   return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout" class=${openRun ? 'open' : ''}>
-      <${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
+      ${loaded && !entries.length ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />`}
       <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
