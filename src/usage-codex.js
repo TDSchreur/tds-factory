@@ -1,7 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { MAX_FILE_BYTES, count, keepLargest } from './usage-parse.js';
+import { count, keepLargest, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Codex rollout files under ~/.codex/sessions/YYYY/MM/DD. Only the model, the token counts
 // and the timestamp of each response are kept. Codex counts cached input inside input, so the cached part is moved to
@@ -63,7 +63,7 @@ function parse(text) {
       meta.id = payload.id;
       meta.root = typeof payload.session_id === 'string' ? payload.session_id : payload.id;
       meta.subagent = Boolean(payload.source?.subagent) || (meta.root !== undefined && meta.root !== payload.id);
-    } else if (data.type === 'turn_context' && typeof payload.model === 'string') {
+    } else if (data.type === 'turn_context' && modelName(payload.model)) {
       lastModel = payload.model;
       if (typeof payload.turn_id === 'string') models.set(payload.turn_id, payload.model);
     } else if (data.type === 'token_usage_record') {
@@ -104,9 +104,9 @@ export function readCodexUsage({ home, runId, sessions, from, deadline }) {
   for (const file of rolloutFiles(root, from)) {
     if (Date.now() > deadline) return { problem: 'reading the Codex session logs took too long' };
     try {
-      const stat = fs.statSync(file);
-      if (stat.mtimeMs < from || stat.size > MAX_FILE_BYTES) continue;
-      const text = fs.readFileSync(file, 'utf8');
+      if (fs.lstatSync(file).mtimeMs < from) continue;
+      const text = readLog(fs, file);
+      if (text === null) continue;
       const { meta, uses } = parse(text);
       rollouts.push({
         meta,

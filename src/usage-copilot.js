@@ -1,7 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { MAX_FILE_BYTES, count, keepLargest } from './usage-parse.js';
+import { count, keepLargest, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Copilot session event files under ~/.copilot/session-state/<session>/events.jsonl. Only
 // the model, the token counts and the timestamp of each call are kept. Copilot counts cache reads and cache writes
@@ -23,7 +23,7 @@ function parse(text, seen, session) {
     }
     const usage = data?.type === 'session.usage_record' ? data.data?.usage : null;
     const ts = typeof data?.timestamp === 'string' ? Date.parse(data.timestamp) : NaN;
-    if (!usage || typeof usage !== 'object' || typeof usage.model !== 'string' || !Number.isFinite(ts)) continue;
+    if (!usage || typeof usage !== 'object' || !modelName(usage.model) || !Number.isFinite(ts)) continue;
     const input = count(usage.inputTokens);
     const output = count(usage.outputTokens);
     if (input === null && output === null) continue;
@@ -61,9 +61,9 @@ export function readCopilotUsage({ home, runId, sessions, from, deadline }) {
     if (Date.now() > deadline) return { problem: 'reading the Copilot session logs took too long' };
     const file = path.join(root, dir.name, 'events.jsonl');
     try {
-      const stat = fs.statSync(file);
-      if (!stat.isFile() || stat.mtimeMs < from || stat.size > MAX_FILE_BYTES) continue;
-      const text = fs.readFileSync(file, 'utf8');
+      if (fs.lstatSync(file).mtimeMs < from) continue;
+      const text = readLog(fs, file);
+      if (text === null) continue;
       if (!sessions.includes(dir.name) && !text.includes(runId)) continue;
       found.add(dir.name);
       parse(text, seen, dir.name);

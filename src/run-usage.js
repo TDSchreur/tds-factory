@@ -11,6 +11,8 @@ import { readCopilotUsage } from './usage-copilot.js';
 // entries is "no data".
 
 const BUDGET_MS = 5000;
+// Rows kept in a Run record: a log cannot grow the record without bound.
+const MAX_ROWS = 500;
 const FIELDS = ['input', 'cache_read', 'cache_write', 'output', 'reasoning'];
 const readers = /** @type {Record<string, Function>} */ ({
   claude: readClaudeUsage,
@@ -85,6 +87,7 @@ export function attribute(entries, record, doneEvents, now) {
       }
     }
     const key = [stage, entry.model, ticket, bucket].join('|');
+    if (!rows.has(key) && rows.size >= MAX_ROWS) continue;
     const row = rows.get(key) ?? {
       stage,
       model: entry.model,

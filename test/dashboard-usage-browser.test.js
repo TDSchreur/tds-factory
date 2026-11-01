@@ -86,6 +86,14 @@ test('Ticket tiles show fresh tokens and models, Run detail shows the table, and
     );
     assert.equal(open[0], true);
     assert.match(open[1], /sonnet-5-5.*input 100\.0k.*cache read 5\.0k.*cache write 40\.0k.*output 8\.0k/);
+    // On a narrow screen the usage line wraps under the Ticket and the page does not scroll sideways.
+    await page.resize(375, 700);
+    const narrow = await page.execute(`const li = document.querySelector('[data-id=used] .ticket');
+      return { under: li.querySelector('.ticket-usage').getBoundingClientRect().top >= li.querySelector('.ticket-head').getBoundingClientRect().bottom,
+        sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth }`);
+    assert.equal(narrow.under, true);
+    assert.equal(narrow.sideways, false);
+    await page.resize(1200, 700);
     // Run detail: the table has the CLI labels and columns.
     await page.execute("document.querySelector('[data-id=used]').click()");
     const table = await page.execute(`const t = document.querySelector('[aria-label="Run metrics"] table');

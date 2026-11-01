@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repo } from './git-repo.js';
 import { world, claudeLine, mention, claudeSession } from './usage-fixtures.js';
@@ -220,4 +220,90 @@ test('run stats --all adds the tokens per model of tracked Runs and names the Ru
   assert.match(out, /claude-sonnet-5-5 {2}fresh 41 {2}input 11 {2}cache read 110 {2}cache write 22 {2}output 8/);
   assert.match(out, /claude-opus-5-5 {2}fresh 14 {2}input 7 /);
   assert.match(out, new RegExp(`Left out of the token totals \\(not tracked\\): ${three}`));
+});
+
+// Session logs are written by other programs, so what they hold is untrusted text.
+test('hostile logs: a model name with control characters, a symlinked transcript, very deep nesting and a very long line', () => {
+  const w = world();
+  const cwd = repo();
+  const id = w.start(cwd);
+  const session = claudeSession(w.home, 'session-a');
+  const deep = '['.repeat(100000) + ']'.repeat(100000);
+  session.add(
+    mention(id),
+    claudeLine({ id: 'e1', model: 'evil\u001b[31m\u0007model', input: 5 }),
+    claudeLine({ id: 'ok', model: 'claude-sonnet-5-5', input: 7 }),
+    `{"usage":${deep}}`,
+    `{"message":{"usage":{"input_tokens":1}},"pad":"${'x'.repeat(5 * 1024 * 1024)}"}`,
+  );
+  // A symlink in the subagent folder that points at a file outside the logs must not be read.
+  const outside = join(w.home, 'outside.jsonl');
+  writeFileSync(outside, claudeLine({ id: 'out', input: 999999 }) + '\n');
+  symlinkSync(
+    outside,
+    join(w.home, '.claude', 'projects', '-home-user-project', 'session-a', 'subagents', 'link.jsonl'),
+  );
+  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  w.move(cwd, id, 'build');
+  const record = w.read(cwd, id);
+  assert.deepEqual(
+    rows(record).map((r) => [r.model, r.input]),
+    [['claude-sonnet-5-5', 7]],
+  );
+  const out = w.command(cwd, 'stats', '--id', id);
+  assert.doesNotMatch(out, /[\u0000-\u0008\u000b-\u001f\u007f]/);
+});
+
+test('the Run record holds a bounded number of Usage rows', () => {
+  const w = world();
+  const cwd = repo();
+  const id = w.start(cwd);
+  const session = claudeSession(w.home, 'session-a');
+  session.add(
+    mention(id),
+    ...Array.from({ length: 700 }, (_, i) => claudeLine({ id: `m${i}`, model: `model-${i}`, input: 1 })),
+  );
+  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  w.move(cwd, id, 'build');
+  assert.equal(rows(w.read(cwd, id)).length, 500);
+});
+
+test('reading stops at its time budget and reports it, instead of holding the transition', async () => {
+  const { readUsage } = await import('../src/run-usage.js');
+  const w = world();
+  const session = claudeSession(w.home, 'session-a');
+  session.add(mention('run-1'), claudeLine({ id: 'x1' }));
+  const record = {
+    agent: 'claude',
+    created: new Date(0).toISOString(),
+    metrics: { version: 1, visits: [{ stage: 'define', started: new Date(0).toISOString() }], verdicts: [] },
+  };
+  const late = readUsage(record, '/nowhere/run-1', { home: w.home, budgetMs: -1 });
+  assert.equal(late.status, 'not tracked');
+  assert.match(late.reason, /took too long/);
+  const ok = readUsage(record, '/nowhere/run-1', { home: w.home });
+  assert.equal(ok.status, 'tracked');
+});
+
+test('a field the log does not report shows n/a, and a visited Stage without entries shows no data', () => {
+  const w = world();
+  const cwd = repo();
+  const id = w.start(cwd);
+  const session = claudeSession(w.home, 'session-a');
+  const bare = JSON.stringify({
+    type: 'assistant',
+    timestamp: new Date().toISOString(),
+    message: { id: 'm1', model: 'claude-sonnet-5-5', usage: { input_tokens: 4, output_tokens: 6 } },
+  });
+  session.add(mention(id), bare);
+  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  w.move(cwd, id, 'build');
+  w.update(cwd, id, { tickets_done: 1 });
+  w.move(cwd, id, 'check');
+  const out = w.command(cwd, 'stats', '--id', id);
+  assert.match(
+    out,
+    /Define · claude-sonnet-5-5 {2}fresh 10 {2}input 4 {2}cache read n\/a {2}cache write n\/a {2}output 6/,
+  );
+  assert.match(out, /Build · no data/);
 });

@@ -1,7 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { MAX_FILE_BYTES, count, keepLargest } from './usage-parse.js';
+import { count, keepLargest, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Claude Code session transcripts under ~/.claude/projects. Only the model, the token
 // counts and the timestamp of each response are kept; no conversation text leaves this module.
@@ -24,8 +24,7 @@ function parse(text, subagent, seen) {
     const message = data?.message;
     const usage = message?.usage;
     const ts = typeof data?.timestamp === 'string' ? Date.parse(data.timestamp) : NaN;
-    if (!usage || typeof usage !== 'object' || typeof message.model !== 'string' || !Number.isFinite(ts)) continue;
-    if (message.model.startsWith('<')) continue;
+    if (!usage || typeof usage !== 'object' || !modelName(message.model) || !Number.isFinite(ts)) continue;
     const entry = {
       ts,
       model: message.model,
@@ -40,13 +39,6 @@ function parse(text, subagent, seen) {
     const key = `${subagent}|${message.id ?? data.uuid ?? ts}|${data.requestId ?? ''}`;
     keepLargest(seen, key, entry);
   }
-}
-
-/** @param {string} file */
-function readText(file) {
-  const stat = fs.statSync(file);
-  if (!stat.isFile() || stat.size > MAX_FILE_BYTES) return null;
-  return fs.readFileSync(file, 'utf8');
 }
 
 /**
@@ -77,8 +69,8 @@ export function readClaudeUsage({ home, runId, sessions, from, deadline }) {
       const sessionId = file.name.slice(0, -'.jsonl'.length);
       try {
         // A session that stopped before the Run began cannot hold its Usage.
-        if (fs.statSync(full).mtimeMs < from) continue;
-        const text = readText(full);
+        if (fs.lstatSync(full).mtimeMs < from) continue;
+        const text = readLog(fs, full);
         if (text === null) continue;
         if (!sessions.includes(sessionId) && !text.includes(runId)) continue;
         found.add(sessionId);
@@ -86,7 +78,7 @@ export function readClaudeUsage({ home, runId, sessions, from, deadline }) {
         const subDir = path.join(root, slug.name, sessionId, 'subagents');
         for (const sub of fs.existsSync(subDir) ? fs.readdirSync(subDir) : []) {
           if (!sub.endsWith('.jsonl')) continue;
-          const subText = readText(path.join(subDir, sub));
+          const subText = readLog(fs, path.join(subDir, sub));
           if (subText !== null) parse(subText, true, seen);
         }
       } catch {
