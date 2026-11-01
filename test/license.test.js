@@ -16,7 +16,10 @@ test('THIRD-PARTY-NOTICES.md names every upstream source and carries its MIT not
   const urls = [...read('.gitmodules').matchAll(/url = (\S+)/g)].map((m) => m[1]);
   assert.equal(urls.length, 3);
   for (const url of urls) assert.ok(notices.includes(url), url);
-  assert.equal(notices.split('Permission is hereby granted, free of charge').length - 1, urls.length, 'one notice text per upstream');
+  // Every source has its own notice text: the three skill repositories and the Fluent UI tokens the Dashboard stylesheet takes values from (ADR 0025).
+  assert.equal(notices.split('Permission is hereby granted, free of charge').length - 1, notices.split(/^Source: /m).length - 1, 'one notice text per upstream');
+  assert.equal(notices.split(/^Source: /m).length - 1, urls.length + 1, 'three skill repositories and the Fluent UI tokens');
+  assert.ok(notices.includes('https://www.npmjs.com/package/@fluentui/tokens'), 'Fluent UI tokens');
 });
 
 test('the packed tarball carries the license and the third-party notices', () => {
