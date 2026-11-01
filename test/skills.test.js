@@ -350,8 +350,8 @@ test('after a Rework the reviewers get the previous findings, and only Security 
 });
 
 test('the main file stays small and names every reference file where it is needed', () => {
-  assert.ok(Buffer.byteLength(main) < 21_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`);
-  assert.deepEqual(Object.keys(references), ['check.md', 'exit-checklist.md', 'follow-up.md', 'progress-commands.md', 'run-schema.md', 'stage-agents.md']);
+  assert.ok(Buffer.byteLength(main) < 18_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`);
+  assert.deepEqual(Object.keys(references), ['check.md', 'define.md', 'exit-checklist.md', 'fast-track.md', 'finish.md', 'follow-up.md', 'invoked-skills.md', 'progress-commands.md', 'run-schema.md', 'stage-agents.md']);
   for (const name of Object.keys(references)) assert.ok(main.includes(`references/${name}`), `${name} is named in SKILL.md`);
   // The contract every Run needs stays in the main file.
   for (const heading of ['Preflight', 'Run record', 'Waiting on the user', 'Invoked Skills', 'Tracks', 'Define', 'Build', 'Check', 'Finish']) assert.match(main, new RegExp(`^## ${heading}$`, 'm'));

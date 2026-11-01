@@ -35,7 +35,7 @@
 | `accepted` | The user's decision to continue with a Check that is not clean: findings, decision, head and time. Set by `run accept` |
 | `fast_commands` | The optional fast Verify command, one string, from the `Verify-fast:` line of the conventions. Set by `run start` only; empty or absent when the project has none. `run verify --fast` runs it; its result is never Evidence |
 | `commands` | The verify command, one string. Set by Preflight; the answer the user gave when the project has none. It can be set once; changing it means starting a new Run |
-| `conventions` | Paths of the conventions files Preflight read, an array of strings |
+| `conventions` | Paths of the conventions files Preflight found, an array of strings; a scoped guide is listed but not read until Check |
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
 | `spec_link` | Link to the Spec (path or URL). Optional; set once the Spec exists |

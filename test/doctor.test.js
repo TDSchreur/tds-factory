@@ -253,7 +253,7 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   const { status, report } = doctor(huge);
   assert.equal(status, 1);
   assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
-  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 5);
+  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 6);
   for (const a of report.agents) assert.equal(a.checks.length, 4, a.id);
   // A link to a regular file is fine.
   const shared = project();
@@ -314,7 +314,7 @@ test('Doctor requires an interactive review agent when an interactive project re
 test('doctor reports claude, codex and copilot in that order by default, shared checks once', () => {
   const { report } = doctorOn(pathWith('claude'), project());
   assert.deepEqual(report.agents.map((a) => a.id), ['claude', 'codex', 'copilot']);
-  assert.deepEqual(report.checks.map((c) => c.id).filter((id) => id !== 'agents'), ['cli', 'tracker', 'git', 'verify-command', 'verify-fast']);
+  assert.deepEqual(report.checks.map((c) => c.id).filter((id) => id !== 'agents'), ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'guides']);
   for (const a of report.agents) assert.deepEqual(a.checks.map((c) => c.id), ['binary', 'skills', 'config', 'review'], a.id);
 });
 
