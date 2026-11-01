@@ -10,8 +10,8 @@ export function sizeWarnings(projectDir, id) {
   if (!record.worktree || !/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) return [];
   const git = (...args) => spawnSync('git', args, { cwd: record.worktree, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
-  const diff = git('diff', ...plain, record.base_sha, 'HEAD');
-  const names = git('diff', ...plain, '-z', '--name-only', record.base_sha, 'HEAD');
+  const diff = git('diff', ...plain, record.base_sha, 'HEAD', '--');
+  const names = git('diff', ...plain, '-z', '--name-only', record.base_sha, 'HEAD', '--');
   const commits = git('rev-list', '--count', '--no-merges', `${record.base_sha}..HEAD`);
   if ([diff, names, commits].some((r) => r.status !== 0)) return [];
   const warnings = [];

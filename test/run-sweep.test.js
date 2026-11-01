@@ -232,3 +232,27 @@ test('a line with thousands of backticks and a control character in a name stay 
   assert.ok(Date.now() - started < 10000);
   assert.doesNotMatch(result.stdout, /\x1b/);
 });
+
+test('a heading followed by a very long run of spaces does not hang the sweep', () => {
+  const p = project(
+    { 'docs/a.md': 'x\n' },
+    { 'docs/a.md': '# a' + ' '.repeat(300000) + 'x\n## ok ' + '\t'.repeat(300000) + '\n' },
+  );
+  const started = Date.now();
+  const result = sweep(p);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 10000);
+});
+
+test('added text that looks like a diff header cannot hide a claim from the claims section', () => {
+  const p = project(
+    { 'docs/a.md': 'x\n' },
+    { 'src/m.js': '++ b/test/m.test.js\n// this is linear\n', 'docs/a.md': 'plain\n' },
+  );
+  assert.match(sweep(p).stdout, /src\/m\.js: \/\/ this is linear/);
+});
+
+test('bidi controls in a document line are not printed', () => {
+  const p = project({ 'docs/a.md': 'x\n', 'docs/b.md': 'see old_flag ‮evil\n' }, { 'docs/a.md': 'old_flag\n' });
+  assert.doesNotMatch(sweep(p).stdout, /‮/);
+});

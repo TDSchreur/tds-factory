@@ -21,7 +21,7 @@ const ROOT_DOCS = ['README.md', 'CONTRIBUTING.md', 'GLOSSARY.md', 'AGENTS.md', '
 const DOC_DIRS = ['docs', 'skills', 'agents', 'changelog.d'];
 const REPLACED_NOTE = /^[_>].*\b(?:replaced|changed|superseded) by\b/im;
 // Newlines and tabs go too: a file name with a newline must not be able to add a line of its own.
-const clean = (text) => text.replace(/\t/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
+const clean = (text) => text.replace(/\t/g, ' ').replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?');
 
 const git = (cwd, ...args) => {
   const out = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -30,7 +30,15 @@ const git = (cwd, ...args) => {
 };
 
 const NUMBER = /(?<![\w.])\d+(?:[.,]\d+)?(?: ?%| ?(?:KB|MB|GB|bytes?|files?|loops?|lines?|characters?|chars|seconds?|minutes?|ms|times|Tickets?|axes|steps?|passes|Reworks?)\b)/gi;
-const HEADING = /^#{1,6}[ \t]+(\S.{1,58}?)[ \t]*#*[ \t]*$/;
+const MAX_HEADING_LINE = 200;
+// No regular expression over the whole line: a long run of spaces would make a trailing-space pattern quadratic, so long lines are skipped first.
+const headingOf = (text) => {
+  if (text.length > MAX_HEADING_LINE) return null;
+  const marks = /^#{1,6}[ \t]+/.exec(text);
+  if (!marks) return null;
+  const title = text.slice(marks[0].length).trimEnd().replace(/(?:[ \t]+#+)$/, '').trim();
+  return title.length >= 2 && title.length <= 60 ? title : null;
+};
 const slug = (text) => text.toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').trim().replace(/ /g, '-');
 
 // Numbers with a unit and headings that only the removed lines hold: a changed cap or a moved section leaves these behind in other documents.
@@ -42,8 +50,8 @@ function goneTerms(diff) {
     const text = line.slice(1);
     const put = (term) => { const key = term.toLowerCase(); if (!side[mark].has(key)) side[mark].set(key, term); };
     for (const m of text.matchAll(NUMBER)) put(m[0].trim());
-    const heading = HEADING.exec(text);
-    if (heading) { put(heading[1]); put(`#${slug(heading[1])}`); }
+    const heading = headingOf(text);
+    if (heading) { put(heading); put(`#${slug(heading)}`); }
   }
   return [...side['-']].filter(([key]) => !side['+'].has(key)).map(([, term]) => term).filter((t) => t.length >= 3).slice(0, MAX_GONE);
 }
@@ -53,10 +61,16 @@ const tokens = (text) => [...text.matchAll(/`([^`\n]{1,40})`/g)].slice(0, MAX_TO
 // Added and removed lines per file, so a member added to a list and the lines that claim something can be told apart.
 function changedLines(diff) {
   const files = new Map();
-  let file = null;
+  let file = null, header = false;
+  // Only a line between `diff --git` and the first `@@` is a file header; the same text in a hunk is content.
   for (const line of diff.split('\n')) {
-    if (line.startsWith('+++ ')) { const m = /^\+\+\+ b\/(.+)$/.exec(line); file = m ? m[1] : null; if (file && !files.has(file)) files.set(file, { added: [], removed: [] }); continue; }
-    if (line.startsWith('--- ') || !file) continue;
+    if (line.startsWith('diff --git ')) { header = true; file = null; continue; }
+    if (line.startsWith('@@')) header = false;
+    if (header) {
+      if (line.startsWith('+++ ')) { const m = /^\+\+\+ b\/(.+)$/.exec(line); file = m ? m[1] : null; if (file && !files.has(file)) files.set(file, { added: [], removed: [] }); }
+      continue;
+    }
+    if (!file) continue;
     if (line[0] === '+') files.get(file).added.push(line.slice(1));
     else if (line[0] === '-') files.get(file).removed.push(line.slice(1));
   }
@@ -137,8 +151,8 @@ export function sweepRun(projectDir, id, extra = []) {
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
   if (!/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) throw new Error('the Run has no usable base commit');
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
-  const diff = git(root, 'diff', ...plain, record.base_sha);
-  const changed = new Set(git(root, 'diff', ...plain, '-z', '--name-only', record.base_sha).split('\0').filter(Boolean));
+  const diff = git(root, 'diff', ...plain, record.base_sha, '--');
+  const changed = new Set(git(root, 'diff', ...plain, '-z', '--name-only', record.base_sha, '--').split('\0').filter(Boolean));
   const gone = goneTerms(diff);
   const fromDiff = [...gone, ...termsFromDiff(diff).filter((t) => !gone.some((g) => g.toLowerCase() === t.toLowerCase()))];
   const given = [...new Set(extra.map((t) => t.trim()).filter(Boolean))];
