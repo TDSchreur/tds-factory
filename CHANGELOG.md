@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.0] - 2026-11-01
 
 ### Added
+
 - `tds-factory run verdict --axis security|infrastructure --value pass|skipped --carried` keeps an earlier Security or Infrastructure verdict for the current code, so those axes need no new review. The command allows it only after a text-only Rework (documents, never code, tests, Skills, agents or instruction files; see the glossary entry Carried-over verdict) and records the revision the verdict was carried from. Standards and Spec are always reviewed again (ADR 0019).
 - The Dashboard shows the status of an Azure DevOps pull request (policies and build, merge conflicts, reviewers) in the same block as for GitHub, and the Done Stage and Clean up work for it. It reads through the `az` command and its `azure-devops` extension, read-only. An Azure DevOps pull request has no Merge button (the card says to merge it in Azure DevOps) and Follow-up does not support it yet. A missing `az`, extension or sign-in shows "status unavailable" with the fix.
 - The Dashboard can grant one extra Check loop to a Run that waits on you in Check at its loop limit ("Grant extra loop", one loop per click, no ceiling). The grant is recorded as `extra_loops` in the Run record and in the Event log, raises the limit that `run rework`, Follow-up and the loop chip use, and has no command-line equivalent so that an agent cannot grant itself a loop. See ADR 0024.
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an incremental JavaScript type-checking pilot and weekly npm dependency updates.
 
 ### Changed
+
 - Check sends a Run back to Build only for a Blocking finding: a violation of a documented standard, a CRITICAL, HIGH or MEDIUM security, infrastructure or project review finding, or a Spec requirement that is missing or wrong. LOW and INFO items, code smells and style judgement are Left open: they are listed but never cause a Rework. Reviewers report a severity and the standard or requirement behind each finding.
 - The Dashboard help text for Check and for the Reworks chip says Blocking findings, and the pull request description gets a "Left open" section.
 - Use `gpt-6.1-terra` for Codex Check reviews to reduce their model cost.
@@ -51,9 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `factory` Skill is about half the size (about 20 KB, from 40 KB): the progress command list, the `run.json` schema, the Stage agents, the Exit checklist, the Check details and Follow-up moved word for word into `skills/factory/references/`, and the main file names each where it is needed. `install` and `sync` ship the reference files and `tds-factory doctor` fails the skills check when an installed factory Skill lacks them (run `tds-factory install`). No rule of the Flow changes. On the Fast track `build.md` is three lines.
 
 ### Removed
+
 - The Build instruction to name a smaller alternative in one line in `build.md`, left over from the removed ponytail Prepare Stage.
 
 ### Fixed
+
 - The Dashboard draws an abandoned card with token colours instead of faded text, so its text keeps 4.5:1 contrast. In high contrast mode the primary, danger and pressed buttons keep system colours on hover and press, and a waiting card shows a visible double border. A card keeps its inner focus ring while it is hovered or selected.
 - The Dashboard serves `help.js`, so the page no longer fails to load its help panel module.
 - Prevent the Dashboard from freezing when a Run file contains an indented Markdown heading.
@@ -64,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - 2026-10-31
 
 ### Added
+
 - The Dashboard has new actions: buttons for `run sync`, `run clean` and accepting a Check that is not clean, and a "Needs you" browser notification when a Run starts waiting on you. Starting a Run stays in the agent.
 - A Fast track for bug fixes and tiny changes: one confirmation in Define, a one-paragraph Spec and a single Ticket, with Standards and Security still required in Check. The user chooses it, or confirms Define's recommendation, with `tds-factory run track`. The track is recorded in `run.json`, shown on the Dashboard and used to split `run stats` by track.
 - `tds-factory run follow-up` collects PR CI failures and unresolved review threads into scoped Rework under the shared Check loop limit.
@@ -71,20 +76,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Run metrics record Stage visits and Check verdict history, with `tds-factory run stats` and a Dashboard Run detail summary.
 
 ### Changed
+
 - The Run store is split into smaller modules behind the same interface, with no change to the CLI, `run.json` or the Dashboard API.
 - `docs/evaluation.md` records the first live baseline on Claude (Haiku 5.5, all seven scenarios pass), and `docs/capabilities.md` marks the Claude cells that the run proved.
 
 ### Fixed
+
 - The Factory Skill and the install guide now say how to check for a needed label: `gh label list --search <name> --json name`, matching the exact name. The agent asks the user only when the label is absent and treats "already exists" from `gh label create` as present, so it no longer asks for a label the repository already has.
 - `tds-factory doctor --agent copilot` (and `/factory` in Copilot) now finds Skills in the Claude and Codex folders, where the default `install` puts them, instead of reporting them missing.
 - The offline `gh` in the evaluation answers `repo view` and `label list` for its fixture repository, and the `approval-resolved` grader no longer requires the Spec to be committed.
 
 ### Security
+
 - Every Dashboard write route (`DELETE` and `POST`) now needs the page's own Origin and a per-session token, and the server sends no CORS headers. See ADR 0017.
 
 ## [0.4.0] - 2026-10-30
 
 ### Added
+
 - Build ends with an Exit checklist, after the last Ticket and after every Rework: a term sweep, the required artifacts, a story trace, a security check and a self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
 - `npm test` checks that relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term and state the Check loop limit as the code does, and browser tests are named so CI runs them.
 - Projects can add source or interactive Check reviews through Skills, with configuration and Skill contents frozen per Run.
@@ -93,17 +102,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changelog entries go in `changelog.d/` fragments, folded into `CHANGELOG.md` at release time by `node scripts/changelog.js release <version>`.
 
 ### Changed
+
 - The default branch is now `main` instead of `master`; workflows, docs and installer links follow.
 - Rework sweeps the docs again, reads its own diff and fixes cheap LOW findings in the area instead of leaving them.
 - The Dashboard theme and page tests are renamed to `*-browser.test.js` so the CI browser job runs them.
 - `install.ps1` supports PowerShell 7 only. The Windows one-line install is now `pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"`; install PowerShell 7 first. See ADR 0011.
 
 ### Security
+
 - The Release version calculation and a Dashboard browser test no longer build a RegExp or a script from input, which closes the two Code Scanning alerts.
 
 ## [0.3.2] - 2026-10-30
 
 ### Added
+
 - A `ci-ok` job that succeeds only when every other CI job does, for the `master` ruleset to require.
 - `SECURITY.md`, `CONTRIBUTING.md`, issue templates and a PR template.
 - The release job runs in a `release` environment that only `master` can deploy to.
@@ -112,11 +124,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-10-30
 
 ### Added
+
 - The Dashboard header shows the Factory version.
 - At 1024 CSS pixels and below, the Dashboard shows one Stage at a time, with Stage buttons that carry Run counts and a "Needs you" marker.
 - At those widths Run detail fills the screen with a Back control, contained keyboard focus and a locked background.
 
 ### Changed
+
 - Dashboard controls are at least 44 pixels high on small screens, long text and links wrap, and dialogs scroll on short screens.
 - `dev-install` and `install-dev-skills` are one setup script.
 - CI and Release are hardened, and Release checks that the README install URL works.
@@ -124,18 +138,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Browser tests set the exact CSS viewport through ChromeDriver emulation.
 
 ### Fixed
+
 - The flaky Delete all Dashboard test no longer races the delete requests.
 
 ## [0.2.0] - 2026-10-30
 
 ### Added
+
 - Runs can now be deleted from every Dashboard column.
 
 ### Changed
+
 - The Copilot Define and Check agents are pinned to an available model.
 - The Build Stage now carries the instruction that Prepare used to give through ponytail.
 
 ### Removed
+
 - **Breaking:** the Prepare Stage.
 - **Breaking:** the ponytail skill and its vendored copy.
 

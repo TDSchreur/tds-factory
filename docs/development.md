@@ -66,16 +66,16 @@ To see which one you use, run `tds-factory --version` and `which -a tds-factory`
 
 Besides the skills the Factory ships, a few skills help while developing the Factory itself. They are not in `skills.manifest.json`, so users do not get them. `scripts/dev-install.js` (step 6) copies them from `vendor/` to `~/.claude/skills` and `~/.agents/skills`, which Claude, Codex and Copilot all read. It only replaces skills it installed earlier (marked `.tds-factory-dev`) and skips same-named skills from other tools. `docs-sync-audit` and `test-gap-audit` need `python3`; `webapp-testing` needs Playwright. To change the set, edit `DEV_SKILLS` in the script.
 
-| Skill | Use it to |
-|---|---|
-| `docs-sync-audit` | Check that the README, `docs/` and the agent tables still match the code after a change. |
-| `test-gap-audit` | Find untested paths in `sync`, `install`, `run-store` and `doctor`. |
-| `github-actions-hardening` | Review `.github/workflows/` (the Release workflow publishes on every merge). |
-| `statechart` | Draw the Run state machine to spot missing or illegal transitions (ADR 0006). |
-| `blast-radius` | List what a change to a Stage agent or the `factory` skill touches: three agent formats, committed skill copies, tests, docs. |
-| `agentic-eval`, `eval-driven-dev` | Write new `eval/` scenarios and judge agent results. |
-| `webapp-testing` | Test the Dashboard in a browser (theme, scroll, layout, header, logo). |
-| `principle-make-operations-idempotent` | Keep `install`, `sync` and `dev-install` safe to re-run. |
-| `principle-prove-it-works`, `principle-test-behavior-not-implementation` | Guide Build and Check: prove behaviour, do not test internals. |
-| `github-release`, `conventional-commit` | Write release notes for the per-merge Releases and consistent commit messages. |
-| `create-agentsmd` | Flesh out `AGENTS.md` with build, test and architecture hints. |
+| Skill                                                                    | Use it to                                                                                                                     |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `docs-sync-audit`                                                        | Check that the README, `docs/` and the agent tables still match the code after a change.                                      |
+| `test-gap-audit`                                                         | Find untested paths in `sync`, `install`, `run-store` and `doctor`.                                                           |
+| `github-actions-hardening`                                               | Review `.github/workflows/` (the Release workflow publishes on every merge).                                                  |
+| `statechart`                                                             | Draw the Run state machine to spot missing or illegal transitions (ADR 0006).                                                 |
+| `blast-radius`                                                           | List what a change to a Stage agent or the `factory` skill touches: three agent formats, committed skill copies, tests, docs. |
+| `agentic-eval`, `eval-driven-dev`                                        | Write new `eval/` scenarios and judge agent results.                                                                          |
+| `webapp-testing`                                                         | Test the Dashboard in a browser (theme, scroll, layout, header, logo).                                                        |
+| `principle-make-operations-idempotent`                                   | Keep `install`, `sync` and `dev-install` safe to re-run.                                                                      |
+| `principle-prove-it-works`, `principle-test-behavior-not-implementation` | Guide Build and Check: prove behaviour, do not test internals.                                                                |
+| `github-release`, `conventional-commit`                                  | Write release notes for the per-merge Releases and consistent commit messages.                                                |
+| `create-agentsmd`                                                        | Flesh out `AGENTS.md` with build, test and architecture hints.                                                                |

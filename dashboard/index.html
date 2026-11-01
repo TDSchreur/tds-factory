@@ -1,29 +1,29 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<title>TDS Factory</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<script id="theme-init">
-// Applies the saved theme before the first paint; the page itself keeps the selector in step.
-(function () {
-  var choice = 'system';
-  try {
-    var saved = localStorage.getItem('dashboard-theme');
-    if (saved === 'light' || saved === 'dark' || saved === 'system') choice = saved;
-  } catch (err) {}
-  document.documentElement.dataset.theme = choice;
-})();
-</script>
-<script type="importmap">
-{ "imports": { "preact": "/vendor/preact.js", "preact/hooks": "/vendor/hooks.js", "htm": "/vendor/htm.js" } }
-</script>
-<link rel="stylesheet" href="/style.css">
-</head>
-<body>
-<div id="app"></div>
-<script type="module" src="/app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>TDS Factory</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script id="theme-init">
+      // Applies the saved theme before the first paint; the page itself keeps the selector in step.
+      (function () {
+        var choice = 'system';
+        try {
+          var saved = localStorage.getItem('dashboard-theme');
+          if (saved === 'light' || saved === 'dark' || saved === 'system') choice = saved;
+        } catch (err) {}
+        document.documentElement.dataset.theme = choice;
+      })();
+    </script>
+    <script type="importmap">
+      { "imports": { "preact": "/vendor/preact.js", "preact/hooks": "/vendor/hooks.js", "htm": "/vendor/htm.js" } }
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
 </html>

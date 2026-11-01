@@ -14,6 +14,7 @@ This repo uses a **single-context** layout for domain knowledge:
 ## Domain concepts
 
 Key concepts in this repo:
+
 - **Claude**: an Agent target, a coding agent the Factory installs skills into
 - **Codex**: an Agent target
 - **Copilot**: an Agent target

@@ -4,9 +4,11 @@ Add one file here per change, named after the Run or the change, for example `ch
 
 ```markdown
 ### Added
+
 - `tds-factory run sync` rebases the Run branch onto origin's default branch.
 
 ### Fixed
+
 - Something that was broken.
 ```
 
