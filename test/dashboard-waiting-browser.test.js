@@ -27,3 +27,25 @@ test('a waiting card carries a Needs you banner with symbol, age and reason', as
     assert.equal(await page.execute("return document.querySelector('#detail .reason').textContent"), 'Needs you, waiting 12 min: Question');
   } finally { await page.close(); }
 });
+
+test('the Needs you filter and the waiting-first sort', async (t) => {
+  const w = (id, column, minutes) => run({ id, title: id, column, waiting: true, status: 'waiting', reason: 'Q', updated: minutesAgo(1), events: [{ type: 'waiting', at: minutesAgo(minutes) }] });
+  const runs = [run({ id: 'busy', column: 'build', updated: minutesAgo(0) }), w('short', 'build', 5), w('long', 'build', 50), run({ id: 'check-busy', column: 'check' })];
+  const page = await openPage(t, { runs });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=busy]')");
+    const order = "return [...document.querySelectorAll('[data-stage=build] .card')].map((c) => c.dataset.id)";
+    assert.deepEqual(await page.execute(order), ['long', 'short', 'busy']);
+    assert.equal(await page.execute("return document.title"), '(2) test · TDS Factory');
+    assert.equal(await page.execute("const b = document.getElementById('needs-you'); return b.textContent + '|' + b.getAttribute('aria-pressed')"), 'Needs you (2)|false');
+    await page.execute("document.getElementById('needs-you').click()");
+    await page.waitFor("return document.getElementById('needs-you').getAttribute('aria-pressed') === 'true'");
+    assert.deepEqual(await page.execute(order), ['long', 'short']);
+    assert.equal(await page.execute("return document.querySelectorAll('.card').length"), 2);
+    assert.match(await page.execute("return document.querySelector('[data-stage=check]').textContent"), /No runs waiting on you/);
+    assert.equal(await page.execute("return document.title"), '(2) test · TDS Factory');
+    await page.execute("document.getElementById('needs-you').click()");
+    await page.waitFor("return document.querySelectorAll('.card').length === 4");
+  } finally { await page.close(); }
+});

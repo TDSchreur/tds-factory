@@ -2,7 +2,7 @@
 import { render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, Intro, html } from './components.js';
-import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName } from './model.js';
+import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName, sortWaitingFirst } from './model.js';
 
 const BRAND = 'TDS Factory';
 const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media query in style.css
@@ -22,6 +22,7 @@ function App() {
   const [showOlder, setShowOlder] = useState(false); // Runs older than a week stay folded until asked for
   const [expandedIds, setExpandedIds] = useState(() => new Set()); // Done cards the user opened
   const [request, setRequest] = useState(null);
+  const [onlyWaiting, setOnlyWaiting] = useState(false); // the Needs you filter; not saved
   const queue = useRef(Promise.resolve());
   const current = useRef(null);
   const token = useRef(null);
@@ -141,7 +142,7 @@ function App() {
   // Runs waiting on the user are never hidden.
   const older = entries.filter((r) => { const a = ageMs(r.updated); return a !== null && a > OLD_MS && !r.waiting; });
   // Newest first within a column; unreadable and undated records sort last.
-  const runs = entries.filter((r) => showOlder || !older.includes(r)).sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id));
+  const runs = sortWaitingFirst(entries.filter((r) => showOlder || !older.includes(r)).sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id))); // waiting Runs first in every Stage
   const defaultStage = COLUMNS.find((c) => runs.some((r) => r.column === c.key && r.waiting))?.key
     ?? COLUMNS.find((c) => runs.some((r) => r.column === c.key))?.key ?? COLUMNS[0].key;
   const stage = selectedStage ?? defaultStage;
@@ -189,10 +190,10 @@ function App() {
   };
   const olderLabel = older.length ? (showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')') : '';
 
-  return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} />
+  return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} />
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
-      <${Board} runs=${runs} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
+      <${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
       <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
