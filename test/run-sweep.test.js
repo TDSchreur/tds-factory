@@ -380,3 +380,21 @@ test('a linked code file is never followed', () => {
   const out = sweep(p).stdout;
   assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
 });
+
+test('a linked folder around a code file is never followed, and a line matched by two terms counts once', () => {
+  const p = project(
+    {
+      'bin/tds-factory.js': 'plain\n',
+      'docs/a.md': 'Use `old_flag` and `old_other`.\n',
+      'docs/b.md': 'old_flag and old_other\n',
+    },
+    { 'docs/a.md': 'Use `new_flag` and `new_other`.\n' },
+  );
+  mkdirSync(join(p.cwd, 'elsewhere'), { recursive: true });
+  writeFileSync(join(p.cwd, 'elsewhere', 'tds-factory.js'), 'old_flag in a folder outside the Run\n');
+  rmSync(join(p.worktree, 'bin'), { recursive: true });
+  symlinkSync(join(p.cwd, 'elsewhere'), join(p.worktree, 'bin'));
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
+  assert.match(toRead(out).join('\n'), /docs\/b\.md: 1 hit\(s\)/);
+});

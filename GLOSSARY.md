@@ -125,13 +125,13 @@ One more Check loop that the user grants from the Dashboard to a Run that waits 
 _Avoid_: Override, Bonus loop
 
 **Rework cause**:
-The reason recorded when Check sends a Run back to Build: one or more of `stale-doc`, `test-gap`, `spec-gap`, `security`, `bug`, `size` and `other`. It is optional; a Rework without one counts as unknown. `tds-factory run stats` counts the causes.
+The reason recorded when Check sends a Run back to Build: one or more of `stale-doc`, `test-gap`, `spec-gap`, `security`, `bug`, `size` and `other`. It is optional; a Rework without one counts as unknown, and so does a Rework that Follow-up starts, because `tds-factory run follow-up` takes no cause. `tds-factory run stats` counts the causes.
 
 **Documentation Ticket**:
 The last Ticket of a Full track Run with three or more Tickets, blocked by all the others. It brings the documents, canonical specs and help text that the Term sweep still lists in line with the finished feature.
 
 **Rework**:
-Sending a Run back from Check or Follow-up to Build to fix Blocking findings or Follow-up feedback. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
+Sending a Run back from Check or Follow-up to Build to fix Blocking findings or Follow-up feedback. Each Rework counts against the same loop limit and makes the earlier Evidence stale. Check can record its Rework cause.
 _Avoid_: Retry, Loop back
 
 **Conventions**:
@@ -158,7 +158,7 @@ The append-only `events.jsonl` in a Run folder, one line for each Stage change, 
 _Avoid_: Audit trail
 
 **Run metrics**:
-Observed Stage time, Reworks, Check history and token Usage for a Run. Missing observations are unknown rather than zero.
+Observed Stage time, Reworks and their causes, Check history and token Usage for a Run. Missing observations are unknown rather than zero.
 
 **Stage visit**:
 One continuous stay in a Stage, including time waiting for a human. Rework starts another Build visit and can lead to another Check visit.

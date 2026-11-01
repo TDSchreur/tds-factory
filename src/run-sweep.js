@@ -168,6 +168,8 @@ function termsFromDiff(diff) {
 function documents(root) {
   const found = [];
   const take = (file, code = false) => {
+    // A code file sits in a folder of the Run worktree; a linked folder would lead out of it.
+    if (code && !fs.lstatSync(path.dirname(file), { throwIfNoEntry: false })?.isDirectory()) return;
     const stat = fs.lstatSync(file, { throwIfNoEntry: false });
     if (!stat || !stat.isFile() || stat.size >= MAX_FILE || !(code || /\.(md|toml)$/.test(file))) return;
     found.push({ file, code });

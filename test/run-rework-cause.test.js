@@ -94,3 +94,17 @@ test('a damaged stored cause list shows only the known causes', () => {
   assert.match(out, /Rework causes: bug 1, size 1\n/);
   assert.doesNotMatch(out, /\u001b/);
 });
+
+test('a repeated cause counts once, and one unknown cause among valid ones refuses the whole Rework', () => {
+  const cwd = repo();
+  const id = inCheck(cwd);
+  const mixed = run(cwd, 'rework', '--id', id, '--cause', 'bug', '--cause', 'sloppy');
+  assert.notEqual(mixed.status, 0);
+  assert.equal(read(cwd, id).check_loops, 0);
+  command(cwd, 'rework', '--id', id, '--cause', 'bug', '--cause', 'bug');
+  assert.deepEqual(
+    read(cwd, id).metrics.rework_causes.map((r) => r.causes),
+    [['bug']],
+  );
+  assert.match(command(cwd, 'stats', '--id', id), /Rework causes: bug 1\n/);
+});
