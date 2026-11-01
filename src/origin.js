@@ -9,6 +9,7 @@ export function originDefaultBranch(cwd) {
   const remoteHead = git('ls-remote', '--symref', 'origin', 'HEAD');
   const branch = remoteHead.status === 0 && remoteHead.stdout.match(/^ref: refs\/heads\/([^\s]+)\s+HEAD$/m)?.[1];
   if (remoteHead.error) return { error: `origin did not answer: ${remoteHead.error.message}` };
-  if (!branch || branch.includes('@{') || git('check-ref-format', '--branch', branch).status !== 0) return { error: remoteHead.stderr.trim() || 'origin has no default branch' };
+  if (!branch || branch.includes('@{') || git('check-ref-format', '--branch', branch).status !== 0)
+    return { error: remoteHead.stderr.trim() || 'origin has no default branch' };
   return { branch };
 }

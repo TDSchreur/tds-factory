@@ -10,9 +10,11 @@ const temp = mkdtempSync(join(tmpdir(), 'tds-package-'));
 const windows = process.platform === 'win32';
 function run(command, args, cwd = temp) {
   const shell = windows && command.endsWith('.cmd');
-  const result = spawnSync(shell ? `"${command}"` : command,
-    shell ? args.map((arg) => `"${arg}"`) : args,
-    { cwd, encoding: 'utf8', shell });
+  const result = spawnSync(shell ? `"${command}"` : command, shell ? args.map((arg) => `"${arg}"`) : args, {
+    cwd,
+    encoding: 'utf8',
+    shell,
+  });
   if (result.error) throw result.error;
   assert.equal(result.status, 0, `${command}: ${result.stderr}\n${result.stdout}`);
   return result.stdout.trim();
@@ -25,10 +27,26 @@ try {
   let tarball = process.argv[2] && resolve(process.argv[2]);
   if (!tarball) {
     run(npm, npmArgs(['pack', '--pack-destination', temp]), process.cwd());
-    tarball = join(temp, readdirSync(temp).find((file) => file.endsWith('.tgz')));
+    tarball = join(
+      temp,
+      readdirSync(temp).find((file) => file.endsWith('.tgz')),
+    );
   }
   const prefix = join(temp, 'prefix');
-  run(npm, npmArgs(['install', '--global', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', '--offline', tarball]));
+  run(
+    npm,
+    npmArgs([
+      'install',
+      '--global',
+      '--prefix',
+      prefix,
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--offline',
+      tarball,
+    ]),
+  );
   const cli = windows ? join(prefix, 'tds-factory.cmd') : join(prefix, 'bin', 'tds-factory');
   const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(run(cli, ['--version']), version);

@@ -8,11 +8,13 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' 
 // Everything a scenario grades: the Run records, files, commits and recorded actions. Never the agent's reply.
 export function collect(fx) {
   const runsDir = join(fx.dir, '.factory', 'runs');
-  const runs = existsSync(runsDir) ? readdirSync(runsDir).map((id) => ({
-    id,
-    record: JSON.parse(readFileSync(join(runsDir, id, 'run.json'), 'utf8')),
-    files: readdirSync(join(runsDir, id)),
-  })) : [];
+  const runs = existsSync(runsDir)
+    ? readdirSync(runsDir).map((id) => ({
+        id,
+        record: JSON.parse(readFileSync(join(runsDir, id, 'run.json'), 'utf8')),
+        files: readdirSync(join(runsDir, id)),
+      }))
+    : [];
   const run = runs[0];
   const tree = run?.record.worktree && existsSync(run.record.worktree) ? run.record.worktree : fx.dir;
   const base = run?.record.base_sha;
@@ -27,5 +29,6 @@ export function collect(fx) {
   };
 }
 
-export const ghWrites = (a, noun, verb) => a.actions.filter((x) => x.tool === 'gh' && x.argv[0] === noun && x.argv[1] === verb);
+export const ghWrites = (a, noun, verb) =>
+  a.actions.filter((x) => x.tool === 'gh' && x.argv[0] === noun && x.argv[1] === verb);
 export const pushes = (a) => a.actions.filter((x) => x.tool === 'git' && x.argv[0] === 'push');

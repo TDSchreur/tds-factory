@@ -11,15 +11,29 @@ const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args],
 // A Run in Build with `tickets` Tickets all done; `files` are committed in the Run worktree, one commit per entry of `commits`.
 function inBuild(tickets, commits) {
   const cwd = repo();
-  const started = run(cwd, 'start', '--data', JSON.stringify({ title: 'Size', agent: 'claude', commands: 'true', conventions: [] }));
+  const started = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'Size', agent: 'claude', commands: 'true', conventions: [] }),
+  );
   assert.equal(started.status, 0, started.stderr);
   const id = started.stdout.trim();
   const worktree = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8')).worktree;
   for (const files of commits) {
-    for (const [name, text] of Object.entries(files)) { mkdirSync(dirname(join(worktree, name)), { recursive: true }); writeFileSync(join(worktree, name), text); }
-    git(worktree, 'add', '.'); git(worktree, 'commit', '-q', '-m', 'change');
+    for (const [name, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(worktree, name)), { recursive: true });
+      writeFileSync(join(worktree, name), text);
+    }
+    git(worktree, 'add', '.');
+    git(worktree, 'commit', '-q', '-m', 'change');
   }
-  const data = { spec_link: 'docs/specs/x.md', tickets: Array.from({ length: tickets }, (_, i) => String(i + 1)), tickets_total: tickets, tickets_done: tickets };
+  const data = {
+    spec_link: 'docs/specs/x.md',
+    tickets: Array.from({ length: tickets }, (_, i) => String(i + 1)),
+    tickets_total: tickets,
+    tickets_done: tickets,
+  };
   assert.equal(run(cwd, 'update', '--id', id, '--data', JSON.stringify(data)).status, 0);
   assert.equal(run(cwd, 'transition', '--id', id, '--to', 'build').status, 0);
   return { cwd, id };

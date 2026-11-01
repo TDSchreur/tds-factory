@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -21,7 +31,11 @@ function project(agents = AGENTS) {
 }
 const doctor = (dir, ...args) => doctorAt(mkdtempSync(join(tmpdir(), 'doctor-home-')), dir, ...args);
 function doctorAt(home, dir, ...args) {
-  const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: home } });
+  const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home },
+  });
   return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stderr: result.stderr };
 }
 // A shared check, else a check of an Agent target: the only one in the report, or Claude's in the default report.
@@ -32,12 +46,19 @@ const entry = (report, id) => report.agents.find((a) => a.id === id);
 function pathWith(...commands) {
   const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-'));
   for (const name of ['npm', ...commands]) writeFileSync(join(bin, name), '');
-  const git = (process.env.PATH ?? '').split(delimiter).map((d) => join(d, 'git')).find((f) => existsSync(f));
+  const git = (process.env.PATH ?? '')
+    .split(delimiter)
+    .map((d) => join(d, 'git'))
+    .find((f) => existsSync(f));
   symlinkSync(git, join(bin, 'git'));
   return bin;
 }
 function doctorOn(path, dir, home, ...args) {
-  const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, HOME: home ?? mkdtempSync(join(tmpdir(), 'doctor-home-')), PATH: path } });
+  const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home ?? mkdtempSync(join(tmpdir(), 'doctor-home-')), PATH: path },
+  });
   return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stdout: result.stdout };
 }
 
@@ -87,15 +108,19 @@ test('doctor preserves spaces at the end of the worktree path', () => {
   assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
 });
 
-test('doctor preserves a trailing carriage return in a POSIX worktree path', { skip: process.platform === 'win32' }, () => {
-  const main = repo();
-  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-cr-')), 'project\r');
-  git(main, 'worktree', 'add', '-b', 'doctor-cr', linked);
-  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
-  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
-  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
-  assert.equal(check(doctor(linked, '--agent', 'codex').report, 'tracker').status, 'pass');
-});
+test(
+  'doctor preserves a trailing carriage return in a POSIX worktree path',
+  { skip: process.platform === 'win32' },
+  () => {
+    const main = repo();
+    const linked = join(mkdtempSync(join(tmpdir(), 'doctor-cr-')), 'project\r');
+    git(main, 'worktree', 'add', '-b', 'doctor-cr', linked);
+    mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+    for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+    writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+    assert.equal(check(doctor(linked, '--agent', 'codex').report, 'tracker').status, 'pass');
+  },
+);
 
 test('doctor tells a user outside Git why it cannot pass', () => {
   const dir = mkdtempSync(join(tmpdir(), 'doctor-outside-'));
@@ -131,20 +156,36 @@ test('doctor fails the git check without a repository, a commit or an origin', (
 
 test('doctor tells a missing Verify command from a malformed or unusable one', () => {
   assert.equal(check(doctor(project('# A\n\n## Agent skills\n')).report, 'verify-command').status, 'missing');
-  const noBullet = check(doctor(project('## Commands\n\n```powershell\n# Required after code changes\n.\\build.ps1\n```\n')).report, 'verify-command');
-  assert.equal(noBullet.status, 'missing', 'a Commands section without a "- Verify:" line is missing, not an empty command');
+  const noBullet = check(
+    doctor(project('## Commands\n\n```powershell\n# Required after code changes\n.\\build.ps1\n```\n')).report,
+    'verify-command',
+  );
+  assert.equal(
+    noBullet.status,
+    'missing',
+    'a Commands section without a "- Verify:" line is missing, not an empty command',
+  );
   assert.match(noBullet.message, /- Verify:/);
   assert.equal(check(doctor(project('## Commands\n\n- Verify: ``\n')).report, 'verify-command').status, 'fail');
   assert.match(check(doctor(project('## Commands\n\n- Verify: `   `\n')).report, 'verify-command').message, /empty/);
-  assert.match(check(doctor(project('## Commands\n\n- Verify: `npm\0 test`\n')).report, 'verify-command').message, /NUL/);
+  assert.match(
+    check(doctor(project('## Commands\n\n- Verify: `npm\0 test`\n')).report, 'verify-command').message,
+    /NUL/,
+  );
   const absent = check(doctor(project('## Commands\n\n- Verify: `no-such-tool-xyz test`\n')).report, 'verify-command');
   assert.equal(absent.status, 'fail');
   assert.match(absent.message, /was not found/);
   // The guide's plain form is accepted too.
-  assert.match(check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').message, /npm test/);
+  assert.match(
+    check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').message,
+    /npm test/,
+  );
   assert.equal(check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').status, 'pass');
   // Shell syntax is not probed.
-  assert.equal(check(doctor(project('## Commands\n\n- Verify: `cd app && no-such-tool-xyz`\n')).report, 'verify-command').status, 'pass');
+  assert.equal(
+    check(doctor(project('## Commands\n\n- Verify: `cd app && no-such-tool-xyz`\n')).report, 'verify-command').status,
+    'pass',
+  );
 });
 
 test('doctor prints one line per check and exits non-zero when a shared check is not pass or no agent is usable', () => {
@@ -163,17 +204,34 @@ test('doctor rejects an unknown Agent target and lists the valid ones', () => {
 
 // Installs the shipped Skills and Stage agents the way `install` lays them out, minus the ones named in `skip`.
 function install(home, agent, skip = []) {
-  const skills = join(home, targets[agent].global), agents = join(home, targets[agent].agents);
+  const skills = join(home, targets[agent].global),
+    agents = join(home, targets[agent].agents);
   mkdirSync(skills, { recursive: true });
   mkdirSync(agents, { recursive: true });
-  for (const name of readdirSync(SKILLS_DIR, { withFileTypes: true }).filter((e) => e.isDirectory() && !skip.includes(e.name)).map((e) => e.name)) cpSync(join(SKILLS_DIR, name), join(skills, name), { recursive: true });
-  for (const file of readdirSync(join(AGENTS_DIR, agent)).filter((f) => !skip.includes(f.split('.')[0]))) cpSync(join(AGENTS_DIR, agent, file), join(agents, file));
+  for (const name of readdirSync(SKILLS_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !skip.includes(e.name))
+    .map((e) => e.name))
+    cpSync(join(SKILLS_DIR, name), join(skills, name), { recursive: true });
+  for (const file of readdirSync(join(AGENTS_DIR, agent)).filter((f) => !skip.includes(f.split('.')[0])))
+    cpSync(join(AGENTS_DIR, agent, file), join(agents, file));
 }
 
 test('doctor lists every required Skill that is not installed', () => {
   const none = check(doctor(project()).report, 'skills');
   assert.equal(none.status, 'fail');
-  for (const name of ['factory', 'grill-with-docs', 'to-spec', 'to-tickets', 'implement-spec', 'tdd', 'code-review', 'security-scan', 'pr', 'unslop']) assert.ok(none.message.includes(name), name);
+  for (const name of [
+    'factory',
+    'grill-with-docs',
+    'to-spec',
+    'to-tickets',
+    'implement-spec',
+    'tdd',
+    'code-review',
+    'security-scan',
+    'pr',
+    'unslop',
+  ])
+    assert.ok(none.message.includes(name), name);
   const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   install(home, 'claude', ['tdd']);
   assert.match(check(doctorAt(home, project()).report, 'skills').message, /: tdd$/);
@@ -206,7 +264,8 @@ test('doctor for Copilot finds Skills in the Claude and Codex folders, where the
 
 test('doctor for Copilot also finds Skills in the project Claude and Codex folders', () => {
   for (const skillsFrom of ['claude', 'codex']) {
-    const dir = project(), home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+    const dir = project(),
+      home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
     install(dir, skillsFrom);
     install(home, 'copilot');
     rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
@@ -225,7 +284,8 @@ test('doctor for Claude and Codex ignores Skills that are only in another Agent 
   rmSync(join(home, targets.claude.global), { recursive: true, force: true });
   rmSync(join(home, targets.codex.global), { recursive: true, force: true });
   // Skills now exist only in the Copilot folder, so Claude and Codex must still report them missing.
-  for (const agent of ['claude', 'codex']) assert.equal(check(doctorAt(home, project(), '--agent', agent).report, 'skills').status, 'fail', agent);
+  for (const agent of ['claude', 'codex'])
+    assert.equal(check(doctorAt(home, project(), '--agent', agent).report, 'skills').status, 'fail', agent);
   // And the Copilot folder alone does satisfy Copilot itself.
   assert.equal(check(doctorAt(home, project(), '--agent', 'copilot').report, 'skills').status, 'pass');
   const other = mkdtempSync(join(tmpdir(), 'doctor-home-'));
@@ -273,7 +333,8 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   const { doctor: run } = await import('../src/doctor.js');
   const { openRunStore } = await import('../src/run-store.js');
   const dir = project();
-  git(dir, 'add', '.'); git(dir, 'commit', '-q', '-m', 'project');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '-q', '-m', 'project');
   const store = openRunStore(dir);
   const merged = store.start({ title: 'Merged', agent: 'claude', commands: 'npm test', conventions: [] });
   const open = store.start({ title: 'Open', agent: 'claude', commands: 'npm test', conventions: [] });
@@ -291,8 +352,15 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   assert.ok(!before.notes[0].includes(open));
   const going = store.start({ title: 'Going', agent: 'claude', commands: 'npm test', conventions: [] });
   store.update(going, { pr: 'https://github.com/o/r/pull/1' });
-  assert.ok(!run({ projectDir: dir, homeDir: home, prState }).notes[0].includes(going), 'a Run that is not done is not named: clean would keep it');
-  assert.equal(before.ok, run({ projectDir: dir, homeDir: home, prState: () => undefined }).ok, 'notes do not change ok');
+  assert.ok(
+    !run({ projectDir: dir, homeDir: home, prState }).notes[0].includes(going),
+    'a Run that is not done is not named: clean would keep it',
+  );
+  assert.equal(
+    before.ok,
+    run({ projectDir: dir, homeDir: home, prState: () => undefined }).ok,
+    'notes do not change ok',
+  );
   store.clean(merged, { prState });
   assert.deepEqual(run({ projectDir: dir, homeDir: home, prState }).notes, []);
 });
@@ -304,18 +372,43 @@ test('Doctor requires an interactive review agent when an interactive project re
   mkdirSync(join(dir, '.factory'), { recursive: true });
   mkdirSync(join(dir, 'review'), { recursive: true });
   writeFileSync(join(dir, 'review', 'SKILL.md'), 'Review UX');
-  writeFileSync(join(dir, '.factory', 'reviews.json'), JSON.stringify({ reviews: [{ id: 'ux', name: 'UX', mode: 'interactive', skill: { source: 'project', path: 'review' }, runtime: { start: 'npm start', ready: 'localhost:4200', setup: 'No account' } }] }));
+  writeFileSync(
+    join(dir, '.factory', 'reviews.json'),
+    JSON.stringify({
+      reviews: [
+        {
+          id: 'ux',
+          name: 'UX',
+          mode: 'interactive',
+          skill: { source: 'project', path: 'review' },
+          runtime: { start: 'npm start', ready: 'localhost:4200', setup: 'No account' },
+        },
+      ],
+    }),
+  );
   const unavailable = check(doctorAt(home, dir, '--agent', 'codex').report, 'review');
-  assert.equal(unavailable.status, 'fail'); assert.match(unavailable.message, /factory-interactive-check/);
+  assert.equal(unavailable.status, 'fail');
+  assert.match(unavailable.message, /factory-interactive-check/);
   install(home, 'codex');
   assert.equal(check(doctorAt(home, dir, '--agent', 'codex').report, 'review').status, 'pass');
 });
 
 test('doctor reports claude, codex and copilot in that order by default, shared checks once', () => {
   const { report } = doctorOn(pathWith('claude'), project());
-  assert.deepEqual(report.agents.map((a) => a.id), ['claude', 'codex', 'copilot']);
-  assert.deepEqual(report.checks.map((c) => c.id).filter((id) => id !== 'agents'), ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'guides']);
-  for (const a of report.agents) assert.deepEqual(a.checks.map((c) => c.id), ['binary', 'skills', 'config', 'review'], a.id);
+  assert.deepEqual(
+    report.agents.map((a) => a.id),
+    ['claude', 'codex', 'copilot'],
+  );
+  assert.deepEqual(
+    report.checks.map((c) => c.id).filter((id) => id !== 'agents'),
+    ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'guides'],
+  );
+  for (const a of report.agents)
+    assert.deepEqual(
+      a.checks.map((c) => c.id),
+      ['binary', 'skills', 'config', 'review'],
+      a.id,
+    );
 });
 
 test('a missing agent binary is missing, never fail, and a usable agent keeps the report ok', () => {
@@ -345,7 +438,11 @@ test('doctor fails when no agent is usable and says what to do', () => {
   const line = report.checks.find((c) => c.id === 'agents');
   assert.equal(line.status, 'fail');
   assert.equal(line.message, 'no agent is usable: install claude, codex or copilot and run tds-factory install');
-  const text = spawnSync(process.execPath, [cli, 'doctor'], { cwd: project(), encoding: 'utf8', env: { ...process.env, PATH: pathWith() } });
+  const text = spawnSync(process.execPath, [cli, 'doctor'], {
+    cwd: project(),
+    encoding: 'utf8',
+    env: { ...process.env, PATH: pathWith() },
+  });
   assert.match(text.stdout, /^fail +agents: no agent is usable/m);
 });
 
@@ -362,11 +459,17 @@ test('doctor --agent reports only that agent and ignores its missing binary', ()
   const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   install(home, 'copilot');
   const { report, status } = doctorOn(pathWith(), project(), home, '--agent', 'copilot');
-  assert.deepEqual(report.agents.map((a) => a.id), ['copilot']);
+  assert.deepEqual(
+    report.agents.map((a) => a.id),
+    ['copilot'],
+  );
   assert.equal(check(report, 'binary').status, 'missing', 'shown');
   assert.equal(report.ok, true, 'but not counted');
   assert.equal(status, 0);
-  assert.equal(report.checks.some((c) => c.id === 'agents'), false);
+  assert.equal(
+    report.checks.some((c) => c.id === 'agents'),
+    false,
+  );
 });
 
 test('doctor --agent still needs that agent Skills, review and config to pass', () => {
@@ -377,29 +480,45 @@ test('doctor --agent still needs that agent Skills, review and config to pass', 
 });
 
 test('doctor text output groups the checks under each agent', () => {
-  const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: project(), encoding: 'utf8', env: { ...process.env, PATH: pathWith('codex') } });
-  for (const id of ['claude', 'codex', 'copilot']) assert.match(result.stdout, new RegExp(`^${id}: (not )?usable$`, 'm'), id);
+  const result = spawnSync(process.execPath, [cli, 'doctor'], {
+    cwd: project(),
+    encoding: 'utf8',
+    env: { ...process.env, PATH: pathWith('codex') },
+  });
+  for (const id of ['claude', 'codex', 'copilot'])
+    assert.match(result.stdout, new RegExp(`^${id}: (not )?usable$`, 'm'), id);
   assert.match(result.stdout, /^ +pass +binary: codex/m);
   assert.match(result.stdout, /^ +missing +binary: claude/m);
 });
 
 test('on Windows the agent command is found with a PATHEXT extension', async () => {
   const { doctor: run } = await import('../src/doctor.js');
-  const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-')), dir = project();
+  const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-')),
+    dir = project();
   writeFileSync(join(bin, 'claude.cmd'), '');
-  const saved = { path: process.env.PATH, ext: process.env.PATHEXT, platform: Object.getOwnPropertyDescriptor(process, 'platform') };
+  const saved = {
+    path: process.env.PATH,
+    ext: process.env.PATHEXT,
+    platform: Object.getOwnPropertyDescriptor(process, 'platform'),
+  };
   try {
-    process.env.PATH = bin; process.env.PATHEXT = '.EXE;.cmd';
+    process.env.PATH = bin;
+    process.env.PATHEXT = '.EXE;.cmd';
     Object.defineProperty(process, 'platform', { value: 'win32' });
-    const binary = (agent) => run({ projectDir: dir, agent, homeDir: mkdtempSync(join(tmpdir(), 'doctor-home-')) }).agents[0].checks.find((c) => c.id === 'binary').status;
+    const binary = (agent) =>
+      run({ projectDir: dir, agent, homeDir: mkdtempSync(join(tmpdir(), 'doctor-home-')) }).agents[0].checks.find(
+        (c) => c.id === 'binary',
+      ).status;
     assert.equal(binary('claude'), 'pass');
     assert.equal(binary('codex'), 'missing');
     Object.defineProperty(process, 'platform', saved.platform);
     assert.equal(binary('claude'), 'missing', 'without Windows the extension is not tried');
   } finally {
     Object.defineProperty(process, 'platform', saved.platform);
-    if (saved.path === undefined) delete process.env.PATH; else process.env.PATH = saved.path;
-    if (saved.ext === undefined) delete process.env.PATHEXT; else process.env.PATHEXT = saved.ext;
+    if (saved.path === undefined) delete process.env.PATH;
+    else process.env.PATH = saved.path;
+    if (saved.ext === undefined) delete process.env.PATHEXT;
+    else process.env.PATHEXT = saved.ext;
   }
 });
 
@@ -422,7 +541,10 @@ test('doctor reports the optional Verify-fast command like the Verify command', 
   assert.equal(shown.report.ok, true);
   assert.equal(shown.status, 0);
   // The full Verify line is still the one `verify-command` reads.
-  assert.match(check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-command').message, /Verify command: npm test$/);
+  assert.match(
+    check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-command').message,
+    /Verify command: npm test$/,
+  );
 });
 
 test('doctor fails the skills check when the installed factory Skill lacks its reference files', () => {

@@ -3,7 +3,14 @@ import { appendFileSync, readFileSync, existsSync } from 'node:fs';
 const READS = new Set(['view', 'list', 'status', 'diff', 'checks']);
 
 // A gh call is a write unless its verb is a plain read; unknown verbs count as writes so they are logged as attempts.
-export const isWrite = (argv) => !argv.slice(0, 3).some((a) => READS.has(a)) && !(argv[0] === 'auth') && !(argv[0] === 'api' && argv[1] === 'graphql' && argv.some((v) => /^query=query FollowUp(?:Checks|Threads|Comments)\(/.test(v)));
+export const isWrite = (argv) =>
+  !argv.slice(0, 3).some((a) => READS.has(a)) &&
+  !(argv[0] === 'auth') &&
+  !(
+    argv[0] === 'api' &&
+    argv[1] === 'graphql' &&
+    argv.some((v) => /^query=query FollowUp(?:Checks|Threads|Comments)\(/.test(v))
+  );
 
 export function option(argv, ...names) {
   for (let i = 0; i < argv.length; i++) {
@@ -15,7 +22,13 @@ export function option(argv, ...names) {
   return undefined;
 }
 
-export const readActions = (log) => (existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+export const readActions = (log) =>
+  existsSync(log)
+    ? readFileSync(log, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l))
+    : [];
 
 // What a fixture repository on GitHub answers when gh-state.json says nothing. Without it the agent sees no repository, publishes nothing and the Ticket checks cannot grade.
 const DEFAULTS = {
@@ -26,10 +39,13 @@ const DEFAULTS = {
 // Records the call and answers from canned state. It never contacts GitHub.
 export function handle(argv, { log, state, cwd = process.cwd() }) {
   const body = option(argv, '--body-file', '-F');
-  const text = body && existsSync(body) ? readFileSync(body, 'utf8') : option(argv, '--body', '-b') ?? '';
+  const text = body && existsSync(body) ? readFileSync(body, 'utf8') : (option(argv, '--body', '-b') ?? '');
   const write = isWrite(argv);
   const n = readActions(log).filter((a) => a.tool === 'gh' && a.write).length + 1;
-  appendFileSync(log, `${JSON.stringify({ tool: 'gh', argv, cwd, write, title: option(argv, '--title', '-t'), labels: option(argv, '--label', '-l'), body: text })}\n`);
+  appendFileSync(
+    log,
+    `${JSON.stringify({ tool: 'gh', argv, cwd, write, title: option(argv, '--title', '-t'), labels: option(argv, '--label', '-l'), body: text })}\n`,
+  );
   const [noun, verb] = argv;
   if (write && verb === 'create') return `https://github.com/eval/fixture/${noun === 'pr' ? 'pull' : 'issues'}/${n}\n`;
   if (!write) {
@@ -38,7 +54,8 @@ export function handle(argv, { log, state, cwd = process.cwd() }) {
     const operation = /query FollowUp(Checks|Threads|Comments)\(/.exec(query)?.[1];
     const cursor = argv.find((v) => v.startsWith('cursor='))?.slice(7) ?? '';
     const thread = argv.find((v) => v.startsWith('thread='))?.slice(7);
-    if (operation) return `${JSON.stringify(canned[`graphql ${operation}`]?.[thread ? `${thread}:${cursor}` : cursor] ?? null)}\n`;
+    if (operation)
+      return `${JSON.stringify(canned[`graphql ${operation}`]?.[thread ? `${thread}:${cursor}` : cursor] ?? null)}\n`;
     return `${JSON.stringify(canned[`${noun} ${verb}`] ?? DEFAULTS[`${noun} ${verb}`] ?? [])}\n`;
   }
   return '';

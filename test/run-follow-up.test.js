@@ -8,22 +8,102 @@ import { repo, git } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
 const page = (nodes, next = false, cursor = null) => ({ nodes, pageInfo: { hasNextPage: next, endCursor: cursor } });
-const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8', env: { ...process.env, PATH: `${join(cwd, 'fake-bin')}:${process.env.PATH}`, FAKE_GH: join(cwd, 'gh.json') } });
+const run = (cwd, ...args) =>
+  spawnSync(process.execPath, [cli, 'run', ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${join(cwd, 'fake-bin')}:${process.env.PATH}`, FAKE_GH: join(cwd, 'gh.json') },
+  });
 function fixture() {
   const cwd = repo();
   mkdirSync(join(cwd, 'fake-bin'));
   const gh = join(cwd, 'fake-bin', 'gh');
-  writeFileSync(gh, `#!/usr/bin/env node\nconst fs = require('fs');\nconst s = JSON.parse(fs.readFileSync(process.env.FAKE_GH));\nconst args = process.argv.slice(2);\nfs.appendFileSync(process.env.FAKE_GH + '.log', JSON.stringify(args) + '\\n');\nif (s.error) { process.exit(1); }\nif (args[0] === 'pr') console.log(JSON.stringify(s.pr));\nelse { const q = args.find(x => x.startsWith('query=')) || ''; const key = q.includes('FollowUpChecks') ? 'checks' : q.includes('FollowUpThreads') ? 'threads' : 'comments'; const cursor = (args.find(x => x.startsWith('cursor=')) || 'cursor=').slice(7); const id = (args.find(x => x.startsWith('thread=')) || 'thread=').slice(7); console.log(JSON.stringify((s[key][id ? id + ':' + cursor : cursor]))); }\n`);
+  writeFileSync(
+    gh,
+    `#!/usr/bin/env node\nconst fs = require('fs');\nconst s = JSON.parse(fs.readFileSync(process.env.FAKE_GH));\nconst args = process.argv.slice(2);\nfs.appendFileSync(process.env.FAKE_GH + '.log', JSON.stringify(args) + '\\n');\nif (s.error) { process.exit(1); }\nif (args[0] === 'pr') console.log(JSON.stringify(s.pr));\nelse { const q = args.find(x => x.startsWith('query=')) || ''; const key = q.includes('FollowUpChecks') ? 'checks' : q.includes('FollowUpThreads') ? 'threads' : 'comments'; const cursor = (args.find(x => x.startsWith('cursor=')) || 'cursor=').slice(7); const id = (args.find(x => x.startsWith('thread=')) || 'thread=').slice(7); console.log(JSON.stringify((s[key][id ? id + ':' + cursor : cursor]))); }\n`,
+  );
   chmodSync(gh, 0o755);
-  const out = run(cwd, 'start', '--data', JSON.stringify({ title: 'PR follow up', agent: 'codex', commands: 'true', conventions: [] }));
+  const out = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'PR follow up', agent: 'codex', commands: 'true', conventions: [] }),
+  );
   assert.equal(out.status, 0, out.stderr);
-  const id = out.stdout.trim(), file = join(cwd, '.factory', 'runs', id, 'run.json');
+  const id = out.stdout.trim(),
+    file = join(cwd, '.factory', 'runs', id, 'run.json');
   const record = JSON.parse(readFileSync(file));
   const head = git(record.worktree, 'rev-parse', 'HEAD');
   const pr = 'https://github.com/o/r/pull/7';
-  Object.assign(record, { stage: 'finish', status: 'done', pr, tickets_total: 1, tickets_done: 1, standards: 'pass', spec: 'pass', security: 'pass', infrastructure: 'skipped', verify: { head }, reviewed: { standards: { head, attempt: 1 } }, accepted: { head }, project_results: { accessibility: { head } } });
+  Object.assign(record, {
+    stage: 'finish',
+    status: 'done',
+    pr,
+    tickets_total: 1,
+    tickets_done: 1,
+    standards: 'pass',
+    spec: 'pass',
+    security: 'pass',
+    infrastructure: 'skipped',
+    verify: { head },
+    reviewed: { standards: { head, attempt: 1 } },
+    accepted: { head },
+    project_results: { accessibility: { head } },
+  });
   writeFileSync(file, JSON.stringify(record));
-  const state = { pr: { state: 'OPEN', headRefOid: head }, checks: { '': { data: { repository: { pullRequest: { headRefOid: head, commits: { nodes: [{ commit: { statusCheckRollup: { contexts: page([{ __typename: 'CheckRun', name: 'unit', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://github.com/o/r/actions/1' }]) } } }] } } } } } }, threads: { '': { data: { repository: { pullRequest: { headRefOid: head, reviewThreads: page([{ id: 'T1', isResolved: false, path: 'src/a.js', comments: page([{ body: 'Fix this', url: 'https://github.com/o/r/pull/7#discussion_r1' }]) }]) } } } } }, comments: {} };
+  const state = {
+    pr: { state: 'OPEN', headRefOid: head },
+    checks: {
+      '': {
+        data: {
+          repository: {
+            pullRequest: {
+              headRefOid: head,
+              commits: {
+                nodes: [
+                  {
+                    commit: {
+                      statusCheckRollup: {
+                        contexts: page([
+                          {
+                            __typename: 'CheckRun',
+                            name: 'unit',
+                            status: 'COMPLETED',
+                            conclusion: 'FAILURE',
+                            detailsUrl: 'https://github.com/o/r/actions/1',
+                          },
+                        ]),
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+    threads: {
+      '': {
+        data: {
+          repository: {
+            pullRequest: {
+              headRefOid: head,
+              reviewThreads: page([
+                {
+                  id: 'T1',
+                  isResolved: false,
+                  path: 'src/a.js',
+                  comments: page([{ body: 'Fix this', url: 'https://github.com/o/r/pull/7#discussion_r1' }]),
+                },
+              ]),
+            },
+          },
+        },
+      },
+    },
+    comments: {},
+  };
   const save = () => writeFileSync(join(cwd, 'gh.json'), JSON.stringify(state));
   const read = () => JSON.parse(readFileSync(file));
   save();
@@ -45,34 +125,110 @@ test('follow-up turns failing CI and unresolved review comments into scoped Rewo
   assert.equal(after.follow_up.head, f.head);
   assert.equal(after.follow_up.failures[0].name, 'unit');
   assert.equal(after.follow_up.threads[0].comments[0].body, 'Fix this');
-  for (const key of ['verify', 'reviewed', 'accepted', 'standards', 'spec', 'security', 'infrastructure', 'project_results']) assert.equal(key in after, false, key);
-  assert.ok(finishProblems(after, { head: f.head, dirty: false }).length > 0, 'cleared Evidence cannot authorize Finish');
+  for (const key of [
+    'verify',
+    'reviewed',
+    'accepted',
+    'standards',
+    'spec',
+    'security',
+    'infrastructure',
+    'project_results',
+  ])
+    assert.equal(key in after, false, key);
+  assert.ok(
+    finishProblems(after, { head: f.head, dirty: false }).length > 0,
+    'cleared Evidence cannot authorize Finish',
+  );
 });
 
 test('follow-up reads every page and excludes resolved threads and nonfailing checks', () => {
   const f = fixture();
   const checkNode = f.state.checks[''].data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.contexts;
-  checkNode.nodes = [{ __typename: 'StatusContext', context: 'lint', state: 'SUCCESS', targetUrl: null, description: null }];
+  checkNode.nodes = [
+    { __typename: 'StatusContext', context: 'lint', state: 'SUCCESS', targetUrl: null, description: null },
+  ];
   checkNode.pageInfo = { hasNextPage: true, endCursor: 'checks2' };
-  f.state.checks.checks2 = { data: { repository: { pullRequest: { headRefOid: f.head, commits: { nodes: [{ commit: { statusCheckRollup: { contexts: page([{ __typename: 'StatusContext', context: 'deploy', state: 'FAILURE', targetUrl: 'https://example.test/status', description: 'broken' }]) } } }] } } } } };
+  f.state.checks.checks2 = {
+    data: {
+      repository: {
+        pullRequest: {
+          headRefOid: f.head,
+          commits: {
+            nodes: [
+              {
+                commit: {
+                  statusCheckRollup: {
+                    contexts: page([
+                      {
+                        __typename: 'StatusContext',
+                        context: 'deploy',
+                        state: 'FAILURE',
+                        targetUrl: 'https://example.test/status',
+                        description: 'broken',
+                      },
+                    ]),
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
   const first = f.state.threads[''].data.repository.pullRequest.reviewThreads;
   first.nodes[0].comments.pageInfo = { hasNextPage: true, endCursor: 'comments2' };
-  first.nodes.push({ id: 'T2', isResolved: true, path: 'old.js', comments: page([{ body: 'resolved', url: 'https://example.test/old' }]) });
+  first.nodes.push({
+    id: 'T2',
+    isResolved: true,
+    path: 'old.js',
+    comments: page([{ body: 'resolved', url: 'https://example.test/old' }]),
+  });
   first.pageInfo = { hasNextPage: true, endCursor: 'threads2' };
-  f.state.threads.threads2 = { data: { repository: { pullRequest: { headRefOid: f.head, reviewThreads: page([{ id: 'T3', isResolved: false, path: 'b.js', comments: page([{ body: 'second thread', url: 'https://example.test/2' }]) }]) } } } };
-  f.state.comments['T1:comments2'] = { data: { node: { id: 'T1', comments: page([{ body: 'reply', url: 'https://example.test/reply' }]) } } };
+  f.state.threads.threads2 = {
+    data: {
+      repository: {
+        pullRequest: {
+          headRefOid: f.head,
+          reviewThreads: page([
+            {
+              id: 'T3',
+              isResolved: false,
+              path: 'b.js',
+              comments: page([{ body: 'second thread', url: 'https://example.test/2' }]),
+            },
+          ]),
+        },
+      },
+    },
+  };
+  f.state.comments['T1:comments2'] = {
+    data: { node: { id: 'T1', comments: page([{ body: 'reply', url: 'https://example.test/reply' }]) } },
+  };
   f.save();
   const result = run(f.cwd, 'follow-up', '--id', f.id);
   assert.equal(result.status, 0, result.stderr);
   const scope = f.read().follow_up;
-  assert.deepEqual(scope.failures.map(c => c.name), ['deploy']);
-  assert.deepEqual(scope.threads.map(t => t.id), ['T1', 'T3']);
-  assert.deepEqual(scope.threads[0].comments.map(c => c.body), ['Fix this', 'reply']);
+  assert.deepEqual(
+    scope.failures.map((c) => c.name),
+    ['deploy'],
+  );
+  assert.deepEqual(
+    scope.threads.map((t) => t.id),
+    ['T1', 'T3'],
+  );
+  assert.deepEqual(
+    scope.threads[0].comments.map((c) => c.body),
+    ['Fix this', 'reply'],
+  );
 });
 
 test('clean or pending reads remain in Follow-up and can be completed and reopened', () => {
   const f = fixture();
-  f.state.checks[''].data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.contexts.nodes = [{ __typename: 'CheckRun', name: 'CI', status: 'IN_PROGRESS', conclusion: null, detailsUrl: null }];
+  f.state.checks[''].data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.contexts.nodes = [
+    { __typename: 'CheckRun', name: 'CI', status: 'IN_PROGRESS', conclusion: null, detailsUrl: null },
+  ];
   f.state.threads[''].data.repository.pullRequest.reviewThreads.nodes = [];
   f.save();
   assert.equal(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
@@ -100,11 +256,13 @@ test('the shared four-Rework limit retains scope without clearing Evidence or en
 
 test('merged PR ends Follow-up without a worktree; closed PR refuses unchanged', () => {
   const f = fixture();
-  f.state.pr.state = 'CLOSED'; f.save();
+  f.state.pr.state = 'CLOSED';
+  f.save();
   let before = f.read();
   assert.notEqual(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   assert.deepEqual(f.read(), before);
-  f.state.pr.state = 'MERGED'; f.save();
+  f.state.pr.state = 'MERGED';
+  f.save();
   git(f.cwd, 'worktree', 'remove', before.worktree);
   assert.equal(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   assert.equal(f.read().status, 'done');
@@ -129,7 +287,8 @@ test('unavailable, incomplete, dirty and head-mismatched reads leave the Run unc
 test('an invalid PR number cannot end a Run even if GitHub says merged', () => {
   const f = fixture();
   writeFileSync(f.file, JSON.stringify({ ...f.read(), pr: 'https://github.com/o/r/pull/0' }));
-  f.state.pr.state = 'MERGED'; f.save();
+  f.state.pr.state = 'MERGED';
+  f.save();
   const before = f.read();
   assert.notEqual(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   assert.deepEqual(f.read(), before);
@@ -137,7 +296,10 @@ test('an invalid PR number cannot end a Run even if GitHub says merged', () => {
 
 test('Follow-up cannot forge scope with update and a new head needs new Check Evidence', () => {
   const f = fixture();
-  assert.notEqual(run(f.cwd, 'update', '--id', f.id, '--data', JSON.stringify({ follow_up: { failures: [] } })).status, 0);
+  assert.notEqual(
+    run(f.cwd, 'update', '--id', f.id, '--data', JSON.stringify({ follow_up: { failures: [] } })).status,
+    0,
+  );
   assert.equal(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   git(f.read().worktree, 'commit', '-q', '--allow-empty', '-m', 'fix feedback');
   assert.equal(run(f.cwd, 'transition', '--id', f.id, '--to', 'check').status, 0);
@@ -156,7 +318,7 @@ test('only eligible Runs enter Follow-up and metrics preserve the visit', () => 
   assert.equal(f.read().metrics.visits.at(-1).stage, 'follow-up');
   assert.equal(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   assert.equal(f.read().metrics.visits.at(-1).stage, 'build');
-  assert.ok(f.read().metrics.visits.some(v => v.stage === 'follow-up' && v.ended));
+  assert.ok(f.read().metrics.visits.some((v) => v.stage === 'follow-up' && v.ended));
 });
 
 test('a loop the user granted raises the shared limit for Follow-up too', () => {

@@ -12,7 +12,8 @@ export function install({ agent, project, force, dryRun = false }) {
   const all = Object.keys(targets);
   const names = agent === 'all' ? all.filter((name) => name !== 'copilot') : [agent];
   for (const name of names) {
-    if (!Object.hasOwn(targets, name)) throw new Error(`unknown agent "${name}" (${Object.keys(targets).join(', ')}, all)`);
+    if (!Object.hasOwn(targets, name))
+      throw new Error(`unknown agent "${name}" (${Object.keys(targets).join(', ')}, all)`);
   }
   const base = project ? process.cwd() : os.homedir();
   const skills = fs
@@ -68,7 +69,11 @@ function installAgents(name, targetDir, force, dryRun) {
   if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
   const recordFile = path.join(targetDir, AGENT_RECORD);
   let record = {};
-  try { record = JSON.parse(fs.readFileSync(recordFile, 'utf8')); } catch { /* no record yet */ }
+  try {
+    record = JSON.parse(fs.readFileSync(recordFile, 'utf8'));
+  } catch {
+    /* no record yet */
+  }
   for (const file of fs.readdirSync(sourceDir)) {
     const dest = path.join(targetDir, file);
     const src = path.join(sourceDir, file);

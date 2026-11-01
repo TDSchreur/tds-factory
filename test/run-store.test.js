@@ -29,16 +29,34 @@ test('start and update go through the store and list returns the raw record', as
 test('list flags broken records, tolerates a missing store and orders summaries by Stage', async () => {
   const cwd = project();
   assert.deepEqual(await openRunStore(cwd).list(), []);
-  for (const status of ['waiting', 'verification-unavailable', 'interrupted', 'abandoned']) seed(cwd, status, { 'run.json': JSON.stringify({ status }) });
+  for (const status of ['waiting', 'verification-unavailable', 'interrupted', 'abandoned'])
+    seed(cwd, status, { 'run.json': JSON.stringify({ status }) });
   seed(cwd, 'unknown', { 'run.json': '{"status":"future"}' });
   seed(cwd, 'broken', { 'run.json': '{' });
   seed(cwd, 'norecord', { 'define.md': 'x' });
-  seed(cwd, 'good', { 'run.json': '{"status":"running"}', 'notes.md': 'x', 'finish.md': 'x', 'check-10.md': 'x', 'check-2.md': 'x', 'build.md': 'x', 'check-1.md': 'x', 'define.md': 'x' });
+  seed(cwd, 'good', {
+    'run.json': '{"status":"running"}',
+    'notes.md': 'x',
+    'finish.md': 'x',
+    'check-10.md': 'x',
+    'check-2.md': 'x',
+    'build.md': 'x',
+    'check-1.md': 'x',
+    'define.md': 'x',
+  });
   const runs = await openRunStore(cwd).list();
   assert.equal(runs.find((r) => r.id === 'broken').unreadable, true);
   assert.equal(runs.find((r) => r.id === 'norecord').unreadable, true);
   assert.equal(runs.find((r) => r.id === 'good').unreadable, false);
-  assert.deepEqual(runs.find((r) => r.id === 'good').files, ['define.md', 'build.md', 'check-1.md', 'check-2.md', 'check-10.md', 'finish.md', 'notes.md']);
+  assert.deepEqual(runs.find((r) => r.id === 'good').files, [
+    'define.md',
+    'build.md',
+    'check-1.md',
+    'check-2.md',
+    'check-10.md',
+    'finish.md',
+    'notes.md',
+  ]);
 });
 
 test('readFile serves only Markdown inside a Run folder', async () => {
@@ -46,20 +64,23 @@ test('readFile serves only Markdown inside a Run folder', async () => {
   seed(cwd, 'a', { 'run.json': '{}', 'define.md': '# hi' });
   const store = openRunStore(cwd);
   assert.equal(await store.readFile('a/define.md'), '# hi');
-  for (const bad of ['a/run.json', 'a/../a/define.md', '../x.md', 'a', 'a/b/c.md']) assert.equal(await store.readFile(bad), null);
+  for (const bad of ['a/run.json', 'a/../a/define.md', '../x.md', 'a', 'a/b/c.md'])
+    assert.equal(await store.readFile(bad), null);
 });
 
 test('remove deletes supported Runs with a readable record', () => {
   const cwd = project();
   seed(cwd, 'done', { 'run.json': '{"status":"done"}' });
   seed(cwd, 'running', { 'run.json': '{"status":"running"}' });
-  for (const status of ['waiting', 'verification-unavailable', 'interrupted', 'abandoned']) seed(cwd, status, { 'run.json': JSON.stringify({ status }) });
+  for (const status of ['waiting', 'verification-unavailable', 'interrupted', 'abandoned'])
+    seed(cwd, status, { 'run.json': JSON.stringify({ status }) });
   seed(cwd, 'unknown', { 'run.json': '{"status":"future"}' });
   seed(cwd, 'broken', { 'run.json': '{' });
   const store = openRunStore(cwd);
   assert.equal(store.remove('done'), 'deleted');
   assert.equal(existsSync(join(cwd, '.factory', 'runs', 'done')), false);
-  for (const status of ['running', 'waiting', 'verification-unavailable', 'interrupted', 'abandoned']) assert.equal(store.remove(status), 'deleted');
+  for (const status of ['running', 'waiting', 'verification-unavailable', 'interrupted', 'abandoned'])
+    assert.equal(store.remove(status), 'deleted');
   assert.equal(store.remove('unknown'), 'not-allowed');
   seed(cwd, 'became-active', { 'run.json': '{"status":"running"}' });
   assert.equal(store.remove('became-active', undefined, { doneOnly: true }), 'not-allowed');
@@ -97,7 +118,15 @@ test('remove refuses linked storage, a linked Run folder and a Run whose update 
 
 test('update preserves unknown fields and clears waiting on resume', () => {
   const cwd = project();
-  seed(cwd, 'old', { 'run.json': JSON.stringify({ created: 'original', status: 'waiting', waiting_reason: 'answer', waiting_on_human: true, future: { value: 42 } }) });
+  seed(cwd, 'old', {
+    'run.json': JSON.stringify({
+      created: 'original',
+      status: 'waiting',
+      waiting_reason: 'answer',
+      waiting_on_human: true,
+      future: { value: 42 },
+    }),
+  });
   openRunStore(cwd).update('old', { status: 'running', activity: 'continuing' });
   const record = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json')));
   assert.deepEqual(record.future, { value: 42 });
@@ -148,9 +177,14 @@ test('a failed replacement leaves the existing record intact', () => {
   seed(cwd, 'old', { 'run.json': '{"status":"running"}' });
   const file = join(cwd, '.factory', 'runs', 'old', 'run.json');
   const rename = fs.renameSync;
-  fs.renameSync = () => { throw new Error('replacement failed'); };
-  try { assert.throws(() => openRunStore(cwd).update('old', { activity: 'changed' }), /replacement failed/); }
-  finally { fs.renameSync = rename; }
+  fs.renameSync = () => {
+    throw new Error('replacement failed');
+  };
+  try {
+    assert.throws(() => openRunStore(cwd).update('old', { activity: 'changed' }), /replacement failed/);
+  } finally {
+    fs.renameSync = rename;
+  }
   assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
 });
 
@@ -161,8 +195,15 @@ test('Run locks identify their process and inspection diagnoses the owner', asyn
   const lock = join(cwd, '.factory', 'runs', `.lock-${createHash('sha256').update(id).digest('hex')}`);
   const rename = fs.renameSync;
   let owner;
-  fs.renameSync = (...args) => { owner = JSON.parse(readFileSync(lock, 'utf8')); return rename(...args); };
-  try { store.update(id, { activity: 'working' }); } finally { fs.renameSync = rename; }
+  fs.renameSync = (...args) => {
+    owner = JSON.parse(readFileSync(lock, 'utf8'));
+    return rename(...args);
+  };
+  try {
+    store.update(id, { activity: 'working' });
+  } finally {
+    fs.renameSync = rename;
+  }
   assert.equal(owner.pid, process.pid);
   assert.ok(owner.host);
   assert.ok(Date.parse(owner.started));

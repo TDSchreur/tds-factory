@@ -17,7 +17,11 @@ if (!command) {
 const dir = realpathSync(mkdtempSync(join(tmpdir(), 'tds-run-')));
 const remove = () => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 // npm and tds-factory are .cmd shims on Windows, which spawn only runs through a shell.
-const child = spawn(command, args, { stdio: 'inherit', env: { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir }, shell: process.platform === 'win32' && /^(npm|npx|tds-factory)$/.test(command) });
+const child = spawn(command, args, {
+  stdio: 'inherit',
+  env: { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir },
+  shell: process.platform === 'win32' && /^(npm|npx|tds-factory)$/.test(command),
+});
 // The child gets the signal as well, since it shares the terminal; wait for it to stop before removing its files.
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
 

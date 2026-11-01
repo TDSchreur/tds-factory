@@ -9,7 +9,21 @@ const text = helpText();
 
 test('the help text names every Stage, both tracks, the Check verdicts and the actions', () => {
   for (const column of COLUMNS) assert.match(text, new RegExp(column.label, 'i'), column.label);
-  for (const word of ['Fast track', 'Full track', 'Needs you', 'pass', 'fail', 'skipped', 'Left open', 'Merge', 'Sync', 'Clean up', 'Accept Check', 'Grant extra loop']) assert.ok(text.includes(word), word);
+  for (const word of [
+    'Fast track',
+    'Full track',
+    'Needs you',
+    'pass',
+    'fail',
+    'skipped',
+    'Left open',
+    'Merge',
+    'Sync',
+    'Clean up',
+    'Accept Check',
+    'Grant extra loop',
+  ])
+    assert.ok(text.includes(word), word);
 });
 
 test('the help sections are short and each has a title and items of plain text', () => {
@@ -31,8 +45,17 @@ test('the help text uses no Avoid term of the glossary and asks for no external 
 
 test('each action says when its button appears', () => {
   const actions = HELP_SECTIONS.find((section) => section.id === 'actions').items;
-  const when = { Merge: /open pull request/, Sync: /Build or Check/, 'Clean up': /merged/, 'Accept Check': /waits in Check/, 'Grant extra loop': /limit/ };
-  assert.deepEqual(actions.map((item) => item.term), Object.keys(when));
+  const when = {
+    Merge: /open pull request/,
+    Sync: /Build or Check/,
+    'Clean up': /merged/,
+    'Accept Check': /waits in Check/,
+    'Grant extra loop': /limit/,
+  };
+  assert.deepEqual(
+    actions.map((item) => item.term),
+    Object.keys(when),
+  );
   for (const item of actions) assert.match(item.text, /Shown /, item.term);
   for (const item of actions) assert.match(item.text, when[item.term], item.term);
 });

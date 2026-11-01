@@ -13,12 +13,20 @@ test('the Help button opens the help panel with the focus inside, and Esc closes
     assert.equal(await page.execute(open), false);
     await page.execute("document.getElementById('help').click()");
     await page.waitFor(open);
-    assert.equal(await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"), true);
-    assert.deepEqual(await page.execute("return [...document.querySelectorAll('#help-panel h3')].map((h) => h.textContent)"), ['Stages', 'Tracks', 'Waiting on you', 'Check verdicts', 'Actions']);
+    assert.equal(
+      await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"),
+      true,
+    );
+    assert.deepEqual(
+      await page.execute("return [...document.querySelectorAll('#help-panel h3')].map((h) => h.textContent)"),
+      ['Stages', 'Tracks', 'Waiting on you', 'Check verdicts', 'Actions'],
+    );
     assert.match(await page.execute("return document.getElementById('help-panel').textContent"), /\/factory/);
     await page.key(''); // Escape
     await page.waitFor("return !document.getElementById('help-panel').open && document.activeElement.id === 'help'"); // the close event follows the closing
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test('Tab stays inside the help panel and the Close button closes it', async (t) => {
@@ -29,13 +37,23 @@ test('Tab stays inside the help panel and the Close button closes it', async (t)
     await page.waitFor(open);
     for (let i = 0; i < 4; i++) {
       await page.key(''); // Tab
-      assert.equal(await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"), true, 'Tab ' + i);
+      assert.equal(
+        await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"),
+        true,
+        'Tab ' + i,
+      );
     }
     await page.keyChord('\uE008', '\uE004'); // Shift+Tab
-    assert.equal(await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"), true, 'Shift+Tab');
+    assert.equal(
+      await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"),
+      true,
+      'Shift+Tab',
+    );
     await page.execute("document.getElementById('help-close').click()");
     await page.waitFor("return !document.getElementById('help-panel').open && document.activeElement.id === 'help'");
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test('on a phone the help panel fills the screen and its buttons are 44 px tall', async (t) => {
@@ -44,13 +62,17 @@ test('on a phone the help panel fills the screen and its buttons are 44 px tall'
   try {
     await page.execute("document.getElementById('help').click()");
     await page.waitFor(open);
-    const box = await page.execute("const r = document.getElementById('help-panel').getBoundingClientRect(); return { width: r.width, height: r.height, close: document.getElementById('help-close').getBoundingClientRect().height, help: document.getElementById('help').getBoundingClientRect().height, scroll: document.documentElement.scrollWidth <= window.innerWidth }");
+    const box = await page.execute(
+      "const r = document.getElementById('help-panel').getBoundingClientRect(); return { width: r.width, height: r.height, close: document.getElementById('help-close').getBoundingClientRect().height, help: document.getElementById('help').getBoundingClientRect().height, scroll: document.documentElement.scrollWidth <= window.innerWidth }",
+    );
     assert.equal(box.width, 375);
     assert.equal(box.height, 700);
     assert.ok(box.close >= 44, 'close ' + box.close);
     assert.ok(box.help >= 44, 'help ' + box.help);
     assert.equal(box.scroll, true);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test('with no Runs a welcome card replaces the Stage columns, says how to start and opens the help panel', async (t) => {
@@ -58,14 +80,27 @@ test('with no Runs a welcome card replaces the Stage columns, says how to start 
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('.welcome')");
-    assert.equal(await page.execute("return document.querySelectorAll('#board, .column').length"), 0, 'no empty columns');
+    assert.equal(
+      await page.execute("return document.querySelectorAll('#board, .column').length"),
+      0,
+      'no empty columns',
+    );
     assert.match(await page.execute("return document.querySelector('.welcome').textContent"), /\/factory/);
-    assert.equal(await page.execute("return document.querySelector('.welcome code').textContent.startsWith('/factory ')"), true);
-    await page.execute("document.querySelector('.welcome button').focus(); document.querySelector('.welcome button').click()");
+    assert.equal(
+      await page.execute("return document.querySelector('.welcome code').textContent.startsWith('/factory ')"),
+      true,
+    );
+    await page.execute(
+      "document.querySelector('.welcome button').focus(); document.querySelector('.welcome button').click()",
+    );
     await page.waitFor(open);
     await page.key('');
-    await page.waitFor("return !document.getElementById('help-panel').open && document.activeElement === document.querySelector('.welcome button')"); // the focus returns to the link
-  } finally { await page.close(); }
+    await page.waitFor(
+      "return !document.getElementById('help-panel').open && document.activeElement === document.querySelector('.welcome button')",
+    ); // the focus returns to the link
+  } finally {
+    await page.close();
+  }
 });
 
 test('the welcome card is gone once a Run exists, and a filter that hides every Run does not bring it back', async (t) => {
@@ -79,6 +114,11 @@ test('the welcome card is gone once a Run exists, and a filter that hides every 
     await page.execute("document.getElementById('needs-you').click()");
     await page.waitFor("return document.getElementById('needs-you').getAttribute('aria-pressed') === 'true'");
     assert.equal(await page.execute("return document.querySelector('.welcome')"), null);
-    assert.ok(await page.execute("return document.querySelectorAll('.column').length") > 0, 'the columns show the empty filter');
-  } finally { await page.close(); }
+    assert.ok(
+      (await page.execute("return document.querySelectorAll('.column').length")) > 0,
+      'the columns show the empty filter',
+    );
+  } finally {
+    await page.close();
+  }
 });

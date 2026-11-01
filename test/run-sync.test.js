@@ -7,7 +7,10 @@ import { git, repo } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
-const ok = (result) => { assert.equal(result.status, 0, result.stderr); return result.stdout.trim(); };
+const ok = (result) => {
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+};
 const read = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8'));
 const data = (value) => JSON.stringify(value);
 
@@ -20,9 +23,13 @@ function checked() {
   writeFileSync(join(cwd, 'shared.txt'), 'one\ntwo\nthree\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'shared');
-  const id = ok(run(cwd, 'start', '--data', data({ title: 'Sync', agent: 'claude', commands: 'true', conventions: [] })));
+  const id = ok(
+    run(cwd, 'start', '--data', data({ title: 'Sync', agent: 'claude', commands: 'true', conventions: [] })),
+  );
   const wt = read(cwd, id).worktree;
-  ok(run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })));
+  ok(
+    run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })),
+  );
   ok(run(cwd, 'transition', '--id', id, '--to', 'build'));
   writeFileSync(join(wt, 'mine.txt'), 'mine\n');
   git(wt, 'add', '-A');
@@ -33,7 +40,13 @@ function checked() {
 }
 const review = (cwd, id) => {
   ok(run(cwd, 'verify', '--id', id));
-  for (const [axis, value] of [['standards', 'pass'], ['spec', 'pass'], ['security', 'pass'], ['infrastructure', 'skipped']]) ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
+  for (const [axis, value] of [
+    ['standards', 'pass'],
+    ['spec', 'pass'],
+    ['security', 'pass'],
+    ['infrastructure', 'skipped'],
+  ])
+    ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
 const advance = (cwd, file, text, message) => {
   writeFileSync(join(cwd, file), text);
@@ -50,11 +63,25 @@ test('sync rebases onto the moved base, records it and clears the Evidence', () 
   const after = read(cwd, id);
   assert.equal(after.base_sha, git(cwd, 'rev-parse', 'main'));
   assert.equal(git(wt, 'rev-parse', 'HEAD~1'), after.base_sha);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted', 'project_results']) assert.equal(key in after, false, key);
+  for (const key of [
+    'standards',
+    'spec',
+    'security',
+    'infrastructure',
+    'verify',
+    'reviewed',
+    'accepted',
+    'project_results',
+  ])
+    assert.equal(key in after, false, key);
   assert.equal(after.check_loops, 0);
   assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
   assert.equal(after.title, before.title);
-  assert.notEqual(run(cwd, 'transition', '--id', id, '--to', 'finish').status, 0, 'cleared Evidence cannot authorize Finish');
+  assert.notEqual(
+    run(cwd, 'transition', '--id', id, '--to', 'finish').status,
+    0,
+    'cleared Evidence cannot authorize Finish',
+  );
 });
 
 test('sync keeps the Evidence when the base has not moved', () => {
@@ -63,7 +90,8 @@ test('sync keeps the Evidence when the base has not moved', () => {
   const before = read(cwd, id);
   ok(run(cwd, 'sync', '--id', id));
   const after = read(cwd, id);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed']) assert.deepEqual(after[key], before[key], key);
+  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed'])
+    assert.deepEqual(after[key], before[key], key);
 });
 
 test('sync names the conflicting files and leaves the branch alone', () => {
@@ -97,7 +125,9 @@ test('sync refuses uncommitted changes and Runs outside Build and Check', () => 
   const { cwd, id, wt } = checked();
   writeFileSync(join(wt, 'dirty.txt'), 'x\n');
   assert.match(run(cwd, 'sync', '--id', id).stderr, /uncommitted/);
-  const define = ok(run(cwd, 'start', '--data', data({ title: 'Other', agent: 'claude', commands: 'true', conventions: [] })));
+  const define = ok(
+    run(cwd, 'start', '--data', data({ title: 'Other', agent: 'claude', commands: 'true', conventions: [] })),
+  );
   assert.match(run(cwd, 'sync', '--id', define).stderr, /Build or Check/);
 });
 
@@ -109,7 +139,10 @@ test('Finish refuses a branch that conflicts with origin, even when accepted, an
   review(cwd, id);
   const refused = run(cwd, 'transition', '--id', id, '--to', 'finish');
   assert.notEqual(refused.status, 0);
-  assert.match(refused.stderr, /merges cleanly: the branch conflicts with origin's default branch in shared\.txt; run `tds-factory run sync`/);
+  assert.match(
+    refused.stderr,
+    /merges cleanly: the branch conflicts with origin's default branch in shared\.txt; run `tds-factory run sync`/,
+  );
   assert.doesNotMatch(refused.stderr, /CONFLICT|Auto-merging/);
   assert.equal(read(cwd, id).stage, 'check');
   // An Accepted Check does not excuse the conflict.

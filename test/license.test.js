@@ -17,13 +17,24 @@ test('THIRD-PARTY-NOTICES.md names every upstream source and carries its MIT not
   assert.equal(urls.length, 3);
   for (const url of urls) assert.ok(notices.includes(url), url);
   // Every source has its own notice text: the three skill repositories and the Fluent UI tokens the Dashboard stylesheet takes values from (ADR 0025).
-  assert.equal(notices.split('Permission is hereby granted, free of charge').length - 1, notices.split(/^Source: /m).length - 1, 'one notice text per upstream');
-  assert.equal(notices.split(/^Source: /m).length - 1, urls.length + 1, 'three skill repositories and the Fluent UI tokens');
+  assert.equal(
+    notices.split('Permission is hereby granted, free of charge').length - 1,
+    notices.split(/^Source: /m).length - 1,
+    'one notice text per upstream',
+  );
+  assert.equal(
+    notices.split(/^Source: /m).length - 1,
+    urls.length + 1,
+    'three skill repositories and the Fluent UI tokens',
+  );
   assert.ok(notices.includes('https://www.npmjs.com/package/@fluentui/tokens'), 'Fluent UI tokens');
 });
 
 test('the packed tarball carries the license and the third-party notices', () => {
-  const packed = spawnSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8', shell: process.platform === 'win32' });
+  const packed = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
   assert.equal(packed.status, 0, packed.stderr);
   const info = JSON.parse(packed.stdout); // an array in npm 10 and 11, an object keyed by package name in npm 12
   const files = (Array.isArray(info) ? info[0] : Object.values(info)[0]).files.map((f) => f.path);
@@ -32,7 +43,10 @@ test('the packed tarball carries the license and the third-party notices', () =>
 });
 
 test('the packed tarball carries a complete provenance entry for every synced skill', () => {
-  const packed = spawnSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8', shell: process.platform === 'win32' });
+  const packed = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
   assert.equal(packed.status, 0, packed.stderr);
   const info = JSON.parse(packed.stdout);
   const files = (Array.isArray(info) ? info[0] : Object.values(info)[0]).files.map((f) => f.path);

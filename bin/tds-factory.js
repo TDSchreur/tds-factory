@@ -83,25 +83,34 @@ try {
     else if (op === 'track') store.track(values.id, values.value);
     else if (op === 'transition') {
       store.transition(values.id, values.to, data);
-      if (values.to === 'check') for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
-    }
-    else if (op === 'follow-up') console.log(store.followUp(values.id));
+      if (values.to === 'check')
+        for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
+    } else if (op === 'follow-up') console.log(store.followUp(values.id));
     else if (op === 'rework') store.rework(values.id, data);
     else if (op === 'sync') store.sync(values.id, data);
     else if (op === 'complete') {
       store.complete(values.id, data);
-      console.log(`Done. After the PR is merged, run \`tds-factory run clean --id ${values.id}\` from the main checkout to remove the Run worktree and branch.`);
-    }
-    else if (op === 'clean') {
+      console.log(
+        `Done. After the PR is merged, run \`tds-factory run clean --id ${values.id}\` from the main checkout to remove the Run worktree and branch.`,
+      );
+    } else if (op === 'clean') {
       if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all, not both');
-      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)]) console.log((reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'));
-    }
-    else if (op === 'stats') {
+      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)])
+        console.log(
+          (reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'),
+        );
+    } else if (op === 'stats') {
       if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
       const report = await store.stats(values.id);
       const print = (label, summary) => {
         const formatted = formatMetrics(summary);
-        console.log(`${label}${formatted.track ? `\n  Track: ${formatted.track}` : ''}\n${Object.entries(formatted.stages).map(([stage, value]) => `  ${stage[0].toUpperCase()}${stage.slice(1)}: ${value}`).join('\n')}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`);
+        console.log(
+          `${label}${formatted.track ? `\n  Track: ${formatted.track}` : ''}\n${Object.entries(formatted.stages)
+            .map(([stage, value]) => `  ${stage[0].toUpperCase()}${stage.slice(1)}: ${value}`)
+            .join(
+              '\n',
+            )}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`,
+        );
       };
       for (const run of report.runs) {
         const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
@@ -110,42 +119,63 @@ try {
       }
       if (values.all) {
         print('Total observed', report.total);
-        for (const [track, { runs, total }] of Object.entries(report.byTrack)) if (runs) print(`Total observed, ${track[0].toUpperCase()}${track.slice(1)} track (${runs} Run(s))`, total);
-        const missing = report.runs.filter(run => !run.summary || Object.values(run.summary.stages).some(value => value.ms === null) || run.summary.reworks === null).length;
-        if (missing) console.log(`${missing} Run(s) have missing or unreadable data; totals include observed values only.`);
+        for (const [track, { runs, total }] of Object.entries(report.byTrack))
+          if (runs) print(`Total observed, ${track[0].toUpperCase()}${track.slice(1)} track (${runs} Run(s))`, total);
+        const missing = report.runs.filter(
+          (run) =>
+            !run.summary ||
+            Object.values(run.summary.stages).some((value) => value.ms === null) ||
+            run.summary.reworks === null,
+        ).length;
+        if (missing)
+          console.log(`${missing} Run(s) have missing or unreadable data; totals include observed values only.`);
       }
-    }
-    else if (op === 'accept') store.accept(values.id, data);
+    } else if (op === 'accept') store.accept(values.id, data);
     else if (op === 'inspect') {
       const report = await store.inspect(values.id);
       if (values.json) console.log(JSON.stringify(report, null, 2));
       else {
-        for (const { id, problems } of report.filter((r) => r.problems.length)) console.log([id, ...problems.map((p) => `  - ${p.message}`)].join('\n'));
+        for (const { id, problems } of report.filter((r) => r.problems.length))
+          console.log([id, ...problems.map((p) => `  - ${p.message}`)].join('\n'));
         if (report.every((r) => !r.problems.length)) console.log('no problems found');
       }
-    }
-    else if (op === 'repair') {
+    } else if (op === 'repair') {
       const plan = store.repairPlan(values.id);
-      console.log([`Proposed repair for ${plan.id}:`, ...plan.notes.map((n) => `  - ${n}`), ...plan.actions.map((a) => `  - Would ${a}`), ...plan.blockers.map((b) => `  - Blocked: ${b}`)].join('\n'));
-      if (values.apply) { store.repairApply(values.id, plan); console.log('Repair applied.'); }
-    }
-    else if (op === 'verify') {
+      console.log(
+        [
+          `Proposed repair for ${plan.id}:`,
+          ...plan.notes.map((n) => `  - ${n}`),
+          ...plan.actions.map((a) => `  - Would ${a}`),
+          ...plan.blockers.map((b) => `  - Blocked: ${b}`),
+        ].join('\n'),
+      );
+      if (values.apply) {
+        store.repairApply(values.id, plan);
+        console.log('Repair applied.');
+      }
+    } else if (op === 'verify') {
       const result = store.verify(values.id, { fast: values.fast });
       if (result.fast) {
-        console.log(`fast verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}; not Evidence: run the full verify before Check`);
-      } else console.log(`verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`);
+        console.log(
+          `fast verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}; not Evidence: run the full verify before Check`,
+        );
+      } else
+        console.log(
+          `verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`,
+        );
       if (result.exit_code !== 0) process.exitCode = 1;
-    }
-    else if (op === 'sweep') console.log(formatSweep(store.sweep(values.id, values.term ?? [])));
+    } else if (op === 'sweep') console.log(formatSweep(store.sweep(values.id, values.term ?? [])));
     else if (op === 'guides') console.log(formatGuides(store.guides(values.id)));
     else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
     else if (op === 'review') store.review(values.id, values.axis, data);
     else if (op === 'config') console.log(JSON.stringify(store.config(values.id), null, 2));
     else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
     else if (op === 'verdict') store.verdict(values.id, values.axis, values.value, { carried: values.carried });
-    else throw new Error('expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, sweep, guides, verdict, inspect, repair or clean');
-  }
-  else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
+    else
+      throw new Error(
+        'expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, sweep, guides, verdict, inspect, repair or clean',
+      );
+  } else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
   else if (command === 'sync') sync({ force: values.force });
   else if (command === 'rules') syncRules({ force: values.force, dryRun: values['dry-run'] });
   else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
@@ -162,10 +192,10 @@ try {
       for (const note of report.notes) console.log(`note    ${clean(note)}`);
     }
     if (!report.ok) process.exitCode = 1;
-  }
-  else if (command === 'dashboard') {
+  } else if (command === 'dashboard') {
     const port = values.port === undefined ? undefined : Number(values.port);
-    if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) throw new Error(`invalid port: ${values.port}`);
+    if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535))
+      throw new Error(`invalid port: ${values.port}`);
     const { url } = await startDashboard({ projectDir: process.cwd(), port });
     const link = process.stdout.isTTY && !process.env.NO_COLOR ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url;
     console.log(`Dashboard for ${process.cwd()}/.factory running at ${link} (Ctrl+C to stop)`);

@@ -12,13 +12,30 @@ const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
 
 test('the factory invokes exactly the skills we expect', () => {
-  const expected = ['code-review', 'diagnosing-bugs', 'grill-with-docs', 'implement-spec', 'pr', 'security-scan', 'tdd', 'to-spec', 'to-tickets', 'unslop'];
+  const expected = [
+    'code-review',
+    'diagnosing-bugs',
+    'grill-with-docs',
+    'implement-spec',
+    'pr',
+    'security-scan',
+    'tdd',
+    'to-spec',
+    'to-tickets',
+    'unslop',
+  ];
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
 test('the factory has no Prepare Stage and no longer invokes ponytail', () => {
   assert.doesNotMatch(flow, /^## Prepare/m);
-  assert.deepEqual(flow.match(/^## (Define|Build|Check|Finish|Follow-up)$/gm), ['## Define', '## Build', '## Check', '## Finish', '## Follow-up']);
+  assert.deepEqual(flow.match(/^## (Define|Build|Check|Finish|Follow-up)$/gm), [
+    '## Define',
+    '## Build',
+    '## Check',
+    '## Finish',
+    '## Follow-up',
+  ]);
   assert.ok(!invoked.includes('ponytail'));
 });
 
@@ -26,7 +43,11 @@ test('the factory follows the configured tracker and the repo PR template', () =
   assert.doesNotMatch(flow, /GitHub Issues/);
   assert.doesNotMatch(flow, /\. The PR body lists `Closes #N`/);
   assert.match(flow, /docs\/agents\/issue-tracker\.md/);
-  for (const path of ['.github/pull_request_template.md', '.azuredevops/pull_request_template.md', 'docs/pull_request_template.md']) {
+  for (const path of [
+    '.github/pull_request_template.md',
+    '.azuredevops/pull_request_template.md',
+    'docs/pull_request_template.md',
+  ]) {
     assert.ok(flow.includes(path), path);
   }
 });
@@ -60,7 +81,15 @@ test('Build ends with an Exit checklist of seven steps, run after the last Ticke
   const build = section('Build');
   const checklist = build.slice(build.indexOf('### Exit checklist'), build.indexOf('### After a Rework'));
   const steps = [...checklist.matchAll(/^\d\. \*\*([^*]+)\*\*/gm)].map((m) => m[1]);
-  assert.deepEqual(steps, ['Static checks.', 'Term sweep.', 'Required artifacts.', 'Story trace.', 'Security check.', 'Hostile input.', 'Self-check.']);
+  assert.deepEqual(steps, [
+    'Static checks.',
+    'Term sweep.',
+    'Required artifacts.',
+    'Story trace.',
+    'Security check.',
+    'Hostile input.',
+    'Self-check.',
+  ]);
   assert.match(checklist, /after the last Ticket, before `run sync`, and again after every Rework/);
   assert.match(checklist, /`build\.md`/);
   assert.match(checklist, /Universal safeguards/);
@@ -75,7 +104,10 @@ test('the Exit checklist self-check is inline and records no verdict, and the co
   assert.match(checklist, /create no subagent, do not call `code-review` and record nothing with `run verdict`/);
   assert.match(checklist, /One pass only/);
   assert.doesNotMatch(checklist, /run verdict --id/);
-  assert.match(section('Invoked Skills'), /self-check is inline and is not the closing review: it creates no subagent, does not call `code-review`, and records no verdict or Evidence/);
+  assert.match(
+    section('Invoked Skills'),
+    /self-check is inline and is not the closing review: it creates no subagent, does not call `code-review`, and records no verdict or Evidence/,
+  );
 });
 
 test('a Rework sweeps the docs again, reads its own diff and fixes cheap LOW findings', () => {
@@ -197,11 +229,13 @@ test('the README describes the Run worktree, the shared Run store and cleanup', 
 });
 
 test('the factory moves a Run only through the Run commands, and names each of them', () => {
-  for (const command of ['transition', 'rework', 'sync', 'verify', 'verdict', 'accept', 'complete', 'inspect']) assert.match(flow, new RegExp(`tds-factory run ${command}\\b`), command);
+  for (const command of ['transition', 'rework', 'sync', 'verify', 'verdict', 'accept', 'complete', 'inspect'])
+    assert.match(flow, new RegExp(`tds-factory run ${command}\\b`), command);
   for (const field of ['stage', 'check_loops', 'standards', 'spec', 'security', 'infrastructure']) {
     assert.doesNotMatch(flow, new RegExp(`run update[^\\n]*"${field}"`), `${field} through run update`);
   }
-  for (const field of ['base_sha', 'verify', 'reviewed', 'accepted']) assert.match(flow, new RegExp(`^\\| \`${field}\` \\|`, 'm'), field);
+  for (const field of ['base_sha', 'verify', 'reviewed', 'accepted'])
+    assert.match(flow, new RegExp(`^\\| \`${field}\` \\|`, 'm'), field);
   assert.match(section('Finish'), /tds-factory run complete/);
   assert.match(check, /tds-factory run verdict/);
   assert.match(check, /tds-factory run rework/);
@@ -219,13 +253,26 @@ test('the docs tell users to refresh the installed Skill and call Agent targets 
   assert.match(readFileSync(join(SKILLS_DIR, '..', 'README.md'), 'utf8'), /tds-factory install.* after every update/);
   const domain = readFileSync(join(SKILLS_DIR, '..', 'docs', 'agents', 'domain.md'), 'utf8');
   assert.doesNotMatch(domain, /backend/i);
-  for (const doc of ['GLOSSARY.md', join('docs', 'usage.md')]) assert.match(readFileSync(join(SKILLS_DIR, '..', doc), 'utf8'), /Clean[\s\S]{0,300}(Evidence|verify command passed)/, doc);
+  for (const doc of ['GLOSSARY.md', join('docs', 'usage.md')])
+    assert.match(
+      readFileSync(join(SKILLS_DIR, '..', doc), 'utf8'),
+      /Clean[\s\S]{0,300}(Evidence|verify command passed)/,
+      doc,
+    );
   assert.match(domain, /Agent target/);
 });
 
-const upstream = Object.fromEntries(['to-spec', 'to-tickets', 'implement-spec'].map((n) => [n, readFileSync(join(SKILLS_DIR, n, 'SKILL.md'), 'utf8')]));
+const upstream = Object.fromEntries(
+  ['to-spec', 'to-tickets', 'implement-spec'].map((n) => [n, readFileSync(join(SKILLS_DIR, n, 'SKILL.md'), 'utf8')]),
+);
 const contract = section('Invoked Skills');
-const overrides = (name) => [...contract.split(/^- \*\*/m).find((b) => b.startsWith(`${name}.`)).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+const overrides = (name) =>
+  [
+    ...contract
+      .split(/^- \*\*/m)
+      .find((b) => b.startsWith(`${name}.`))
+      .matchAll(/"([^"]+)"/g),
+  ].map((m) => m[1]);
 
 test('the invocation contract overrides each conflicting upstream step, and only steps that still exist', () => {
   for (const name of Object.keys(upstream)) {
@@ -233,7 +280,14 @@ test('the invocation contract overrides each conflicting upstream step, and only
     assert.ok(found.length > 0, name);
     for (const fragment of found) assert.ok(upstream[name].includes(fragment), `${name} no longer says: ${fragment}`);
   }
-  for (const phrase of ['inline', 'Run worktree', 'one commit per Ticket', 'no closing review', 'docs/specs/', 'Do not ask the user']) {
+  for (const phrase of [
+    'inline',
+    'Run worktree',
+    'one commit per Ticket',
+    'no closing review',
+    'docs/specs/',
+    'Do not ask the user',
+  ]) {
     assert.ok(contract.toLowerCase().includes(phrase.toLowerCase()), phrase);
   }
 });
@@ -241,30 +295,46 @@ test('the invocation contract overrides each conflicting upstream step, and only
 test('upstream approval steps that the Factory already resolved are all overridden', () => {
   for (const name of ['to-spec', 'to-tickets']) {
     const covered = overrides(name).join('\n');
-    for (const line of upstream[name].split('\n').filter((l) => /Check with the user|Ask the user|user approves|Quiz the user/.test(l))) {
-      assert.ok(covered.split('\n').some((f) => line.includes(f)) || /^#/.test(line), `${name} asks the user, not overridden: ${line}`);
+    for (const line of upstream[name]
+      .split('\n')
+      .filter((l) => /Check with the user|Ask the user|user approves|Quiz the user/.test(l))) {
+      assert.ok(
+        covered.split('\n').some((f) => line.includes(f)) || /^#/.test(line),
+        `${name} asks the user, not overridden: ${line}`,
+      );
     }
   }
 });
 
 test('upstream implement-spec steps that spawn subagents, branches, PRs or reviews are all overridden', () => {
   const covered = overrides('implement-spec');
-  for (const line of upstream['implement-spec'].split('\n').filter((l) => /^\d+\./.test(l) && /subagent|branch|worktree|draft PR|code-review/i.test(l))) {
-    assert.ok(covered.some((f) => line.includes(f)), `implement-spec step not overridden: ${line}`);
+  for (const line of upstream['implement-spec']
+    .split('\n')
+    .filter((l) => /^\d+\./.test(l) && /subagent|branch|worktree|draft PR|code-review/i.test(l))) {
+    assert.ok(
+      covered.some((f) => line.includes(f)),
+      `implement-spec step not overridden: ${line}`,
+    );
   }
 });
 
 test('Preflight runs the read-only doctor and stops on anything but a missing Verify command', () => {
   const preflight = section('Preflight');
   assert.match(preflight, /tds-factory doctor --json --agent/);
-  assert.ok(preflight.indexOf('tds-factory doctor') < preflight.indexOf('empty `commands`'), 'doctor runs before the Run is created');
+  assert.ok(
+    preflight.indexOf('tds-factory doctor') < preflight.indexOf('empty `commands`'),
+    'doctor runs before the Run is created',
+  );
   assert.match(preflight, /other than `verify-command`/);
   assert.doesNotMatch(preflight, /\/setup-matt-pocock-skills/);
 });
 
 test('the factory and the install guide check a label by exact name before asking to create it', () => {
   const guide = readFileSync(join(SKILLS_DIR, '..', 'docs', 'install.md'), 'utf8');
-  for (const [name, text] of [['SKILL.md', section('Define')], ['docs/install.md', guide]]) {
+  for (const [name, text] of [
+    ['SKILL.md', section('Define')],
+    ['docs/install.md', guide],
+  ]) {
     assert.ok(text.includes('gh label list --search <name> --json name'), `${name} names the lookup`);
     assert.match(text, /exact name/, `${name} matches the exact name`);
     assert.match(text, /already exists/, `${name} treats "already exists" as present`);
@@ -281,7 +351,10 @@ test('Check sends a Run back only for a Blocking finding and lists the rest as L
   // Stale text: current-behavior documents block, a historical Spec that is not canonical does not.
   assert.match(check, /stale statement in a document that describes current behavior/);
   assert.match(check, /historical Spec in `docs\/specs\/` that is not canonical/);
-  assert.match(check, /Behavior the Spec did not ask for is Left open unless it contradicts a requirement or an "Out of scope" statement/);
+  assert.match(
+    check,
+    /Behavior the Spec did not ask for is Left open unless it contradicts a requirement or an "Out of scope" statement/,
+  );
   // Everything else is Left open and cannot block.
   assert.match(check, /\*\*Left open\*\*/);
   assert.match(check, /LOW and INFO items, and every code smell and style or design judgement/);
@@ -319,7 +392,10 @@ test('Define recommends the Fast track by stated criteria and the user still con
 
 test('Build runs the fast Verify after each Ticket and the full Verify before Check, and a fast Verify is never Evidence', () => {
   const build = section('Build');
-  assert.match(build, /run `tds-factory run verify --id <id> --fast` when the Run has a fast Verify command \(otherwise the full `tds-factory run verify --id <id>`\)/);
+  assert.match(
+    build,
+    /run `tds-factory run verify --id <id> --fast` when the Run has a fast Verify command \(otherwise the full `tds-factory run verify --id <id>`\)/,
+  );
   assert.match(build, /a fast Verify is not Evidence/);
   assert.match(build, /run the full `tds-factory run verify --id <id>` \(never `--fast`\)/);
   assert.match(check, /run the full `tds-factory run verify --id <id>` \(never `--fast`\)/);
@@ -329,7 +405,10 @@ test('Build runs the fast Verify after each Ticket and the full Verify before Ch
 });
 
 test('the Exit checklist sweeps terms with the sweep command and the Standards reviewer gets its output', () => {
-  const checklist = section('Build').slice(section('Build').indexOf('### Exit checklist'), section('Build').indexOf('### After a Rework'));
+  const checklist = section('Build').slice(
+    section('Build').indexOf('### Exit checklist'),
+    section('Build').indexOf('### After a Rework'),
+  );
   assert.match(checklist, /Run `tds-factory run sweep --id <id>`/);
   assert.match(checklist, /add each older or other wording of a changed term with `--term`/);
   assert.match(checklist, /A hit marked as replaced is history and needs no change/);
@@ -340,7 +419,10 @@ test('the Exit checklist sweeps terms with the sweep command and the Standards r
 test('after a Rework the reviewers get the previous findings, and only Security and Infrastructure can be carried over', () => {
   assert.match(check, /the review of an earlier head no longer counts, except for a Carried-over verdict/);
   assert.match(check, /give each reviewer the previous findings and the rework diff/);
-  assert.match(check, /For Security and Infrastructure first run `tds-factory run verdict --id <id> --axis <axis> --value <the earlier value> --carried`/);
+  assert.match(
+    check,
+    /For Security and Infrastructure first run `tds-factory run verdict --id <id> --axis <axis> --value <the earlier value> --carried`/,
+  );
   assert.match(check, /only after a text-only Rework, and it alone decides: documents only/);
   assert.match(check, /never code, tests, Skills, agents, instruction files, hidden files or links/);
   assert.match(check, /its refusal names the files that changed/);
@@ -350,10 +432,33 @@ test('after a Rework the reviewers get the previous findings, and only Security 
 
 test('the main file stays small and names every reference file where it is needed', () => {
   assert.ok(Buffer.byteLength(main) < 18_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`);
-  assert.deepEqual(Object.keys(references), ['check.md', 'define.md', 'exit-checklist.md', 'fast-track.md', 'finish.md', 'follow-up.md', 'invoked-skills.md', 'progress-commands.md', 'run-schema.md', 'stage-agents.md']);
-  for (const name of Object.keys(references)) assert.ok(main.includes(`references/${name}`), `${name} is named in SKILL.md`);
+  assert.deepEqual(Object.keys(references), [
+    'check.md',
+    'define.md',
+    'exit-checklist.md',
+    'fast-track.md',
+    'finish.md',
+    'follow-up.md',
+    'invoked-skills.md',
+    'progress-commands.md',
+    'run-schema.md',
+    'stage-agents.md',
+  ]);
+  for (const name of Object.keys(references))
+    assert.ok(main.includes(`references/${name}`), `${name} is named in SKILL.md`);
   // The contract every Run needs stays in the main file.
-  for (const heading of ['Preflight', 'Run record', 'Waiting on the user', 'Invoked Skills', 'Tracks', 'Define', 'Build', 'Check', 'Finish']) assert.match(main, new RegExp(`^## ${heading}$`, 'm'));
+  for (const heading of [
+    'Preflight',
+    'Run record',
+    'Waiting on the user',
+    'Invoked Skills',
+    'Tracks',
+    'Define',
+    'Build',
+    'Check',
+    'Finish',
+  ])
+    assert.match(main, new RegExp(`^## ${heading}$`, 'm'));
   assert.match(main, /go back at most 4 times/);
   assert.match(main, /Only a clean Check|only a clean Check continues to Finish/);
 });
@@ -362,8 +467,13 @@ test('install ships the reference files with the factory Skill', () => {
   const project = mkdtempSync(join(tmpdir(), 'skill-refs-'));
   const cwd = process.cwd();
   process.chdir(project);
-  try { install({ agent: 'claude', project: true, force: false }); } finally { process.chdir(cwd); }
-  for (const name of Object.keys(references)) assert.ok(existsSync(join(project, '.claude', 'skills', 'factory', 'references', name)), name);
+  try {
+    install({ agent: 'claude', project: true, force: false });
+  } finally {
+    process.chdir(cwd);
+  }
+  for (const name of Object.keys(references))
+    assert.ok(existsSync(join(project, '.claude', 'skills', 'factory', 'references', name)), name);
 });
 
 test('on the Fast track build.md is three lines and the story trace and security check depend on a trust boundary', () => {
@@ -374,7 +484,10 @@ test('on the Fast track build.md is three lines and the story trace and security
 
 test('Define decides build or borrow and splits oversized work, and the Exit checklist has a hostile-input step and a hit list', () => {
   const define = references['define.md'];
-  assert.match(define, /names the approach in the Spec or the Ticket before Build starts: a dependency, a simpler syntax/);
+  assert.match(
+    define,
+    /names the approach in the Spec or the Ticket before Build starts: a dependency, a simpler syntax/,
+  );
   assert.match(define, /passes about 40 KB or about 15 files, split the work/);
   assert.match(define, /warns, without refusing/);
   assert.match(main, /before you cut Tickets \(build or borrow, size\)/);
@@ -382,6 +495,9 @@ test('Define decides build or borrow and splits oversized work, and the Exit che
   assert.match(checklist, /write an adversarial test: very long input, deep nesting/);
   assert.match(checklist, /every "linear", "bounded", "safe"/);
   assert.match(checklist, /It applies again after every Rework/);
-  assert.match(checklist, /a symlink or a path outside the folder.*a control character in output.*a silent drop.*one commit for more than one Ticket/);
+  assert.match(
+    checklist,
+    /a symlink or a path outside the folder.*a control character in output.*a silent drop.*one commit for more than one Ticket/,
+  );
   assert.match(checklist, /find the sibling members and update every list/);
 });

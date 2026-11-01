@@ -17,7 +17,14 @@ function atLimit(over = {}) {
   const main = repo();
   const store = openRunStore(main);
   const id = store.start(start);
-  setRecord(main, id, { stage: 'check', status: 'waiting', waiting_on_human: true, waiting_reason: 'Blocking findings remain', check_loops: 4, ...over });
+  setRecord(main, id, {
+    stage: 'check',
+    status: 'waiting',
+    waiting_on_human: true,
+    waiting_reason: 'Blocking findings remain',
+    check_loops: 4,
+    ...over,
+  });
   return { main, store, id };
 }
 const refuses = (store, id, pattern, data) => assert.throws(() => store.grantLoop(id, data), pattern);
@@ -47,7 +54,10 @@ test('the grant is in the Event log with the new limit', () => {
 
 test('a Rework is allowed after the grant, once, and the grant has no ceiling', () => {
   const { main, store, id } = atLimit();
-  assert.throws(() => { setRecord(main, id, { status: 'running' }); store.rework(id); }, /limit of 4 is reached/);
+  assert.throws(() => {
+    setRecord(main, id, { status: 'running' });
+    store.rework(id);
+  }, /limit of 4 is reached/);
   setRecord(main, id, { status: 'waiting', waiting_on_human: true });
   store.grantLoop(id);
   store.rework(id);
@@ -63,7 +73,10 @@ test('a Rework is allowed after the grant, once, and the grant has no ceiling', 
 });
 
 test('a lower project cap is raised from where it is', () => {
-  const { main, store, id } = atLimit({ project_config: { models: {}, max_check_loops: 1, labels: {} }, check_loops: 1 });
+  const { main, store, id } = atLimit({
+    project_config: { models: {}, max_check_loops: 1, labels: {} },
+    check_loops: 1,
+  });
   assert.equal(loopCap(read(main, id)), 1);
   store.grantLoop(id);
   assert.equal(loopCap(read(main, id)), 2);
@@ -88,7 +101,8 @@ test('the grant is refused outside its one case', () => {
 
 test('the loop limit cannot be raised any other way', () => {
   const { main, store, id } = atLimit({ status: 'running', waiting_on_human: false });
-  for (const data of [{ extra_loops: 1 }, { check_loops: 0 }]) assert.throws(() => store.update(id, data), /can only change through a Run transition/);
+  for (const data of [{ extra_loops: 1 }, { check_loops: 0 }])
+    assert.throws(() => store.update(id, data), /can only change through a Run transition/);
   assert.equal(read(main, id).extra_loops, undefined);
   const cli = resolve('bin/tds-factory.js');
   for (const command of ['extra-loop', 'grant', 'grant-loop', 'loop']) {

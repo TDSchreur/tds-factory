@@ -16,24 +16,48 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
   try {
     if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) return 'not-allowed';
     return withRunLock(root, id, () => {
-      if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink()) return 'not-allowed';
+      if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink())
+        return 'not-allowed';
       const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
-      if (!record || !statuses.includes(record.status) || (doneOnly === true && !['done', 'abandoned'].includes(record.status))) return 'not-allowed';
+      if (
+        !record ||
+        !statuses.includes(record.status) ||
+        (doneOnly === true && !['done', 'abandoned'].includes(record.status))
+      )
+        return 'not-allowed';
       // Only a worktree this store created is removed; an adopted one belongs to the user.
       const own = path.join(factory, 'worktrees', id);
       if (record.worktree === own) {
         const treeRoot = path.dirname(own);
-        const lstat = (p) => { try { return fs.lstatSync(p); } catch (err) { if (err.code === 'ENOENT') return null; throw err; } };
-        const rootStat = lstat(treeRoot), ownStat = lstat(own);
+        const lstat = (p) => {
+          try {
+            return fs.lstatSync(p);
+          } catch (err) {
+            if (err.code === 'ENOENT') return null;
+            throw err;
+          }
+        };
+        const rootStat = lstat(treeRoot),
+          ownStat = lstat(own);
         if (rootStat?.isSymbolicLink() || ownStat?.isSymbolicLink() || (ownStat && fs.realpathSync(own) !== own)) {
-          why('the Run worktree storage is linked'); return 'worktree-refused';
+          why('the Run worktree storage is linked');
+          return 'worktree-refused';
         }
         if (ownStat) {
           // Pin untracked file visibility and inspect submodules before Git's required force removal.
           const changes = worktreeChanges(own);
-          if (changes && discardChanges !== true) { why('the Run worktree has uncommitted changes'); return 'dirty-worktree'; }
-          const removal = changes !== undefined ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' }) : { status: 1, stderr: 'cannot read the Run worktree status' };
-          if (removal.status !== 0) { why('git could not remove the Run worktree: ' + (removal.stderr || removal.error?.message || '').trim()); return 'worktree-refused'; }
+          if (changes && discardChanges !== true) {
+            why('the Run worktree has uncommitted changes');
+            return 'dirty-worktree';
+          }
+          const removal =
+            changes !== undefined
+              ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' })
+              : { status: 1, stderr: 'cannot read the Run worktree status' };
+          if (removal.status !== 0) {
+            why('git could not remove the Run worktree: ' + (removal.stderr || removal.error?.message || '').trim());
+            return 'worktree-refused';
+          }
         }
       }
       fs.rmSync(dir, { recursive: true });
@@ -53,7 +77,9 @@ function ghPrInfo(url) {
   try {
     const { state, headRefOid } = provider.view(url);
     return typeof state === 'string' ? { state, head: headRefOid } : undefined;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 // Removes the worktree and branch of a Run whose PR is merged, and keeps its record. Anything unclear leaves everything in place.
@@ -67,14 +93,19 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
   if (!own && !head) return { id, outcome: 'already clean' };
   if (!record.pr) return kept('no PR recorded');
   if (record.status !== 'done') return kept('the Run is not done: finish it with run complete first');
-  const inside = (dir) => { const rel = path.relative(dir, fs.realpathSync(callerDir)); return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel); };
-  if (own && !own.missing && inside(own.dir)) return kept('run clean from the main checkout, not from inside the Run worktree');
+  const inside = (dir) => {
+    const rel = path.relative(dir, fs.realpathSync(callerDir));
+    return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  };
+  if (own && !own.missing && inside(own.dir))
+    return kept('run clean from the main checkout, not from inside the Run worktree');
   const pr = prState(record.pr);
   if (!pr) return kept('cannot read the PR state from its host');
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
   if (head && head !== pr.head) return kept('the branch has commits that are not in the merged PR');
   if (own && (!own.safe || own.branch !== id)) return kept('the Run worktree is not the one this store created');
-  if (record.worktree !== path.join(projectDir, '.factory', 'worktrees', id)) return kept('the Run record does not name the worktree this store created');
+  if (record.worktree !== path.join(projectDir, '.factory', 'worktrees', id))
+    return kept('the Run record does not name the worktree this store created');
   if (own?.missing) return kept('the Run worktree is missing: inspect it with run repair');
   return withRunLock(root, id, () => {
     // The lookup above can take seconds; a commit made meanwhile must keep the branch.
@@ -82,7 +113,12 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
     if (head && now !== head) return kept('the branch has commits that are not in the merged PR');
     const listed = git('worktree', 'list', '--porcelain');
     if (listed.status !== 0) return kept('cannot list the git worktrees');
-    const elsewhere = listed.stdout.split('\n\n').some((part) => new RegExp(`^branch refs/heads/${id}$`, 'm').test(part) && !(own && part.startsWith(`worktree ${own.dir}\n`)));
+    const elsewhere = listed.stdout
+      .split('\n\n')
+      .some(
+        (part) =>
+          new RegExp(`^branch refs/heads/${id}$`, 'm').test(part) && !(own && part.startsWith(`worktree ${own.dir}\n`)),
+      );
     if (elsewhere) return kept('the branch is checked out in another worktree');
     if (own) {
       const changes = worktreeChanges(own.dir);
@@ -107,14 +143,23 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
 // Ids of Runs whose PR is merged but whose worktree or branch is still there. Doctor reports them; nothing is changed.
 export function mergedLeftovers(callerDir, prState = ghPrInfo) {
   let projectDir, root, trees, ids;
-  try { projectDir = mainCheckout(callerDir).dir; root = runRoot(projectDir, false); trees = ownWorktrees(projectDir); ids = runIds(root); } catch { return []; }
+  try {
+    projectDir = mainCheckout(callerDir).dir;
+    root = runRoot(projectDir, false);
+    trees = ownWorktrees(projectDir);
+    ids = runIds(root);
+  } catch {
+    return [];
+  }
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   return ids.filter((id) => {
     try {
       const { record } = readRun(projectDir, id);
       const left = trees.has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
       return left && record.status === 'done' && !!record.pr && prState(record.pr)?.state === 'MERGED';
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   });
 }
 
@@ -123,6 +168,10 @@ export function cleanAll(projectDir, callerDir, prState) {
   if (!fs.existsSync(path.join(projectDir, '.factory', 'runs'))) return [];
   const root = runRoot(projectDir, false);
   return runIds(root).flatMap((name) => {
-    try { return readRun(projectDir, name).record.pr ? [cleanRun(projectDir, callerDir, name, prState)] : []; } catch (err) { return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }]; }
+    try {
+      return readRun(projectDir, name).record.pr ? [cleanRun(projectDir, callerDir, name, prState)] : [];
+    } catch (err) {
+      return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }];
+    }
   });
 }

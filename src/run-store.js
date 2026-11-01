@@ -6,7 +6,17 @@ import { tracks } from './run-record.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
 import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeReview } from './evidence.js';
-import { startRun, trackRun, updateRun, transitionRun, acceptRun, grantLoopRun, syncRun, reworkRun, completeRun } from './run-lifecycle.js';
+import {
+  startRun,
+  trackRun,
+  updateRun,
+  transitionRun,
+  acceptRun,
+  grantLoopRun,
+  syncRun,
+  reworkRun,
+  completeRun,
+} from './run-lifecycle.js';
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
@@ -50,12 +60,24 @@ export function openRunStore(callerDir) {
     list: () => listRuns(runsDir),
     stats: async (id) => {
       const entries = await listRuns(runsDir);
-      if (id && !entries.some(entry => entry.id === id)) throw new Error(`Run not found: ${id}`);
-      const selected = id ? entries.filter(entry => entry.id === id) : entries;
+      if (id && !entries.some((entry) => entry.id === id)) throw new Error(`Run not found: ${id}`);
+      const selected = id ? entries.filter((entry) => entry.id === id) : entries;
       const now = Date.now();
-      const runs = selected.map(entry => ({ id: entry.id, unreadable: entry.unreadable, summary: entry.unreadable ? null : summarizeMetrics(entry.record, now) }));
-      const readable = runs.filter(run => run.summary).map(run => run.summary);
-      const byTrack = Object.fromEntries(tracks.map(track => [track, { runs: readable.filter(summary => summary.track === track).length, total: totalMetrics(readable.filter(summary => summary.track === track)) }]));
+      const runs = selected.map((entry) => ({
+        id: entry.id,
+        unreadable: entry.unreadable,
+        summary: entry.unreadable ? null : summarizeMetrics(entry.record, now),
+      }));
+      const readable = runs.filter((run) => run.summary).map((run) => run.summary);
+      const byTrack = Object.fromEntries(
+        tracks.map((track) => [
+          track,
+          {
+            runs: readable.filter((summary) => summary.track === track).length,
+            total: totalMetrics(readable.filter((summary) => summary.track === track)),
+          },
+        ]),
+      );
       return { runs, total: totalMetrics(readable), byTrack };
     },
     inspect: (id) => inspectRuns(projectDir, runsDir, id),

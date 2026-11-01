@@ -18,7 +18,11 @@ export function hashTree(dir) {
     .map((e) => path.relative(dir, path.join(parentOf(e), e.name)))
     .filter((f) => f !== MARKER)
     .sort();
-  for (const f of files) hash.update(`${f.split(path.sep).join('/')}\0`).update(fs.readFileSync(path.join(dir, f))).update('\0');
+  for (const f of files)
+    hash
+      .update(`${f.split(path.sep).join('/')}\0`)
+      .update(fs.readFileSync(path.join(dir, f)))
+      .update('\0');
   return hash.digest('hex');
 }
 

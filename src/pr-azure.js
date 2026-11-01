@@ -13,9 +13,16 @@ const REMOTE_SSH = new RegExp(`^(?:ssh://)?git@ssh\\.dev\\.azure\\.com[:/]v3/(${
 export const name = 'azure-devops';
 export const title = 'Azure DevOps';
 // Whether a PR link is an Azure DevOps one; only such a link is ever passed to az.
-const decode = (value) => { try { return decodeURIComponent(value); } catch { return undefined; } };
+const decode = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+};
 // A decoded name is one path segment of plain text: no slash, no control character, not a dot segment.
-const plain = (value) => typeof value === 'string' && !/[\x00-\x1f\x7f\\/]/.test(value) && value !== '.' && value !== '..';
+const plain = (value) =>
+  typeof value === 'string' && !/[\x00-\x1f\x7f\\/]/.test(value) && value !== '.' && value !== '..';
 export const matches = (url) => {
   if (typeof url !== 'string' || url.length > 600) return false;
   const match = PR.exec(url);
@@ -31,7 +38,12 @@ export function repoOfRemote(remote) {
 
 const parts = (url) => {
   const match = PR.exec(url);
-  return { organization: `https://dev.azure.com/${match[1]}`, project: decode(match[2]), repository: decode(match[3]), id: match[4] };
+  return {
+    organization: `https://dev.azure.com/${match[1]}`,
+    project: decode(match[2]),
+    repository: decode(match[3]),
+    id: match[4],
+  };
 };
 const bad = () => new Error('incomplete Azure DevOps PR status');
 const label = (v) => String(v).slice(0, 80);
@@ -45,7 +57,8 @@ export function parseStatus(pr, policies) {
   const state = Object.hasOwn(STATE, pr.status) ? STATE[pr.status] : undefined;
   const reviewers = pr.reviewers ?? [];
   if (!state || !Array.isArray(reviewers) || reviewers.some((r) => !r || typeof r.vote !== 'number')) throw bad();
-  const checks = [], reviewPolicies = [];
+  const checks = [],
+    reviewPolicies = [];
   for (const policy of policies) {
     const config = policy?.configuration;
     const kind = config?.type?.displayName;
@@ -55,10 +68,22 @@ export function parseStatus(pr, policies) {
     else checks.push({ name: label(config.settings?.displayName ?? kind), status: policy.status });
   }
   const failing = checks.filter((c) => ['rejected', 'broken'].includes(c.status)).map((c) => c.name);
-  const result = failing.length ? 'failing' : checks.some((c) => ['running', 'queued'].includes(c.status)) ? 'pending' : checks.length ? 'passing' : 'none';
+  const result = failing.length
+    ? 'failing'
+    : checks.some((c) => ['running', 'queued'].includes(c.status))
+      ? 'pending'
+      : checks.length
+        ? 'passing'
+        : 'none';
   const votes = reviewers.map((r) => r.vote);
   const open = reviewPolicies.some((s) => s !== 'approved') || reviewers.some((r) => r.isRequired && r.vote === 0);
-  const review = votes.some((v) => v <= -5) ? 'changes-requested' : open ? 'required' : votes.some((v) => v >= 5) ? 'approved' : 'none';
+  const review = votes.some((v) => v <= -5)
+    ? 'changes-requested'
+    : open
+      ? 'required'
+      : votes.some((v) => v >= 5)
+        ? 'approved'
+        : 'none';
   return {
     state,
     draft: pr.isDraft === true,
@@ -71,20 +96,38 @@ export function parseStatus(pr, policies) {
 // Why az could not answer: az-missing, az-extension-missing, az-not-signed-in, rate-limited or error.
 const failure = (err) => {
   const text = `${err.stderr ?? ''}`;
-  return err.code === 'ENOENT' ? 'az-missing'
-    : /misspelled or not recognized|azure-devops|extension/i.test(text) ? 'az-extension-missing'
-      : /az login|AADSTS|TF400813|not authorized|401|403|credentials/i.test(text) ? 'az-not-signed-in'
-        : /rate limit|429|TF400733/i.test(text) ? 'rate-limited' : 'error';
+  return err.code === 'ENOENT'
+    ? 'az-missing'
+    : /misspelled or not recognized|azure-devops|extension/i.test(text)
+      ? 'az-extension-missing'
+      : /az login|AADSTS|TF400813|not authorized|401|403|credentials/i.test(text)
+        ? 'az-not-signed-in'
+        : /rate limit|429|TF400733/i.test(text)
+          ? 'rate-limited'
+          : 'error';
 };
-const args = (subcommand, { organization, id }) => ['repos', 'pr', ...subcommand, '--id', id, '--organization', organization, '--output', 'json', '--only-show-errors'];
-const SHOW = ['show'], POLICIES = ['policy', 'list'];
+const args = (subcommand, { organization, id }) => [
+  'repos',
+  'pr',
+  ...subcommand,
+  '--id',
+  id,
+  '--organization',
+  organization,
+  '--output',
+  'json',
+  '--only-show-errors',
+];
+const SHOW = ['show'],
+  POLICIES = ['policy', 'list'];
 const env = () => ({ ...process.env, AZURE_CORE_NO_COLOR: '1', AZURE_CORE_COLLECT_TELEMETRY: 'false' });
 const defaultRun = (argv) => exec('az', argv, { timeout: 20_000, maxBuffer: 16 * 1024 * 1024, env: env() });
 const read = async (run, target, subcommand) => JSON.parse((await run(args(subcommand, target))).stdout);
 // The PR must be the one the link names: a PR id is unique in an organisation, so a link with the wrong project or repository is refused.
 function belongsTo(pr, target) {
   const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
-  if (!same(pr?.repository?.name, target.repository) || !same(pr?.repository?.project?.name, target.project)) throw new Error('the Azure DevOps PR does not belong to the repository in its link');
+  if (!same(pr?.repository?.name, target.repository) || !same(pr?.repository?.project?.name, target.project))
+    throw new Error('the Azure DevOps PR does not belong to the repository in its link');
 }
 
 // Read from Azure DevOps without blocking the caller. `run` is the injection point for tests. A failure carries a `reason`.
@@ -92,10 +135,19 @@ export async function statusAsync(url, { run = defaultRun } = {}) {
   if (!matches(url)) throw Object.assign(new Error('not an Azure DevOps pull request'), { reason: 'error' });
   const target = parts(url);
   let pr, policies;
-  try { [pr, policies] = await Promise.all([read(run, target, SHOW), read(run, target, POLICIES)]); }
-  catch (err) { throw Object.assign(new Error('cannot read Azure DevOps PR status'), { reason: err instanceof SyntaxError ? 'error' : failure(err) }); }
-  try { belongsTo(pr, target); return parseStatus(pr, policies); }
-  catch (err) { throw Object.assign(err, { reason: 'error' }); }
+  try {
+    [pr, policies] = await Promise.all([read(run, target, SHOW), read(run, target, POLICIES)]);
+  } catch (err) {
+    throw Object.assign(new Error('cannot read Azure DevOps PR status'), {
+      reason: err instanceof SyntaxError ? 'error' : failure(err),
+    });
+  }
+  try {
+    belongsTo(pr, target);
+    return parseStatus(pr, policies);
+  } catch (err) {
+    throw Object.assign(err, { reason: 'error' });
+  }
 }
 
 const GIT_STATE = { active: 'OPEN', completed: 'MERGED', abandoned: 'CLOSED' };

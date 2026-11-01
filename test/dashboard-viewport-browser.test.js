@@ -8,6 +8,8 @@ for (const width of [320, 375, 390, 768, 1024, 1200]) {
     if (!page) return;
     try {
       assert.deepEqual(await page.execute('return [window.innerWidth, window.innerHeight]'), [width, 700]);
-    } finally { await page.close(); }
+    } finally {
+      await page.close();
+    }
   });
 }

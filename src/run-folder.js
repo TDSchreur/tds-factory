@@ -16,7 +16,8 @@ export function runRoot(projectDir, create) {
     if (fs.realpathSync(factory) !== factory) throw new Error('Run storage must not be symlinked');
     if (!fs.existsSync(root)) fs.mkdirSync(root);
   }
-  if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) throw new Error('Run storage must not be symlinked');
+  if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root)
+    throw new Error('Run storage must not be symlinked');
   return root;
 }
 
@@ -26,27 +27,46 @@ export function lockOwner(lock) {
   try {
     if (fs.lstatSync(lock).isSymbolicLink()) return { state: 'unknown' };
     const owner = JSON.parse(fs.readFileSync(lock, 'utf8'));
-    if (!Number.isSafeInteger(owner.pid) || owner.pid < 1 || typeof owner.host !== 'string' || !owner.host || typeof owner.started !== 'string' || !Number.isFinite(Date.parse(owner.started))) return { state: 'unknown' };
+    if (
+      !Number.isSafeInteger(owner.pid) ||
+      owner.pid < 1 ||
+      typeof owner.host !== 'string' ||
+      !owner.host ||
+      typeof owner.started !== 'string' ||
+      !Number.isFinite(Date.parse(owner.started))
+    )
+      return { state: 'unknown' };
     let state = 'unknown';
     if (owner.host === os.hostname()) {
-      try { process.kill(owner.pid, 0); state = 'live'; }
-      catch (err) { if (err.code === 'ESRCH') state = 'dead'; }
+      try {
+        process.kill(owner.pid, 0);
+        state = 'live';
+      } catch (err) {
+        if (err.code === 'ESRCH') state = 'dead';
+      }
     }
     return { ...owner, state };
-  } catch { return { state: 'unknown' }; }
+  } catch {
+    return { state: 'unknown' };
+  }
 }
 export function withLock(lock, action) {
   const fd = fs.openSync(lock, 'wx', 0o600);
   const identity = fs.fstatSync(fd);
   try {
-    fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, host: os.hostname(), started: new Date().toISOString() }) + '\n');
+    fs.writeFileSync(
+      fd,
+      JSON.stringify({ pid: process.pid, host: os.hostname(), started: new Date().toISOString() }) + '\n',
+    );
     return action();
   } finally {
     fs.closeSync(fd);
     try {
       const current = fs.lstatSync(lock);
       if (current.dev === identity.dev && current.ino === identity.ino) fs.unlinkSync(lock);
-    } catch (err) { if (err.code !== 'ENOENT') throw err; }
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
   }
 }
 export const repairLockFile = (root, id) => lockFile(root, id).replace(`${path.sep}.lock-`, `${path.sep}.repair-`);
@@ -71,7 +91,10 @@ export function changeRun(projectDir, id, change) {
     const { dir, record } = readRun(projectDir, id);
     const changed = change(record);
     // Every Stage change passes here, whether it is a transition, a Rework or a Follow-up.
-    const next = { ...(changed.stage !== record.stage ? withStageModel(changed) : changed), last_seen: new Date().toISOString() };
+    const next = {
+      ...(changed.stage !== record.stage ? withStageModel(changed) : changed),
+      last_seen: new Date().toISOString(),
+    };
     write(dir, next);
     for (const event of deriveEvents(record, next)) appendEvent(dir, event);
   });
@@ -106,7 +129,10 @@ const byStage = (a, b) => {
 async function listMarkdown(dir) {
   try {
     const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-    return entries.filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name)).map((e) => e.name).sort(byStage);
+    return entries
+      .filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name))
+      .map((e) => e.name)
+      .sort(byStage);
   } catch {
     return [];
   }
@@ -126,7 +152,13 @@ export async function listRuns(runsDir) {
     try {
       const record = JSON.parse(await fs.promises.readFile(path.join(runsDir, entry.name, 'run.json'), 'utf8'));
       if (record === null || typeof record !== 'object' || Array.isArray(record)) throw new Error('not an object');
-      runs.push({ id: entry.name, unreadable: false, record, files, events: readEvents(path.join(runsDir, entry.name)) });
+      runs.push({
+        id: entry.name,
+        unreadable: false,
+        record,
+        files,
+        events: readEvents(path.join(runsDir, entry.name)),
+      });
     } catch {
       runs.push({ id: entry.name, unreadable: true, record: null, files });
     }
@@ -154,11 +186,20 @@ export async function readRunFile(runsDir, rawPath) {
   }
 }
 
-export const runIds = (root) => fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && validId(e.name)).map((e) => e.name).sort();
+export const runIds = (root) =>
+  fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && validId(e.name))
+    .map((e) => e.name)
+    .sort();
 
 // Run records live in the main checkout, including when called from a linked worktree.
 export function mainCheckout(dir) {
-  const out = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel'], { cwd: dir, encoding: 'utf8' });
+  const out = spawnSync(
+    'git',
+    ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel'],
+    { cwd: dir, encoding: 'utf8' },
+  );
   const [gitDir, common] = out.status === 0 ? out.stdout.trim().split('\n') : [];
   if (!gitDir || path.basename(common) !== '.git') return { dir };
   return { dir: path.dirname(common) };

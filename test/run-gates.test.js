@@ -24,7 +24,17 @@ test('run update rejects fields that only a transition may change, and leaves th
   const cwd = repo();
   const id = startRun(cwd);
   const before = read(cwd, id);
-  for (const data of [{ stage: 'build' }, { check_loops: 1 }, { standards: 'pass' }, { spec: 'pass' }, { security: 'pass' }, { infrastructure: 'skipped' }, { status: 'done' }, { worktree: '/elsewhere' }, { base_sha: 'abc' }]) {
+  for (const data of [
+    { stage: 'build' },
+    { check_loops: 1 },
+    { standards: 'pass' },
+    { spec: 'pass' },
+    { security: 'pass' },
+    { infrastructure: 'skipped' },
+    { status: 'done' },
+    { worktree: '/elsewhere' },
+    { base_sha: 'abc' },
+  ]) {
     const result = update(cwd, id, { ...data, activity: 'sneaky' });
     assert.notEqual(result.status, 0, json(data));
     assert.deepEqual(read(cwd, id), before, json(data));
@@ -34,7 +44,16 @@ test('run update rejects fields that only a transition may change, and leaves th
 test('run update still takes activity, links, counters, waiting and abandoned', () => {
   const cwd = repo();
   const id = startRun(cwd);
-  assert.equal(update(cwd, id, { activity: 'working', spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 }).status, 0);
+  assert.equal(
+    update(cwd, id, {
+      activity: 'working',
+      spec_link: 'docs/specs/x.md',
+      tickets: ['1'],
+      tickets_total: 1,
+      tickets_done: 1,
+    }).status,
+    0,
+  );
   assert.equal(update(cwd, id, { status: 'waiting', waiting_reason: 'answer' }).status, 0);
   assert.equal(update(cwd, id, { status: 'running' }).status, 0);
   assert.equal(update(cwd, id, { status: 'abandoned' }).status, 0);
@@ -46,7 +65,12 @@ test('a finished Run cannot change status through update, but still takes notes'
   const id = startRun(cwd);
   for (const status of ['done', 'abandoned']) {
     writeFileSync(file(cwd, id), json({ ...read(cwd, id), status, waiting_on_human: false, waiting_reason: '' }));
-    for (const next of ['running', 'waiting', 'abandoned']) assert.notEqual(update(cwd, id, { status: next, waiting_reason: next === 'waiting' ? 'x' : '' }).status, 0, `${status} to ${next}`);
+    for (const next of ['running', 'waiting', 'abandoned'])
+      assert.notEqual(
+        update(cwd, id, { status: next, waiting_reason: next === 'waiting' ? 'x' : '' }).status,
+        0,
+        `${status} to ${next}`,
+      );
     assert.equal(read(cwd, id).status, status);
     assert.equal(update(cwd, id, { activity: 'PR merged' }).status, 0);
   }
@@ -97,7 +121,8 @@ test('a Run cannot enter Build without a Spec and Tickets, and the message names
 test('transitions follow Flow order and skipping a Stage is refused', () => {
   const cwd = repo();
   const id = defined(cwd);
-  for (const to of ['prepare', 'check', 'finish', 'define', 'nonsense']) assert.notEqual(transition(cwd, id, to).status, 0, to);
+  for (const to of ['prepare', 'check', 'finish', 'define', 'nonsense'])
+    assert.notEqual(transition(cwd, id, to).status, 0, to);
   assert.equal(read(cwd, id).stage, 'define');
 });
 
@@ -145,7 +170,18 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   const cwd = repo();
   const id = defined(cwd);
   assert.notEqual(run(cwd, 'rework', '--id', id).status, 0, 'not in Check');
-  force(cwd, id, { stage: 'check', tickets_done: 2, standards: 'fail', spec: 'pass', security: 'pass', infrastructure: 'skipped', verify: { exit_code: 0 }, reviewed: { standards: { head: 'a', attempt: 1 } }, accepted: { decision: 'ok' }, project_results: { a11y: { head: 'a' } } });
+  force(cwd, id, {
+    stage: 'check',
+    tickets_done: 2,
+    standards: 'fail',
+    spec: 'pass',
+    security: 'pass',
+    infrastructure: 'skipped',
+    verify: { exit_code: 0 },
+    reviewed: { standards: { head: 'a', attempt: 1 } },
+    accepted: { decision: 'ok' },
+    project_results: { a11y: { head: 'a' } },
+  });
   const before = read(cwd, id);
   assert.equal(run(cwd, 'rework', '--id', id).status, 0);
   const after = read(cwd, id);
@@ -153,7 +189,17 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.check_loops, 1);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed', 'accepted', 'project_results']) assert.equal(key in after, false, key);
+  for (const key of [
+    'standards',
+    'spec',
+    'security',
+    'infrastructure',
+    'verify',
+    'reviewed',
+    'accepted',
+    'project_results',
+  ])
+    assert.equal(key in after, false, key);
   assert.ok(finishProblems(after, { head: 'a', dirty: false }).length > 0, 'cleared Evidence cannot authorize Finish');
   for (const loops of [2, 3]) {
     force(cwd, id, { stage: 'check', check_loops: loops });
@@ -237,7 +283,8 @@ test('a Run cannot start with, or be given, a blank or NUL-containing Verify com
     assert.notEqual(start.status, 0, json(commands));
   }
   const id = startRun(cwd, '');
-  for (const commands of ['   ', 'npm\0 test']) assert.notEqual(update(cwd, id, { commands }).status, 0, json(commands));
+  for (const commands of ['   ', 'npm\0 test'])
+    assert.notEqual(update(cwd, id, { commands }).status, 0, json(commands));
   assert.equal(read(cwd, id).commands, '');
   assert.equal(update(cwd, id, { commands: 'npm test' }).status, 0);
 });
@@ -250,7 +297,10 @@ test('Build, Check and Finish need a usable Verify command, so a Run without one
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /usable Verify command/);
   assert.equal(read(cwd, id).stage, 'define');
-  for (const [stage, to] of [['build', 'check'], ['check', 'finish']]) {
+  for (const [stage, to] of [
+    ['build', 'check'],
+    ['check', 'finish'],
+  ]) {
     force(cwd, id, { stage, commands: ' ' });
     const result = transition(cwd, id, to);
     assert.match(result.stderr, /usable Verify command/, to);
@@ -308,7 +358,13 @@ const cleanCheck = (cwd, commands = 'true') => {
   const id = startRun(cwd, commands);
   force(cwd, id, { stage: 'check', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
   verify(cwd, id);
-  for (const [axis, value] of [['standards', 'pass'], ['spec', 'pass'], ['security', 'pass'], ['infrastructure', 'skipped']]) assert.equal(verdict(cwd, id, axis, value).status, 0);
+  for (const [axis, value] of [
+    ['standards', 'pass'],
+    ['spec', 'pass'],
+    ['security', 'pass'],
+    ['infrastructure', 'skipped'],
+  ])
+    assert.equal(verdict(cwd, id, axis, value).status, 0);
   return id;
 };
 const refusesFinish = (cwd, id, why) => {
@@ -356,7 +412,15 @@ test('Evidence goes stale when the head changes or the worktree is dirty', () =>
   writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
   force(cwd, id, { stage: 'check' });
   verify(cwd, id);
-  force(cwd, id, { standards: 'pass', spec: 'pass', security: 'pass', infrastructure: 'skipped', reviewed: Object.fromEntries(['standards', 'spec', 'security', 'infrastructure'].map((a) => [a, { head: head(cwd, id), attempt: 1 }])) });
+  force(cwd, id, {
+    standards: 'pass',
+    spec: 'pass',
+    security: 'pass',
+    infrastructure: 'skipped',
+    reviewed: Object.fromEntries(
+      ['standards', 'spec', 'security', 'infrastructure'].map((a) => [a, { head: head(cwd, id), attempt: 1 }]),
+    ),
+  });
   refusesFinish(cwd, id, 'Verify result from a dirty tree');
 });
 
@@ -402,7 +466,9 @@ const inspect = (cwd, ...args) => run(cwd, 'inspect', '--json', ...args);
 const problems = (cwd, id) => {
   const result = inspect(cwd);
   assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout).find((r) => r.id === id).problems.map((p) => p.code);
+  return JSON.parse(result.stdout)
+    .find((r) => r.id === id)
+    .problems.map((p) => p.code);
 };
 
 test('inspect reports nothing for a healthy Run', () => {
@@ -489,7 +555,8 @@ test('inspect leaves finished Runs without a worktree alone and changes nothing 
   const finished = startRun(cwd);
   rmSync(read(cwd, finished).worktree, { recursive: true });
   force(cwd, finished, { status: 'done' });
-  const snapshot = () => execFileSync('find', ['.factory/runs', '-type', 'f', '-exec', 'sha1sum', '{}', '+'], { cwd, encoding: 'utf8' });
+  const snapshot = () =>
+    execFileSync('find', ['.factory/runs', '-type', 'f', '-exec', 'sha1sum', '{}', '+'], { cwd, encoding: 'utf8' });
   const before = snapshot();
   assert.deepEqual(problems(cwd, finished), []);
   assert.equal(snapshot(), before);
@@ -532,7 +599,9 @@ test('inspect reports a running Run with no worktree and a finished Run with unc
 test('a Verify result is not recorded for a Run that was stopped while the command ran', () => {
   const cwd = repo();
   const id = startRun(cwd, '');
-  update(cwd, id, { commands: `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} run update --id ${id} --data '{"status":"abandoned"}'` });
+  update(cwd, id, {
+    commands: `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} run update --id ${id} --data '{"status":"abandoned"}'`,
+  });
   assert.notEqual(verify(cwd, id).status, 0);
   assert.equal('verify' in read(cwd, id), false);
   assert.equal(read(cwd, id).status, 'abandoned');
