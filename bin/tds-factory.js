@@ -158,7 +158,8 @@ try {
     const port = values.port === undefined ? undefined : Number(values.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535)) throw new Error(`invalid port: ${values.port}`);
     const { url } = await startDashboard({ projectDir: process.cwd(), port });
-    console.log(`Dashboard for ${process.cwd()}/.factory running at ${url} (Ctrl+C to stop)`);
+    const link = process.stdout.isTTY && !process.env.NO_COLOR ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url;
+    console.log(`Dashboard for ${process.cwd()}/.factory running at ${link} (Ctrl+C to stop)`);
   } else {
     console.log(USAGE);
     process.exitCode = command ? 1 : 0;
