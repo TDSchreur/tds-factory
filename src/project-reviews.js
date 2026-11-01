@@ -101,7 +101,7 @@ function parseReview(review, ids, projectDir, agent, homeDir) {
     patterns !== undefined &&
     (!Array.isArray(patterns) ||
       !patterns.length ||
-      patterns.some((p) => !text(p) || p.startsWith('/') || p.split('/').includes('..') || /[\[\]{}!\\]/.test(p)))
+      patterns.some((p) => !text(p) || p.startsWith('/') || p.split('/').includes('..') || /[[\]{}!\\]/.test(p)))
   )
     throw new Error(`${id}: patterns must be nonempty relative globs using *, ** and ?`);
   if (

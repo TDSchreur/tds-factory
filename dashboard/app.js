@@ -131,7 +131,7 @@ function App() {
         false,
         true,
       );
-    } catch (err) {
+    } catch {
       await ask(
         'Could not ' +
           (name === 'sync'
@@ -223,9 +223,9 @@ function App() {
           if (
             !(await ask(
               'Discard uncommitted changes?',
-              'The Run \"' +
+              'The Run "' +
                 run.title +
-                '\" has uncommitted changes. They will be permanently lost and its Run worktree removed. Continue?',
+                '" has uncommitted changes. They will be permanently lost and its Run worktree removed. Continue?',
               'Discard and delete',
               true,
             ))
@@ -234,7 +234,7 @@ function App() {
           response = await write('DELETE', url + (query ? query + '&' : '?') + 'discardChanges=true');
         }
         if (!response.ok) failed.push(run.title + ' (' + (await response.text()) + ')');
-      } catch (err) {
+      } catch {
         failed.push(run.title);
       }
     }
@@ -260,7 +260,7 @@ function App() {
     try {
       const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/merge');
       if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
-    } catch (err) {
+    } catch {
       await ask('Could not merge', run.title, 'Close', false, true);
     }
     poll();

@@ -12,10 +12,8 @@ export default [
       'prefer-const': 'error',
       'no-var': 'error',
       'no-shadow': 'error',
-      // Existing code intentionally matches control characters and ignores some caught errors.
+      // Existing code intentionally matches control characters; error causes are not chained on rethrow.
       'no-control-regex': 'off',
-      'no-unused-vars': ['error', { caughtErrors: 'none' }],
-      'no-useless-escape': 'off',
       'preserve-caught-error': 'off',
     },
   },

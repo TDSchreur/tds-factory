@@ -9,8 +9,8 @@ export const labelKeys = ['ticket'];
 export const defaultLabels = { ticket: 'ready-for-agent' };
 const topKeys = ['models', 'max_check_loops', 'labels', 'reviews'];
 const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
-const modelName = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:\/@-]{0,99}$/.test(v);
-const labelName = (v) => typeof v === 'string' && !!v.trim() && v.length <= 50 && /^[\w .:\/-]+$/.test(v) && !!v.trim();
+const modelName = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,99}$/.test(v);
+const labelName = (v) => typeof v === 'string' && !!v.trim() && v.length <= 50 && /^[\w .:/-]+$/.test(v) && !!v.trim();
 
 // The line of the last key in `keys`, searched in order so a repeated name resolves to the right object.
 function lineOf(source, keys) {

@@ -8,7 +8,7 @@ import { ownWorktrees, worktreeChanges, submoduleLocalWork } from './worktrees.j
 
 // Deletes a readable Run in the project's own, unlinked storage.
 export function removeRun(projectDir, id, why = () => {}, { discardChanges = false, doneOnly = false } = {}) {
-  if (!id || id === '.' || id === '..' || /[\/\\\0]/.test(id)) return 'invalid';
+  if (!id || id === '.' || id === '..' || /[/\\\0]/.test(id)) return 'invalid';
   const project = fs.realpathSync(projectDir);
   const factory = path.join(project, '.factory');
   const root = path.join(factory, 'runs');

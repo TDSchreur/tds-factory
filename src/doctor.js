@@ -64,7 +64,7 @@ function verifyFastCheck(projectDir) {
   const problem = fastCommandProblem(command) ?? (command.trim() ? undefined : 'the fast Verify command is empty');
   if (problem) return ['fail', problem];
   const words = command.trim().split(/\s+/);
-  if (words.every((w) => /^[\w.@+\/-]+$/.test(w)) && !which(words[0], projectDir))
+  if (words.every((w) => /^[\w.@+/-]+$/.test(w)) && !which(words[0], projectDir))
     return ['fail', `the Verify-fast command "${command.trim()}" starts with "${words[0]}", which was not found`];
   return ['pass', `Verify-fast command: ${command.trim()}`];
 }
@@ -84,7 +84,7 @@ function verifyCommandCheck(projectDir) {
   if (problem) return ['fail', problem];
   const words = command.trim().split(/\s+/);
   // Only a plain command is probed: anything with shell syntax may be a builtin, a function or an assignment.
-  if (words.every((w) => /^[\w.@+\/-]+$/.test(w)) && !which(words[0], projectDir))
+  if (words.every((w) => /^[\w.@+/-]+$/.test(w)) && !which(words[0], projectDir))
     return ['fail', `the Verify command "${command.trim()}" starts with "${words[0]}", which was not found`];
   return ['pass', `Verify command: ${command.trim()}`];
 }

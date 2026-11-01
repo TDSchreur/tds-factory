@@ -354,7 +354,7 @@ function ThemeSelect() {
     document.documentElement.dataset.theme = choice;
     try {
       localStorage.setItem(THEME_KEY, choice);
-    } catch (err) {
+    } catch {
       /* storage unavailable: the choice still applies to this page */
     }
   };
