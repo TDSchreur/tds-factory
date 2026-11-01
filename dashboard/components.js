@@ -114,7 +114,7 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
         onCheckPr(run);
       }} onKeyDown=${stop}>Check again</button>`
     }
-    ${status.lines.map((line) => html`<span key=${line} class=${'pr-fact' + (/^Checks: failing|conflicts/.test(line) ? ' bad' : '')}>${line}</span>${' '}`)}
+    ${status.lines.map((line) => html`<span key=${line} class=${'pr-fact' + (/^(Checks: failing|Merge: conflicts)/.test(line) ? ' bad' : '')}>${line}</span>${' '}`)}
   </div>`;
 }
 

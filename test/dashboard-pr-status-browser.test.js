@@ -118,3 +118,47 @@ test('Runs without a prStatus field render as before', async (t) => {
     await page.close();
   }
 });
+
+test('a mergeable pull request with passing checks shows no red line, and a conflict or failing checks do', async (t) => {
+  const runs = [
+    run({ id: 'good', title: 'Good', column: 'finish', pr: PR, prStatus: open() }),
+    run({
+      id: 'conflict',
+      title: 'Conflict',
+      column: 'finish',
+      pr: PR,
+      prStatus: open({ merge: 'conflicting' }),
+    }),
+  ];
+  const page = await openPage(t, { runs });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=good]')");
+    const lines = (id) =>
+      page.execute(
+        `return [...document.querySelectorAll('[data-id=${id}] .pr-fact')].map((e) => [e.textContent, e.classList.contains('bad'), getComputedStyle(e).color])`,
+      );
+    const good = await lines('good');
+    assert.deepEqual(
+      good.map(([text, bad]) => [text, bad]),
+      [
+        ['Checks: passing', false],
+        ['Merge: no conflicts', false],
+        ['Review: approved', false],
+      ],
+    );
+    assert.equal(good[1][2], good[2][2], 'the "no conflicts" line has the colour of the neutral lines');
+    const conflict = await lines('conflict');
+    assert.deepEqual(
+      conflict.map(([text, bad]) => [text, bad]),
+      [
+        ['Checks: passing', false],
+        ['Merge: conflicts with the base branch', true],
+        ['Review: approved', false],
+      ],
+    );
+    assert.notEqual(conflict[1][2], conflict[0][2], 'a conflict is shown in the alert colour');
+  } finally {
+    await page.close();
+  }
+});
