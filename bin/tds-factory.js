@@ -171,6 +171,6 @@ try {
     process.exitCode = command ? 1 : 0;
   }
 } catch (err) {
-  console.error(`error: ${err.message}`);
+  console.error(`error: ${String(err.message).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
   process.exitCode = 1;
 }

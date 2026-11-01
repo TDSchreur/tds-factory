@@ -15,7 +15,7 @@ The rule to follow the Flow through (detailed instructions do not replace Define
 
 The Check agents are given the diff and any command output by the coordinator, because they cannot run commands. Where the table says "Same", the Factory behaves identically and only the host's tool or sandbox setting differs.
 
-The rule for an unavailable reviewer is in the Check section of [`skills/factory/SKILL.md`](../skills/factory/SKILL.md). The upstream steps the Factory overrides are listed in its `## Invoked Skills` section. [`test/capabilities.test.js`](../test/capabilities.test.js) checks the Review isolation row against the shipped Stage agent files.
+The rule for an unavailable reviewer is in the Check section of [`skills/factory/SKILL.md`](../skills/factory/SKILL.md). The upstream steps the Factory overrides are listed in [`skills/factory/references/invoked-skills.md`](../skills/factory/references/invoked-skills.md), which the `## Invoked Skills` section of the Skill points to. [`test/capabilities.test.js`](../test/capabilities.test.js) checks the Review isolation row against the shipped Stage agent files.
 
 ## Default models per Stage
 

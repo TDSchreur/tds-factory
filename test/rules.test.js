@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo } from './git-repo.js';
@@ -66,4 +66,22 @@ test('--dry-run writes nothing, and a bad applyTo or a missing source folder is 
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /bad\.instructions\.md:2: .*unclosed quote/);
   assert.notEqual(rules(repo()).status, 0);
+});
+
+test('rules never writes through a symbolic link, not even with --force', () => {
+  const outside = repo();
+  const cwd = project();
+  mkdirSync(join(cwd, '.claude', 'rules'), { recursive: true });
+  symlinkSync(join(outside, 'planted.md'), join(cwd, '.claude', 'rules', 'general.md'));
+  for (const args of [[], ['--force']]) {
+    const result = rules(cwd, ...args);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /symbolic link/);
+  }
+  assert.ok(!existsSync(join(outside, 'planted.md')));
+  const folder = project();
+  mkdirSync(join(folder, '.claude'));
+  symlinkSync(outside, join(folder, '.claude', 'rules'));
+  assert.match(rules(folder).stderr, /symbolic link/);
+  assert.ok(!existsSync(join(outside, 'general.md')));
 });

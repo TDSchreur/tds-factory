@@ -8,29 +8,58 @@ import { readRun } from './run-folder.js';
 const CONVENTION_FILES = ['AGENTS.md', 'CLAUDE.md'];
 const MAX_FILE = 1 << 20;
 
+// True when `file` resolves, symbolic links included, to a place inside the project.
+export function insideProject(projectDir, file) {
+  try {
+    const root = fs.realpathSync(projectDir);
+    const rel = path.relative(root, fs.realpathSync(file));
+    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+  } catch { return false; }
+}
+
 const readFile = (file) => {
   const stat = fs.statSync(file, { throwIfNoEntry: false });
   if (!stat?.isFile() || stat.size > MAX_FILE) return undefined;
   return fs.readFileSync(file, 'utf8');
 };
 
-// A glob is repo-relative with `/` separators: `*` stays inside a folder, `**` crosses folders, `?` is one character.
-// A glob without a `/` matches the file name at any depth, as `*.js` does in a .gitignore.
-export function globToRegExp(glob) {
-  const pattern = glob.includes('/') ? glob.replace(/^\.\//, '') : `**/${glob}`;
-  let out = '';
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === '*' && pattern[i + 1] === '*') {
-      if (pattern[i + 2] === '/') { out += '(?:.*/)?'; i += 2; } else { out += '.*'; i += 1; }
-    } else if (c === '*') out += '[^/]*';
-    else if (c === '?') out += '[^/]';
-    else out += c.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+// A glob is repo-relative with `/` separators: `*` stays inside a folder, `**` as a whole segment crosses folders, `?` is one character.
+// A glob without a `/` matches the file name at any depth, as `*.js` does in a .gitignore. No regular expression is built from a glob,
+// so a hostile glob cannot make the match take more than a few steps per character of path and glob (ADR 0022).
+export const MAX_GLOB_LENGTH = 200;
+
+// One path segment against one glob segment, with the linear two-pointer walk that remembers only the last `*`.
+function segmentMatches(name, pattern) {
+  let n = 0, p = 0, star = -1, mark = 0;
+  while (n < name.length) {
+    if (p < pattern.length && (pattern[p] === '?' || pattern[p] === name[n])) { n++; p++; }
+    else if (p < pattern.length && pattern[p] === '*') { star = p++; mark = n; }
+    else if (star >= 0) { p = star + 1; n = ++mark; }
+    else return false;
   }
-  return new RegExp(`^${out}$`);
+  while (pattern[p] === '*') p++;
+  return p === pattern.length;
 }
 
-export const matchesGlob = (file, globs) => globs.some((g) => globToRegExp(g).test(file));
+export function globMatches(file, glob) {
+  const pattern = (glob.includes('/') ? glob.replace(/^\.\//, '') : `**/${glob}`).split('/').map((seg) => (/^\*{2,}$/.test(seg) ? '**' : seg.replace(/\*+/g, '*')));
+  const parts = file.split('/');
+  // reachable[i] after pattern segment k: path segments consumed so far.
+  let reachable = new Set([0]);
+  pattern.forEach((seg, k) => {
+    const next = new Set();
+    for (const i of reachable) {
+      if (seg === '**') {
+        // A final `**` needs at least one segment below it; elsewhere it may match none.
+        for (let j = k === pattern.length - 1 ? i + 1 : i; j <= parts.length; j++) next.add(j);
+      } else if (i < parts.length && segmentMatches(parts[i], seg)) next.add(i + 1);
+    }
+    reachable = next;
+  });
+  return reachable.has(parts.length);
+}
+
+export const matchesGlob = (file, globs) => globs.some((g) => globMatches(file, g));
 
 // Reads the frontmatter of a guide. Returns { globs } (empty when unscoped) or { problem: { line, message } }.
 export function parseGuide(text) {
@@ -49,8 +78,10 @@ export function parseGuide(text) {
     }
     const globs = value.split(',').map((g) => g.trim());
     if (!value.trim() || globs.some((g) => !g)) return { problem: { line: i + 1, message: 'applyTo must be one glob or a comma-separated list of globs' } };
+    const long = globs.find((g) => g.length > MAX_GLOB_LENGTH);
+    if (long) return { problem: { line: i + 1, message: `an applyTo glob is longer than ${MAX_GLOB_LENGTH} characters` } };
     const bad = globs.find((g) => g.startsWith('/') || g.split('/').includes('..') || /[\x00-\x1f]/.test(g));
-    if (bad) return { problem: { line: i + 1, message: `applyTo glob "${bad}" must be relative to the repository and stay inside it` } };
+    if (bad) return { problem: { line: i + 1, message: `applyTo glob ${JSON.stringify(bad)} must be relative to the repository and stay inside it` } };
     return { globs };
   }
   return { globs: [] };
@@ -61,19 +92,20 @@ export const conventionsFile = (projectDir) => CONVENTION_FILES.find((f) => fs.s
 // Markdown links, plus backticked paths that exist, to other Markdown files inside the project. Only a link can be reported missing.
 export function linkedGuides(projectDir) {
   const file = conventionsFile(projectDir);
-  const text = file && readFile(path.join(projectDir, file));
-  if (!text) return [];
+  if (!file) return [];
+  const text = readFile(path.join(projectDir, file));
+  if (text === undefined) throw new Error(`${file} is not a regular file of at most 1 MiB`);
   const found = new Map();
   const add = (raw, link) => {
     const target = raw.split('#')[0].trim();
     if (!/\.md$/i.test(target) || /^[a-z][a-z0-9+.-]*:/i.test(target) || path.isAbsolute(target)) return;
     const rel = path.posix.normalize(target.replace(/\\/g, '/'));
-    if (rel.startsWith('..') || CONVENTION_FILES.includes(rel) || /[<>*]/.test(rel)) return;
+    if (rel.startsWith('..') || CONVENTION_FILES.includes(rel) || /[<>*\x00-\x1f]/.test(rel)) return;
     const exists = !!fs.statSync(path.join(projectDir, rel), { throwIfNoEntry: false })?.isFile();
     if (link || exists) found.set(rel, { path: rel, exists });
   };
-  for (const m of text.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) add(m[1], true);
-  for (const m of text.matchAll(/`([^`\n]+\.md)`/gi)) add(m[1], false);
+  for (const m of text.matchAll(/\[[^\]\n]{0,200}\]\(([^)\s]{1,300})\)/g)) add(m[1], true);
+  for (const m of text.matchAll(/`([^`\n]{1,300}\.md)`/gi)) add(m[1], false);
   return [...found.values()];
 }
 
@@ -81,7 +113,7 @@ export function linkedGuides(projectDir) {
 function normalizeGuidePath(projectDir, raw) {
   if (typeof raw !== 'string' || !/\.md$/i.test(raw) || path.isAbsolute(raw) || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return undefined;
   const rel = path.posix.normalize(raw.replace(/\\/g, '/'));
-  if (rel.startsWith('..') || CONVENTION_FILES.includes(rel)) return undefined;
+  if (rel.startsWith('..') || CONVENTION_FILES.includes(rel) || /[\x00-\x1f]/.test(rel)) return undefined;
   return { path: rel, exists: !!fs.statSync(path.join(projectDir, rel), { throwIfNoEntry: false })?.isFile() };
 }
 
@@ -89,6 +121,7 @@ function normalizeGuidePath(projectDir, raw) {
 export function loadGuides(projectDir, only) {
   return (only ? only.map((p) => normalizeGuidePath(projectDir, p)).filter(Boolean) : linkedGuides(projectDir)).map(({ path: rel, exists }) => {
     if (!exists) return { path: rel, globs: [], problem: { line: 1, message: 'the linked guide does not exist' } };
+    if (!insideProject(projectDir, path.join(projectDir, rel))) return { path: rel, globs: [], problem: { line: 1, message: 'the guide resolves to a place outside the project' } };
     const text = readFile(path.join(projectDir, rel));
     if (text === undefined) return { path: rel, globs: [], problem: { line: 1, message: 'the guide is not a regular file of at most 1 MiB' } };
     return { path: rel, ...parseGuide(text) };
@@ -113,7 +146,7 @@ export function guidesRun(projectDir, id) {
   const root = record.worktree;
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
   if (!/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) throw new Error('the Run has no usable base commit');
-  const out = spawnSync('git', ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '-z', '--name-only', record.base_sha], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const out = spawnSync('git', ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '-z', '--name-only', record.base_sha], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (out.status !== 0) throw new Error(`git diff failed: ${(out.stderr || '').trim()}`);
   const files = out.stdout.split('\0').filter(Boolean);
   const guides = loadGuides(root, record.conventions ?? []);

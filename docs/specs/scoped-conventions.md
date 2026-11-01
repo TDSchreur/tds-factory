@@ -22,7 +22,7 @@ An instruction guide declares its own path globs in its frontmatter, in Copilot'
 
 ## Implementation Decisions
 
-- **Declaration.** A guide is a Markdown file `AGENTS.md` or `CLAUDE.md` links to. Its frontmatter may hold `applyTo`: one glob or a comma-separated list, as Copilot reads it. Globs are repo-relative and matched with `path.matchesGlob`. No frontmatter or no `applyTo` means unscoped.
+- **Declaration.** A guide is a Markdown file `AGENTS.md` or `CLAUDE.md` links to. Its frontmatter may hold `applyTo`: one glob or a comma-separated list, as Copilot reads it. Globs are repo-relative. `path.matchesGlob` is not stable on Node 20, which `engines` allows, so the Factory has its own linear matcher with no regular expression: `*` and `?` stay inside a folder, `**` as a whole segment crosses folders, a glob without a `/` matches the file name at any depth, and brace patterns such as `{a,b}` are not supported (the comma separates globs). A glob is at most 200 characters. No frontmatter or no `applyTo` means unscoped.
 - **Run record.** `conventions` stays an array of paths and gets no new field. Globs are read from the guides at Check, so a change to a guide mid-Run is respected.
 - **Preflight.** Reads `AGENTS.md` and the unscoped guides. For a scoped guide it records the path in `conventions` without reading it.
 - **Check.** `run guides --id <id>` takes the guides recorded in `conventions` and prints those that apply: the unscoped ones and the scoped ones whose globs match a file in `git diff --name-only <base_sha>`. The coordinator gives these to Standards and Security. Reviewers receive no other guide.
