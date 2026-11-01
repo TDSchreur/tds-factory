@@ -65,7 +65,7 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 | Route | Returns |
 |---|---|
 | `/` | The Dashboard page, with a card per Run in a column per Stage. Runs waiting on you are flagged. Cards show the track, and Check cards a chip per verdict: Standards, Spec, Security and Infrastructure (Spec may be skipped on the Fast track). Cards carry the [actions](#actions). |
-| `/style.css`, `/favicon.svg`, `/app.js`, `/components.js`, `/model.js`, `/markdown.js`, `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` | The Dashboard's stylesheet, icon, ES modules and vendored libraries, from the `dashboard/` folder. Only these names are served. |
+| `/style.css`, `/favicon.svg`, `/app.js`, `/components.js`, `/model.js`, `/markdown.js`, `/help.js`, `/vendor/preact.js`, `/vendor/hooks.js`, `/vendor/htm.js` | The Dashboard's stylesheet, icon, ES modules and vendored libraries, from the `dashboard/` folder. Only these names are served. |
 | `/api/views` | Run records interpreted for the Dashboard, including `model` (`requested`, `effort` and `observed`, each empty when unknown; a requested model is not a confirmed one), `lastSeen`, the last 50 `events` of the Run's event log and `eventsDamaged`, the count of log lines that could not be read. |
 | `/api/info` | The project folder the Dashboard serves, the session token for write routes and, when available, the serving Factory package version. |
 | `/api/runs` | A JSON list of Run records, each with its raw event log (`events`). Use `/api/views` for the interpreted data. A record that cannot be read comes back with `unreadable: true`. |
