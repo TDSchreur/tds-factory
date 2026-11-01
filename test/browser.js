@@ -211,14 +211,14 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         throw new Error('Timed out waiting for: ' + script);
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${server.address().port}/` }),
-      async resize(width, height) {
+      async resize(w, h) {
         await request('POST', base + '/goog/cdp/execute', {
           cmd: 'Emulation.setDeviceMetricsOverride',
-          params: { width, height, deviceScaleFactor: 1, mobile: false },
+          params: { width: w, height: h, deviceScaleFactor: 1, mobile: false },
         });
         assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), {
-          width,
-          height,
+          width: w,
+          height: h,
         });
       },
       // A DevTools protocol command, for example to emulate prefers-reduced-motion or forced-colors.

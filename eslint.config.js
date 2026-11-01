@@ -11,6 +11,7 @@ export default [
       eqeqeq: 'error',
       'prefer-const': 'error',
       'no-var': 'error',
+      'no-shadow': 'error',
       // Existing code intentionally matches control characters and ignores some caught errors.
       'no-control-regex': 'off',
       'no-unused-vars': ['error', { caughtErrors: 'none' }],

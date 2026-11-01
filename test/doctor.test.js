@@ -46,11 +46,11 @@ const entry = (report, id) => report.agents.find((a) => a.id === id);
 function pathWith(...commands) {
   const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-'));
   for (const name of ['npm', ...commands]) writeFileSync(join(bin, name), '');
-  const git = (process.env.PATH ?? '')
+  const gitBin = (process.env.PATH ?? '')
     .split(delimiter)
     .map((d) => join(d, 'git'))
     .find((f) => existsSync(f));
-  symlinkSync(git, join(bin, 'git'));
+  symlinkSync(gitBin, join(bin, 'git'));
   return bin;
 }
 function doctorOn(path, dir, home, ...args) {

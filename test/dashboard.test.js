@@ -218,9 +218,9 @@ test('every write needs the same Origin and the session token', async () => {
 });
 
 test('the server sends no CORS headers and does not answer a preflight', async () => {
-  const get = await fetch(`${dash.url}/api/info`, { headers: { Origin: 'http://evil.example' } });
+  const info = await fetch(`${dash.url}/api/info`, { headers: { Origin: 'http://evil.example' } });
   assert.equal(
-    [...get.headers.keys()].some((name) => name.startsWith('access-control-')),
+    [...info.headers.keys()].some((name) => name.startsWith('access-control-')),
     false,
   );
   const options = await fetch(`${dash.url}/api/runs/x/sync`, {

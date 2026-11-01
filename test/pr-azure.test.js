@@ -311,8 +311,8 @@ test('no source or test file names the production repository', () => {
 
 test('a status that is a prototype key is not a state', () => {
   const { pr, policies } = fixture('passing');
-  for (const status of ['constructor', '__proto__', 'toString'])
-    assert.throws(() => parseStatus({ ...pr, status }, policies), /incomplete Azure DevOps PR status/, status);
+  for (const value of ['constructor', '__proto__', 'toString'])
+    assert.throws(() => parseStatus({ ...pr, status: value }, policies), /incomplete Azure DevOps PR status/, value);
   assert.equal(parseStatus({ ...pr, mergeStatus: 'constructor' }, policies).merge, 'unknown');
   assert.throws(
     () =>
