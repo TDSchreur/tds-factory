@@ -5,6 +5,7 @@ import { install } from '../src/install.js';
 import { openRunStore, formatMetrics } from '../src/run-store.js';
 import { formatSweep } from '../src/run-sweep.js';
 import { formatGuides } from '../src/guides.js';
+import { rowLine } from '../src/run-usage.js';
 import { sync } from '../src/sync.js';
 import { syncRules } from '../src/rules.js';
 import { startDashboard } from '../src/dashboard.js';
@@ -111,6 +112,8 @@ try {
               '\n',
             )}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`,
         );
+        for (const row of formatted.usage.rows) console.log(`    ${rowLine(row)}`);
+        for (const gap of formatted.usage.gaps ?? []) console.log(`    ${gap.label} · no data`);
       };
       for (const run of report.runs) {
         const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');

@@ -1,5 +1,6 @@
 import { stages } from './flow.js';
 import { trackOf } from './run-record.js';
+import { summarizeUsage, formatUsage } from './run-usage.js';
 
 // Metrics record observations independently of current Evidence. Missing or damaged
 // metrics on an older record are never backfilled from its current state.
@@ -68,6 +69,7 @@ export function summarizeMetrics(record, now = Date.now()) {
     reworks,
     clean: outcome === 'clean' ? 1 : 0,
     observed: outcome ? 1 : 0,
+    usage: summarizeUsage(usable(metrics) ? metrics.usage : undefined, record),
   };
 }
 export function formatMetrics(summary) {
@@ -78,7 +80,10 @@ export function formatMetrics(summary) {
     ...(summary.track ? { track: summary.track === 'fast' ? 'Fast' : 'Full' } : {}),
     reworks: summary.reworks === null ? 'no data' : String(summary.reworks),
     firstPass: rate(summary.clean, summary.observed),
-    tokens: 'not tracked',
+    ...(() => {
+      const usage = formatUsage(summary.usage ?? summarizeUsage(undefined));
+      return { tokens: usage.tokens, usage };
+    })(),
     cost: 'not tracked',
   };
 }

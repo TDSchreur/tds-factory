@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { stages } from './flow.js';
 import { validId, validate, write, withStageModel } from './run-record.js';
 import { appendEvent, deriveEvents, readEvents } from './run-events.js';
+import { withUsage } from './run-usage.js';
 
 export function runRoot(projectDir, create) {
   const project = fs.realpathSync(projectDir);
@@ -91,10 +92,14 @@ export function changeRun(projectDir, id, change) {
     const { dir, record } = readRun(projectDir, id);
     const changed = change(record);
     // Every Stage change passes here, whether it is a transition, a Rework or a Follow-up.
-    const next = {
-      ...(changed.stage !== record.stage ? withStageModel(changed) : changed),
-      last_seen: new Date().toISOString(),
-    };
+    const next = withUsage(
+      {
+        ...(changed.stage !== record.stage ? withStageModel(changed) : changed),
+        last_seen: new Date().toISOString(),
+      },
+      record,
+      dir,
+    );
     write(dir, next);
     for (const event of deriveEvents(record, next)) appendEvent(dir, event);
   });
