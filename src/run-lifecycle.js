@@ -20,7 +20,7 @@ import {
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
 import { finishProblems, clearEvidence } from './evidence.js';
-import { newMetrics, moveVisit, firstCheck } from './run-metrics.js';
+import { newMetrics, moveVisit, firstCheck, recordCauses, REWORK_CAUSES } from './run-metrics.js';
 
 export function startRun(projectDir, data) {
   validate(data);
@@ -226,12 +226,14 @@ export function syncRun(projectDir, id, data = {}) {
   });
 }
 
-export function reworkRun(projectDir, id, data = {}) {
+export function reworkRun(projectDir, id, data = {}, causes = []) {
+  const unknown = causes.find((cause) => !REWORK_CAUSES.includes(cause));
+  if (unknown !== undefined) throw new Error(`unknown cause "${unknown}" (use ${REWORK_CAUSES.join(', ')})`);
   changeRunning(projectDir, id, data, (old) => {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be sent back to Build');
     if (loops(old) >= loopCap(old)) throw new Error(`the Check loop limit of ${loopCap(old)} is reached`);
     const record = clearEvidence({
-      ...moveVisit(firstCheck(old, false), 'build'),
+      ...recordCauses(moveVisit(firstCheck(old, false), 'build'), [...new Set(causes)], loops(old) + 1),
       stage: 'build',
       check_loops: loops(old) + 1,
     });

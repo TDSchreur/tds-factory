@@ -39,7 +39,7 @@ export function openRunStore(callerDir) {
     track: (id, value) => trackRun(projectDir, id, value),
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     followUp: (id) => followUpRun(projectDir, id),
-    rework: (id, data) => reworkRun(projectDir, id, data),
+    rework: (id, data, causes) => reworkRun(projectDir, id, data, causes),
     sync: (id, data) => syncRun(projectDir, id, data),
     complete: (id, data) => completeRun(projectDir, id, data),
     accept: (id, data) => acceptRun(projectDir, id, data),

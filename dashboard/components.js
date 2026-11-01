@@ -529,7 +529,7 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       html`<section aria-label="Run metrics"><h3>Run metrics</h3>
       <div>Track: ${run.metrics.track}</div>
       ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}
-      <div>Reworks: ${run.metrics.reworks}</div><div>First-pass clean rate: ${run.metrics.firstPass}</div>
+      <div>Reworks: ${run.metrics.reworks}</div><div>Rework causes: ${run.metrics.reworkCauses}</div><div>First-pass clean rate: ${run.metrics.firstPass}</div>
       <div>Tokens: ${run.metrics.tokens}</div>
       ${
         run.metrics.usage?.rows?.length > 0 &&

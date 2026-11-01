@@ -531,3 +531,9 @@ test('Define names the documents in the Spec and adds a documentation Ticket to 
   assert.match(references['define.md'], /The Fast track and a Run with fewer than three Tickets get no extra Ticket/);
   assert.match(references['invoked-skills.md'], /documentation Ticket/);
 });
+
+test('Check passes the cause of each Blocking finding to run rework, and the command reference and schema name it', () => {
+  assert.match(references['check.md'], /passing `--cause <cause>` for each cause of the Blocking findings/);
+  assert.match(references['progress-commands.md'], /`tds-factory run rework --id <id> \[--cause <cause>\]\.\.\.`/);
+  assert.match(references['run-schema.md'], /`rework_causes`/);
+});
