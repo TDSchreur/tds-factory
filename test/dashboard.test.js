@@ -276,7 +276,7 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
 
 test('the style, scripts and vendored libraries are served at fixed names', async () => {
   for (const [path, type, marker] of [
-    ['/style.css', /text\/css/, /--bg:/],
+    ['/style.css', /text\/css/, /--colorNeutralBackground1:/],
     ['/favicon.svg', /image\/svg\+xml/, /<svg/],
     ['/app.js', /text\/javascript/, /function App/],
     ['/components.js', /text\/javascript/, /export function Card/],

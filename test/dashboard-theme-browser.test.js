@@ -44,8 +44,8 @@ test('rendered theme follows the system preference and manual overrides', async 
         ['system', 'light', 'dark'].forEach(function (theme) { document.documentElement.dataset.theme = theme; out[theme] = getComputedStyle(document.body).backgroundColor; });
         return out;`);
       assert.equal(colors.systemDark, dark);
-      assert.equal(colors.light, 'rgb(246, 247, 249)');
-      assert.equal(colors.dark, 'rgb(20, 23, 26)');
+      assert.equal(colors.light, 'rgb(250, 250, 250)');
+      assert.equal(colors.dark, 'rgb(31, 31, 31)');
       assert.equal(colors.system, dark ? colors.dark : colors.light);
     } finally { await page.close(); }
   }
