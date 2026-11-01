@@ -10,7 +10,7 @@ export const modelName = (value) => typeof value === 'string' && /^[A-Za-z0-9][A
 
 /**
  * The text of a regular log file, or null for a link, a special file or one that is too big. A link is never followed.
- * @param {import('node:fs')} fs
+ * @param {typeof import('node:fs')} fs
  * @param {string} file
  */
 export function readLog(fs, file) {
