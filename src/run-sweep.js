@@ -6,6 +6,11 @@ import { readRun } from './run-folder.js';
 // Read-only: lists where the terms a Run changed still occur in the documents, so a stale statement is found while building.
 const MAX_TERMS = 25;
 const MAX_GONE = 15;
+const MAX_MEMBERS = 20;
+const MAX_SIBLINGS = 12;
+const MAX_TOKENS = 30;
+const MAX_CLAIMS = 40;
+const CLAIM = /\b(?:linear|bounded|constant[- ]time|safe|safely|sanitized|injection-proof)\b|\bO\([^()\n]{1,20}\)/i;
 const PER_TERM = 40;
 const TOTAL = 250;
 const TOO_COMMON = 100;
@@ -41,6 +46,45 @@ function goneTerms(diff) {
     if (heading) { put(heading[1]); put(`#${slug(heading[1])}`); }
   }
   return [...side['-']].filter(([key]) => !side['+'].has(key)).map(([, term]) => term).filter((t) => t.length >= 3).slice(0, MAX_GONE);
+}
+
+const tokens = (text) => [...text.matchAll(/`([^`\n]{1,40})`/g)].slice(0, MAX_TOKENS).map((m) => m[1]);
+
+// Added and removed lines per file, so a member added to a list and the lines that claim something can be told apart.
+function changedLines(diff) {
+  const files = new Map();
+  let file = null;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++ ')) { const m = /^\+\+\+ b\/(.+)$/.exec(line); file = m ? m[1] : null; if (file && !files.has(file)) files.set(file, { added: [], removed: [] }); continue; }
+    if (line.startsWith('--- ') || !file) continue;
+    if (line[0] === '+') files.get(file).added.push(line.slice(1));
+    else if (line[0] === '-') files.get(file).removed.push(line.slice(1));
+  }
+  return files;
+}
+
+// A list is a line with at least three backticked names. A member only the added (or only the removed) lines of a file hold is the change; its siblings are the other names on that line.
+function listChanges(files) {
+  const found = new Map();
+  for (const { added, removed } of files.values()) {
+    const had = (lines) => new Set(lines.flatMap(tokens));
+    const before = had(removed), after = had(added);
+    for (const [lines, other, kind] of [[added, before, 'added'], [removed, after, 'removed']]) {
+      for (const line of lines) {
+        const names = tokens(line);
+        if (names.length < 3) continue;
+        for (const member of names) {
+          if (other.has(member)) continue;
+          const siblings = names.filter((n) => n !== member && before.has(n) && after.has(n));
+          const key = `${kind}\0${member}`;
+          const known = found.get(key) ?? { member, kind, siblings: new Set() };
+          for (const n of siblings) if (known.siblings.size < MAX_SIBLINGS) known.siblings.add(n);
+          found.set(key, known);
+        }
+      }
+    }
+  }
+  return [...found.values()].filter((x) => x.siblings.size >= 2).slice(0, MAX_MEMBERS);
 }
 
 // Backticked terms, --flags, quoted phrases, snake_case and camelCase identifiers on the added and removed lines, most frequent first.
@@ -113,12 +157,30 @@ export function sweepRun(projectDir, id, extra = []) {
     });
     return { term, ...hits };
   });
-  return { id, base: record.base_sha, fromDiff: fromDiff.length, given: terms.length - fromDiff.length, files: files.length, results };
+  const byFile = changedLines(diff);
+  const lists = listChanges(byFile).map(({ member, kind, siblings }) => {
+    const names = [...siblings];
+    const hits = [];
+    for (const f of files) {
+      if (f.replaced) continue;
+      f.lines.forEach((text, i) => {
+        if (text.length > 4000 || names.filter((n) => text.includes(`\`${n}\``)).length < 2) return;
+        if (text.includes(`\`${member}\``) === (kind === 'removed')) hits.push({ file: f.rel, line: i + 1, text, changed: f.changed });
+      });
+    }
+    return { member, kind, siblings: names, hits };
+  }).filter((x) => x.hits.length);
+  const claims = [];
+  for (const [file, { added }] of byFile) {
+    if (/(^|\/)tests?\//.test(file)) continue;
+    for (const text of added) if (text.length < 4000 && CLAIM.test(text) && claims.length < MAX_CLAIMS) claims.push({ file, text });
+  }
+  return { id, base: record.base_sha, fromDiff: fromDiff.length, given: terms.length - fromDiff.length, files: files.length, results, lists, claims };
 }
 
 export function formatSweep(report) {
   const out = [`Term sweep for ${report.id}: ${report.fromDiff} term(s) from the diff, ${report.given} given with --term, ${report.files} documents searched.`];
-  if (!report.results.length) { out.push('no terms found in the diff and none given with --term'); return out.join('\n'); }
+  if (!report.results.length && !report.lists.length && !report.claims.length) { out.push('no terms found in the diff and none given with --term'); return out.join('\n'); }
   let budget = TOTAL, cut = 0;
   const show = (hits, perTerm) => {
     const take = hits.slice(0, Math.max(0, Math.min(perTerm, budget)));
@@ -139,6 +201,18 @@ export function formatSweep(report) {
       out.push(...b.lines);
       if (b.left) out.push(`    ${b.left} more hits left out`);
     }
+  }
+  if (report.lists.length) {
+    out.push('', '== lists that miss a changed member or still hold a removed one:');
+    for (const { member, kind, siblings, hits } of report.lists) {
+      out.push(`  ${kind} \`${clean(member)}\` (siblings: ${clean(siblings.slice(0, 4).join(', '))}${siblings.length > 4 ? ', ...' : ''}): ${hits.length} line(s)`);
+      for (const h of hits.slice(0, 10)) out.push(`    ${clean(h.file)}:${h.line}: ${clean(h.text.trim().slice(0, LINE))}${h.changed ? ' [changed]' : ''}`);
+      if (hits.length > 10) out.push(`    ${hits.length - 10} more lines left out`);
+    }
+  }
+  if (report.claims.length) {
+    out.push('', '== claims in added lines; each needs an adversarial test or must go:');
+    for (const c of report.claims) out.push(`    ${clean(c.file)}: ${clean(c.text.trim().slice(0, LINE))}`);
   }
   if (cut) out.push('', `${cut} hit(s) left out in total; narrow the terms with --term to see them.`);
   return out.join('\n');

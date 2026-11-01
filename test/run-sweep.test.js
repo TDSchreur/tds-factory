@@ -181,3 +181,54 @@ test('hostile input does not slow the sweep or add lines', () => {
   assert.ok(Date.now() - started < 10000);
   assert.doesNotMatch(result.stdout, /\x1b/);
 });
+
+const sections = (out) => out.split('== lists that miss')[1] ?? '';
+
+test('a list that misses a member the diff added is listed, and one that has it is not', () => {
+  const p = project(
+    {
+      'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n',
+      'docs/b.md': 'The report holds `cli`, `git` and `tracker` checks.\n',
+      'docs/c.md': 'Also `cli`, `git`, `tracker` and `guides`.\n',
+    },
+    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' },
+  );
+  const lists = sections(sweep(p).stdout);
+  assert.match(lists, /added `guides`/);
+  assert.match(lists, /docs\/b\.md:1\b/);
+  assert.doesNotMatch(lists, /docs\/c\.md/);
+});
+
+test('a list that still holds a member the diff removed is listed', () => {
+  const p = project(
+    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n', 'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n' },
+    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n' },
+  );
+  const lists = sections(sweep(p).stdout);
+  assert.match(lists, /removed `old`/);
+  assert.match(lists, /docs\/b\.md:1\b/);
+});
+
+test('added lines that claim linear or safe behaviour are listed, tests are not', () => {
+  const p = project(
+    { 'docs/a.md': 'x\n' },
+    { 'src/m.js': '// matching is linear in the input\n', 'test/m.test.js': '// linear here\n', 'docs/a.md': 'plain\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /claims in added lines/);
+  assert.match(out, /src\/m\.js: \/\/ matching is linear/);
+  assert.doesNotMatch(out, /test\/m\.test\.js/);
+});
+
+test('a line with thousands of backticks and a control character in a name stay bounded and clean', () => {
+  const many = '`x` '.repeat(5000);
+  const p = project(
+    { 'docs/a.md': many + '\n`a`, `b`, `c`\n' },
+    { 'docs/a.md': many + '\n`a`, `b`, `c`, `d\x1b[31m`\n' },
+  );
+  const started = Date.now();
+  const result = sweep(p);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 10000);
+  assert.doesNotMatch(result.stdout, /\x1b/);
+});
