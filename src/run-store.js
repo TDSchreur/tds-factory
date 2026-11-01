@@ -11,6 +11,7 @@ import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
 import { guidesRun } from './guides.js';
+import { sizeWarnings } from './run-size.js';
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
 export { MAX_CHECK_LOOPS, loopCap, verifyCommandProblem, fastCommandProblem, trackOf } from './run-record.js';
@@ -34,6 +35,7 @@ export function openRunStore(callerDir) {
     verify: (id, options) => verifyRun(projectDir, id, options),
     verdict: (id, axis, value, options) => verdictRun(projectDir, id, axis, value, options),
     sweep: (id, terms) => sweepRun(projectDir, id, terms),
+    sizeWarnings: (id) => sizeWarnings(projectDir, id),
     guides: (id) => guidesRun(projectDir, id),
     config: (id) => readRun(projectDir, id).record.project_config ?? null,
     reviews: (id) => reviewPlan(readRun(projectDir, id).record),
