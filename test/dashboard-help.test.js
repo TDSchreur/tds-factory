@@ -28,3 +28,11 @@ test('the help text uses no Avoid term of the glossary and asks for no external 
   }
   assert.doesNotMatch(text, /https?:\/\//);
 });
+
+test('each action says when its button appears', () => {
+  const actions = HELP_SECTIONS.find((section) => section.id === 'actions').items;
+  const when = { Merge: /open pull request/, Sync: /Build or Check/, 'Clean up': /merged/, 'Accept Check': /waits in Check/, 'Grant extra loop': /limit/ };
+  assert.deepEqual(actions.map((item) => item.term), Object.keys(when));
+  for (const item of actions) assert.match(item.text, /Shown /, item.term);
+  for (const item of actions) assert.match(item.text, when[item.term], item.term);
+});

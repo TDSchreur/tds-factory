@@ -31,6 +31,8 @@ test('Tab stays inside the help panel and the Close button closes it', async (t)
       await page.key(''); // Tab
       assert.equal(await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"), true, 'Tab ' + i);
     }
+    await page.keyChord('\uE008', '\uE004'); // Shift+Tab
+    assert.equal(await page.execute("return document.getElementById('help-panel').contains(document.activeElement)"), true, 'Shift+Tab');
     await page.execute("document.getElementById('help-close').click()");
     await page.waitFor("return !document.getElementById('help-panel').open && document.activeElement.id === 'help'");
   } finally { await page.close(); }

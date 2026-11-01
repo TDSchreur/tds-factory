@@ -42,11 +42,11 @@ export const HELP_SECTIONS = [
     id: 'actions',
     title: 'Actions',
     items: [
-      { term: 'Merge', text: 'squash and merge the open pull request of a Done Run.' },
-      { term: 'Sync', text: 'rebase the Run branch onto the default branch of origin.' },
-      { term: 'Clean up', text: 'remove the Run worktree and branch once the pull request is merged.' },
-      { term: 'Accept Check', text: 'continue to Finish with a Check that is not clean.' },
-      { term: 'Grant extra loop', text: 'allow one more Check loop when the limit is reached.' },
+      { term: 'Merge', text: 'squash and merge the open pull request of a Done Run. Shown on a Done Run with an open pull request.' },
+      { term: 'Sync', text: 'rebase the Run branch onto the default branch of origin. Shown while a Run is running in Build or Check.' },
+      { term: 'Clean up', text: 'remove the Run worktree and branch. Shown once the pull request is merged.' },
+      { term: 'Accept Check', text: 'continue to Finish with a Check that is not clean. Shown while a Run waits in Check.' },
+      { term: 'Grant extra loop', text: 'allow one more Check loop. Shown while a Run waits at the Check loop limit.' },
     ],
   },
 ];
