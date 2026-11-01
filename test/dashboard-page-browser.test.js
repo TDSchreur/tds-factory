@@ -39,15 +39,15 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
     );
     assert.deepEqual(
       await page.execute(
-        "return [...document.querySelectorAll('[data-stage=check] .chip')].map(c => [c.textContent, c.className, c.title.length > 10])",
+        "return [...document.querySelectorAll('[data-stage=check] ul.chips > li.chip')].map(c => [c.querySelector('.chip-icon').textContent, c.querySelector('.chip-label').textContent, c.querySelector('.chip-value').textContent, c.className, c.title.length > 10])",
       ),
       [
-        ['1/2 tickets', 'chip ', true],
-        ['Standards pass', 'chip pass', true],
-        ['Spec pass', 'chip pass', true],
-        ['Security fail', 'chip fail', true],
-        ['Infrastructure skipped', 'chip skipped', true],
-        ['loop 1/4', 'chip ', true],
+        ['▣', 'Tickets', '1/2', 'chip accent', true],
+        ['✓', 'Standards', 'pass', 'chip pass', true],
+        ['✓', 'Spec', 'pass', 'chip pass', true],
+        ['✗', 'Security', 'fail', 'chip fail', true],
+        ['⊘', 'Infrastructure', 'skipped', 'chip skipped', true],
+        ['↻', 'Check loops', '1/4', 'chip neutral', true],
       ],
     );
     assert.equal(
@@ -468,7 +468,7 @@ test('the Run detail header shows the Run state and stays in view while the summ
       'Waiting run',
       'Check',
       'Needs you: confirm the plan',
-      '1/2 tickets',
+      'Tickets 1/2',
       'Standards pass',
       'claude',
       'Updated',

@@ -30,7 +30,7 @@ Add a Fast track next to the existing Full track. On the Fast track Define is sh
 - Build refuses a Fast track Run unless it has exactly one Ticket. The Full track rule (a Spec link and at least one Ticket) is unchanged.
 - The Standards and Security verdicts are required on both tracks. On the Fast track the Spec verdict may also be `skipped`; on the Full track it still may not. Infrastructure keeps its rule. The Finish gate stays one rule for both tracks: a clean Check or an Accepted one. `skipped` on a worktree with uncommitted changes stays refused.
 - The track is shown in `tds-factory run stats` for each Run. `run stats --all` adds the observed totals and first-pass clean rate per track, with Runs that have no track counted as Full. The Dashboard Run detail shows the same track. This fills the track dimension [ADR 0013](../adr/0013-run-metrics-preserve-observed-history.md) left open.
-- The Dashboard card shows a track chip, `Fast` or `Full`.
+- The Dashboard card shows the track as a row of its facts list, `Fast` or `Full`.
 - The factory Skill, the Stage agents, `README.md` and `docs/usage.md` describe the track. The Skill invokes `diagnosing-bugs`, so that Skill is added to the shipped set (`skills.manifest.json`, `skills/`).
 - `GLOSSARY.md` names Track, Fast track and Full track. A changelog fragment is added.
 - Out of scope: choosing the track by size or by label automatically, a Fast track for Follow-up Reworks beyond what the existing Follow-up does, changing the Check loop limit.
