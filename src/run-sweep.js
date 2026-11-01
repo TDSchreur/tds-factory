@@ -5,6 +5,7 @@ import { readRun } from './run-folder.js';
 
 // Read-only: lists where the terms a Run changed still occur in the documents, so a stale statement is found while building.
 const MAX_TERMS = 25;
+const MAX_GONE = 15;
 const PER_TERM = 40;
 const TOTAL = 250;
 const TOO_COMMON = 100;
@@ -22,6 +23,25 @@ const git = (cwd, ...args) => {
   if (out.status !== 0) throw new Error(`git ${args[0]} failed: ${(out.stderr || out.error?.message || '').trim()}`);
   return out.stdout;
 };
+
+const NUMBER = /(?<![\w.])\d+(?:[.,]\d+)?(?: ?%| ?(?:KB|MB|GB|bytes?|files?|loops?|lines?|characters?|chars|seconds?|minutes?|ms|times|Tickets?|axes|steps?|passes|Reworks?)\b)/gi;
+const HEADING = /^#{1,6}[ \t]+(\S.{1,58}?)[ \t]*#*[ \t]*$/;
+const slug = (text) => text.toLowerCase().replace(/[^\p{L}\p{N} _-]/gu, '').trim().replace(/ /g, '-');
+
+// Numbers with a unit and headings that only the removed lines hold: a changed cap or a moved section leaves these behind in other documents.
+function goneTerms(diff) {
+  const side = { '-': new Map(), '+': new Map() };
+  for (const line of diff.split('\n')) {
+    const mark = line[0];
+    if (!side[mark] || line.startsWith('+++') || line.startsWith('---')) continue;
+    const text = line.slice(1);
+    const put = (term) => { const key = term.toLowerCase(); if (!side[mark].has(key)) side[mark].set(key, term); };
+    for (const m of text.matchAll(NUMBER)) put(m[0].trim());
+    const heading = HEADING.exec(text);
+    if (heading) { put(heading[1]); put(`#${slug(heading[1])}`); }
+  }
+  return [...side['-']].filter(([key]) => !side['+'].has(key)).map(([, term]) => term).filter((t) => t.length >= 3).slice(0, MAX_GONE);
+}
 
 // Backticked terms, --flags, quoted phrases, snake_case and camelCase identifiers on the added and removed lines, most frequent first.
 function termsFromDiff(diff) {
@@ -75,7 +95,8 @@ export function sweepRun(projectDir, id, extra = []) {
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
   const diff = git(root, 'diff', ...plain, record.base_sha);
   const changed = new Set(git(root, 'diff', ...plain, '-z', '--name-only', record.base_sha).split('\0').filter(Boolean));
-  const fromDiff = termsFromDiff(diff);
+  const gone = goneTerms(diff);
+  const fromDiff = [...gone, ...termsFromDiff(diff).filter((t) => !gone.some((g) => g.toLowerCase() === t.toLowerCase()))];
   const given = [...new Set(extra.map((t) => t.trim()).filter(Boolean))];
   const terms = [...fromDiff, ...given.filter((t) => !fromDiff.some((d) => d.toLowerCase() === t.toLowerCase()))];
   const files = documents(root).map((file) => {

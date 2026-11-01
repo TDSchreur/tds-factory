@@ -142,3 +142,42 @@ test('a file name with a newline cannot add lines, and a non-ASCII name still ge
   assert.match(out, /docs\/x\?== fake header\.md:1/);
   assert.match(out, /docs\/\u00e9\.md:1:.*\[changed\]/);
 });
+
+test('the sweep lists documents that still hold a number with a unit the diff removed', () => {
+  const p = project(
+    { 'docs/a.md': 'Keep the file under 21 KB.\n', 'docs/b.md': 'The cap is 21 KB.\nUp to 40 KB is fine.\n' },
+    { 'docs/a.md': 'Keep the file under 18 KB.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /== 21 KB: 1 hit/);
+  assert.match(out, /docs\/b\.md:1\b.*21 KB/);
+  assert.doesNotMatch(out, /== 40 KB/);
+});
+
+test('a number that is still on an added line is not a stale number', () => {
+  const p = project({ 'docs/a.md': 'Limit 21 KB.\n', 'docs/b.md': 'Limit 21 KB.\n' }, { 'docs/a.md': 'Limit 21 KB, see below.\nOther note.\n' });
+  assert.doesNotMatch(sweep(p).stdout, /== 21 KB/);
+});
+
+test('the sweep lists a pointer to a heading the diff removed, by its text and by its anchor', () => {
+  const p = project(
+    { 'docs/a.md': '## Old section\n\nText.\n', 'docs/b.md': 'See [it](a.md#old-section) in the Old section.\n' },
+    { 'docs/a.md': '## New section\n\nText.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /== #old-section: 1 hit/);
+  assert.match(out, /== Old section: 1 hit/);
+  assert.match(out, /docs\/b\.md:1\b/);
+});
+
+test('hostile input does not slow the sweep or add lines', () => {
+  const p = project(
+    { 'docs/a.md': `${'9'.repeat(200000)}\n${'#'.repeat(200000)}\n`, 'docs/b.md': 'x\n' },
+    { 'docs/a.md': `1 KB\x1b[31m\n${'1'.repeat(200000)} KB\n` },
+  );
+  const started = Date.now();
+  const result = sweep(p);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 10000);
+  assert.doesNotMatch(result.stdout, /\x1b/);
+});
