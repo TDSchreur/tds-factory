@@ -3,6 +3,7 @@ import os from 'node:os';
 import { stages } from './flow.js';
 import { readEvents } from './run-events.js';
 import { readClaudeUsage } from './usage-claude.js';
+import { readCodexUsage } from './usage-codex.js';
 
 // Token Usage of a Run (ADR 0026): counts per Stage, model and Ticket, read from the Agent session logs at each Stage
 // change and at completion. Unknown is never zero: a Run without a readable log is "not tracked" and a Stage without
@@ -10,7 +11,7 @@ import { readClaudeUsage } from './usage-claude.js';
 
 const BUDGET_MS = 5000;
 const FIELDS = ['input', 'cache_read', 'cache_write', 'output', 'reasoning'];
-const readers = /** @type {Record<string, Function>} */ ({ claude: readClaudeUsage });
+const readers = /** @type {Record<string, Function>} */ ({ claude: readClaudeUsage, codex: readCodexUsage });
 const SESSION_ID = /^[A-Za-z0-9._-]{1,100}$/;
 
 /** @param {any} metrics */

@@ -1,16 +1,10 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
+import { MAX_FILE_BYTES, count, keepLargest } from './usage-parse.js';
 
 // Reads token Usage from the Claude Code session transcripts under ~/.claude/projects. Only the model, the token
 // counts and the timestamp of each response are kept; no conversation text leaves this module.
-// Every reader returns { entries, sessions } or { problem }. An entry is
-// { ts, model, input, cache_read, cache_write, output, reasoning, subagent }; a field the log does not report is null.
-
-const MAX_FILE_BYTES = 256 * 1024 * 1024;
-
-/** @param {unknown} value */
-const count = (value) => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null);
 
 /**
  * Entries of one transcript. A response is written once per content block with the same usage, so a response counts once.
@@ -44,19 +38,7 @@ function parse(text, subagent, seen) {
     };
     if (entry.input === null && entry.output === null) continue;
     const key = `${subagent}|${message.id ?? data.uuid ?? ts}|${data.requestId ?? ''}`;
-    const old = seen.get(key);
-    // Streaming can rewrite a response with growing counts: keep the largest of each field.
-    seen.set(
-      key,
-      old
-        ? Object.fromEntries(
-            Object.entries(entry).map(([k, v]) => [
-              k,
-              typeof v === 'number' ? Math.max(v, old[k] ?? 0) : (old[k] ?? v),
-            ]),
-          )
-        : entry,
-    );
+    keepLargest(seen, key, entry);
   }
 }
 

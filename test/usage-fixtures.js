@@ -90,3 +90,55 @@ export function claudeSession(home, sessionId, slug = '-home-user-project') {
     main,
   };
 }
+
+// A Codex rollout file. `rootId` is the root session; a subagent rollout has its own `id` but the same `rootId`.
+export function codexSession(home, { id, rootId = id, subagent = false, model = 'gpt-6.1-sol' }) {
+  const day = new Date().toISOString().slice(0, 10).split('-');
+  const dir = join(home, '.codex', 'sessions', ...day);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `rollout-${day.join('-')}T00-00-00-${id}.jsonl`);
+  const at = () => new Date().toISOString();
+  const meta = {
+    id,
+    session_id: rootId,
+    timestamp: at(),
+    cwd: '/home/user/project',
+    ...(subagent ? { source: { subagent: {} } } : {}),
+  };
+  writeFileSync(
+    file,
+    [
+      { timestamp: at(), type: 'session_meta', payload: meta },
+      { timestamp: at(), type: 'turn_context', payload: { turn_id: `turn-${id}`, model } },
+    ]
+      .map((l) => JSON.stringify(l))
+      .join('\n') + '\n',
+  );
+  return {
+    add: (...lines) => appendFileSync(file, lines.join('\n') + '\n'),
+    file,
+    turn: `turn-${id}`,
+  };
+}
+export const codexMention = (runId) =>
+  JSON.stringify({
+    timestamp: new Date().toISOString(),
+    type: 'response_item',
+    payload: { type: 'custom_tool_call', input: `tds-factory run update --id ${runId}` },
+  });
+export const codexUsage = (turn, responseId, { input, cached = 0, output = 1, reasoning = 0 }) =>
+  JSON.stringify({
+    timestamp: new Date().toISOString(),
+    type: 'token_usage_record',
+    payload: {
+      turn_id: turn,
+      response_id: responseId,
+      usage: {
+        input_tokens: input,
+        cached_input_tokens: cached,
+        cache_write_input_tokens: 0,
+        output_tokens: output,
+        reasoning_output_tokens: reasoning,
+      },
+    },
+  });
