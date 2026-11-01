@@ -307,6 +307,16 @@
   .ticket.done { color: var(--colorPaletteGreenForeground1); }
   .ticket.active { font-weight: var(--fontWeightSemibold); }
   .ticket.todo { color: var(--colorNeutralForeground3); }
+  .ticket-usage { display: block; font-weight: normal; color: var(--colorNeutralForeground2); overflow-wrap: anywhere; }
+  .ticket-usage:focus-visible { outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2); outline-offset: 1px; border-radius: var(--borderRadiusSmall); }
+  .usage-breakdown { display: none; color: var(--colorNeutralForeground2); }
+  .usage-model { display: block; }
+  .ticket-usage:hover .usage-breakdown, .ticket-usage:focus .usage-breakdown { display: block; }
+  .usage-table-wrap { overflow-x: auto; margin-top: var(--spacingVerticalS); }
+  .usage-table { border-collapse: collapse; font-size: var(--fontSizeBase200); }
+  .usage-table caption { text-align: left; color: var(--colorNeutralForeground3); padding-bottom: var(--spacingVerticalXS); }
+  .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; white-space: nowrap; }
+  .usage-table th[scope="col"]:first-child, .usage-table th[scope="row"] { text-align: left; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .chips { display: flex; flex-wrap: wrap; gap: var(--spacingHorizontalSNudge); margin-top: var(--spacingVerticalS); font-size: var(--fontSizeBase200); }
   .chip { background: var(--colorNeutralBackground3); border: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusCircular); padding: 0 var(--spacingHorizontalSNudge); color: var(--colorNeutralForeground2); line-height: var(--lineHeightBase200); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

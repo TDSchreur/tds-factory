@@ -206,6 +206,9 @@ export function summarizeUsage(usage, record) {
   };
 }
 
+/** The model name as the tiles show it. @param {string} model */
+const shortModel = (model) => model.replace(/^claude-/, '');
+
 /** @param {number|null} n */
 export function tokenText(n) {
   if (n === null) return 'n/a';
@@ -229,7 +232,13 @@ export function rowLabel(row) {
 
 /** The lines `run stats` and the Dashboard show, built from one place so their labels match. @param {ReturnType<typeof summarizeUsage>} summary */
 export function formatUsage(summary) {
-  if (!summary.tracked) return { tokens: summary.reason ? `not tracked (${summary.reason})` : 'not tracked', rows: [] };
+  if (!summary.tracked)
+    return {
+      tokens: summary.reason ? `not tracked (${summary.reason})` : 'not tracked',
+      rows: [],
+      gaps: [],
+      tiles: [],
+    };
   const rows = summary.rows.map((/** @type {any} */ r) => ({
     label: rowLabel(r),
     fresh: tokenText(fresh(r)),
@@ -245,8 +254,52 @@ export function formatUsage(summary) {
     ticket: r.ticket,
     bucket: r.bucket,
   }));
+  // Build rows grouped for the Ticket tiles: one tile per Ticket, and one for the Rework bucket.
+  /** @type {Map<string, any>} */
+  const groups = new Map();
+  for (const r of summary.rows) {
+    if (r.stage !== 'build' || (!r.ticket && r.bucket !== 'rework')) continue;
+    const key = r.ticket ? `ticket-${r.ticket}` : 'rework';
+    const group = groups.get(key) ?? {
+      ticket: r.ticket,
+      bucket: r.ticket ? null : 'rework',
+      fresh: null,
+      items: /** @type {any[]} */ ([]),
+    };
+    group.fresh = add(group.fresh, fresh(r));
+    group.items.push({
+      size: fresh(r) ?? 0,
+      model: shortModel(r.model),
+      fresh: tokenText(fresh(r)),
+      input: tokenText(r.input),
+      cacheRead: tokenText(r.cache_read),
+      cacheWrite: tokenText(r.cache_write),
+      output: tokenText(r.output),
+    });
+    groups.set(key, group);
+  }
+  // The model that used the most comes first.
+  const tiles = [...groups.values()].map(({ items, ...g }) => {
+    const sorted = items.sort(
+      (/** @type {any} */ a, /** @type {any} */ b) => b.size - a.size || a.model.localeCompare(b.model),
+    );
+    const breakdown = sorted.map((/** @type {any} */ item) => ({
+      model: item.model,
+      fresh: item.fresh,
+      input: item.input,
+      cacheRead: item.cacheRead,
+      cacheWrite: item.cacheWrite,
+      output: item.output,
+    }));
+    return {
+      ...g,
+      fresh: tokenText(g.fresh),
+      models: [...new Set(breakdown.map((/** @type {any} */ b) => b.model))],
+      breakdown,
+    };
+  });
   const gaps = summary.noData.map((s) => ({ label: `${s[0].toUpperCase()}${s.slice(1)}`, noData: true }));
-  return { tokens: `${tokenText(summary.fresh)} fresh`, rows, gaps };
+  return { tokens: `${tokenText(summary.fresh)} fresh`, rows, gaps, tiles };
 }
 
 /** One printable line per row. @param {any} row */
