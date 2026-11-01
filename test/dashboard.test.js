@@ -282,6 +282,7 @@ test('the style, scripts and vendored libraries are served at fixed names', asyn
     ['/components.js', /text\/javascript/, /export function Card/],
     ['/model.js', /text\/javascript/, /export const COLUMNS/],
     ['/markdown.js', /text\/javascript/, /export function parseMarkdown/],
+    ['/help.js', /text\/javascript/, /export const HELP_SECTIONS/],
     ['/vendor/preact.js', /text\/javascript/, /export\{/],
     ['/vendor/hooks.js', /text\/javascript/, /useState/],
     ['/vendor/htm.js', /text\/javascript/, /export default/],

@@ -1,0 +1,3 @@
+# Dashboard: serve help.js
+
+The Dashboard serves its page modules from a fixed allowlist of asset paths (`ASSETS` in `src/dashboard.js`). The help panel work added `dashboard/help.js`, which `dashboard/components.js` imports, but never added `/help.js` to that allowlist. The server therefore answers `GET /help.js` with a 404 `text/plain` body, the browser refuses the module (Firefox reports `NS_ERROR_CORRUPTED_CONTENT`) and the page does not load. The fix adds `/help.js` to the allowlist with the JavaScript content type, and the asset test in `test/dashboard.test.js` lists `/help.js` so a missing module route fails a test.

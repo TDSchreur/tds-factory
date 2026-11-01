@@ -35,7 +35,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
 const JS = 'text/javascript';
 const ASSETS = {
   '/style.css': 'text/css', '/favicon.svg': 'image/svg+xml',
-  '/app.js': JS, '/components.js': JS, '/model.js': JS, '/markdown.js': JS,
+  '/app.js': JS, '/components.js': JS, '/model.js': JS, '/markdown.js': JS, '/help.js': JS,
   '/vendor/preact.js': JS, '/vendor/hooks.js': JS, '/vendor/htm.js': JS,
 };
 const FALLBACK_PAGE = `<!doctype html>
