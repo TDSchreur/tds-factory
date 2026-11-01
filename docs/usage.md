@@ -225,6 +225,7 @@ Put the project's settings in a committed `.factory/config.json`; every key is o
   "models": { "build": "gpt-5.3-codex", "check": "claude-sonnet-5.5" },
   "max_check_loops": 2,
   "labels": { "ticket": "ready-for-agent" },
+  "usage": true,
   "reviews": []
 }
 ```
@@ -232,6 +233,7 @@ Put the project's settings in a committed `.factory/config.json`; every key is o
 - `models` names a model per Stage (`define`, `build`, `check`, `finish`, `follow-up`) or for `interactive-check`. The coordinator passes it when it dispatches the Stage agent, so you do not edit agent files or run `install --force`.
 - `max_check_loops` lowers how many times Check or Follow-up may send a Run back to Build. The Factory maximum is 4; a higher value fails. A loop you grant on the Dashboard is added on top of it.
 - `labels.ticket` is the label `to-tickets` puts on Tickets.
+- `usage` is `true` by default. Set it to `false` to stop the Factory reading the agent session logs for [token usage](#5-follow-runs-on-the-dashboard); the Run then shows `Tokens: not tracked (switched off in the project config)`.
 - `reviews` holds [Project reviews](project-reviews.md), with the same entries as `.factory/reviews.json`, which keeps working.
 
 `.factory/` is ignored for Run records, so commit the file with `git add -f .factory/config.json`. A Run reads it from the default branch of `origin` and freezes it when it starts; `tds-factory run config --id <id>` prints what it froze. Edits apply to new Runs. `tds-factory doctor` reports a bad value as `fail` with the line to fix. See [ADR 0016](adr/0016-project-config-is-committed-and-frozen-per-run.md).

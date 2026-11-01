@@ -140,6 +140,7 @@ function configCheck(agent, projectDir, homeDir) {
     Object.keys(config.models).length && 'models',
     config.max_check_loops !== 4 && 'max_check_loops',
     JSON.stringify(config.labels) !== JSON.stringify({ ticket: 'ready-for-agent' }) && 'labels',
+    config.usage === false && 'usage',
     config.reviews.length && 'reviews',
   ].filter(Boolean);
   return ['pass', `.factory/config.json is valid${set.length ? ` (${set.join(', ')})` : ''}`];

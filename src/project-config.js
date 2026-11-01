@@ -7,7 +7,7 @@ import os from 'node:os';
 export const modelKeys = [...stages, 'interactive-check'];
 export const labelKeys = ['ticket'];
 export const defaultLabels = { ticket: 'ready-for-agent' };
-const topKeys = ['models', 'max_check_loops', 'labels', 'reviews'];
+const topKeys = ['models', 'max_check_loops', 'labels', 'usage', 'reviews'];
 const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 const modelName = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,99}$/.test(v);
 const labelName = (v) => typeof v === 'string' && !!v.trim() && v.length <= 50 && /^[\w .:/-]+$/.test(v) && !!v.trim();
@@ -61,6 +61,7 @@ export function configProblems(source, data) {
           add(['labels', key], `the "${key}" label must be 1 to 50 letters, digits, spaces or . : _ / -`);
       }
   }
+  if ('usage' in data && typeof data.usage !== 'boolean') add(['usage'], '"usage" must be true or false');
   if ('reviews' in data && !Array.isArray(data.reviews)) add(['reviews'], '"reviews" must be an array');
   return out;
 }
@@ -68,7 +69,7 @@ export function configProblems(source, data) {
 // Reads the project configuration from `projectDir`. Absent file: defaults. A bad file throws one message per problem with its line.
 export function loadProjectConfig(projectDir, agent, homeDir = os.homedir()) {
   const file = readProjectJson(projectDir, 'config.json');
-  const config = { models: {}, max_check_loops: MAX_CHECK_LOOPS, labels: { ...defaultLabels } };
+  const config = { models: {}, max_check_loops: MAX_CHECK_LOOPS, labels: { ...defaultLabels }, usage: true };
   if (file) {
     const problems = configProblems(file.source, file.data);
     if (problems.length)
@@ -76,6 +77,7 @@ export function loadProjectConfig(projectDir, agent, homeDir = os.homedir()) {
     Object.assign(config.models, file.data.models);
     if (file.data.max_check_loops !== undefined) config.max_check_loops = file.data.max_check_loops;
     Object.assign(config.labels, file.data.labels);
+    if (file.data.usage !== undefined) config.usage = file.data.usage;
   }
   let reviews;
   try {
@@ -89,4 +91,9 @@ export function loadProjectConfig(projectDir, agent, homeDir = os.homedir()) {
 }
 
 // What a Run freezes: everything but the reviews, which the Run stores with their Skill content.
-export const frozenSettings = ({ models, max_check_loops, labels }) => ({ models, max_check_loops, labels });
+export const frozenSettings = ({ models, max_check_loops, labels, usage }) => ({
+  models,
+  max_check_loops,
+  labels,
+  usage,
+});

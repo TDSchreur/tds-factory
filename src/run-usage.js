@@ -130,6 +130,8 @@ export function readUsage(record, dir, { home = os.homedir(), now = Date.now(), 
     kept?.status === 'tracked' ? kept : { status: 'not tracked', reason };
   try {
     const id = record.id ?? dir.split(/[\\/]/).pop();
+    if (record.project_config?.usage === false)
+      return { status: 'not tracked', reason: 'switched off in the project config' };
     const reader = readers[record.agent];
     if (!reader) return untracked(`Usage is not read for ${record.agent} yet`);
     const from = Date.parse(record.created);
