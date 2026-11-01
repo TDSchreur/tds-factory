@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
@@ -367,4 +367,16 @@ test('an oversized or linked code file is skipped, and code lines never make a l
   const out = sweep(p).stdout;
   assert.doesNotMatch(out, /dashboard\/help\.js/);
   assert.doesNotMatch(out.split('== lists that miss')[1] ?? '', /bin\/tds-factory\.js/);
+});
+
+test('a linked code file is never followed', () => {
+  const p = project(
+    { 'bin/tds-factory.js': 'plain\n', 'docs/a.md': 'Use `old_flag`.\n' },
+    { 'docs/a.md': 'Use `new_flag`.\n' },
+  );
+  writeFileSync(join(p.cwd, 'secret.txt'), 'old_flag in a file outside the Run\n');
+  rmSync(join(p.worktree, 'bin', 'tds-factory.js'));
+  symlinkSync(join(p.cwd, 'secret.txt'), join(p.worktree, 'bin', 'tds-factory.js'));
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
 });

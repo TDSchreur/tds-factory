@@ -1,5 +1,7 @@
 # Reduce the number of Check loops per Run
 
+_The Sweep now also searches the command line help and the Dashboard help text, ends with the list of documents still to read, and Define and Build gain steps for documents: see [Stale documents in Build](stale-documents-in-build.md) and [ADR 0027](../adr/0027-stale-documents-are-caught-in-build-with-a-closing-sweep-list-a-documentation-ticket-and-counted-rework-causes.md)._
+
 ## Problem Statement
 
 A Run is often sent back from Check to Build for findings Build could have found itself. Run `2026-11-01-scope-conventions-by-path-globs` needed three Checks and `first_check: unclean`; two earlier Runs had one Rework each. The causes: the term sweep misses enumerations (a member added to a list, a changed number, a moved section) so current documents go stale; security-sensitive code over untrusted input ships without an adversarial test and with unproven "linear" or "safe" claims; Build hand-rolls a security-sensitive primitive that Define should have decided; the diff grows past what Check can review in one pass and Build makes one commit for several Tickets; and Build's self-check is unfocused.
@@ -42,7 +44,7 @@ Five changes, each cutting one cause. The Sweep finds stale numbers, removed hea
 
 - Refusing a transition on size.
 - Changing Check's Blocking rules, loop cap or reviewer assignment.
-- Sweeping non-Markdown files or plain (unquoted) comma lists.
+- Sweeping non-Markdown files other than the command line help and the Dashboard help text (added by [Stale documents in Build](stale-documents-in-build.md)), or plain (unquoted) comma lists.
 
 ## Further Notes
 

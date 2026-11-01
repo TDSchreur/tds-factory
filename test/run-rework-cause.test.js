@@ -81,3 +81,16 @@ test('run stats --all adds the causes of all Runs and names the unknown ones', (
   const total = command(cwd, 'stats', '--all').split('Total observed')[1];
   assert.match(total, /Rework causes: stale-doc 1, unknown 1\n/);
 });
+
+test('a damaged stored cause list shows only the known causes', () => {
+  const cwd = repo();
+  const id = inCheck(cwd);
+  command(cwd, 'rework', '--id', id, '--cause', 'bug');
+  const record = read(cwd, id);
+  record.metrics.rework_causes.push({ attempt: 9, causes: ['evil\u001b[31m', 'size', 7, null], at: 'x' });
+  record.check_loops = 2;
+  writeFileSync(file(cwd, id), JSON.stringify(record));
+  const out = command(cwd, 'stats', '--id', id);
+  assert.match(out, /Rework causes: bug 1, size 1\n/);
+  assert.doesNotMatch(out, /\u001b/);
+});
