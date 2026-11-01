@@ -23,7 +23,7 @@ The rule for an unavailable reviewer is in the Check section of [`skills/factory
 
 | Stage | Claude | Codex | Copilot |
 |---|---|---|---|
-| Define | Sonnet, medium | `gpt-6.1-terra`, low | `claude-haiku-4.5`, not set |
+| Define | Sonnet, medium | `gpt-6.1-terra`, low | `claude-sonnet-5.5`, not set |
 | Build | Sonnet, low | `gpt-6-luna`, medium | `gpt-5.3-codex`, not set |
 | Check | Sonnet, medium | `gpt-6.1-terra`, medium | `claude-sonnet-5.5`, not set |
 | Finish | Haiku, low | `gpt-6-luna`, low | `claude-haiku-4.5`, not set |
