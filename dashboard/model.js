@@ -123,6 +123,7 @@ function describe(e) {
     }
     case 'waiting': return e.reason ? `Waiting: ${e.reason}` : 'Waiting';
     case 'released': return 'Released';
+    case 'extra-loop': return Number.isSafeInteger(e.limit) ? `Extra Check loop granted, limit now ${e.limit}` : 'Extra Check loop granted';
     case 'rework': return Number.isSafeInteger(e.loops) ? `Rework, loop ${e.loops}` : 'Rework';
     case 'status': return e.status ? `Status: ${e.status}` : 'status';
     default: return e.type;
@@ -158,6 +159,9 @@ export function waitAgeOf(run, now = Date.now()) {
   const m = Math.floor(Math.max(0, now - since) / 60000);
   return { text: `waiting ${m < 1 ? 'less than a minute' : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h` : `${Math.floor(m / 1440)} d`}` };
 }
+
+// Whether the Run waits on the user in Check at its loop limit, so that the user may grant an extra loop (ADR 0024).
+export const canGrantLoop = (run) => !run.unreadable && run.waiting === true && run.column === 'check' && Number.isSafeInteger(run.loops) && Number.isSafeInteger(run.loopCap) && run.loops >= run.loopCap;
 
 // Waiting Runs first, the longest wait first and unknown starts after known ones; the other Runs keep their order. Returns a new list.
 export function sortWaitingFirst(runs) {
