@@ -1,8 +1,9 @@
+// @ts-check
 // Prints the version of the next Release: major and minor of the package, patch one above the highest tag of that line.
 // Usage: node scripts/next-version.js <package version> [tag...]
 import { pathToFileURL } from 'node:url';
 
-export function nextVersion(base, tags) {
+export function nextVersion(/** @type {string} */ base, /** @type {string[]} */ tags) {
   const line = /^(\d+)\.(\d+)\.\d+$/.exec(base);
   if (!line) throw new Error(`not a version: ${base}`);
   const prefix = `v${line[1]}.${line[2]}.`;
@@ -16,7 +17,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     console.log(nextVersion(process.argv[2], process.argv.slice(3)));
   } catch (err) {
-    console.error(`error: ${err.message}`);
+    console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exitCode = 1;
   }
 }

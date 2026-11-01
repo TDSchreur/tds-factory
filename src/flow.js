@@ -1,3 +1,4 @@
+// @ts-check
 export const stages = ['define', 'build', 'check', 'finish', 'follow-up'];
 
 export const targets = {

@@ -1,3 +1,4 @@
+// @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +7,9 @@ import { originDefaultBranch } from './origin.js';
 import { validId } from './run-record.js';
 
 // Fetches origin's default branch and returns the commit it points at, without touching any local ref.
+/** @param {string} dir */
 export function fetchOriginDefault(dir) {
+  /** @param {...string} args */
   const git = (...args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
   const { branch, error } = originDefaultBranch(dir);
   if (!branch) throw new Error(`cannot determine origin default branch: ${error}`);
@@ -20,6 +23,10 @@ export function fetchOriginDefault(dir) {
 }
 
 // Why the Run branch would not merge cleanly into origin's default branch: empty when it would.
+/**
+ * @param {string} projectDir
+ * @param {Record<string, any>} record
+ */
 export function mergeProblem(projectDir, record) {
   const base = fetchOriginDefault(projectDir);
   const merged = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', base, 'HEAD'], {
@@ -37,8 +44,10 @@ export function mergeProblem(projectDir, record) {
 }
 
 // The code revision a Run's Evidence is about: the worktree's head, and whether it has uncommitted changes.
+/** @param {Record<string, any>} record */
 export function worktreeState(record) {
   if (!record.worktree || !fs.existsSync(record.worktree)) throw new Error('the Run worktree is missing');
+  /** @param {...string} args */
   const git = (...args) => spawnSync('git', args, { cwd: record.worktree, encoding: 'utf8' });
   const head = git('rev-parse', 'HEAD'),
     status = git('status', '--porcelain');
@@ -48,6 +57,7 @@ export function worktreeState(record) {
 }
 
 // Only worktrees at the store's own paths can be recovered.
+/** @param {string} projectDir */
 export function ownWorktrees(projectDir) {
   const base = path.join(projectDir, '.factory', 'worktrees');
   if (fs.existsSync(base) && fs.realpathSync(base) !== base)
@@ -69,6 +79,7 @@ export function ownWorktrees(projectDir) {
 }
 
 // Uncommitted work in a worktree, as Git reports it with untracked files shown and submodules inspected; undefined when Git cannot say.
+/** @param {string} dir */
 export const worktreeChanges = (dir) => {
   const status = spawnSync(
     'git',
@@ -88,6 +99,7 @@ export const worktreeChanges = (dir) => {
 
 // A linked worktree keeps its submodules' repositories in its own git folder, so `git worktree remove --force` deletes them.
 // Commits that no remote has and stashes live only there; undefined when Git cannot say.
+/** @param {string} dir */
 export const submoduleLocalWork = (dir) => {
   const out = spawnSync(
     'git',

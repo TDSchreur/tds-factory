@@ -9,5 +9,18 @@
     "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["src/tree-hash.js"]
+  "include": [
+    "src/tree-hash.js",
+    "src/paths.js",
+    "src/flow.js",
+    "src/origin.js",
+    "src/replace-dir.js",
+    "src/run-size.js",
+    "src/pr-provider.js",
+    "src/run-events.js",
+    "src/worktrees.js",
+    "scripts/next-version.js",
+    "scripts/with-temp-dir.js",
+    "scripts/test-unit.js"
+  ]
 }

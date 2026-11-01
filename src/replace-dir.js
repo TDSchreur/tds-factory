@@ -1,7 +1,12 @@
+// @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
 
 // Fills a staging folder next to dest, then renames it into place, so a failure never leaves dest half-written.
+/**
+ * @param {string} dest
+ * @param {(staging: string) => void} populate
+ */
 export function replaceDir(dest, populate) {
   const parent = path.dirname(dest);
   const base = path.basename(dest);

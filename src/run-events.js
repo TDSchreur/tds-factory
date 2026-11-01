@@ -1,3 +1,4 @@
+// @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
 import { loopCap } from './run-record.js';
@@ -6,6 +7,7 @@ import { loopCap } from './run-record.js';
 export const EVENTS_FILE = 'events.jsonl';
 const WINDOW = 256 * 1024;
 
+/** @param {string} file */
 const isLink = (file) => {
   try {
     return fs.lstatSync(file).isSymbolicLink();
@@ -14,6 +16,7 @@ const isLink = (file) => {
   }
 };
 // Only a plain file with one name: a FIFO would block the open, and a hard link would write through to another file.
+/** @param {number} fd */
 const plain = (fd) => {
   const st = fs.fstatSync(fd);
   return st.isFile() && st.nlink === 1;
@@ -21,6 +24,10 @@ const plain = (fd) => {
 const NONBLOCK = fs.constants.O_NONBLOCK ?? 0;
 
 // Appends one event. A failure is ignored: the Run record is the source of truth, and an operation must not fail over its history.
+/**
+ * @param {string} dir
+ * @param {Record<string, unknown>} event
+ */
 export function appendEvent(dir, event) {
   const file = path.join(dir, EVENTS_FILE);
   if (isLink(file)) return false;
@@ -43,6 +50,7 @@ export function appendEvent(dir, event) {
 }
 
 // Reads the end of the log. Lines that cannot be parsed are skipped and counted; the line cut by the read window is neither.
+/** @param {string} dir */
 export function readEvents(dir) {
   const file = path.join(dir, EVENTS_FILE);
   if (isLink(file)) return { events: [], damaged: 0, unreadable: true };
@@ -61,7 +69,9 @@ export function readEvents(dir) {
       fs.closeSync(fd);
     }
   } catch (err) {
-    return err.code === 'ENOENT' ? { events: [], damaged: 0 } : { events: [], damaged: 0, unreadable: true };
+    return err instanceof Error && 'code' in err && err.code === 'ENOENT'
+      ? { events: [], damaged: 0 }
+      : { events: [], damaged: 0, unreadable: true };
   }
   const events = [];
   let damaged = 0;
@@ -86,7 +96,12 @@ export function readEvents(dir) {
 }
 
 // The events a change of the Run record stands for, found by comparing the record before and after, so no operation can forget one.
+/**
+ * @param {Record<string, any>} old
+ * @param {Record<string, any>} next
+ */
 export function deriveEvents(old, next) {
+  /** @type {Record<string, unknown>[]} */
   const events = [];
   if ((next.tickets_done ?? 0) > (old.tickets_done ?? 0))
     events.push({ type: 'ticket-done', done: next.tickets_done, total: next.tickets_total ?? 0 });

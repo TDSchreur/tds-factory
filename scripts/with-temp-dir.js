@@ -1,3 +1,4 @@
+// @ts-check
 // Runs a command with its own temporary directory and removes that directory afterwards.
 // Usage: node scripts/with-temp-dir.js <command> [args...]
 // The tests and evals make many folders in the temp directory and none of them removes its own. Pointing
@@ -23,7 +24,9 @@ const child = spawn(command, args, {
   shell: process.platform === 'win32' && /^(npm|npx|tds-factory)$/.test(command),
 });
 // The child gets the signal as well, since it shares the terminal; wait for it to stop before removing its files.
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
+/** @type {NodeJS.Signals[]} */
+const forwarded = ['SIGINT', 'SIGTERM'];
+for (const signal of forwarded) process.on(signal, () => child.kill(signal));
 
 child.on('error', (err) => {
   remove();

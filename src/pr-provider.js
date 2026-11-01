@@ -1,3 +1,4 @@
+// @ts-check
 import * as github from './pr-github.js';
 import * as azure from './pr-azure.js';
 
@@ -18,11 +19,19 @@ const OPERATIONS = [
 ];
 
 // The adapter that handles this PR link, or undefined when no adapter does.
+/** @param {string} url */
 export const providerFor = (url) => providers.find((p) => p.matches(url));
 // Whether the adapter that handles this PR link has this operation.
-export const can = (url, operation) =>
-  OPERATIONS.includes(operation) && typeof providerFor(url)?.[operation] === 'function';
+/**
+ * @param {string} url
+ * @param {string} operation
+ */
+export const can = (url, operation) => {
+  const provider = providerFor(url);
+  return OPERATIONS.includes(operation) && !!provider && typeof Object(provider)[operation] === 'function';
+};
 // The adapter that handles this git remote URL, with the repository it points at.
+/** @param {string} remote */
 export function remoteRepo(remote) {
   for (const provider of providers) {
     const repo = provider.repoOfRemote(remote);

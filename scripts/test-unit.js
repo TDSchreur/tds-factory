@@ -1,3 +1,4 @@
+// @ts-check
 import { readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
