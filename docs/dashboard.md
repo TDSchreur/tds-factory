@@ -12,6 +12,16 @@ Selecting a Run opens its detail across the screen at compact widths. Use **Back
 
 Each card carries a Fast or Full chip for its track (a Run without a track is Full), and Run detail shows it too, with Stage time, Reworks and first-pass clean rate using the same calculations as `tds-factory run stats --id ID`. Time includes waiting and repeated visits; an active visit is labeled ongoing. Old or missing observations show `no data`. Tokens and cost are `not tracked` for current Agent targets. See [Run metrics in the usage guide](usage.md#run-metrics) for the rate and totals.
 
+## Runs that wait on you
+
+One definition of waiting is used everywhere: the Run's `waiting` flag in `/api/views`, which is true while its status is `waiting` or `waiting_on_human` is set and the Run is not done or abandoned. The card border, the banner, the filter, the sort, the tab title count and the browser notification all read it.
+
+- A waiting card carries a banner that starts with a pause symbol and reads "Needs you, waiting 12 min: <reason>". The Run detail shows the same banner. It is text and a thick left border as well as colour.
+- The wait age comes from the Run's event log: the latest waiting event, if nothing released the Run or changed its status after it. When the log cannot tell (an older Run, a damaged log or a wait older than the last 50 events), the banner shows no age and does not guess.
+- The **Needs you (N)** button in the header filters every Stage to the Runs that wait on you. It is pressed while the filter is on, and a Stage without waiting Runs says so. The filter is not saved and does not change the tab title count.
+- In each Stage, waiting Runs come first, the longest wait first.
+- Paused Runs ("Verification unavailable", "Agent interrupted") keep their own line and are not waiting.
+
 ## Progress on cards and in the Run detail
 
 A card that is not Done shows how far the Run is, from the data in `/api/views` ([ADR 0021](adr/0021-run-record-model-last-seen-and-event-log.md)):

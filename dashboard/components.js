@@ -3,7 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
-import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, lastSeenOf, modelOf, progressOf, safeUrl, ticketsOf, timelineOf } from './model.js';
+import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, lastSeenOf, modelOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
 
 export const html = htm.bind(h);
 
@@ -79,7 +79,7 @@ function Tickets({ run }) {
 }
 
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
-const pauseLabel = (run) => run.waiting ? 'Needs you' : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
+const pauseLabel = (run) => run.waiting ? 'Needs you' + (waitAgeOf(run) ? ', ' + waitAgeOf(run).text : '') : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
 
 export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onSync, onClean, onAccept, onDelete }) {
   const done = run.column === 'done';
@@ -105,7 +105,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onS
   const toggleText = expanded ? 'Hide details' : 'Show details';
   const classes = ['card', run.unreadable && 'unreadable', run.waiting && 'waiting', selected && 'selected', run.status === 'abandoned' && 'abandoned'].filter(Boolean).join(' ');
   return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => { if (e.key === 'Enter') onSelect(run.id); }}>
-    ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
+    ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
     <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${seen && html`<span class=${'last-seen' + (seen.quiet ? ' quiet' : '')}>${seen.quiet ? '⚠ ' : ''}${seen.text}</span>`}${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
     ${done && run.prState === 'open' && html`<div class="open-pr"><span class="badge open">Open PR</span></div>`}
@@ -115,7 +115,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onS
   </li>`;
 }
 
-export function Board({ runs, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
+export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
   return html`<div class="board-wrap">
   <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
     const mine = runs.filter((r) => r.column === c.key);
@@ -130,7 +130,7 @@ export function Board({ runs, stage, onStage, selectedId, expandedIds, doneCount
       <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
       ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
       <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
-      ${!mine.length && html`<div class="empty">No runs</div>`}
+      ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
     </section>`;
   })}</main></div>`;
 }
@@ -146,7 +146,7 @@ export function Intro() {
       <li><strong>Finish</strong>: open the pull request.</li>
       <li><strong>Follow-up</strong>: collect PR feedback and return to Build when needed.</li>
     </ol>
-    <p>A red card marked "Needs you" is waiting for your answer in the agent session. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
+    <p>A red card with a "Needs you" banner is waiting for your answer in the agent session; the Needs you button in the header shows only those Runs, and they come first in their Stage. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
   </details>`;
 }
 
@@ -180,11 +180,12 @@ function Logo() {
 }
 
 // The pill shows the last segment of the project path; the full path is its tooltip.
-export function Header({ project, version, status, olderLabel, onOlder, canNotify, onNotify }) {
+export function Header({ project, version, status, olderLabel, onOlder, canNotify, onNotify, waitingCount, onlyWaiting, onToggleWaiting }) {
   return html`<header>
     <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
+    <button id="needs-you" type="button" aria-pressed=${String(!!onlyWaiting)} title="Show only the Runs that wait on you" onClick=${onToggleWaiting}>Needs you (${waitingCount ?? 0})</button>
     <${ThemeSelect} />
     ${canNotify && html`<button id="notify" type="button" onClick=${onNotify}>Notify me</button>`}
     <button id="older" type="button" hidden=${!olderLabel} onClick=${onOlder}>${olderLabel}</button>
@@ -264,7 +265,7 @@ export function Detail({ run, compact, onClose }) {
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
-      ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
+      ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
     </header>
