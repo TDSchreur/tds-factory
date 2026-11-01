@@ -143,7 +143,9 @@ The Run record keeps the track (`fast` or `full`; a Run without one is Full). It
 
 Run `tds-factory run stats --id ID` for one Run or `tds-factory run stats --all` for every Run and observed totals. Run detail shows the same per-Run summary. Stage time is elapsed wall-clock time, including waiting. Repeated visits are summed, and an open visit is labeled ongoing. Completion or abandonment stops the clock. A missing observation is `no data`; totals report observed values and identify missing or unreadable records.
 
-First-pass clean rate is clean first Checks divided by observed first Check outcomes. Rework and an Accepted nonclean Check count as unsuccessful; unfinished and unknown outcomes are excluded. The output shows the numerator and denominator, or `no data` when there are no outcomes. The Run record keeps prior Check verdicts for history; they do not count as current Evidence. Current Agent targets expose no token or cost measurements to the Factory, so both are reported as `not tracked`.
+**Token usage.** For a Run on the Claude, Codex or Copilot target, `tds-factory run stats --id ID` also prints the tokens the Run used, read from that agent's session logs at each Stage change and when the Run completes. A row shows one Stage and model, with Build split per Ticket (Build work after the last Ticket is done is the "wrap-up", and Build after a Rework is the "Rework" bucket). The headline is the **fresh tokens**: input plus cache write plus output. Cache reads are shown beside it, not inside it. Codex counts cached input inside input, and Copilot counts cache reads and writes inside input; the Factory takes those parts out, so every target shows the same four fields, and reasoning tokens are shown as part of output. Tokens used by reviewer subagents count in the Stage and model they ran under, and the "subagents" figure shows their share. A session belongs to the Run when its log names the Run id. The Run record keeps only counts, never conversation text. If no log can be read, the line says `Tokens: not tracked` with the reason, and a Stage with no entries says `no data`; unknown usage is never shown as zero. `tds-factory run stats --all` adds the tokens per model over all Runs whose usage is tracked, and names the Runs it leaves out instead of counting them as zero. Only tokens are counted, never money.
+
+First-pass clean rate is clean first Checks divided by observed first Check outcomes. Rework and an Accepted nonclean Check count as unsuccessful; unfinished and unknown outcomes are excluded. The output shows the numerator and denominator, or `no data` when there are no outcomes. The Run record keeps prior Check verdicts for history; they do not count as current Evidence. Cost is always reported as `not tracked`; tokens are described under Token usage above.
 
 ## 6. Stop or redirect a Run
 
@@ -223,6 +225,7 @@ Put the project's settings in a committed `.factory/config.json`; every key is o
   "models": { "build": "gpt-5.3-codex", "check": "claude-sonnet-5.5" },
   "max_check_loops": 2,
   "labels": { "ticket": "ready-for-agent" },
+  "usage": true,
   "reviews": []
 }
 ```
@@ -230,6 +233,7 @@ Put the project's settings in a committed `.factory/config.json`; every key is o
 - `models` names a model per Stage (`define`, `build`, `check`, `finish`, `follow-up`) or for `interactive-check`. The coordinator passes it when it dispatches the Stage agent, so you do not edit agent files or run `install --force`.
 - `max_check_loops` lowers how many times Check or Follow-up may send a Run back to Build. The Factory maximum is 4; a higher value fails. A loop you grant on the Dashboard is added on top of it.
 - `labels.ticket` is the label `to-tickets` puts on Tickets.
+- `usage` is `true` by default. Set it to `false` to stop the Factory reading the agent session logs for [token usage](#5-follow-runs-on-the-dashboard); the Run then shows `Tokens: not tracked (switched off in the project config)`.
 - `reviews` holds [Project reviews](project-reviews.md), with the same entries as `.factory/reviews.json`, which keeps working.
 
 `.factory/` is ignored for Run records, so commit the file with `git add -f .factory/config.json`. A Run reads it from the default branch of `origin` and freezes it when it starts; `tds-factory run config --id <id>` prints what it froze. Edits apply to new Runs. `tds-factory doctor` reports a bad value as `fail` with the line to fix. See [ADR 0016](adr/0016-project-config-is-committed-and-frozen-per-run.md).

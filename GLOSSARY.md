@@ -152,10 +152,22 @@ The append-only `events.jsonl` in a Run folder, one line for each Stage change, 
 _Avoid_: Audit trail
 
 **Run metrics**:
-Observed Stage time, Reworks and Check history for a Run. Missing observations are unknown rather than zero.
+Observed Stage time, Reworks, Check history and token Usage for a Run. Missing observations are unknown rather than zero.
 
 **Stage visit**:
 One continuous stay in a Stage, including time waiting for a human. Rework starts another Build visit and can lead to another Check visit.
+
+**Usage**:
+The tokens an Agent target reports for a Run, counted per Stage, model and Ticket as input, cache read, cache write and output, with reasoning shown as part of output. Usage is observed, never estimated: a Run whose Agent target reports nothing has no Usage ("not tracked"), and a Stage with no entries has "no data", never zero. Usage is counted in tokens only.
+
+**Fresh tokens**:
+The headline Usage number: input plus cache write plus output. Cache reads are shown beside it, not inside it.
+
+**Build wrap-up**:
+The Usage of the first Build visit after the last Ticket is done: the Exit checklist, Run sync and the final Verify. It belongs to the Run, not to a Ticket, and is a row of the Usage table without a tile.
+
+**Rework bucket**:
+The Usage of Build visits after a Rework. It belongs to the Run, not to a Ticket, and is shown as its own tile.
 
 **First-pass clean rate**:
 The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.

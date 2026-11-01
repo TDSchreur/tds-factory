@@ -127,7 +127,22 @@ export function ticketsOf(run) {
     href,
     label: ticketLabel(href),
     state: i < done ? 'done' : i === done && run.column === 'build' ? 'active' : 'todo',
+    usage: null,
   }));
+}
+
+// The Tickets with their Usage tile (a todo Ticket has none), and the Rework bucket as a tile of its own at the end.
+export function ticketTilesOf(run) {
+  const tiles = Array.isArray(run.metrics?.usage?.tiles) ? run.metrics.usage.tiles : [];
+  const tickets = ticketsOf(run).map((t, i) => ({
+    ...t,
+    key: t.href,
+    usage: t.state === 'todo' ? null : (tiles.find((tile) => tile.ticket === i + 1) ?? null),
+  }));
+  const rework = tiles.find((tile) => tile.bucket === 'rework');
+  return rework
+    ? [...tickets, { key: 'rework', href: null, label: 'Rework', state: 'rework', usage: rework }]
+    : tickets;
 }
 
 // The last segment of a project path, with either kind of separator; empty when there is none.

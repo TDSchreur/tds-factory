@@ -17,7 +17,7 @@ import {
   prStatusOf,
   progressOf,
   safeUrl,
-  ticketsOf,
+  ticketTilesOf,
   timelineOf,
   waitAgeOf,
 } from './model.js';
@@ -119,10 +119,22 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
 }
 
 function Tickets({ run }) {
-  const tickets = ticketsOf(run);
-  const mark = { done: '✓', active: '▶', todo: '○' };
+  const tickets = ticketTilesOf(run);
+  const mark = { done: '✓', active: '▶', todo: '○', rework: '↻' };
   return tickets.length
-    ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => html`<li key=${t.href} class=${'ticket ' + t.state}><span aria-hidden="true">${mark[t.state]}</span> <${Link} href=${t.href}>${t.label}<//><span class="sr"> (${t.state})</span></li>`)}</ul>`
+    ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => {
+        const id = `usage-${run.id}-${t.key}`.replace(/[^A-Za-z0-9_-]/g, '-');
+        return html`<li key=${t.key} class=${'ticket ' + t.state}>
+          <div class="ticket-head"><span aria-hidden="true">${mark[t.state]}</span> ${t.href ? html`<${Link} href=${t.href}>${t.label}<//>` : t.label}<span class="sr"> (${t.state})</span></div>
+          ${
+            t.usage &&
+            html`<div class="ticket-usage" tabindex="0" aria-describedby=${id}>
+            <span>${t.usage.fresh} fresh${t.state === 'active' ? ' so far' : ''} · ${t.usage.models.join(', ')}</span>
+            <span class="usage-breakdown" id=${id} role="tooltip">${t.usage.breakdown.map((b) => html`<span key=${b.model} class="usage-model">${b.model}: fresh ${b.fresh}, input ${b.input}, cache read ${b.cacheRead}, cache write ${b.cacheWrite}, output ${b.output}</span>`)}</span>
+          </div>`
+          }
+        </li>`;
+      })}</ul>`
     : null;
 }
 
@@ -518,7 +530,15 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       <div>Track: ${run.metrics.track}</div>
       ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}
       <div>Reworks: ${run.metrics.reworks}</div><div>First-pass clean rate: ${run.metrics.firstPass}</div>
-      <div>Tokens: ${run.metrics.tokens}</div><div>Cost: ${run.metrics.cost}</div>
+      <div>Tokens: ${run.metrics.tokens}</div>
+      ${
+        run.metrics.usage?.rows?.length > 0 &&
+        html`<div class="usage-table-wrap" tabindex="0" role="region" aria-label="Token usage table"><table class="usage-table"><caption>Token usage per Stage, model and Ticket</caption>
+        <thead><tr><th scope="col">Where</th><th scope="col">Fresh</th><th scope="col">Input</th><th scope="col">Cache read</th><th scope="col">Cache write</th><th scope="col">Output</th><th scope="col">Reasoning</th><th scope="col">Subagents</th></tr></thead>
+        <tbody>${run.metrics.usage.rows.map((r) => html`<tr key=${r.label}><th scope="row">${r.label}</th><td>${r.fresh}</td><td>${r.input}</td><td>${r.cacheRead}</td><td>${r.cacheWrite}</td><td>${r.output}</td><td>${r.reasoning ?? 'n/a'}</td><td>${r.subagents}</td></tr>`)}</tbody></table></div>`
+      }
+      ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label} · no data</div>`)}
+      <div>Cost: ${run.metrics.cost}</div>
     </section>`
     }
     ${(run.projectReviews ?? []).length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${run.projectReviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}

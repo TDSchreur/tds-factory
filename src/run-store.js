@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { followUpRun } from './run-follow-up.js';
 import { summarizeMetrics, totalMetrics } from './run-metrics.js';
+import { totalUsage } from './run-usage.js';
 import { reviewPlan } from './project-reviews.js';
 import { tracks } from './run-record.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
@@ -78,7 +79,8 @@ export function openRunStore(callerDir) {
           },
         ]),
       );
-      return { runs, total: totalMetrics(readable), byTrack };
+      const usage = totalUsage(runs.filter((run) => run.summary));
+      return { runs, total: totalMetrics(readable), byTrack, usage };
     },
     inspect: (id) => inspectRuns(projectDir, runsDir, id),
     repairPlan: (id) => repairPlan(projectDir, runsDir, id),

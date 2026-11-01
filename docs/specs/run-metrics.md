@@ -1,5 +1,7 @@
 # Run metrics
 
+> Superseded in part by [ADR 0026](../adr/0026-token-usage-is-read-from-the-agent-session-logs.md): token Usage is now read from the Agent session logs, so the statements below that tokens are not tracked and that session-log reading is out of scope no longer hold.
+>
 > Superseded in part by [ADR 0015](../adr/0015-fast-track-is-chosen-explicitly-and-keeps-the-check-gate.md) and [the Fast track Spec](fast-track.md): the track is now recorded in the Run record (absence means Full) and `run stats --all` splits by track. The statements below about leaving the track unspecified describe the original scope.
 
 ## Problem Statement
@@ -8,7 +10,7 @@ The Run record shows current progress and Evidence but does not preserve Stage t
 
 ## Solution
 
-Record Run metrics through the existing named Run operations. Add `tds-factory run stats --id ID` for one Run and `tds-factory run stats --all` for all Runs, and show the same per-Run summary in Dashboard Run detail. Preserve old records and show `no data` when a metric was not observed. State explicitly when tokens and cost are not tracked.
+Record Run metrics through the existing named Run operations. Add `tds-factory run stats --id ID` for one Run and `tds-factory run stats --all` for all Runs, and show the same per-Run summary in Dashboard Run detail. Preserve old records and show `no data` when a metric was not observed. State explicitly when tokens and cost are not tracked; tokens are tracked from the Agent session logs when they can be read (ADR 0026).
 
 ## User Stories
 
@@ -22,7 +24,7 @@ Record Run metrics through the existing named Run operations. Add `tds-factory r
 8. As a user, I want one-Run stats and all-Run stats, so that I can inspect individual work and the project together.
 9. As a Dashboard user, I want the same metrics summary in Run detail, so that I can inspect it without a terminal.
 10. As a user with old Run records, I want missing metrics to show `no data`, so that upgrading keeps history readable without inventing measurements.
-11. As a user, I want tokens and cost shown only when the Agent target exposes them, and otherwise explicitly marked not tracked, so that unknown usage is never reported as zero.
+11. As a user, I want tokens shown only when they can be read from the Agent's session logs, and otherwise explicitly marked not tracked, and cost always marked not tracked, so that unknown usage is never reported as zero.
 12. As a maintainer, I want the metrics representation to leave room for a future track dimension, so that a Fast track can later be compared without rewriting the history model.
 
 ## Implementation Decisions
@@ -36,7 +38,7 @@ Record Run metrics through the existing named Run operations. Add `tds-factory r
 - One-Run stats print time per Stage, Reworks and first-pass clean rate. All-Run stats print the per-Run summaries and project totals for observed Stage time and Reworks, plus the aggregate first-pass clean rate. Identify missing or unreadable data rather than treating it as zero. Stats are read-only, work from the main checkout or a linked worktree, and need no Agent session, git worktree or GitHub connection to calculate recorded values.
 - Dashboard Run detail uses the same calculations and labels as the CLI, including `no data`, ongoing time and usage availability. No separate analytics page or verdict-history viewer is required.
 - Legacy Runs remain readable and are not migrated or backfilled. Their missing metrics show `no data`; later operations must not invent earlier visits or first Check outcomes. Existing recorded Rework counts remain intact, but a missing count is unknown. Malformed optional metrics must not make an otherwise readable Run disappear or crash the Dashboard.
-- The current Factory integrations do not expose Agent token or cost measurements to the Run store. Explicitly show `Tokens: not tracked` and `Cost: not tracked`; do not estimate from time, model names or prices. Keep availability explicit in the representation so a future integration can supply observed measurements.
+- Token Usage is read from the Agent session logs and shown as described in [the token usage Spec](token-usage.md) ([ADR 0026](../adr/0026-token-usage-is-read-from-the-agent-session-logs.md)). When no usage can be read, show `Tokens: not tracked` with the reason, and always show `Cost: not tracked`; do not estimate from time, model names or prices. Keep availability explicit in the representation.
 - Keep the metrics representation versioned and leave an optional track dimension whose absence means unspecified. Do not infer a track for old Runs, add a Fast track, add a track selector or split the current output by track. This follows [ADR 0013](../adr/0013-run-metrics-preserve-observed-history.md) and extends [ADR 0006](../adr/0006-run-progress-goes-through-named-transitions.md).
 - Update the usage and Dashboard guides, the glossary, the Factory Skill's Run record schema and a changelog fragment so the documented record and commands agree with the implementation.
 
@@ -53,7 +55,7 @@ Record Run metrics through the existing named Run operations. Add `tds-factory r
 ## Out of Scope
 
 - Fast track behavior, new Stages, track selection or filtering, Follow-up work and project configuration.
-- Agent session-log scraping, token estimates, pricing tables, cost estimation or integrations that do not already expose usage to the Factory.
+- Token estimates, pricing tables and cost estimation. Reading token counts from the Agent session logs is in scope since ADR 0026.
 - Backfilling or migrating old records, changing Evidence or review gates, analytics charts, exports, a verdict-history UI and new Dashboard routes unrelated to Run detail metrics.
 - Changing Rework limits, repairing Runs, deleting Runs or changing clean-up behavior.
 

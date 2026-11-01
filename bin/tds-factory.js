@@ -5,6 +5,7 @@ import { install } from '../src/install.js';
 import { openRunStore, formatMetrics } from '../src/run-store.js';
 import { formatSweep } from '../src/run-sweep.js';
 import { formatGuides } from '../src/guides.js';
+import { rowLine } from '../src/run-usage.js';
 import { sync } from '../src/sync.js';
 import { syncRules } from '../src/rules.js';
 import { startDashboard } from '../src/dashboard.js';
@@ -34,7 +35,7 @@ const USAGE = `Usage:
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
-  tds-factory run config --id ID   (prints the project settings frozen for the Run: models, Check loop cap, labels)
+  tds-factory run config --id ID   (prints the project settings frozen for the Run: models, Check loop cap, labels, usage)
   tds-factory run reviews --id ID
   tds-factory run materialize-review --id ID --axis ID
   tds-factory run review --id ID --axis ID --data JSON
@@ -111,6 +112,8 @@ try {
               '\n',
             )}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`,
         );
+        for (const row of formatted.usage.rows) console.log(`    ${rowLine(row)}`);
+        for (const gap of formatted.usage.gaps ?? []) console.log(`    ${gap.label} · no data`);
       };
       for (const run of report.runs) {
         const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
@@ -121,6 +124,14 @@ try {
         print('Total observed', report.total);
         for (const [track, { runs, total }] of Object.entries(report.byTrack))
           if (runs) print(`Total observed, ${track[0].toUpperCase()}${track.slice(1)} track (${runs} Run(s))`, total);
+        if (report.usage.tracked) {
+          console.log(`Token usage of ${report.usage.tracked} tracked Run(s)`);
+          for (const row of report.usage.rows) console.log(`  ${rowLine(row)}`);
+        }
+        if (report.usage.left.length)
+          console.log(
+            `Left out of the token totals (not tracked): ${report.usage.left.map((id) => id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')).join(', ')}`,
+          );
         const missing = report.runs.filter(
           (run) =>
             !run.summary ||

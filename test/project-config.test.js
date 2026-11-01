@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
@@ -44,6 +45,7 @@ test('a Run freezes the project settings, so later edits do not change it', () =
     models: { build: 'gpt-x' },
     max_check_loops: 1,
     labels: { ticket: 'agent-ready' },
+    usage: true,
   });
 });
 
@@ -54,6 +56,7 @@ test('a project without a config file gets the Factory defaults', () => {
     models: {},
     max_check_loops: 4,
     labels: { ticket: 'ready-for-agent' },
+    usage: true,
   });
   assert.equal(doctorConfig(cwd).status, 'pass');
 });
@@ -113,4 +116,41 @@ test('reviews in config.json join reviews.json, and an ID in both is a duplicate
   const duplicate = doctorConfig(cwd);
   assert.equal(duplicate.status, 'fail');
   assert.match(duplicate.message, /line \d+: .*duplicate/);
+});
+
+test('usage: false is frozen into the Run, and the Run then never opens a session log', () => {
+  const cwd = project({ usage: false });
+  const home = mkdtempSync(join(tmpdir(), 'usage-off-home-'));
+  const id = start(cwd);
+  assert.equal(JSON.parse(invoke(cwd, 'run', 'config', '--id', id).stdout).usage, false);
+  // A session log that would match the Run; switched off, it must not be read.
+  const dir = join(home, '.claude', 'projects', 'slug');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 's.jsonl'), `${id}\n`);
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  const set = invoke(
+    cwd,
+    'run',
+    'update',
+    '--id',
+    id,
+    '--data',
+    JSON.stringify({ spec_link: 's.md', tickets: ['1'], tickets_total: 1 }),
+  );
+  assert.equal(set.status, 0, set.stderr);
+  const moved = spawnSync(process.execPath, [cli, 'run', 'transition', '--id', id, '--to', 'build'], {
+    cwd,
+    encoding: 'utf8',
+    env,
+  });
+  assert.equal(moved.status, 0, moved.stderr);
+  const usage = JSON.parse(readFileSync(runFile(cwd, id), 'utf8')).metrics.usage;
+  assert.deepEqual(usage, { status: 'not tracked', reason: 'switched off in the project config' });
+  assert.equal(doctorConfig(cwd).message, '.factory/config.json is valid (usage)');
+});
+
+test('doctor names the line of a usage value that is not true or false', () => {
+  const result = doctorConfig(project('{\n  "models": {},\n  "usage": "no"\n}\n'));
+  assert.equal(result.status, 'fail');
+  assert.match(result.message, /line 3: "usage" must be true or false/);
 });
