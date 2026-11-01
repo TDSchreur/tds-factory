@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { loopCap } from './run-record.js';
 
 // The event log of a Run (ADR 0021): append-only, one JSON object per line. It describes what happened and never feeds a gate or Evidence.
 export const EVENTS_FILE = 'events.jsonl';
@@ -63,6 +64,7 @@ export function deriveEvents(old, next) {
     else events.push({ type: 'status', status: next.status, ...(next.status_reason ? { reason: next.status_reason } : {}) });
   }
   if ((next.check_loops ?? 0) > (old.check_loops ?? 0)) events.push({ type: 'rework', loops: next.check_loops });
+  if ((next.extra_loops ?? 0) > (old.extra_loops ?? 0)) events.push({ type: 'extra-loop', granted: next.extra_loops, limit: loopCap(next) });
   if (next.stage !== old.stage) events.push({ type: 'stage', from: old.stage, to: next.stage });
   return events;
 }
