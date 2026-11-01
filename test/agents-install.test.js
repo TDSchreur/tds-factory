@@ -27,8 +27,22 @@ test('install writes the Stage and interactive review agents for each target', (
   for (const [agent, dir] of Object.entries(dirs)) {
     const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
     installIn(project, agent);
-    const names = readdirSync(join(project, dir)).filter((f) => !f.startsWith('.')).map((f) => f.split('.')[0]).sort();
-    assert.deepEqual(names, ['factory-build', 'factory-check', 'factory-define', 'factory-finish', 'factory-follow-up', 'factory-interactive-check'], agent);
+    const names = readdirSync(join(project, dir))
+      .filter((f) => !f.startsWith('.'))
+      .map((f) => f.split('.')[0])
+      .sort();
+    assert.deepEqual(
+      names,
+      [
+        'factory-build',
+        'factory-check',
+        'factory-define',
+        'factory-finish',
+        'factory-follow-up',
+        'factory-interactive-check',
+      ],
+      agent,
+    );
   }
 });
 
@@ -44,7 +58,8 @@ test('install keeps an existing agent file you edited, unless forced', () => {
 });
 
 test('the Build agent of every target follows the Exit checklist and records no verdict', () => {
-  const sentence = 'After the last Ticket and after every Rework, follow the Exit checklist in the Build instructions: the static checks, a term sweep, the required artifacts, a story trace and a security check in `build.md`, a hostile-input step, and one inline self-check of your own diff that records no verdict or Evidence.';
+  const sentence =
+    'After the last Ticket and after every Rework, follow the Exit checklist in the Build instructions: the static checks, a term sweep, the required artifacts, a story trace and a security check in `build.md`, a hostile-input step, and one inline self-check of your own diff that records no verdict or Evidence.';
   for (const file of ['claude/factory-build.md', 'codex/factory-build.toml', 'copilot/factory-build.agent.md']) {
     assert.ok(readFileSync(join(AGENTS_DIR, file), 'utf8').includes(sentence), file);
   }
@@ -52,7 +67,10 @@ test('the Build agent of every target follows the Exit checklist and records no 
 
 test('the Check agent of every target is read-only', () => {
   assert.match(readFileSync(join(AGENTS_DIR, 'claude', 'factory-check.md'), 'utf8'), /^tools: Read, Grep, Glob$/m);
-  assert.match(readFileSync(join(AGENTS_DIR, 'copilot', 'factory-check.agent.md'), 'utf8'), /^tools: \["view", "grep", "glob"\]$/m);
+  assert.match(
+    readFileSync(join(AGENTS_DIR, 'copilot', 'factory-check.agent.md'), 'utf8'),
+    /^tools: \["view", "grep", "glob"\]$/m,
+  );
   assert.match(readFileSync(join(AGENTS_DIR, 'codex', 'factory-check.toml'), 'utf8'), /^sandbox_mode = "read-only"$/m);
 });
 
@@ -124,10 +142,18 @@ test('install updates an unedited agent file but keeps an edited one', () => {
 
 test('the Skill and every Stage agent of every target state the follow-through rule', () => {
   const root = join(import.meta.dirname, '..');
-  assert.match(readFileSync(join(root, 'skills', 'factory', 'SKILL.md'), 'utf8'), /Follow the Flow through: detailed instructions do not replace Define, never skip a Stage, never work around a refused transition or edit `run\.json` directly, and if something blocks a Stage, stop and tell the user/);
+  assert.match(
+    readFileSync(join(root, 'skills', 'factory', 'SKILL.md'), 'utf8'),
+    /Follow the Flow through: detailed instructions do not replace Define, never skip a Stage, never work around a refused transition or edit `run\.json` directly, and if something blocks a Stage, stop and tell the user/,
+  );
   for (const dir of ['claude', 'codex', 'copilot']) {
     const files = readdirSync(join(root, 'agents', dir));
     assert.equal(files.length, 6, dir);
-    for (const file of files) assert.match(readFileSync(join(root, 'agents', dir, file), 'utf8'), /Follow the Flow through: never skip a Stage or its reviewers, never work around a refused transition or edit `run\.json` directly, and if something blocks you, stop and tell the coordinator/, `${dir}/${file}`);
+    for (const file of files)
+      assert.match(
+        readFileSync(join(root, 'agents', dir, file), 'utf8'),
+        /Follow the Flow through: never skip a Stage or its reviewers, never work around a refused transition or edit `run\.json` directly, and if something blocks you, stop and tell the coordinator/,
+        `${dir}/${file}`,
+      );
   }
 });

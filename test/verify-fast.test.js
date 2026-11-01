@@ -8,7 +8,18 @@ import { repo } from './git-repo.js';
 const cli = resolve('bin/tds-factory.js');
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 const start = (cwd, extra = {}) => {
-  const result = run(cwd, 'start', '--data', JSON.stringify({ title: 'Fast', agent: 'claude', commands: 'node -e "process.exit(0)"', conventions: [], ...extra }));
+  const result = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({
+      title: 'Fast',
+      agent: 'claude',
+      commands: 'node -e "process.exit(0)"',
+      conventions: [],
+      ...extra,
+    }),
+  );
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
@@ -18,7 +29,12 @@ test('a Run records the fast Verify command given at start, and rejects an unusa
   const cwd = repo();
   const id = start(cwd, { fast_commands: 'node -e "process.exit(0)"' });
   assert.equal(record(cwd, id).fast_commands, 'node -e "process.exit(0)"');
-  const bad = run(cwd, 'start', '--data', JSON.stringify({ title: 'Bad', agent: 'claude', commands: 'npm test', fast_commands: 'a\0b', conventions: [] }));
+  const bad = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'Bad', agent: 'claude', commands: 'npm test', fast_commands: 'a\0b', conventions: [] }),
+  );
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /fast Verify command/);
 });

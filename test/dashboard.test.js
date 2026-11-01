@@ -18,11 +18,13 @@ function run(id, files) {
 // Raw request so paths are sent exactly as written (fetch normalizes ..).
 function get(d, path) {
   return new Promise((resolve, reject) => {
-    http.get({ host: '127.0.0.1', port: d.port, path }, (res) => {
-      let body = '';
-      res.on('data', (c) => (body += c));
-      res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
-    }).on('error', reject);
+    http
+      .get({ host: '127.0.0.1', port: d.port, path }, (res) => {
+        let body = '';
+        res.on('data', (c) => (body += c));
+        res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
+      })
+      .on('error', reject);
   });
 }
 
@@ -131,23 +133,31 @@ test('info route names the project directory the Dashboard serves', async () => 
   assert.match(info.token, /^[0-9a-f]{64}$/);
   assert.deepEqual({ ...info, token: undefined }, { project, version, token: undefined });
   assert.notEqual(version, '99.88.77');
-  assert.deepEqual({ ...JSON.parse((await get(emptyDash, '/api/info')).body), token: undefined }, { project: empty, version, token: undefined });
+  assert.deepEqual(
+    { ...JSON.parse((await get(emptyDash, '/api/info')).body), token: undefined },
+    { project: empty, version, token: undefined },
+  );
 });
 
 const getAs = (d, path, host) =>
   new Promise((resolve, reject) => {
-    http.get({ host: '127.0.0.1', port: d.port, path, headers: { host } }, (res) => {
-      res.resume();
-      resolve(res.statusCode);
-    }).on('error', reject);
+    http
+      .get({ host: '127.0.0.1', port: d.port, path, headers: { host } }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      })
+      .on('error', reject);
   });
 
 test('a non-GET with a foreign Host is still rejected', async () => {
   const status = await new Promise((resolve, reject) => {
-    const req = http.request({ host: '127.0.0.1', port: dash.port, path: '/api/runs', method: 'POST', headers: { host: 'evil.example' } }, (res) => {
-      res.resume();
-      resolve(res.statusCode);
-    });
+    const req = http.request(
+      { host: '127.0.0.1', port: dash.port, path: '/api/runs', method: 'POST', headers: { host: 'evil.example' } },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      },
+    );
     req.on('error', reject);
     req.end();
   });
@@ -171,28 +181,57 @@ test('server listens on loopback only', () => {
 
 test('unsupported methods are rejected', async () => {
   for (const path of ['/api/runs', '/api/info']) {
-    assert.equal((await fetch(`${dash.url}${path}`, { method: 'POST', headers: await writeHeaders(dash) })).status, 405, path);
+    assert.equal(
+      (await fetch(`${dash.url}${path}`, { method: 'POST', headers: await writeHeaders(dash) })).status,
+      405,
+      path,
+    );
   }
 });
 
 test('every write needs the same Origin and the session token', async () => {
-  const paths = [['DELETE', '/api/runs/x'], ['POST', '/api/runs/x/merge'], ['POST', '/api/runs/x/sync'], ['POST', '/api/runs/x/clean'], ['POST', '/api/runs/x/accept'], ['POST', '/api/runs']];
+  const paths = [
+    ['DELETE', '/api/runs/x'],
+    ['POST', '/api/runs/x/merge'],
+    ['POST', '/api/runs/x/sync'],
+    ['POST', '/api/runs/x/clean'],
+    ['POST', '/api/runs/x/accept'],
+    ['POST', '/api/runs'],
+  ];
   const good = await writeHeaders(dash);
   for (const [method, path] of paths) {
-    for (const [name, headers] of [['no headers', {}], ['no token', { Origin: dash.url }], ['no origin', { 'X-Factory-Token': good['X-Factory-Token'] }],
-      ['wrong token', { ...good, 'X-Factory-Token': 'x'.repeat(64) }], ['foreign origin', { ...good, Origin: 'http://evil.example' }]]) {
-      assert.equal((await fetch(`${dash.url}${path}`, { method, headers })).status, 403, `${method} ${path} with ${name}`);
+    for (const [name, headers] of [
+      ['no headers', {}],
+      ['no token', { Origin: dash.url }],
+      ['no origin', { 'X-Factory-Token': good['X-Factory-Token'] }],
+      ['wrong token', { ...good, 'X-Factory-Token': 'x'.repeat(64) }],
+      ['foreign origin', { ...good, Origin: 'http://evil.example' }],
+    ]) {
+      assert.equal(
+        (await fetch(`${dash.url}${path}`, { method, headers })).status,
+        403,
+        `${method} ${path} with ${name}`,
+      );
     }
   }
   assert.equal((await fetch(`${dash.url}/api/runs/x/sync`, { method: 'POST', headers: good })).status, 404);
 });
 
 test('the server sends no CORS headers and does not answer a preflight', async () => {
-  const get = await fetch(`${dash.url}/api/info`, { headers: { Origin: 'http://evil.example' } });
-  assert.equal([...get.headers.keys()].some((name) => name.startsWith('access-control-')), false);
-  const options = await fetch(`${dash.url}/api/runs/x/sync`, { method: 'OPTIONS', headers: { Origin: 'http://evil.example', 'Access-Control-Request-Method': 'POST' } });
+  const info = await fetch(`${dash.url}/api/info`, { headers: { Origin: 'http://evil.example' } });
+  assert.equal(
+    [...info.headers.keys()].some((name) => name.startsWith('access-control-')),
+    false,
+  );
+  const options = await fetch(`${dash.url}/api/runs/x/sync`, {
+    method: 'OPTIONS',
+    headers: { Origin: 'http://evil.example', 'Access-Control-Request-Method': 'POST' },
+  });
   assert.equal(options.status, 403);
-  assert.equal([...options.headers.keys()].some((name) => name.startsWith('access-control-')), false);
+  assert.equal(
+    [...options.headers.keys()].some((name) => name.startsWith('access-control-')),
+    false,
+  );
 });
 
 test('a token header of the right length in other bytes is refused without crashing the server', async () => {
@@ -204,7 +243,15 @@ test('a token header of the right length in other bytes is refused without crash
     socket.on('data', (c) => (data += c.toString('latin1')));
     socket.on('end', () => resolve(data.split(' ')[1]));
     socket.on('error', reject);
-    socket.write(Buffer.concat([Buffer.from(`POST /api/runs/x/sync HTTP/1.1\r\nHost: 127.0.0.1:${dash.port}\r\nOrigin: ${dash.url}\r\nConnection: close\r\nX-Factory-Token: `), Buffer.alloc(64, 0xe9), Buffer.from('\r\n\r\n')]));
+    socket.write(
+      Buffer.concat([
+        Buffer.from(
+          `POST /api/runs/x/sync HTTP/1.1\r\nHost: 127.0.0.1:${dash.port}\r\nOrigin: ${dash.url}\r\nConnection: close\r\nX-Factory-Token: `,
+        ),
+        Buffer.alloc(64, 0xe9),
+        Buffer.from('\r\n\r\n'),
+      ]),
+    );
   });
   assert.equal(status, '403');
   assert.equal((await fetch(`${dash.url}/api/runs/x/sync`, { method: 'POST', headers: good })).status, 404);
@@ -213,17 +260,21 @@ test('a token header of the right length in other bytes is refused without crash
 test('the session token differs between servers and stays the same within one', async () => {
   const other = await startDashboard({ projectDir: project, port: 0 });
   try {
-    const a = (await writeHeaders(dash))['X-Factory-Token'], b = (await writeHeaders(other))['X-Factory-Token'];
+    const a = (await writeHeaders(dash))['X-Factory-Token'],
+      b = (await writeHeaders(other))['X-Factory-Token'];
     assert.match(a, /^[0-9a-f]{64}$/);
     assert.equal(a, (await writeHeaders(dash))['X-Factory-Token']);
     assert.notEqual(a, b);
-  } finally { await other.close(); }
+  } finally {
+    await other.close();
+  }
 });
 
 test('deletion removes completed and active Runs', async () => {
   run('2026-02-01-finished', { 'run.json': JSON.stringify({ status: 'done' }), 'finish.md': 'history' });
   run('active-to-delete', { 'run.json': JSON.stringify({ status: 'running' }) });
-  const request = async (id) => fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
+  const request = async (id) =>
+    fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
   assert.equal((await request('2026-02-01-finished')).status, 200);
   assert.equal((await request('active-to-delete')).status, 200);
   assert.equal((await get(dash, '/files/2026-02-01-finished/finish.md')).status, 404);
@@ -232,7 +283,8 @@ test('deletion removes completed and active Runs', async () => {
 
 test('deletion rejects foreign origins and traversal', async () => {
   run('2026-02-02-abandoned', { 'run.json': JSON.stringify({ status: 'abandoned' }) });
-  const request = async (path, origin = dash.url) => fetch(`${dash.url}${path}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
+  const request = async (path, origin = dash.url) =>
+    fetch(`${dash.url}${path}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
   assert.equal((await request('/api/runs/2026-02-02-abandoned', 'http://evil.example')).status, 403);
   assert.equal((await request('/api/runs/%2e%2e%2fsecret')).status, 400);
   assert.equal((await request('/api/runs/2026-02-02-abandoned')).status, 200);
@@ -240,7 +292,10 @@ test('deletion rejects foreign origins and traversal', async () => {
 
 test('terminal Runs with older directory names can be deleted', async () => {
   run('2026-02-03_Ünicode legacy!.run', { 'run.json': JSON.stringify({ status: 'done' }) });
-  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, { method: 'DELETE', headers: await writeHeaders(dash) });
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, {
+    method: 'DELETE',
+    headers: await writeHeaders(dash),
+  });
   assert.equal(response.status, 200);
 });
 
@@ -250,7 +305,10 @@ test('deleting a Run with a whitespace-padded ID preserves the similarly named R
   const views = JSON.parse((await get(dash, '/api/views')).body);
   const padded = views.find((r) => r.title === 'Padded');
   assert.equal(padded.id, ' padded ');
-  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, { method: 'DELETE', headers: await writeHeaders(dash) });
+  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, {
+    method: 'DELETE',
+    headers: await writeHeaders(dash),
+  });
   assert.equal(response.status, 200);
   assert.ok((await list()).some((r) => r.id === 'padded'));
   assert.ok(!(await list()).some((r) => r.id === ' padded '));
@@ -259,10 +317,16 @@ test('deleting a Run with a whitespace-padded ID preserves the similarly named R
 test('Dashboard interprets incomplete and unreadable Run records', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'factory-view-'));
   for (const id of ['old', 'broken']) mkdirSync(join(cwd, '.factory', 'runs', id), { recursive: true });
-  writeFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json'), JSON.stringify({ stage: 'unknown', status: 'waiting', extra: 1 }));
+  writeFileSync(
+    join(cwd, '.factory', 'runs', 'old', 'run.json'),
+    JSON.stringify({ stage: 'unknown', status: 'waiting', extra: 1 }),
+  );
   writeFileSync(join(cwd, '.factory', 'runs', 'broken', 'run.json'), '{');
   mkdirSync(join(cwd, '.factory', 'runs', 'legacy'), { recursive: true });
-  writeFileSync(join(cwd, '.factory', 'runs', 'legacy', 'run.json'), JSON.stringify({ stage: 'prepare', status: 'running' }));
+  writeFileSync(
+    join(cwd, '.factory', 'runs', 'legacy', 'run.json'),
+    JSON.stringify({ stage: 'prepare', status: 'running' }),
+  );
   const dashboard = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     const records = await (await fetch(dashboard.url + '/api/views')).json();
@@ -271,7 +335,9 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
     assert.equal(old.waiting, true);
     assert.equal(records.find((r) => r.id === 'legacy').column, 'define');
     assert.equal(records.find((r) => r.id === 'broken').unreadable, true);
-  } finally { await dashboard.close(); }
+  } finally {
+    await dashboard.close();
+  }
 });
 
 test('the style, scripts and vendored libraries are served at fixed names', async () => {
@@ -301,7 +367,19 @@ test('the page maps the vendored libraries with an import map', async () => {
 });
 
 test('only the allow-listed Dashboard files are served', async () => {
-  for (const path of ['/index.html', '/dashboard/app.js', '/package.json', '/src/dashboard.js', '/..%2fpackage.json', '/%2e%2e/package.json', '/style.css/..', '/vendor/LICENSE-preact', '/vendor/README.md', '/vendor/../app.js', '/vendor/%2e%2e/package.json']) {
+  for (const path of [
+    '/index.html',
+    '/dashboard/app.js',
+    '/package.json',
+    '/src/dashboard.js',
+    '/..%2fpackage.json',
+    '/%2e%2e/package.json',
+    '/style.css/..',
+    '/vendor/LICENSE-preact',
+    '/vendor/README.md',
+    '/vendor/../app.js',
+    '/vendor/%2e%2e/package.json',
+  ]) {
     const res = await get(dash, path);
     assert.equal(res.status, 404, path);
   }
@@ -314,7 +392,9 @@ test('a missing Dashboard folder shows the fallback page', async () => {
     assert.equal(res.status, 200);
     assert.match(res.body, /not installed/);
     assert.equal((await get(d, '/app.js')).status, 404);
-  } finally { await d.close(); }
+  } finally {
+    await d.close();
+  }
 });
 
 test('the page links the SVG favicon and a plain title', async () => {
@@ -324,22 +404,61 @@ test('the page links the SVG favicon and a plain title', async () => {
 });
 
 test('project review outcomes, findings and skip reasons are visible in the Dashboard view', async () => {
-  run('2026-01-05-project-reviews', { 'run.json': JSON.stringify({ title: 'Reviews', stage: 'check', status: 'running', project_reviews: [{ id: 'angular', name: 'Angular' }, { id: 'ux', name: 'UX' }], project_results: { angular: { verdict: 'fail', findings: [{ severity: 'MEDIUM', description: 'Bad label', location: 'src/app.html' }] }, ux: { verdict: 'skipped', reason: 'No changed file matches the review patterns' } } }) });
+  run('2026-01-05-project-reviews', {
+    'run.json': JSON.stringify({
+      title: 'Reviews',
+      stage: 'check',
+      status: 'running',
+      project_reviews: [
+        { id: 'angular', name: 'Angular' },
+        { id: 'ux', name: 'UX' },
+      ],
+      project_results: {
+        angular: {
+          verdict: 'fail',
+          findings: [{ severity: 'MEDIUM', description: 'Bad label', location: 'src/app.html' }],
+        },
+        ux: { verdict: 'skipped', reason: 'No changed file matches the review patterns' },
+      },
+    }),
+  });
   const views = JSON.parse((await get(dash, '/api/views')).body);
-  const view = views.find(v => v.id === '2026-01-05-project-reviews');
-  assert.deepEqual(view.projectReviews.map(r => [r.name, r.verdict]), [['Angular', 'fail'], ['UX', 'skipped']]);
+  const view = views.find((v) => v.id === '2026-01-05-project-reviews');
+  assert.deepEqual(
+    view.projectReviews.map((r) => [r.name, r.verdict]),
+    [
+      ['Angular', 'fail'],
+      ['UX', 'skipped'],
+    ],
+  );
   assert.equal(view.projectReviews[0].findings[0].description, 'Bad label');
   assert.match(view.projectReviews[1].reason, /No changed file/);
 });
 
 test('numbered Follow-up summaries follow Finish and are sorted by observation', async () => {
-  run('2026-01-05-follow-up', { 'run.json': JSON.stringify({ stage: 'follow-up', status: 'running' }), 'follow-up-10.md': '10', 'follow-up-2.md': '2', 'finish.md': 'finish' });
-  assert.deepEqual((await list()).find((r) => r.id === '2026-01-05-follow-up').files, ['finish.md', 'follow-up-2.md', 'follow-up-10.md']);
+  run('2026-01-05-follow-up', {
+    'run.json': JSON.stringify({ stage: 'follow-up', status: 'running' }),
+    'follow-up-10.md': '10',
+    'follow-up-2.md': '2',
+    'finish.md': 'finish',
+  });
+  assert.deepEqual((await list()).find((r) => r.id === '2026-01-05-follow-up').files, [
+    'finish.md',
+    'follow-up-2.md',
+    'follow-up-10.md',
+  ]);
 });
 
 test('/api/views returns the model, last seen and the event log of a Run, and skips damaged lines', async () => {
   run('2026-01-09-events', {
-    'run.json': JSON.stringify({ title: 'Events', stage: 'build', status: 'running', requested_model: 'claude-sonnet-5.5', requested_effort: 'high', last_seen: '2026-01-09T10:00:00.000Z' }),
+    'run.json': JSON.stringify({
+      title: 'Events',
+      stage: 'build',
+      status: 'running',
+      requested_model: 'claude-sonnet-5.5',
+      requested_effort: 'high',
+      last_seen: '2026-01-09T10:00:00.000Z',
+    }),
     'events.jsonl': `${JSON.stringify({ at: '2026-01-09T09:00:00.000Z', type: 'stage', from: 'define', to: 'build', secret: { nested: 1 } })}\nnot json\n`,
   });
   const view = JSON.parse((await get(dash, '/api/views')).body).find((v) => v.id === '2026-01-09-events');

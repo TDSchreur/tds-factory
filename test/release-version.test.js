@@ -22,7 +22,9 @@ test('a base that is not a version is refused', () => {
   assert.throws(() => nextVersion('next', []), /version/);
 });
 test('the script prints the next version for the workflow', () => {
-  const result = spawnSync(process.execPath, [resolve('scripts/next-version.js'), '0.1.0', 'v0.1.0', 'v0.1.1'], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [resolve('scripts/next-version.js'), '0.1.0', 'v0.1.0', 'v0.1.1'], {
+    encoding: 'utf8',
+  });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '0.1.2\n');
 });
@@ -34,7 +36,10 @@ test('the release workflow runs manually on main and tests before it publishes',
   assert.doesNotMatch(workflow, /\n\s+push:/);
   assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /needs: \[verify, browser\]/, 'publication waits for verification jobs');
-  assert.ok(workflow.indexOf('npm run test:package -- tds-factory.tgz') < workflow.indexOf('gh release create'), 'the published asset is tested before release');
+  assert.ok(
+    workflow.indexOf('npm run test:package -- tds-factory.tgz') < workflow.indexOf('gh release create'),
+    'the published asset is tested before release',
+  );
 });
 test('the release workflow publishes tds-factory.tgz as the latest Release, serialized and without committing', () => {
   assert.match(workflow, /gh release create .*tds-factory\.tgz/);
@@ -47,12 +52,18 @@ const ASSETS = ['tds-factory.tgz', 'tds-factory.tgz.sha256', 'install.sh', 'inst
 const latestWorkflow = readFileSync(resolve('.github/workflows/latest-release.yml'), 'utf8');
 
 test('the release workflow attaches the tarball, its checksum and both installers in the call that creates the Release', () => {
-  assert.match(workflow, /gh release create "v\$VERSION" tds-factory\.tgz tds-factory\.tgz\.sha256 scripts\/install\.sh scripts\/install\.ps1 /);
+  assert.match(
+    workflow,
+    /gh release create "v\$VERSION" tds-factory\.tgz tds-factory\.tgz\.sha256 scripts\/install\.sh scripts\/install\.ps1 /,
+  );
 });
 
 test('the release workflow checks that every published asset URL serves the file it built', () => {
   const check = workflow.slice(workflow.indexOf('Check that the install URLs'));
-  assert.ok(workflow.indexOf('Check that the install URLs') > workflow.indexOf('gh release create'), 'the check comes after publishing');
+  assert.ok(
+    workflow.indexOf('Check that the install URLs') > workflow.indexOf('gh release create'),
+    'the check comes after publishing',
+  );
   for (const asset of ASSETS) assert.ok(check.includes(asset), `${asset} is checked`);
   assert.match(check, /releases\/latest\/download\/\$name/);
   assert.match(check, /cmp "\$file" downloaded/);

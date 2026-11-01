@@ -4,13 +4,13 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 
 ## 1. What you need
 
-| You need | Check it with | Notes |
-|---|---|---|
-| Node 20 or newer | `node --version` | Installs from nodejs.org, your package manager or nvm. |
-| git (2.38 or later) | `git --version` | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote. |
-| GitHub CLI, signed in | `gh auth status` | Tickets and pull requests go through `gh`. Sign in with `gh auth login`. |
+| You need                                                                                     | Check it with                             | Notes                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node 20 or newer                                                                             | `node --version`                          | Installs from nodejs.org, your package manager or nvm.                                                                                                      |
+| git (2.38 or later)                                                                          | `git --version`                           | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote.                                                        |
+| GitHub CLI, signed in                                                                        | `gh auth status`                          | Tickets and pull requests go through `gh`. Sign in with `gh auth login`.                                                                                    |
 | Azure CLI with the `azure-devops` extension, signed in (only for Azure DevOps pull requests) | `az extension list` and `az account show` | The Dashboard reads the status of an Azure DevOps pull request with `az`. Run `az extension add --name azure-devops` and `az login`. Nothing else needs it. |
-| One coding agent | | GitHub Copilot (VS Code or the Copilot CLI), Claude Code or Codex. |
+| One coding agent                                                                             |                                           | GitHub Copilot (VS Code or the Copilot CLI), Claude Code or Codex.                                                                                          |
 
 ## 2. Install the Factory
 
@@ -58,29 +58,29 @@ To install for one agent only, use `--agent`:
 tds-factory install --agent copilot
 ```
 
-| Agent | Folder `tds-factory install --agent <name>` writes to |
-|---|---|
-| `copilot` | `~/.copilot/skills` |
-| `claude` | `~/.claude/skills` |
-| `codex` | `~/.agents/skills` |
-| `all` (the default) | Claude and Codex folders, which Copilot also reads |
+| Agent               | Folder `tds-factory install --agent <name>` writes to |
+| ------------------- | ----------------------------------------------------- |
+| `copilot`           | `~/.copilot/skills`                                   |
+| `claude`            | `~/.claude/skills`                                    |
+| `codex`             | `~/.agents/skills`                                    |
+| `all` (the default) | Claude and Codex folders, which Copilot also reads    |
 
 Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create. `--force` does overwrite it, so a skill of your own with the same name would be lost. An installed skill you edited is skipped as well, until you use `--force`. Add `--dry-run` to see what install would do without changing anything.
 
 Install options:
 
-| Option | Effect |
-|---|---|
+| Option                                | Effect                                                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `--agent claude\|codex\|copilot\|all` | Pick the Agent target. `all` is the default and means Claude plus Codex, because Copilot reads both directories. |
-| `--project` | Install into the current directory instead of the user-global directory. |
-| `--force` | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install. |
-| `--dry-run` | Print what install would do and change nothing. |
+| `--project`                           | Install into the current directory instead of the user-global directory.                                         |
+| `--force`                             | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install.                 |
+| `--dry-run`                           | Print what install would do and change nothing.                                                                  |
 
-| Agent | Project directory | Global directory |
-|---|---|---|
-| claude | `.claude/skills` | `~/.claude/skills` |
-| codex | `.agents/skills` | `~/.agents/skills` |
-| copilot | `.github/skills` | `~/.copilot/skills` |
+| Agent   | Project directory | Global directory    |
+| ------- | ----------------- | ------------------- |
+| claude  | `.claude/skills`  | `~/.claude/skills`  |
+| codex   | `.agents/skills`  | `~/.agents/skills`  |
+| copilot | `.github/skills`  | `~/.copilot/skills` |
 
 After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
 

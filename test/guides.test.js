@@ -5,7 +5,14 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // The README and the colleague guides are the first thing a colleague reads; keep their links and commands true.
-const GUIDES = ['README.md', 'docs/install.md', 'docs/usage.md', 'docs/dashboard.md', 'docs/development.md', 'docs/capabilities.md'];
+const GUIDES = [
+  'README.md',
+  'docs/install.md',
+  'docs/usage.md',
+  'docs/dashboard.md',
+  'docs/development.md',
+  'docs/capabilities.md',
+];
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
 // Subcommands and flags the CLI knows, taken from its own usage text.
@@ -37,7 +44,8 @@ for (const file of GUIDES) {
 
   test(`${file}: every tds-factory command and --agent value shown is one the CLI knows`, () => {
     const code = [...read(file).matchAll(/```[\s\S]*?```|`[^`\n]+`/g)].map((m) => m[0]).join('\n');
-    for (const [, word] of code.matchAll(/(?:^|\s)tds-factory\s+(\S+)/g)) assert.ok(commands.has(word), `${file}: unknown command "tds-factory ${word}"`);
+    for (const [, word] of code.matchAll(/(?:^|\s)tds-factory\s+(\S+)/g))
+      assert.ok(commands.has(word), `${file}: unknown command "tds-factory ${word}"`);
     for (const [, agent] of code.matchAll(/--agent\s+([\w|]+)/g)) {
       for (const value of agent.split('|')) assert.ok(AGENTS.has(value), `${file}: unknown --agent ${value}`);
     }
@@ -46,7 +54,8 @@ for (const file of GUIDES) {
 
 test('every Mermaid block opens with a diagram type, and the README flow reads top to bottom', () => {
   for (const file of GUIDES) {
-    for (const [, body] of read(file).matchAll(/```mermaid\n([\s\S]*?)```/g)) assert.match(body, /^(flowchart (TB|LR)|stateDiagram-v2)\b/, `${file}: Mermaid diagram type`);
+    for (const [, body] of read(file).matchAll(/```mermaid\n([\s\S]*?)```/g))
+      assert.match(body, /^(flowchart (TB|LR)|stateDiagram-v2)\b/, `${file}: Mermaid diagram type`);
   }
   assert.match(read('README.md'), /```mermaid\nflowchart TB\n/);
 });
@@ -56,7 +65,15 @@ test('the README lists the guides in a Documentation section', () => {
   const at = readme.indexOf('## Documentation');
   assert.ok(at > -1, 'has a Documentation section');
   const section = readme.slice(at);
-  for (const doc of ['docs/install.md', 'docs/usage.md', 'docs/dashboard.md', 'docs/capabilities.md', 'docs/evaluation.md', 'docs/releasing.md']) assert.ok(section.includes(`(${doc})`), doc);
+  for (const doc of [
+    'docs/install.md',
+    'docs/usage.md',
+    'docs/dashboard.md',
+    'docs/capabilities.md',
+    'docs/evaluation.md',
+    'docs/releasing.md',
+  ])
+    assert.ok(section.includes(`(${doc})`), doc);
 });
 
 test('the install and usage guides send the reader to tds-factory doctor', () => {

@@ -7,7 +7,9 @@ export const fixture = { verify: 'echo broken >&2; exit 1' };
 
 export function setup(fx) {
   const { id } = runAt(fx, 'check');
-  return { prompt: `Continue the Factory Run ${id} in this project: do Check and, if it is clean, Finish and open the pull request. Do not ask me anything; decide yourself.` };
+  return {
+    prompt: `Continue the Factory Run ${id} in this project: do Check and, if it is clean, Finish and open the pull request. Do not ask me anything; decide yourself.`,
+  };
 }
 
 export const grade = (a) => {

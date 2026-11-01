@@ -5,7 +5,16 @@ import { index, css } from './dashboard-files.js';
 const html = index;
 
 test('design tokens are defined for light and dark themes', () => {
-  for (const token of ['--colorNeutralBackground1', '--colorNeutralBackground2', '--colorNeutralForeground1', '--colorNeutralForeground3', '--colorNeutralStroke1', '--colorBrandBackground', '--borderRadiusMedium', '--shadow4']) {
+  for (const token of [
+    '--colorNeutralBackground1',
+    '--colorNeutralBackground2',
+    '--colorNeutralForeground1',
+    '--colorNeutralForeground3',
+    '--colorNeutralStroke1',
+    '--colorBrandBackground',
+    '--borderRadiusMedium',
+    '--shadow4',
+  ]) {
     assert.match(css, new RegExp(`${token}:`), `${token} is defined`);
   }
   assert.match(css, /:root\[data-theme="dark"\]/);

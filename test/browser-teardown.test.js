@@ -5,8 +5,21 @@ import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { stopDriver } from './browser.js';
 
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
-const freePort = () => new Promise((resolve) => { const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const freePort = () =>
+  new Promise((resolve) => {
+    const s = createServer().listen(0, '127.0.0.1', () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
 
 // A driver that ignores /shutdown and SIGTERM and prints its child's pid, like a stuck ChromeDriver with its Chromium.
 const STUCK = `
@@ -18,7 +31,13 @@ const STUCK = `
 
 test('teardown kills a driver that ignores shutdown, with its children, within the bounds', async (t) => {
   const driver = spawn(process.execPath, ['-e', STUCK], { stdio: ['ignore', 'pipe', 'ignore'], detached: true });
-  t.after(() => { try { process.kill(-driver.pid, 'SIGKILL'); } catch { /* already gone */ } });
+  t.after(() => {
+    try {
+      process.kill(-driver.pid, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  });
   const child = Number(await new Promise((resolve) => driver.stdout.once('data', resolve)));
   assert.ok(alive(child), 'the child runs before teardown');
   const started = Date.now();

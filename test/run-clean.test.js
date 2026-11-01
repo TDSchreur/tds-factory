@@ -175,16 +175,32 @@ test('after clean, inspect reports no problems and the Run stays listed', async 
   const main = repo();
   const { store, id, prState } = finished(main);
   store.clean(id, { prState });
-  assert.deepEqual((await store.inspect()).filter((r) => r.problems.length), []);
-  assert.deepEqual((await store.list()).map((r) => r.id), [id]);
+  assert.deepEqual(
+    (await store.inspect()).filter((r) => r.problems.length),
+    [],
+  );
+  assert.deepEqual(
+    (await store.list()).map((r) => r.id),
+    [id],
+  );
 });
 
 test('clean --all sweeps merged Runs and leaves the others', () => {
   const main = repo();
-  const a = finished(main), b = finished(main, 'OPEN');
+  const a = finished(main),
+    b = finished(main, 'OPEN');
   const noPr = openRunStore(main).start(start);
-  const results = a.store.cleanAll({ prState: (url) => (url === a.pr ? { state: 'MERGED', head: a.head } : { state: 'OPEN', head: b.head }) });
-  assert.deepEqual(results.map(({ id, outcome }) => [id, outcome]), [[a.id, 'cleaned'], [b.id, 'kept']], `${noPr} has no PR and is not listed`);
+  const results = a.store.cleanAll({
+    prState: (url) => (url === a.pr ? { state: 'MERGED', head: a.head } : { state: 'OPEN', head: b.head }),
+  });
+  assert.deepEqual(
+    results.map(({ id, outcome }) => [id, outcome]),
+    [
+      [a.id, 'cleaned'],
+      [b.id, 'kept'],
+    ],
+    `${noPr} has no PR and is not listed`,
+  );
   assert.ok(!existsSync(a.wt) && existsSync(b.wt));
 });
 
@@ -213,15 +229,24 @@ test('run complete tells the user how to clean up once the PR is merged', () => 
 
 test('clean works for a merged Azure DevOps PR through the provider seam, and keeps a Run whose PR is still open', async () => {
   const { providerFor } = await import('../src/pr-provider.js');
-  const recorded = (key) => JSON.parse(readFileSync(new URL(`./fixtures/pr-status/azure/${key}.pr.json`, import.meta.url), 'utf8'));
-  for (const [key, outcome] of [['completed', 'cleaned'], ['passing', 'kept']]) {
+  const recorded = (key) =>
+    JSON.parse(readFileSync(new URL(`./fixtures/pr-status/azure/${key}.pr.json`, import.meta.url), 'utf8'));
+  for (const [key, outcome] of [
+    ['completed', 'cleaned'],
+    ['passing', 'kept'],
+  ]) {
     const main = repo();
     const { store, id, wt, head } = finished(main);
     const pr = `https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/${recorded(key).pullRequestId}`;
     store.update(id, { pr });
     // What the default lookup does for a Run: ask the adapter of the PR link for state and head (here from the recorded answer, with the head of this branch).
     const answer = { ...recorded(key), lastMergeSourceCommit: { commitId: head } };
-    const prState = (url) => { const { state, headRefOid } = providerFor(url).view(url, { run: () => ({ status: 0, stdout: JSON.stringify(answer) }) }); return { state, head: headRefOid }; };
+    const prState = (url) => {
+      const { state, headRefOid } = providerFor(url).view(url, {
+        run: () => ({ status: 0, stdout: JSON.stringify(answer) }),
+      });
+      return { state, head: headRefOid };
+    };
     const result = store.clean(id, { prState });
     assert.equal(result.outcome, outcome, key);
     assert.equal(existsSync(wt), outcome === 'kept', key);

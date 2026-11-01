@@ -6,11 +6,28 @@ import { SKILLS_DIR, AGENTS_DIR } from '../src/paths.js';
 
 const root = join(SKILLS_DIR, '..');
 const matrix = readFileSync(join(root, 'docs', 'capabilities.md'), 'utf8');
-const rows = Object.fromEntries(matrix.split('\n').filter((l) => l.startsWith('| ') && !l.startsWith('| ---')).map((l) => l.split(/(?<!\\)\|/).slice(1, -1).map((c) => c.trim())).map(([name, ...cells]) => [name, cells]));
+const rows = Object.fromEntries(
+  matrix
+    .split('\n')
+    .filter((l) => l.startsWith('| ') && !l.startsWith('| ---'))
+    .map((l) =>
+      l
+        .split(/(?<!\\)\|/)
+        .slice(1, -1)
+        .map((c) => c.trim()),
+    )
+    .map(([name, ...cells]) => [name, cells]),
+);
 
 test('the capability matrix has a column per Agent target and a row per concern', () => {
   assert.deepEqual(rows.Concern, ['Claude', 'Codex', 'Copilot']);
-  for (const concern of ['Skill invocation', 'Stage agent dispatch', 'Review isolation', 'Resumability', 'Reviewer unavailable']) {
+  for (const concern of [
+    'Skill invocation',
+    'Stage agent dispatch',
+    'Review isolation',
+    'Resumability',
+    'Reviewer unavailable',
+  ]) {
     assert.equal(rows[concern]?.length, 3, concern);
   }
 });

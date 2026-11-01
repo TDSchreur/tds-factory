@@ -8,10 +8,13 @@ export default [
     languageOptions: { globals: globals.node },
     rules: {
       ...js.configs.recommended.rules,
-      // Existing code intentionally matches control characters and ignores some caught errors.
+      eqeqeq: 'error',
+      'prefer-const': 'error',
+      'no-var': 'error',
+      'no-shadow': 'error',
+      // Existing code intentionally matches control characters.
       'no-control-regex': 'off',
-      'no-unused-vars': ['error', { caughtErrors: 'none' }],
-      'no-useless-escape': 'off',
+      // Rethrown errors deliberately carry no cause.
       'preserve-caught-error': 'off',
     },
   },

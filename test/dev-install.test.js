@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync, readFileSync, existsSync, realpathSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  copyFileSync,
+  chmodSync,
+  readFileSync,
+  existsSync,
+  realpathSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -33,14 +42,25 @@ function setup() {
   const bin = join(base, 'bin');
   mkdirSync(bin);
   const log = join(base, 'npm.log');
-  writeFileSync(join(bin, 'npm'), `#!/bin/sh\ncase "$1" in --version) echo 10.0.0; exit 0;; prefix) echo /nonexistent; exit 0;; esac\necho "$*" >> ${log}\nfor a in "$@"; do last=$a; done\ntar tzf "$last" >> ${log}\n`);
+  writeFileSync(
+    join(bin, 'npm'),
+    `#!/bin/sh\ncase "$1" in --version) echo 10.0.0; exit 0;; prefix) echo /nonexistent; exit 0;; esac\necho "$*" >> ${log}\nfor a in "$@"; do last=$a; done\ntar tzf "$last" >> ${log}\n`,
+  );
   chmodSync(join(bin, 'npm'), 0o755);
-  writeFileSync(join(bin, 'tds-factory'), `#!/bin/sh\necho "tds-factory $*" >> ${log}\n[ "$1" = --version ] && echo 9.9.9\nexit 0\n`);
+  writeFileSync(
+    join(bin, 'tds-factory'),
+    `#!/bin/sh\necho "tds-factory $*" >> ${log}\n[ "$1" = --version ] && echo 9.9.9\nexit 0\n`,
+  );
   chmodSync(join(bin, 'tds-factory'), 0o755);
   return { base, clone, log, bin };
 }
 
-const run = (s, ...flags) => spawnSync(process.execPath, [join(s.clone, 'scripts', 'dev-install.js'), '--skip-dev-skills', ...flags], { cwd: s.clone, encoding: 'utf8', env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}` } });
+const run = (s, ...flags) =>
+  spawnSync(process.execPath, [join(s.clone, 'scripts', 'dev-install.js'), '--skip-dev-skills', ...flags], {
+    cwd: s.clone,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}` },
+  });
 
 test('installs the tip of the default branch of origin, fetched without pulling', { skip: !posix }, () => {
   const s = setup();

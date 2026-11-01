@@ -39,10 +39,12 @@ const isLink = (file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbol
 function checkFolder(project, dir) {
   let at = dir;
   while (at !== project && path.dirname(at) !== at) {
-    if (isLink(at)) throw new Error(`${path.relative(project, at).replace(/\\/g, '/')} is a symbolic link; remove it first`);
+    if (isLink(at))
+      throw new Error(`${path.relative(project, at).replace(/\\/g, '/')} is a symbolic link; remove it first`);
     at = path.dirname(at);
   }
-  if (fs.existsSync(dir) && !insideProject(project, dir)) throw new Error(`${clean(path.relative(project, dir))} resolves to a place outside the project`);
+  if (fs.existsSync(dir) && !insideProject(project, dir))
+    throw new Error(`${clean(path.relative(project, dir))} resolves to a place outside the project`);
 }
 
 export function syncRules({ project = process.cwd(), force = false, dryRun = false, log = console.log } = {}) {
@@ -51,7 +53,11 @@ export function syncRules({ project = process.cwd(), force = false, dryRun = fal
   checkFolder(project, source);
   const targetDir = path.join(project, TARGET_DIR);
   checkFolder(project, targetDir);
-  const names = fs.readdirSync(source, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.instructions.md')).map((e) => e.name).sort();
+  const names = fs
+    .readdirSync(source, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.instructions.md'))
+    .map((e) => e.name)
+    .sort();
   const result = { written: [], kept: [] };
   for (const name of names) {
     const from = path.join(source, name);

@@ -2,7 +2,17 @@ import { writeHeaders } from './dashboard-token.js';
 import { test } from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync, appendFileSync, mkdirSync, symlinkSync, renameSync } from 'node:fs';
+import {
+  mkdtempSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  appendFileSync,
+  mkdirSync,
+  symlinkSync,
+  renameSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import childProcess, { spawnSync } from 'node:child_process';
@@ -39,7 +49,10 @@ test('a Dashboard in the main checkout lists a Run created from a worktree', asy
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
     const runs = await (await fetch(`${dashboard.url}/api/runs`)).json();
-    assert.deepEqual(runs.map((r) => r.id), [id]);
+    assert.deepEqual(
+      runs.map((r) => r.id),
+      [id],
+    );
   } finally {
     await dashboard.close();
   }
@@ -256,18 +269,22 @@ test('Dashboard requires an explicit discard option before deleting dirty work',
   const { worktree } = record(main, id);
   writeFileSync(join(worktree, 'unsaved.txt'), 'work');
   const dash = await startDashboard({ projectDir: main, port: 0 });
-  const request = async (query, origin = dash.url) => fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
+  const request = async (query, origin = dash.url) =>
+    fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
   try {
     const refused = await request('');
     assert.equal(refused.status, 409);
     assert.equal(refused.headers.get('x-factory-error'), 'dirty-worktree');
-    for (const bad of ['?discardChanges=false', '?discardChanges=true&discardChanges=true', '?other=true']) assert.equal((await request(bad)).status, 400);
+    for (const bad of ['?discardChanges=false', '?discardChanges=true&discardChanges=true', '?other=true'])
+      assert.equal((await request(bad)).status, 400);
     assert.equal((await request('?discardChanges=true', 'http://evil.example')).status, 403);
     assert.equal((await request('?doneOnly=true&discardChanges=true')).status, 409);
     assert.ok(existsSync(join(worktree, 'unsaved.txt')));
     assert.equal((await request('?discardChanges=true')).status, 200);
     assert.ok(!existsSync(worktree) && !existsSync(join(main, '.factory', 'runs', id)));
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('the Dashboard reports a refused worktree removal and keeps the Run', async () => {
@@ -278,16 +295,22 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
   finish(store, id);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dashboard) });
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, {
+      method: 'DELETE',
+      headers: await writeHeaders(dashboard),
+    });
     assert.equal(res.status, 409);
     assert.match(await res.text(), /uncommitted changes/);
-    assert.deepEqual((await (await fetch(`${dashboard.url}/api/runs`)).json()).map((r) => r.id), [id]);
+    assert.deepEqual(
+      (await (await fetch(`${dashboard.url}/api/runs`)).json()).map((r) => r.id),
+      [id],
+    );
   } finally {
     await dashboard.close();
   }
 });
 
-test('the Dashboard shows git\'s error when it cannot remove a clean worktree', async () => {
+test("the Dashboard shows git's error when it cannot remove a clean worktree", async () => {
   const main = repo();
   const store = openRunStore(main);
   const id = store.start(start);
@@ -295,13 +318,19 @@ test('the Dashboard shows git\'s error when it cannot remove a clean worktree', 
   finish(store, id);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const res = await fetch(`${dashboard.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dashboard) });
+    const res = await fetch(`${dashboard.url}/api/runs/${id}`, {
+      method: 'DELETE',
+      headers: await writeHeaders(dashboard),
+    });
     assert.equal(res.status, 409);
     const body = await res.text();
     assert.match(body, /git could not remove the Run worktree: .*locked/);
     assert.doesNotMatch(body, /uncommitted changes/);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
-    const override = await fetch(`${dashboard.url}/api/runs/${id}?discardChanges=true`, { method: 'DELETE', headers: await writeHeaders(dashboard) });
+    const override = await fetch(`${dashboard.url}/api/runs/${id}?discardChanges=true`, {
+      method: 'DELETE',
+      headers: await writeHeaders(dashboard),
+    });
     assert.equal(override.status, 409);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
   } finally {
@@ -339,13 +368,18 @@ test('a branch the user already made with the Run id does not block start', () =
   assert.equal(git(record(main, id).worktree, 'branch', '--show-current'), id);
 });
 
-
 test('start rolls back the new worktree and branch if the record cannot be persisted', () => {
   const main = repo();
   const rename = fs.renameSync;
-  fs.renameSync = (...args) => { if (args[1].endsWith('/run.json')) throw new Error('simulated record write failure'); return rename(...args); };
-  try { assert.throws(() => openRunStore(main).start(start), /simulated record write failure/); }
-  finally { fs.renameSync = rename; }
+  fs.renameSync = (...args) => {
+    if (args[1].endsWith('/run.json')) throw new Error('simulated record write failure');
+    return rename(...args);
+  };
+  try {
+    assert.throws(() => openRunStore(main).start(start), /simulated record write failure/);
+  } finally {
+    fs.renameSync = rename;
+  }
   assert.deepEqual(branches(main), ['main']);
   assert.equal(git(main, 'worktree', 'list', '--porcelain').match(/^worktree /gm).length, 1);
   assert.deepEqual(readdirSync(join(main, '.factory', 'runs')), []);
@@ -362,20 +396,33 @@ test('failed start keeps a dirty worktree and names the original and rollback fa
     }
     return rename(...args);
   };
-  try { assert.throws(() => openRunStore(main).start(start), /simulated record write failure; rollback failed: worktree remains/); }
-  finally { fs.renameSync = rename; }
+  try {
+    assert.throws(
+      () => openRunStore(main).start(start),
+      /simulated record write failure; rollback failed: worktree remains/,
+    );
+  } finally {
+    fs.renameSync = rename;
+  }
   const branch = branches(main).find((b) => b !== 'main');
   assert.equal(readFileSync(join(main, '.factory', 'worktrees', branch, 'unfinished'), 'utf8'), 'keep me');
 });
 
-
 test('failed start preserves a branch advanced while rollback is deleting it', () => {
   const main = repo();
-  const rename = fs.renameSync, spawn = childProcess.spawnSync;
+  const rename = fs.renameSync,
+    spawn = childProcess.spawnSync;
   let advanced, branch;
-  fs.renameSync = (...args) => { if (args[1].endsWith('/run.json')) throw new Error('record write failed'); return rename(...args); };
+  fs.renameSync = (...args) => {
+    if (args[1].endsWith('/run.json')) throw new Error('record write failed');
+    return rename(...args);
+  };
   childProcess.spawnSync = (command, args, options) => {
-    if (command === 'git' && ((args[0] === 'branch' && args[1] === '-D') || (args[0] === 'update-ref' && args[1] === '-d' && args[2].startsWith('refs/heads/')))) {
+    if (
+      command === 'git' &&
+      ((args[0] === 'branch' && args[1] === '-D') ||
+        (args[0] === 'update-ref' && args[1] === '-d' && args[2].startsWith('refs/heads/')))
+    ) {
       branch = args[2].replace(/^refs\/heads\//, '');
       const old = git(main, 'rev-parse', `refs/heads/${branch}`);
       advanced = git(main, 'commit-tree', `${old}^{tree}`, '-p', old, '-m', 'concurrent work');
@@ -384,8 +431,13 @@ test('failed start preserves a branch advanced while rollback is deleting it', (
     return spawn(command, args, options);
   };
   syncBuiltinESMExports();
-  try { assert.throws(() => openRunStore(main).start(start), /record write failed.*branch .*remains/); }
-  finally { fs.renameSync = rename; childProcess.spawnSync = spawn; syncBuiltinESMExports(); }
+  try {
+    assert.throws(() => openRunStore(main).start(start), /record write failed.*branch .*remains/);
+  } finally {
+    fs.renameSync = rename;
+    childProcess.spawnSync = spawn;
+    syncBuiltinESMExports();
+  }
   assert.ok(advanced);
   assert.equal(git(main, 'rev-parse', `refs/heads/${branch}`), advanced);
 });

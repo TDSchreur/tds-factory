@@ -37,9 +37,9 @@ Run these checks individually with `npm run test:unit`, `npm run test:browser` a
 
 ## JavaScript quality checks
 
-For the development tools, use Node 20.19 or later (or Node 22.13 or later), then run `npm ci`. The CLI itself still supports Node 20. Run `npm run lint` to check the project's JavaScript with ESLint. Vendored files are excluded. Run `npm run format:check` to check the ESLint configuration and package manifest; this limited scope avoids rewriting existing files. Run `npm run format -- <paths>` to format selected files with Prettier. Expand the checked formatting scope as files are adopted.
+For the development tools, use Node 20.19 or later (or Node 22.13 or later), then run `npm ci`. The CLI itself still supports Node 20. Run `npm run check` to run all three checks below in one go. `npm run lint` checks every JavaScript file with ESLint. `npm run format:check` checks JavaScript, JSON, Markdown, YAML and the remaining CSS and HTML with Prettier (`.prettierrc.json`, `.editorconfig` matches it); `npm run format` rewrites the files. Vendored files and `.factory/` are excluded from both. `skills/`, `agents/` and `CHANGELOG.md` are synced or generated and stay out of the formatting check, as do `dashboard/index.html` and `dashboard/style.css`, whose source the Dashboard tests read with regular expressions. `git config blame.ignoreRevsFile .git-blame-ignore-revs` hides the formatting commits from `git blame`. There is no pre-commit hook: a hook would run on every commit the Factory makes in each Run worktree, and a failing hook would block them, so CI and `npm run check` are the gate.
 
-CI runs the lint, formatting and type checks. ESLint uses recommended correctness rules with a few existing-code exceptions in its configuration. The project already checks workflows with actionlint, shell scripts with ShellCheck, PowerShell with PSScriptAnalyzer, and documentation with its own tests. Run `npm run typecheck` to check the JSDoc-annotated tree-hashing module with TypeScript; this pilot emits no files and can be expanded to other modules incrementally. Dependabot checks npm and GitHub Actions dependencies weekly. `npm audit` can identify dependency advisories; development dependencies are not shipped as runtime dependencies.
+CI runs the lint, formatting and type checks; `npm test` does not, so run `npm run check` before every Check. ESLint uses the recommended rules plus `eqeqeq`, `prefer-const`, `no-var` and `no-shadow`, with a few commented exceptions in its configuration. The project already checks workflows with actionlint, shell scripts with ShellCheck, PowerShell with PSScriptAnalyzer, and documentation with its own tests. Run `npm run typecheck` to check with TypeScript the files that start with `// @ts-check`; `tsconfig.json` has `checkJs: false` and includes every JavaScript folder, so a file opts in by adding that comment and annotating itself with JSDoc, without casts or blanket `@ts-ignore`. `src/` is checked except the larger modules that still have many errors (the run store, record, lifecycle, folder, repair, sweep, clean, metrics and follow-up modules, the project config and review modules, the guides, rules, install, sync, update and doctor modules, the PR adapters, the Dashboard server and `bin/tds-factory.js`); `scripts/` is checked except `changelog.js`, `dev-install.js`, `doc-checks.js` and `test-package.js`; `test/`, `eval/` and `dashboard/` are not checked yet. Dependabot checks npm and GitHub Actions dependencies weekly. `npm audit` can identify dependency advisories; development dependencies are not shipped as runtime dependencies.
 
 ## Run store modules
 
@@ -66,16 +66,16 @@ To see which one you use, run `tds-factory --version` and `which -a tds-factory`
 
 Besides the skills the Factory ships, a few skills help while developing the Factory itself. They are not in `skills.manifest.json`, so users do not get them. `scripts/dev-install.js` (step 6) copies them from `vendor/` to `~/.claude/skills` and `~/.agents/skills`, which Claude, Codex and Copilot all read. It only replaces skills it installed earlier (marked `.tds-factory-dev`) and skips same-named skills from other tools. `docs-sync-audit` and `test-gap-audit` need `python3`; `webapp-testing` needs Playwright. To change the set, edit `DEV_SKILLS` in the script.
 
-| Skill | Use it to |
-|---|---|
-| `docs-sync-audit` | Check that the README, `docs/` and the agent tables still match the code after a change. |
-| `test-gap-audit` | Find untested paths in `sync`, `install`, `run-store` and `doctor`. |
-| `github-actions-hardening` | Review `.github/workflows/` (the Release workflow publishes on every merge). |
-| `statechart` | Draw the Run state machine to spot missing or illegal transitions (ADR 0006). |
-| `blast-radius` | List what a change to a Stage agent or the `factory` skill touches: three agent formats, committed skill copies, tests, docs. |
-| `agentic-eval`, `eval-driven-dev` | Write new `eval/` scenarios and judge agent results. |
-| `webapp-testing` | Test the Dashboard in a browser (theme, scroll, layout, header, logo). |
-| `principle-make-operations-idempotent` | Keep `install`, `sync` and `dev-install` safe to re-run. |
-| `principle-prove-it-works`, `principle-test-behavior-not-implementation` | Guide Build and Check: prove behaviour, do not test internals. |
-| `github-release`, `conventional-commit` | Write release notes for the per-merge Releases and consistent commit messages. |
-| `create-agentsmd` | Flesh out `AGENTS.md` with build, test and architecture hints. |
+| Skill                                                                    | Use it to                                                                                                                     |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `docs-sync-audit`                                                        | Check that the README, `docs/` and the agent tables still match the code after a change.                                      |
+| `test-gap-audit`                                                         | Find untested paths in `sync`, `install`, `run-store` and `doctor`.                                                           |
+| `github-actions-hardening`                                               | Review `.github/workflows/` (the Release workflow publishes on every merge).                                                  |
+| `statechart`                                                             | Draw the Run state machine to spot missing or illegal transitions (ADR 0006).                                                 |
+| `blast-radius`                                                           | List what a change to a Stage agent or the `factory` skill touches: three agent formats, committed skill copies, tests, docs. |
+| `agentic-eval`, `eval-driven-dev`                                        | Write new `eval/` scenarios and judge agent results.                                                                          |
+| `webapp-testing`                                                         | Test the Dashboard in a browser (theme, scroll, layout, header, logo).                                                        |
+| `principle-make-operations-idempotent`                                   | Keep `install`, `sync` and `dev-install` safe to re-run.                                                                      |
+| `principle-prove-it-works`, `principle-test-behavior-not-implementation` | Guide Build and Check: prove behaviour, do not test internals.                                                                |
+| `github-release`, `conventional-commit`                                  | Write release notes for the per-merge Releases and consistent commit messages.                                                |
+| `create-agentsmd`                                                        | Flesh out `AGENTS.md` with build, test and architecture hints.                                                                |

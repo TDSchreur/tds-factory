@@ -4,16 +4,16 @@
 
 The Run store now keeps `openRunStore` and its interface unchanged, and the work lives in modules placed where a change of one kind stays in one place. Each module imports only from the ones above it, so there are no cycles.
 
-| Module | Holds | A feature that lands here |
-| --- | --- | --- |
-| `run-record.js` | Field rules, `validate`, `apply`, atomic `write`, `MAX_CHECK_LOOPS`, the Check attempt | a new `run.json` field, a project config file's limits |
-| `run-folder.js` | Run folder paths, symlink refusal, locks, `readRun`, `changeRun`, `changeRunning`, listing, main-checkout lookup | storage layout |
-| `worktrees.js` | `worktreeState`, fetching origin's default branch, merge check, Run worktree listing, uncommitted-work checks | where a Run branches from |
-| `evidence.js` | `finishProblems`, `clearEvidence`, `verifyRun`, `verdictRun`, project review recording and materialising | a Fast track that skips axes, Run metrics from Verify times |
-| `run-lifecycle.js` | start, update, transition, accept, sync, rework, complete | a Follow-up Stage |
-| `run-repair.js` | `repairPlan`, `repairApply`, `inspectRuns` | new repair findings |
-| `run-clean.js` | `removeRun`, `cleanRun`, `cleanAll`, `mergedLeftovers` | clean-up rules |
-| `run-store.js` | `openRunStore`, `MAX_CHECK_LOOPS`, `verifyCommandProblem`, `mergedLeftovers` | |
+| Module             | Holds                                                                                                            | A feature that lands here                                   |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `run-record.js`    | Field rules, `validate`, `apply`, atomic `write`, `MAX_CHECK_LOOPS`, the Check attempt                           | a new `run.json` field, a project config file's limits      |
+| `run-folder.js`    | Run folder paths, symlink refusal, locks, `readRun`, `changeRun`, `changeRunning`, listing, main-checkout lookup | storage layout                                              |
+| `worktrees.js`     | `worktreeState`, fetching origin's default branch, merge check, Run worktree listing, uncommitted-work checks    | where a Run branches from                                   |
+| `evidence.js`      | `finishProblems`, `clearEvidence`, `verifyRun`, `verdictRun`, project review recording and materialising         | a Fast track that skips axes, Run metrics from Verify times |
+| `run-lifecycle.js` | start, update, transition, accept, sync, rework, complete                                                        | a Follow-up Stage                                           |
+| `run-repair.js`    | `repairPlan`, `repairApply`, `inspectRuns`                                                                       | new repair findings                                         |
+| `run-clean.js`     | `removeRun`, `cleanRun`, `cleanAll`, `mergedLeftovers`                                                           | clean-up rules                                              |
+| `run-store.js`     | `openRunStore`, `MAX_CHECK_LOOPS`, `verifyCommandProblem`, `mergedLeftovers`                                     |                                                             |
 
 The modules are an internal split, not new public interfaces. The CLI, the Dashboard and Doctor keep importing `run-store.js` only, and the tests go through `openRunStore`, so one test surface still covers everything. The split moves code without editing it: the Run record shape, CLI output and Dashboard API are unchanged.
 

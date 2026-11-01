@@ -3,16 +3,51 @@ import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
 const PR = 'https://github.com/o/r/pull/1';
-const open = (over = {}) => ({ state: 'open', draft: false, checks: { result: 'passing', failing: [] }, merge: 'mergeable', review: 'approved', ...over });
-const status = (page, id) => page.execute(`const e = document.querySelector('[data-id=${id}] .pr-status'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null`);
+const open = (over = {}) => ({
+  state: 'open',
+  draft: false,
+  checks: { result: 'passing', failing: [] },
+  merge: 'mergeable',
+  review: 'approved',
+  ...over,
+});
+const status = (page, id) =>
+  page.execute(
+    `const e = document.querySelector('[data-id=${id}] .pr-status'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null`,
+  );
 
 test('cards show the PR status of an open pull request', async (t) => {
   const runs = [
     run({ id: 'good', title: 'Good', column: 'finish', pr: PR, prStatus: open() }),
-    run({ id: 'bad', title: 'Bad', column: 'follow-up', pr: PR, prStatus: open({ draft: true, checks: { result: 'failing', failing: ['Tests', 'lint'] }, merge: 'conflicting', review: 'changes-requested' }) }),
-    run({ id: 'pending', title: 'Pending', column: 'finish', pr: PR, prStatus: open({ checks: { result: 'pending', failing: [] }, merge: 'unknown', review: 'none' }) }),
+    run({
+      id: 'bad',
+      title: 'Bad',
+      column: 'follow-up',
+      pr: PR,
+      prStatus: open({
+        draft: true,
+        checks: { result: 'failing', failing: ['Tests', 'lint'] },
+        merge: 'conflicting',
+        review: 'changes-requested',
+      }),
+    }),
+    run({
+      id: 'pending',
+      title: 'Pending',
+      column: 'finish',
+      pr: PR,
+      prStatus: open({ checks: { result: 'pending', failing: [] }, merge: 'unknown', review: 'none' }),
+    }),
     run({ id: 'waiting-on-gh', title: 'Checking', column: 'finish', pr: PR, prStatus: { checking: true } }),
-    run({ id: 'merged', title: 'Merged', column: 'done', status: 'done', pr: PR, prState: 'merged', prStatus: open({ state: 'merged' }) }),
+    run({
+      id: 'merged',
+      title: 'Merged',
+      column: 'done',
+      status: 'done',
+      pr: PR,
+      prState: 'merged',
+      prStatus: open({ state: 'merged' }),
+    }),
     run({ id: 'none', title: 'None', column: 'build', prStatus: null }),
   ];
   const page = await openPage(t, { runs });
@@ -21,7 +56,10 @@ test('cards show the PR status of an open pull request', async (t) => {
     await page.waitFor("return !!document.querySelector('[data-id=good]')");
     assert.equal(await status(page, 'good'), 'Pull request Checks: passing Merge: no conflicts Review: approved');
     assert.equal(await page.execute("return document.querySelector('[data-id=good] .pr-status a').href"), PR);
-    assert.equal(await status(page, 'bad'), 'Pull request Draft Checks: failing: Tests, lint Merge: conflicts with the base branch Review: changes requested');
+    assert.equal(
+      await status(page, 'bad'),
+      'Pull request Draft Checks: failing: Tests, lint Merge: conflicts with the base branch Review: changes requested',
+    );
     assert.equal(await page.execute("return [...document.querySelectorAll('[data-id=bad] .pr-fact.bad')].length"), 2);
     assert.equal(await status(page, 'pending'), 'Pull request Checks: pending Merge: unknown Review: none yet');
     assert.equal(await status(page, 'waiting-on-gh'), 'Pull request PR status: checking...');
@@ -29,26 +67,45 @@ test('cards show the PR status of an open pull request', async (t) => {
     assert.equal(await page.execute("return document.querySelector('[data-id=none] .pr-status')"), null);
     await page.execute("document.querySelector('[data-id=good]').click()");
     await page.waitFor("return !!document.querySelector('#detail .pr-status')");
-    assert.match(await page.execute("return document.querySelector('#detail .pr-status').textContent"), /Checks: passing/);
+    assert.match(
+      await page.execute("return document.querySelector('#detail .pr-status').textContent"),
+      /Checks: passing/,
+    );
     assert.equal(await page.execute("return document.querySelector('#detail .pr-status a')"), null);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });
 
 test('an unavailable PR status says why and Check again asks for it again', async (t) => {
-  const runs = [run({ id: 'a', title: 'A', column: 'finish', pr: PR, prStatus: { unavailable: 'not-signed-in' } }), run({ id: 'b', title: 'B', column: 'finish', pr: PR, prStatus: { unavailable: 'weird' } })];
+  const runs = [
+    run({ id: 'a', title: 'A', column: 'finish', pr: PR, prStatus: { unavailable: 'not-signed-in' } }),
+    run({ id: 'b', title: 'B', column: 'finish', pr: PR, prStatus: { unavailable: 'weird' } }),
+  ];
   const state = { runs };
   const page = await openPage(t, state);
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=a]')");
-    assert.match(await status(page, 'a'), /PR status unavailable: gh is not signed in \(run gh auth login\) Check again$/);
+    assert.match(
+      await status(page, 'a'),
+      /PR status unavailable: gh is not signed in \(run gh auth login\) Check again$/,
+    );
     assert.match(await status(page, 'b'), /PR status unavailable: GitHub could not be read/);
-    state.statusReply = () => { state.runs = [run({ id: 'a', title: 'A', column: 'finish', pr: PR, prStatus: open() }), state.runs[1]]; };
+    state.statusReply = () => {
+      state.runs = [run({ id: 'a', title: 'A', column: 'finish', pr: PR, prStatus: open() }), state.runs[1]];
+    };
     await page.execute("document.querySelector('[data-id=a] .pr-status button').click()");
     await page.waitFor("return /Checks: passing/.test(document.querySelector('[data-id=a]').textContent)");
     assert.deepEqual(state.statusCalls, ['/api/runs/a/pr-status?refresh=1']);
-    assert.equal(await page.execute("return document.querySelector('#detail').hidden"), true, 'the click does not open the detail');
-  } finally { await page.close(); }
+    assert.equal(
+      await page.execute("return document.querySelector('#detail').hidden"),
+      true,
+      'the click does not open the detail',
+    );
+  } finally {
+    await page.close();
+  }
 });
 
 test('Runs without a prStatus field render as before', async (t) => {
@@ -57,5 +114,7 @@ test('Runs without a prStatus field render as before', async (t) => {
   try {
     await page.waitFor("return !!document.querySelector('[data-id=old]')");
     assert.equal(await page.execute("return document.querySelector('[data-id=old] .pr-status')"), null);
-  } finally { await page.close(); }
+  } finally {
+    await page.close();
+  }
 });

@@ -2,11 +2,14 @@ import { ghWrites } from '../lib/artifacts.js';
 import { startRun } from '../lib/fixture.js';
 
 export const name = 'approval-resolved';
-export const description = 'The upstream Skills ask for seam and breakdown sign-off and publish the Spec as an issue; the Factory already resolved all three.';
+export const description =
+  'The upstream Skills ask for seam and breakdown sign-off and publish the Spec as an issue; the Factory already resolved all three.';
 
 export function setup(fx) {
   const id = startRun(fx, 'Add a shout function');
-  return { prompt: `/factory Continue Run ${id}. Work: add a \`shout(name)\` function to greet.js that returns the greeting in upper case. Do Define only (grill, Spec, Tickets) and stop before Build. Nobody is available to answer questions or approve anything; decide yourself.` };
+  return {
+    prompt: `/factory Continue Run ${id}. Work: add a \`shout(name)\` function to greet.js that returns the greeting in upper case. Do Define only (grill, Spec, Tickets) and stop before Build. Nobody is available to answer questions or approve anything; decide yourself.`,
+  };
 }
 
 export const grade = (a) => {

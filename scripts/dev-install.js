@@ -51,14 +51,18 @@ const win = process.platform === 'win32';
 const say = (msg = '') => console.log(msg);
 const info = (msg) => console.log(`  ${msg}`);
 const warn = (msg) => console.warn(`  warning: ${msg}`);
-const first = (text) => String(text ?? '').trim().split('\n')[0];
+const first = (text) =>
+  String(text ?? '')
+    .trim()
+    .split('\n')[0];
 // On Windows npm and tds-factory are .cmd shims, which need a shell.
 const spawnOpts = (cwd, stdio) => ({ cwd, stdio, encoding: 'utf8', shell: win });
 
 function capture(cmd, cmdArgs, cwd = root) {
   const r = spawnSync(cmd, cmdArgs, spawnOpts(cwd, ['ignore', 'pipe', 'pipe']));
   if (r.error) throw new Error(`${cmd} is not available: ${r.error.message}`);
-  if (r.status !== 0) throw new Error(`${cmd} ${cmdArgs.join(' ')} failed (exit ${r.status}): ${first(r.stderr) || first(r.stdout)}`);
+  if (r.status !== 0)
+    throw new Error(`${cmd} ${cmdArgs.join(' ')} failed (exit ${r.status}): ${first(r.stderr) || first(r.stdout)}`);
   return r.stdout.trim();
 }
 
@@ -102,17 +106,22 @@ const tools = step('Check the tools and the checkout', () => {
   info(`node ${process.versions.node}`);
   info(capture('git', ['--version']));
   info(`npm ${capture('npm', ['--version'])}`);
-  if (capture('git', ['rev-parse', '--is-inside-work-tree']) !== 'true') throw new Error(`${root} is not a git checkout`);
+  if (capture('git', ['rev-parse', '--is-inside-work-tree']) !== 'true')
+    throw new Error(`${root} is not a git checkout`);
   info(`origin ${capture('git', ['remote', 'get-url', 'origin'])}`);
   info(`npm global prefix ${capture('npm', ['prefix', '-g'])}`);
 });
 
 let submodulesOk = false;
 if (tools) {
-  submodulesOk = step('Initialise the vendor submodules', () => {
-    if (!fs.existsSync(path.join(root, '.gitmodules'))) return info('no submodules in this checkout');
-    stream('git', ['submodule', 'update', '--init']);
-  }, { warnOnly: true });
+  submodulesOk = step(
+    'Initialise the vendor submodules',
+    () => {
+      if (!fs.existsSync(path.join(root, '.gitmodules'))) return info('no submodules in this checkout');
+      stream('git', ['submodule', 'update', '--init']);
+    },
+    { warnOnly: true },
+  );
 } else skip('Initialise the vendor submodules', 'the tool check failed');
 
 let installed = false;
@@ -143,7 +152,8 @@ function factoryCommand() {
   if (spawnSync('tds-factory', ['--version'], spawnOpts(root, 'ignore')).status === 0) return 'tds-factory';
   const prefix = capture('npm', ['prefix', '-g']);
   const candidate = win ? path.join(prefix, 'tds-factory.cmd') : path.join(prefix, 'bin', 'tds-factory');
-  if (!fs.existsSync(candidate)) throw new Error('tds-factory is on neither PATH nor the npm global prefix; check `npm prefix -g`');
+  if (!fs.existsSync(candidate))
+    throw new Error('tds-factory is on neither PATH nor the npm global prefix; check `npm prefix -g`');
   warn(`tds-factory is not on PATH; add ${path.dirname(candidate)} to PATH. Using ${candidate} for now.`);
   return candidate;
 }
@@ -168,35 +178,42 @@ if (registered) {
 
 if (skipDevSkills) skip('Register the developer skills', '--skip-dev-skills');
 else if (!tools) skip('Register the developer skills', 'the tool check failed');
-else step('Register the developer skills', () => {
-  if (!submodulesOk) warn('the submodules were not initialised; skills missing from vendor/ will fail');
-  const problems = [];
-  for (const skill of DEV_SKILLS) {
-    const src = path.join(root, skill);
-    const name = path.basename(skill);
-    if (!fs.existsSync(path.join(src, 'SKILL.md'))) { problems.push(`${skill} has no SKILL.md`); continue; }
-    for (const target of SKILL_TARGETS) {
-      try {
-        const dest = path.join(os.homedir(), target, name);
-        const stat = fs.lstatSync(dest, { throwIfNoEntry: false });
-        // A symlink is another installer's link to the same skill; replace it, not its target.
-        const replaceable = force || stat?.isSymbolicLink() || (stat && fs.existsSync(path.join(dest, MARKER)));
-        if (stat && !replaceable) { warn(`skip ${target}/${name}: exists and was not installed by this script (use --force)`); continue; }
-        if (!dryRun) {
-          fs.mkdirSync(path.dirname(dest), { recursive: true });
-          fs.rmSync(dest, { recursive: true, force: true });
-          fs.cpSync(src, dest, { recursive: true });
-          fs.writeFileSync(path.join(dest, MARKER), '');
+else
+  step('Register the developer skills', () => {
+    if (!submodulesOk) warn('the submodules were not initialised; skills missing from vendor/ will fail');
+    const problems = [];
+    for (const skill of DEV_SKILLS) {
+      const src = path.join(root, skill);
+      const name = path.basename(skill);
+      if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
+        problems.push(`${skill} has no SKILL.md`);
+        continue;
+      }
+      for (const target of SKILL_TARGETS) {
+        try {
+          const dest = path.join(os.homedir(), target, name);
+          const stat = fs.lstatSync(dest, { throwIfNoEntry: false });
+          // A symlink is another installer's link to the same skill; replace it, not its target.
+          const replaceable = force || stat?.isSymbolicLink() || (stat && fs.existsSync(path.join(dest, MARKER)));
+          if (stat && !replaceable) {
+            warn(`skip ${target}/${name}: exists and was not installed by this script (use --force)`);
+            continue;
+          }
+          if (!dryRun) {
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.rmSync(dest, { recursive: true, force: true });
+            fs.cpSync(src, dest, { recursive: true });
+            fs.writeFileSync(path.join(dest, MARKER), '');
+          }
+          info(`${dryRun ? 'would install' : 'installed'} ${target}/${name}${stat ? ' (replaced)' : ''}`);
+        } catch (err) {
+          problems.push(`${target}/${name}: ${first(err.message)}`);
         }
-        info(`${dryRun ? 'would install' : 'installed'} ${target}/${name}${stat ? ' (replaced)' : ''}`);
-      } catch (err) {
-        problems.push(`${target}/${name}: ${first(err.message)}`);
       }
     }
-  }
-  if (problems.length) throw new Error(`${problems.length} problem(s): ${problems.join('; ')}`);
-  info('docs-sync-audit and test-gap-audit need python3; webapp-testing needs Playwright');
-});
+    if (problems.length) throw new Error(`${problems.length} problem(s): ${problems.join('; ')}`);
+    info('docs-sync-audit and test-gap-audit need python3; webapp-testing needs Playwright');
+  });
 
 say('\nSummary');
 for (const r of results) say(`  ${r.status.padEnd(7)} ${r.title}${r.detail ? ` (${r.detail})` : ''}`);

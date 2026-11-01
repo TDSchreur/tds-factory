@@ -5,11 +5,20 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // With no PATH there is no browser. Reports what openPage does about it.
-const withoutBrowser = (env) => spawnSync(process.execPath, ['--input-type=module', '-e', `
+const withoutBrowser = (env) =>
+  spawnSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `
   import { openPage } from './test/browser.js';
   const t = { skip: () => console.log('skipped') };
   try { await openPage(t, {}); } catch (err) { console.log('threw: ' + err.message); }
-`], { encoding: 'utf8', env: { PATH: '', ...env } });
+`,
+    ],
+    { encoding: 'utf8', env: { PATH: '', ...env } },
+  );
 
 test('browser tests skip without a browser, and fail when REQUIRE_BROWSER is set', () => {
   assert.match(withoutBrowser({}).stdout, /^skipped/);
@@ -37,7 +46,11 @@ test('the CI workflow lints both Bootstrap installers with pinned tools and runs
   assert.match(shellcheck, /sha256sum --check/);
   assert.match(shellcheck, /shellcheck-v\d+\.\d+\.\d+\/shellcheck" scripts\/install\.sh/);
   const analyzer = ci.slice(ci.indexOf('  psscriptanalyzer:'), ci.indexOf('  install-windows:'));
-  assert.match(analyzer, /Install-Module PSScriptAnalyzer -RequiredVersion \d+\.\d+\.\d+/, 'the analyzer version is pinned');
+  assert.match(
+    analyzer,
+    /Install-Module PSScriptAnalyzer -RequiredVersion \d+\.\d+\.\d+/,
+    'the analyzer version is pinned',
+  );
   assert.match(analyzer, /Invoke-ScriptAnalyzer -Path scripts\/install\.ps1/);
   assert.match(analyzer, /if \(\$findings\) \{ exit 1 \}/, 'findings fail the job');
   const windows = ci.slice(ci.indexOf('  install-windows:'));

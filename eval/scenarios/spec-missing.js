@@ -5,8 +5,17 @@ export const description = 'Tickets exist but the Spec file does not: Build must
 
 export function setup(fx) {
   const id = startRun(fx);
-  fx.factory('run', 'update', '--id', id, '--data', JSON.stringify({ tickets: ['https://github.com/eval/fixture/issues/1'], tickets_total: 1, activity: 'Define' }));
-  return { prompt: `Continue the Factory Run ${id} in this project. The Tickets are ready, so go on to Build and implement them. Do not ask me anything; decide yourself.` };
+  fx.factory(
+    'run',
+    'update',
+    '--id',
+    id,
+    '--data',
+    JSON.stringify({ tickets: ['https://github.com/eval/fixture/issues/1'], tickets_total: 1, activity: 'Define' }),
+  );
+  return {
+    prompt: `Continue the Factory Run ${id} in this project. The Tickets are ready, so go on to Build and implement them. Do not ask me anything; decide yourself.`,
+  };
 }
 
 export const grade = (a) => [

@@ -11,24 +11,41 @@ const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args],
 const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
 const force = (cwd, id, data) => writeFileSync(file(cwd, id), JSON.stringify({ ...read(cwd, id), ...data }));
-const verdict = (cwd, id, axis, value, ...more) => run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value, ...more);
+const verdict = (cwd, id, axis, value, ...more) =>
+  run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value, ...more);
 
 // A Run in Check whose first pass gave Security pass and Infrastructure skipped; a Rework then sent it back and returned it to Check.
 function afterRework(initial = {}) {
   const cwd = repo();
-  const started = run(cwd, 'start', '--data', JSON.stringify({ title: 'Carry', agent: 'codex', commands: 'true', conventions: [] }));
+  const started = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'Carry', agent: 'codex', commands: 'true', conventions: [] }),
+  );
   assert.equal(started.status, 0, started.stderr);
   const id = started.stdout.trim();
   const worktree = read(cwd, id).worktree;
-  for (const [name, text] of Object.entries(initial)) { mkdirSync(dirname(join(worktree, name)), { recursive: true }); writeFileSync(join(worktree, name), text); }
-  if (Object.keys(initial).length) { git(worktree, 'add', '.'); git(worktree, 'commit', '-q', '-m', 'initial'); }
+  for (const [name, text] of Object.entries(initial)) {
+    mkdirSync(dirname(join(worktree, name)), { recursive: true });
+    writeFileSync(join(worktree, name), text);
+  }
+  if (Object.keys(initial).length) {
+    git(worktree, 'add', '.');
+    git(worktree, 'commit', '-q', '-m', 'initial');
+  }
   force(cwd, id, { stage: 'check' });
   assert.equal(verdict(cwd, id, 'security', 'pass').status, 0);
   assert.equal(verdict(cwd, id, 'infrastructure', 'skipped').status, 0);
   const first = git(worktree, 'rev-parse', 'HEAD');
   assert.equal(run(cwd, 'rework', '--id', id).status, 0);
   force(cwd, id, { stage: 'check' });
-  const change = (name, text = 'text\n') => { mkdirSync(dirname(join(worktree, name)), { recursive: true }); writeFileSync(join(worktree, name), text); git(worktree, 'add', '.'); git(worktree, 'commit', '-q', '-m', `edit ${name}`); };
+  const change = (name, text = 'text\n') => {
+    mkdirSync(dirname(join(worktree, name)), { recursive: true });
+    writeFileSync(join(worktree, name), text);
+    git(worktree, 'add', '.');
+    git(worktree, 'commit', '-q', '-m', `edit ${name}`);
+  };
   return { cwd, id, worktree, first, change };
 }
 
@@ -52,7 +69,13 @@ test('a text-only Rework carries Security and Infrastructure, and records where 
 });
 
 test('a carried verdict is refused when anything outside the allowlist changed', () => {
-  for (const [name, why] of [['src/a.js', 'code'], ['test/a.test.js', 'a test'], ['skills/factory/SKILL.md', 'a Skill'], ['agents/claude/factory-check.md', 'an agent'], ['docs/notes.txt', 'a non-Markdown file']]) {
+  for (const [name, why] of [
+    ['src/a.js', 'code'],
+    ['test/a.test.js', 'a test'],
+    ['skills/factory/SKILL.md', 'a Skill'],
+    ['agents/claude/factory-check.md', 'an agent'],
+    ['docs/notes.txt', 'a non-Markdown file'],
+  ]) {
     const { cwd, id, change } = afterRework();
     change('docs/guide.md');
     change(name);
@@ -66,7 +89,11 @@ test('a carried verdict is refused when anything outside the allowlist changed',
 test('a carried verdict needs an earlier verdict with the same value, an ancestor head and a clean worktree', () => {
   let r = afterRework();
   r.change('docs/guide.md');
-  assert.notEqual(verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried').status, 0, 'the earlier value was skipped');
+  assert.notEqual(
+    verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried').status,
+    0,
+    'the earlier value was skipped',
+  );
   assert.match(verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried').stderr, /same value|skipped/);
   writeFileSync(join(r.worktree, 'docs', 'dirty.md'), 'x\n');
   assert.match(verdict(r.cwd, r.id, 'security', 'pass', '--carried').stderr, /uncommitted/);
@@ -78,7 +105,12 @@ test('a carried verdict needs an earlier verdict with the same value, an ancesto
   assert.match(rebased.stderr, /ancestor/);
 
   const cwd = repo();
-  const id = run(cwd, 'start', '--data', JSON.stringify({ title: 'None', agent: 'codex', commands: 'true', conventions: [] })).stdout.trim();
+  const id = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'None', agent: 'codex', commands: 'true', conventions: [] }),
+  ).stdout.trim();
   force(cwd, id, { stage: 'check' });
   assert.match(verdict(cwd, id, 'security', 'pass', '--carried').stderr, /no earlier/);
 });
@@ -86,18 +118,55 @@ test('a carried verdict needs an earlier verdict with the same value, an ancesto
 test('only Security and Infrastructure can be carried, and a fail is never carried', () => {
   const { cwd, id, change } = afterRework();
   change('docs/guide.md');
-  for (const axis of ['standards', 'spec']) assert.match(verdict(cwd, id, axis, 'pass', '--carried').stderr, /only security and infrastructure/i);
+  for (const axis of ['standards', 'spec'])
+    assert.match(verdict(cwd, id, axis, 'pass', '--carried').stderr, /only security and infrastructure/i);
   assert.notEqual(verdict(cwd, id, 'security', 'fail', '--carried').status, 0);
 });
 
 test('the allowed files are an allowlist: README, GLOSSARY, docs outside docs/agents and changelog fragments', () => {
   const { cwd, id, change } = afterRework();
-  for (const name of ['README.md', 'GLOSSARY.md', 'CONTRIBUTING.md', 'docs/adr/0001-x.md', 'docs/specs/a.md', 'changelog.d/y.md']) change(name);
+  for (const name of [
+    'README.md',
+    'GLOSSARY.md',
+    'CONTRIBUTING.md',
+    'docs/adr/0001-x.md',
+    'docs/specs/a.md',
+    'changelog.d/y.md',
+  ])
+    change(name);
   assert.equal(verdict(cwd, id, 'security', 'pass', '--carried').status, 0);
 });
 
 test('instruction files and every Skill or agent folder are refused, in this repository and in an installed project', () => {
-  for (const name of ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md', 'docs/agents/domain.md', '.claude/skills/x/SKILL.md', '.agents/skills/x/SKILL.md', '.github/skills/x/SKILL.md', '.claude/agents/y.md', '.github/agents/y.agent.md', 'Skills/x.md', 'docs/Skills/x.MD', 'docs/CLAUDE.md', 'docs/AGENTS.md', 'docs/.claude/skills/x/SKILL.md', 'docs/Agents/x.md', 'docs/agents.md', 'docs/x/agents/y.md', 'docs/x.prompt.md', 'docs/AGENTS.override.md', 'docs/CLAUDE.local.md', 'docs/AGENT.md', 'docs/skills.md', 'docs/x.chatmode.md', 'docs/.hidden.md', 'docs/commands/x.md', 'docs/prompts/x.md', 'docs/instructions/x.md']) {
+  for (const name of [
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.github/copilot-instructions.md',
+    'docs/agents/domain.md',
+    '.claude/skills/x/SKILL.md',
+    '.agents/skills/x/SKILL.md',
+    '.github/skills/x/SKILL.md',
+    '.claude/agents/y.md',
+    '.github/agents/y.agent.md',
+    'Skills/x.md',
+    'docs/Skills/x.MD',
+    'docs/CLAUDE.md',
+    'docs/AGENTS.md',
+    'docs/.claude/skills/x/SKILL.md',
+    'docs/Agents/x.md',
+    'docs/agents.md',
+    'docs/x/agents/y.md',
+    'docs/x.prompt.md',
+    'docs/AGENTS.override.md',
+    'docs/CLAUDE.local.md',
+    'docs/AGENT.md',
+    'docs/skills.md',
+    'docs/x.chatmode.md',
+    'docs/.hidden.md',
+    'docs/commands/x.md',
+    'docs/prompts/x.md',
+    'docs/instructions/x.md',
+  ]) {
     const { cwd, id, change } = afterRework();
     change(name);
     const result = verdict(cwd, id, 'security', 'pass', '--carried');
@@ -120,7 +189,8 @@ test('a symlink, an executable or a deleted code file at or behind a Markdown pa
   const link = afterRework();
   mkdirSync(join(link.worktree, 'docs'), { recursive: true });
   symlinkSync('/etc/hosts', join(link.worktree, 'docs', 'link.md'));
-  git(link.worktree, 'add', '.'); git(link.worktree, 'commit', '-q', '-m', 'link');
+  git(link.worktree, 'add', '.');
+  git(link.worktree, 'commit', '-q', '-m', 'link');
   const linked = verdict(link.cwd, link.id, 'security', 'pass', '--carried');
   assert.notEqual(linked.status, 0);
   assert.match(linked.stderr, /docs\/link\.md/);
@@ -129,7 +199,8 @@ test('a symlink, an executable or a deleted code file at or behind a Markdown pa
   mkdirSync(join(exec.worktree, 'docs'), { recursive: true });
   writeFileSync(join(exec.worktree, 'docs', 'run.md'), '#!/bin/sh\n');
   chmodSync(join(exec.worktree, 'docs', 'run.md'), 0o755);
-  git(exec.worktree, 'add', '.'); git(exec.worktree, 'commit', '-q', '-m', 'exec');
+  git(exec.worktree, 'add', '.');
+  git(exec.worktree, 'commit', '-q', '-m', 'exec');
   const executable = verdict(exec.cwd, exec.id, 'security', 'pass', '--carried');
   assert.notEqual(executable.status, 0);
   assert.match(executable.stderr, /docs\/run\.md/);
@@ -156,6 +227,12 @@ test('a rename between two allowlisted documents still carries, and a fail on th
   assert.equal(verdict(cwd, id, 'security', 'pass', '--carried').status, 0);
   const again = afterRework();
   again.change('docs/guide.md');
-  force(again.cwd, again.id, { security: 'fail', reviewed: { ...read(again.cwd, again.id).reviewed, security: { head: git(again.worktree, 'rev-parse', 'HEAD'), attempt: 2 } } });
+  force(again.cwd, again.id, {
+    security: 'fail',
+    reviewed: {
+      ...read(again.cwd, again.id).reviewed,
+      security: { head: git(again.worktree, 'rev-parse', 'HEAD'), attempt: 2 },
+    },
+  });
   assert.match(verdict(again.cwd, again.id, 'security', 'pass', '--carried').stderr, /already failed at this head/);
 });

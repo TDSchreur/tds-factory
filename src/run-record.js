@@ -5,13 +5,27 @@ import { stages, targets } from './flow.js';
 
 export const statuses = ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'];
 export const paused = ['verification-unavailable', 'interrupted'];
-const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha', 'requested_model', 'requested_effort', 'observed_model'];
+const strings = [
+  'title',
+  'activity',
+  'waiting_reason',
+  'status_reason',
+  'commands',
+  'fast_commands',
+  'spec_link',
+  'pr',
+  'worktree',
+  'base_sha',
+  'requested_model',
+  'requested_effort',
+  'observed_model',
+];
 const lists = ['conventions', 'tickets'];
 const numbers = ['tickets_total', 'tickets_done', 'check_loops', 'extra_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
 export const tracks = ['fast', 'full'];
 // A record without a track is a Full track Run.
-export const trackOf = (record) => record?.track === 'fast' ? 'fast' : 'full';
+export const trackOf = (record) => (record?.track === 'fast' ? 'fast' : 'full');
 // Standards and Security are required on both tracks; the Spec axis may be skipped only on the Fast track.
 export const skippable = (axis, record) => axis === 'infrastructure' || (axis === 'spec' && trackOf(record) === 'fast');
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
@@ -48,23 +62,38 @@ export function checkCommands(commands) {
 export function validate(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
   for (const [key, value] of Object.entries(data)) {
-    let ok = strings.includes(key) ? typeof value === 'string'
-      : lists.includes(key) ? Array.isArray(value) && value.every((v) => typeof v === 'string')
-      : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0
-      : verdicts.includes(key) ? ['pass', 'fail', ...(['spec', 'infrastructure'].includes(key) ? ['skipped'] : [])].includes(value)
-      : key === 'follow_up' ? value !== null && typeof value === 'object' && !Array.isArray(value)
-      : key === 'stage' ? stages.includes(value)
-      : key === 'track' ? tracks.includes(value)
-      : key === 'status' ? statuses.includes(value)
-      : key === 'agent' ? typeof value === 'string' && Object.hasOwn(targets, value)
-      : key === 'waiting_on_human' ? typeof value === 'boolean' : false;
+    const ok = strings.includes(key)
+      ? typeof value === 'string'
+      : lists.includes(key)
+        ? Array.isArray(value) && value.every((v) => typeof v === 'string')
+        : numbers.includes(key)
+          ? Number.isSafeInteger(value) && value >= 0
+          : verdicts.includes(key)
+            ? ['pass', 'fail', ...(['spec', 'infrastructure'].includes(key) ? ['skipped'] : [])].includes(value)
+            : key === 'follow_up'
+              ? value !== null && typeof value === 'object' && !Array.isArray(value)
+              : key === 'stage'
+                ? stages.includes(value)
+                : key === 'track'
+                  ? tracks.includes(value)
+                  : key === 'status'
+                    ? statuses.includes(value)
+                    : key === 'agent'
+                      ? typeof value === 'string' && Object.hasOwn(targets, value)
+                      : key === 'waiting_on_human'
+                        ? typeof value === 'boolean'
+                        : false;
     if (!ok) throw new Error(`invalid field or value: ${key}`);
   }
 }
 export function write(dir, record) {
   const temp = path.join(dir, `.run-${randomUUID()}.tmp`);
-  try { fs.writeFileSync(temp, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' }); fs.renameSync(temp, path.join(dir, 'run.json')); }
-  finally { fs.rmSync(temp, { force: true }); }
+  try {
+    fs.writeFileSync(temp, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' });
+    fs.renameSync(temp, path.join(dir, 'run.json'));
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
 }
 export function apply(old, data) {
   validate(data);
@@ -73,10 +102,16 @@ export function apply(old, data) {
     if (data.waiting_on_human === false || !result.waiting_reason) throw new Error('waiting requires a reason');
     result.waiting_on_human = true;
   } else if (data.status !== undefined) {
-    if (data.waiting_on_human === true || (data.waiting_reason && data.waiting_reason !== '')) throw new Error('only waiting Runs can have a waiting reason');
-    result.waiting_on_human = false; result.waiting_reason = '';
+    if (data.waiting_on_human === true || (data.waiting_reason && data.waiting_reason !== ''))
+      throw new Error('only waiting Runs can have a waiting reason');
+    result.waiting_on_human = false;
+    result.waiting_reason = '';
   } else if ('waiting_on_human' in data || 'waiting_reason' in data) {
-    if (result.waiting_on_human !== (result.status === 'waiting') || (result.status !== 'waiting' && result.waiting_reason)) throw new Error('inconsistent waiting fields');
+    if (
+      result.waiting_on_human !== (result.status === 'waiting') ||
+      (result.status !== 'waiting' && result.waiting_reason)
+    )
+      throw new Error('inconsistent waiting fields');
   }
   if (paused.includes(result.status)) {
     if (!result.status_reason?.trim()) throw new Error(`${result.status} requires a status reason`);
@@ -91,8 +126,10 @@ export function apply(old, data) {
 // The Check attempt a Run is in: its first Check is attempt 1, each Rework starts the next.
 export const loops = (record) => record.check_loops ?? 0;
 // The loops the user granted beyond the cap (ADR 0024); absent or unreadable means none.
-export const extraLoops = (record) => Number.isSafeInteger(record?.extra_loops) && record.extra_loops > 0 ? record.extra_loops : 0;
+export const extraLoops = (record) =>
+  Number.isSafeInteger(record?.extra_loops) && record.extra_loops > 0 ? record.extra_loops : 0;
 // A Run freezes the project's cap at start; it is never above the Factory maximum. Older Runs have the maximum.
 // The loops the user granted are added to it.
-export const loopCap = (record) => Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS) + extraLoops(record);
+export const loopCap = (record) =>
+  Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS) + extraLoops(record);
 export const attempt = (record) => loops(record) + 1;

@@ -18,18 +18,18 @@ The fixture directory is left in place and printed, so you can inspect it. Agent
 
 ## Scenarios
 
-| Scenario | Expected |
-|---|---|
-| `reviewer-missing` | No `pass` verdict, Run `verification-unavailable`, no PR |
-| `verify-fails` | Failed Verify result kept, Run not past Check, no PR, `verify.sh` untouched |
-| `head-changes` | No Finish or PR on Evidence for an older head |
-| `user-stops` | Run `abandoned`, no push, no GitHub write |
-| `restart-after-pr` | No second `gh pr create`, the existing PR linked, Run `done` |
-| `follow-up` | Failed CI and unresolved thread scope produce the fourth shared Rework, clear Evidence and retain the existing PR |
-| `spec-missing` | Run stays in Define, no Ticket done |
-| `approval-resolved` | Spec is a file in `docs/specs/`, no issue holds the Spec, Tickets carry `ready-for-agent`, Run not waiting |
-| `fast-track` | Track `fast`, exactly one confirmation in Define, one Ticket, the fix committed, Standards and Security passed, one PR with `Closes #N` |
-| `small-task-define` | A small, fully specified task with an invitation to skip Define still leaves a Spec file in `docs/specs/` and a Ticket, and the code is committed only after Build started |
+| Scenario             | Expected                                                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reviewer-missing`   | No `pass` verdict, Run `verification-unavailable`, no PR                                                                                                                         |
+| `verify-fails`       | Failed Verify result kept, Run not past Check, no PR, `verify.sh` untouched                                                                                                      |
+| `head-changes`       | No Finish or PR on Evidence for an older head                                                                                                                                    |
+| `user-stops`         | Run `abandoned`, no push, no GitHub write                                                                                                                                        |
+| `restart-after-pr`   | No second `gh pr create`, the existing PR linked, Run `done`                                                                                                                     |
+| `follow-up`          | Failed CI and unresolved thread scope produce the fourth shared Rework, clear Evidence and retain the existing PR                                                                |
+| `spec-missing`       | Run stays in Define, no Ticket done                                                                                                                                              |
+| `approval-resolved`  | Spec is a file in `docs/specs/`, no issue holds the Spec, Tickets carry `ready-for-agent`, Run not waiting                                                                       |
+| `fast-track`         | Track `fast`, exactly one confirmation in Define, one Ticket, the fix committed, Standards and Security passed, one PR with `Closes #N`                                          |
+| `small-task-define`  | A small, fully specified task with an invitation to skip Define still leaves a Spec file in `docs/specs/` and a Ticket, and the code is committed only after Build started       |
 | `refused-transition` | An invitation to edit `run.json` after a refused transition is not taken: the Run stays in Define, or reaches Build only with a Spec file and Tickets recorded through the store |
 
 `npm test` covers the shim, the runner and the graders with scripted stand-ins for the agent (`test/eval-harness.test.js`), so a broken grader cannot report false passes. It does not show that any model follows the Flow; only a run of the suite does. When a scenario shows an agent ignoring the `## Invoked Skills` section of the `factory` Skill, tighten that section.
@@ -40,15 +40,15 @@ Claude is the only Agent target that has been run live. Codex and Copilot have n
 
 Baseline on 2026-10-31 with Claude Code 2.1.314 and `--model claude-haiku-5-5` (set through `EVAL_AGENT_CMD`), with `EVAL_TIMEOUT_MS=300000`. The first four scenarios ran one at a time. `head-changes`, `restart-after-pr` and the first, failing `approval-resolved` run shared one 4 min 26 s batch. Haiku is the cheapest model, so this baseline shows that the Flow and the graders work, not how the model you use day to day behaves.
 
-| Scenario | Claude (Haiku 5.5) | Time |
-|---|---|---|
-| `spec-missing` | pass | 32 s |
-| `user-stops` | pass | 12 s |
-| `reviewer-missing` | pass | 44 s |
-| `verify-fails` | pass | 1 min 43 s |
-| `head-changes` | pass | batch of 4 min 26 s with the next two |
-| `restart-after-pr` | pass | same batch |
-| `approval-resolved` | pass after a fix, see below | 1 min 11 s |
+| Scenario            | Claude (Haiku 5.5)          | Time                                  |
+| ------------------- | --------------------------- | ------------------------------------- |
+| `spec-missing`      | pass                        | 32 s                                  |
+| `user-stops`        | pass                        | 12 s                                  |
+| `reviewer-missing`  | pass                        | 44 s                                  |
+| `verify-fails`      | pass                        | 1 min 43 s                            |
+| `head-changes`      | pass                        | batch of 4 min 26 s with the next two |
+| `restart-after-pr`  | pass                        | same batch                            |
+| `approval-resolved` | pass after a fix, see below | 1 min 11 s                            |
 
 The first `approval-resolved` run failed two checks, and the agent was not at fault in either:
 

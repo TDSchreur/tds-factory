@@ -11,7 +11,13 @@ export function invokedByFactory(skillsDir) {
   // The main file and its reference files: a Stage's text may live in a reference.
   const dir = path.join(skillsDir, 'factory');
   const references = path.join(dir, 'references');
-  const names = fs.existsSync(references) ? fs.readdirSync(references, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => path.join('references', e.name)).sort() : [];
+  const names = fs.existsSync(references)
+    ? fs
+        .readdirSync(references, { withFileTypes: true })
+        .filter((e) => e.isFile() && e.name.endsWith('.md'))
+        .map((e) => path.join('references', e.name))
+        .sort()
+    : [];
   const flow = ['SKILL.md', ...names].map((n) => fs.readFileSync(path.join(dir, n), 'utf8')).join('\n');
   return new Set([...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]));
 }
@@ -50,27 +56,35 @@ const leaves = (base, target) => {
 export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}) {
   const manifestPath = path.join(root, 'skills.manifest.json');
   // The installed package ships skills/ but not the manifest or vendor/, so sync only works in a checkout.
-  if (!fs.existsSync(manifestPath)) throw new Error(`${manifestPath} not found. sync is a maintainer command that needs a repository checkout: run \`node bin/tds-factory.js sync\` from the checkout, not the installed tds-factory.`);
+  if (!fs.existsSync(manifestPath))
+    throw new Error(
+      `${manifestPath} not found. sync is a maintainer command that needs a repository checkout: run \`node bin/tds-factory.js sync\` from the checkout, not the installed tds-factory.`,
+    );
   const { skills, upstreams = {} } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const invoked = invokedByFactory(skillsDir);
   // Validate every entry first, so a bad one leaves the skills folder untouched.
   const seen = new Set();
   const plan = skills.map((entry) => {
     const bad = (why) => new Error(`manifest entry ${JSON.stringify(entry)} ${why}`);
-    const shaped = typeof entry === 'string' || (typeof entry?.path === 'string' && ['undefined', 'string'].includes(typeof entry.as));
+    const shaped =
+      typeof entry === 'string' ||
+      (typeof entry?.path === 'string' && ['undefined', 'string'].includes(typeof entry.as));
     if (!shaped) throw bad('is not a path or { path, as }');
     const { path: rel, as: name = path.basename(rel) } = typeof entry === 'string' ? { path: entry } : entry;
     const src = path.join(root, rel);
     const dest = path.join(skillsDir, name);
-    if (!/^[a-z0-9-]+$/.test(name)) throw bad('has an invalid shipped name (lowercase letters, digits and hyphens only)');
+    if (!/^[a-z0-9-]+$/.test(name))
+      throw bad('has an invalid shipped name (lowercase letters, digits and hyphens only)');
     if (leaves(root, src)) throw bad('leaves the repository');
-    if (path.relative(root, src) === '' || !leaves(skillsDir, src)) throw bad('is the repository root or sits inside the skills folder');
+    if (path.relative(root, src) === '' || !leaves(skillsDir, src))
+      throw bad('is the repository root or sits inside the skills folder');
     if (leaves(skillsDir, dest)) throw bad('leaves the skills folder');
     if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
       throw new Error(`${rel} has no SKILL.md (run: git submodule update --init)`);
     }
     // A link anywhere on the way to the source would let the rewrite below reach outside the repo.
-    if (fs.realpathSync(src) !== path.join(fs.realpathSync(root), path.relative(root, src))) throw bad('is or sits under a symlink');
+    if (fs.realpathSync(src) !== path.join(fs.realpathSync(root), path.relative(root, src)))
+      throw bad('is or sits under a symlink');
     if (seen.has(name)) throw bad('ships under the same name as an earlier entry');
     seen.add(name);
     if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, MARKER))) {
@@ -81,9 +95,13 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
     }
     // Shipped skills are plain files: a link could make the rewrite below touch files outside the skill.
     for (const e of fs.readdirSync(src, { recursive: true, withFileTypes: true })) {
-      if (e.isSymbolicLink()) throw new Error(`skill ${name} contains a symlink: ${path.relative(src, path.join(e.parentPath ?? e.path, e.name))}`);
+      if (e.isSymbolicLink())
+        throw new Error(
+          `skill ${name} contains a symlink: ${path.relative(src, path.join(e.parentPath ?? e.path, e.name))}`,
+        );
     }
-    const unflag = invoked.has(name) && /^disable-model-invocation:/m.test(fs.readFileSync(path.join(src, 'SKILL.md'), 'utf8'));
+    const unflag =
+      invoked.has(name) && /^disable-model-invocation:/m.test(fs.readFileSync(path.join(src, 'SKILL.md'), 'utf8'));
     return { rel, name, src, dest, unflag };
   });
   // A skill that left the manifest is no longer shipped; folders without the marker are ours and stay.
@@ -101,7 +119,9 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
       upstream: upstream.url ?? null,
       commit: upstreamCommit(root, rel),
       transformations: [
-        ...(path.basename(rel) !== name ? [`renamed from ${path.basename(rel)} (name and /${path.basename(rel)} mentions rewritten)`] : []),
+        ...(path.basename(rel) !== name
+          ? [`renamed from ${path.basename(rel)} (name and /${path.basename(rel)} mentions rewritten)`]
+          : []),
         ...(unflag ? ['disable-model-invocation flag removed'] : []),
       ],
       license: upstream.license ?? null,
@@ -109,18 +129,31 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
     };
     replaceDir(dest, (staging) => {
       fs.cpSync(src, staging, { recursive: true });
-      const markdown = fs.readdirSync(staging, { recursive: true, withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.md'));
+      const markdown = fs
+        .readdirSync(staging, { recursive: true, withFileTypes: true })
+        .filter((e) => e.isFile() && e.name.endsWith('.md'));
       for (const e of markdown) {
         const f = path.relative(staging, path.join(e.parentPath ?? e.path, e.name));
         const file = path.join(staging, f);
         const skillFile = f === 'SKILL.md';
-        fs.writeFileSync(file, rewrite(fs.readFileSync(file, 'utf8'), { skillFile, from: path.basename(rel), to: name, unflag: skillFile && invoked.has(name) }));
+        fs.writeFileSync(
+          file,
+          rewrite(fs.readFileSync(file, 'utf8'), {
+            skillFile,
+            from: path.basename(rel),
+            to: name,
+            unflag: skillFile && invoked.has(name),
+          }),
+        );
       }
       fs.writeFileSync(path.join(staging, MARKER), `${rel}\n${hashLine(staging)}`);
     });
     console.log(`synced ${name}`);
   }
   const file = path.join(skillsDir, PROVENANCE);
-  fs.writeFileSync(`${file}.tmp`, `${JSON.stringify({ skills: Object.fromEntries(Object.entries(provenance).sort(([a], [b]) => a.localeCompare(b))) }, null, 2)}\n`);
+  fs.writeFileSync(
+    `${file}.tmp`,
+    `${JSON.stringify({ skills: Object.fromEntries(Object.entries(provenance).sort(([a], [b]) => a.localeCompare(b))) }, null, 2)}\n`,
+  );
   fs.renameSync(`${file}.tmp`, file);
 }

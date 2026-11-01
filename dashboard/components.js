@@ -4,22 +4,41 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
 import { HELP_SECTIONS } from './help.js';
-import { COLUMNS, STALE_MS, ageMs, ago, canGrantLoop, chipsOf, folderName, lastSeenOf, modelOf, prStatusOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
+import {
+  COLUMNS,
+  STALE_MS,
+  ageMs,
+  ago,
+  canGrantLoop,
+  chipsOf,
+  folderName,
+  lastSeenOf,
+  modelOf,
+  prStatusOf,
+  progressOf,
+  safeUrl,
+  ticketsOf,
+  timelineOf,
+  waitAgeOf,
+} from './model.js';
 
 export const html = htm.bind(h);
 
 // An anchor that opens in a new tab for an http(s) URL; anything else is plain text.
 export function Link({ href, children }) {
   const url = safeUrl(href);
-  return url ? html`<a href=${url} target="_blank" rel="noopener noreferrer">${children}</a>` : html`<span>${children}</span>`;
+  return url
+    ? html`<a href=${url} target="_blank" rel="noopener noreferrer">${children}</a>`
+    : html`<span>${children}</span>`;
 }
 
-const inline = (spans) => spans.map((sp) => {
-  if (sp.t === 'text') return sp.v;
-  if (sp.t === 'code') return html`<code>${sp.v}</code>`;
-  if (sp.t === 'link') return html`<${Link} href=${sp.href}>${inline(sp.c)}<//>`;
-  return h(sp.t, null, inline(sp.c));
-});
+const inline = (spans) =>
+  spans.map((sp) => {
+    if (sp.t === 'text') return sp.v;
+    if (sp.t === 'code') return html`<code>${sp.v}</code>`;
+    if (sp.t === 'link') return html`<${Link} href=${sp.href}>${inline(sp.c)}<//>`;
+    return h(sp.t, null, inline(sp.c));
+  });
 
 function MdList({ list }) {
   const Tag = list.ordered ? 'ol' : 'ul';
@@ -49,12 +68,16 @@ const stop = (e) => e.stopPropagation();
 
 function Chips({ run }) {
   const chips = chipsOf(run);
-  return chips.length ? html`<div class="chips">${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}</div>` : null;
+  return chips.length
+    ? html`<div class="chips">${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}</div>`
+    : null;
 }
 
 function Progress({ run }) {
   const p = progressOf(run);
-  return p ? html`<div class="progress" role="progressbar" aria-label="Ticket progress" aria-valuemin="0" aria-valuenow=${p.done} aria-valuemax=${p.total} aria-valuetext=${p.done + ' of ' + p.total + ' Tickets done'}><div class="progress-fill" style=${'width:' + Math.round(p.done / p.total * 100) + '%'}></div></div>` : null;
+  return p
+    ? html`<div class="progress" role="progressbar" aria-label="Ticket progress" aria-valuemin="0" aria-valuenow=${p.done} aria-valuemax=${p.total} aria-valuetext=${p.done + ' of ' + p.total + ' Tickets done'}><div class="progress-fill" style=${'width:' + Math.round((p.done / p.total) * 100) + '%'}></div></div>`
+    : null;
 }
 
 function ModelLine({ run }) {
@@ -82,7 +105,15 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
   return html`<div class="pr-status" aria-label="Pull request status">
     ${link}${link && ' '}
     ${status.kind === 'checking' && html`<span>PR status: checking...</span>`}
-    ${status.kind === 'unavailable' && html`<span class="unavailable">PR status unavailable: ${status.text}</span> <button type="button" aria-label=${'Check the PR status of ' + run.title + ' again'} onClick=${(e) => { stop(e); onCheckPr(run); }} onKeyDown=${stop}>Check again</button>`}
+    ${
+      status.kind === 'unavailable' &&
+      html`<span class="unavailable">PR status unavailable: ${status.text}</span> <button type="button" aria-label=${'Check the PR status of ' + run.title + ' again'} onClick=${(
+        e,
+      ) => {
+        stop(e);
+        onCheckPr(run);
+      }} onKeyDown=${stop}>Check again</button>`
+    }
     ${status.lines.map((line) => html`<span key=${line} class=${'pr-fact' + (/^Checks: failing|conflicts/.test(line) ? ' bad' : '')}>${line}</span>${' '}`)}
   </div>`;
 }
@@ -90,13 +121,35 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
 function Tickets({ run }) {
   const tickets = ticketsOf(run);
   const mark = { done: '✓', active: '▶', todo: '○' };
-  return tickets.length ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => html`<li key=${t.href} class=${'ticket ' + t.state}><span aria-hidden="true">${mark[t.state]}</span> <${Link} href=${t.href}>${t.label}<//><span class="sr"> (${t.state})</span></li>`)}</ul>` : null;
+  return tickets.length
+    ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => html`<li key=${t.href} class=${'ticket ' + t.state}><span aria-hidden="true">${mark[t.state]}</span> <${Link} href=${t.href}>${t.label}<//><span class="sr"> (${t.state})</span></li>`)}</ul>`
+    : null;
 }
 
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
-const pauseLabel = (run) => run.waiting ? 'Needs you' + (waitAgeOf(run) ? ', ' + waitAgeOf(run).text : '') : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
+const pauseLabel = (run) =>
+  run.waiting
+    ? 'Needs you' + (waitAgeOf(run) ? ', ' + waitAgeOf(run).text : '')
+    : run.status === 'verification-unavailable'
+      ? 'Verification unavailable'
+      : run.status === 'interrupted'
+        ? 'Agent interrupted'
+        : '';
 
-export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, onGrant, onMerge, onSync, onClean, onAccept, onDelete }) {
+export function Card({
+  run,
+  selected,
+  expanded,
+  onSelect,
+  onToggle,
+  onCheckPr,
+  onGrant,
+  onMerge,
+  onSync,
+  onClean,
+  onAccept,
+  onDelete,
+}) {
   const done = run.column === 'done';
   const age = ageMs(run.updated);
   const stale = age !== null && !done && !run.unreadable && age > STALE_MS;
@@ -109,26 +162,95 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, o
     html`<${Tickets} run=${run} />`,
     html`<${Chips} run=${run} />`,
     html`<${PrStatus} run=${run} onCheckPr=${onCheckPr} />`,
-    done && run.pr && html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
-    (done || (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) && html`<div class="actions">
+    done &&
+      run.pr &&
+      html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
+    (done ||
+      (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) &&
+      html`<div class="actions">
       ${run.pr && run.prState === 'open' && run.status === 'done' && run.prCanMerge === false && html`<span class="merge-note">Merge it in ${run.prHost === 'azure-devops' ? 'Azure DevOps' : 'the pull request host'}</span>`}
-      ${run.pr && run.prState === 'open' && run.status === 'done' && run.prCanMerge !== false && html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(e) => { stop(e); onMerge(run); }} onKeyDown=${stop}>Merge</button>`}
-      ${!run.unreadable && ['build', 'check'].includes(run.column) && run.status === 'running' && html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(e) => { stop(e); onSync(run); }} onKeyDown=${stop}>Sync</button>`}
-      ${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(e) => { stop(e); onGrant(run); }} onKeyDown=${stop}>Grant extra loop</button>`}
-      ${!run.unreadable && run.column === 'check' && run.status === 'waiting' && html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(e) => { stop(e); onAccept(run); }} onKeyDown=${stop}>Accept Check</button>`}
-      ${run.status === 'done' && run.prState === 'merged' && html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(e) => { stop(e); onClean(run); }} onKeyDown=${stop}>Clean up</button>`}
-      ${!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) && html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => { stop(e); onDelete(run); }} onKeyDown=${stop}>Delete</button>`}
+      ${
+        run.pr &&
+        run.prState === 'open' &&
+        run.status === 'done' &&
+        run.prCanMerge !== false &&
+        html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(
+          e,
+        ) => {
+          stop(e);
+          onMerge(run);
+        }} onKeyDown=${stop}>Merge</button>`
+      }
+      ${
+        !run.unreadable &&
+        ['build', 'check'].includes(run.column) &&
+        run.status === 'running' &&
+        html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(e) => {
+          stop(e);
+          onSync(run);
+        }} onKeyDown=${stop}>Sync</button>`
+      }
+      ${
+        canGrantLoop(run) &&
+        html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(e) => {
+          stop(e);
+          onGrant(run);
+        }} onKeyDown=${stop}>Grant extra loop</button>`
+      }
+      ${
+        !run.unreadable &&
+        run.column === 'check' &&
+        run.status === 'waiting' &&
+        html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(e) => {
+          stop(e);
+          onAccept(run);
+        }} onKeyDown=${stop}>Accept Check</button>`
+      }
+      ${
+        run.status === 'done' &&
+        run.prState === 'merged' &&
+        html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(e) => {
+          stop(e);
+          onClean(run);
+        }} onKeyDown=${stop}>Clean up</button>`
+      }
+      ${
+        !run.unreadable &&
+        ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) &&
+        html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => {
+          stop(e);
+          onDelete(run);
+        }} onKeyDown=${stop}>Delete</button>`
+      }
     </div>`,
   ];
   const toggleText = expanded ? 'Hide details' : 'Show details';
-  const classes = ['card', run.unreadable && 'unreadable', run.waiting && 'waiting', selected && 'selected', run.status === 'abandoned' && 'abandoned'].filter(Boolean).join(' ');
-  return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => { if (e.key === 'Enter') onSelect(run.id); }}>
+  const classes = [
+    'card',
+    run.unreadable && 'unreadable',
+    run.waiting && 'waiting',
+    selected && 'selected',
+    run.status === 'abandoned' && 'abandoned',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => {
+    if (e.key === 'Enter') onSelect(run.id);
+  }}>
     ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
     <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${seen && html`<span class=${'last-seen' + (seen.quiet ? ' quiet' : '')}>${seen.quiet ? '⚠ ' : ''}${seen.text}</span>`}${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
     ${done && run.prState === 'open' && html`<div class="open-pr"><span class="badge open">Open PR</span></div>`}
     ${!done && more}
-    ${done && html`<button type="button" class="toggle" aria-expanded=${String(expanded)} aria-label=${toggleText + ': ' + run.title} onClick=${(e) => { stop(e); onToggle(run.id); }} onKeyDown=${stop}>${expanded ? '▾' : '▸'} ${toggleText}</button>`}
+    ${
+      done &&
+      html`<button type="button" class="toggle" aria-expanded=${String(expanded)} aria-label=${toggleText + ': ' + run.title} onClick=${(
+        e,
+      ) => {
+        stop(e);
+        onToggle(run.id);
+      }} onKeyDown=${stop}>${expanded ? '▾' : '▸'} ${toggleText}</button>`
+    }
     ${done && html`<div class="details" hidden=${!expanded}>${more}</div>`}
   </li>`;
 }
@@ -171,32 +293,48 @@ export function HelpPanel({ open, onClose }) {
   const opener = useRef(null);
   useEffect(() => {
     const element = dialog.current;
-    if (open && !element.open) { opener.current = document.activeElement; element.showModal(); close.current.focus(); }
-    else if (!open && element.open) element.close();
+    if (open && !element.open) {
+      opener.current = document.activeElement;
+      element.showModal();
+      close.current.focus();
+    } else if (!open && element.open) element.close();
   }, [open]);
   // The page behind the dialog is inert; Tab cycles inside it instead of leaving for the browser's own controls.
   const trap = (event) => {
     if (event.key !== 'Tab') return;
     const targets = [...dialog.current.querySelectorAll('button:not([disabled]), a[href]')];
-    const first = targets[0], last = targets[targets.length - 1];
-    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    const first = targets[0],
+      last = targets[targets.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
   // The focus goes back to what opened the panel, or to the Help button when that did not take the focus (some browsers do not focus a clicked button).
   const closed = () => {
-    const back = opener.current && opener.current !== document.body && opener.current.isConnected ? opener.current : document.getElementById('help');
+    const back =
+      opener.current && opener.current !== document.body && opener.current.isConnected
+        ? opener.current
+        : document.getElementById('help');
     back?.focus();
-    requestAnimationFrame(() => { if (back?.isConnected && document.activeElement !== back) back.focus(); }); // the browser may still be lifting the inert state
+    requestAnimationFrame(() => {
+      if (back?.isConnected && document.activeElement !== back) back.focus();
+    }); // the browser may still be lifting the inert state
     onClose();
   };
   return html`<dialog id="help-panel" ref=${dialog} aria-labelledby="help-title" onKeyDown=${trap} onClose=${closed}>
     <div class="dialog-content">
       <h2 id="help-title">Help</h2>
       <p class="help-lead">The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Start a Run in your agent with <code>/factory</code>.</p>
-      ${HELP_SECTIONS.map((section) => html`<section key=${section.id} class="help-section" aria-labelledby=${'help-' + section.id}>
+      ${HELP_SECTIONS.map(
+        (section) => html`<section key=${section.id} class="help-section" aria-labelledby=${'help-' + section.id}>
         <h3 id=${'help-' + section.id}>${section.title}</h3>
         <ul>${section.items.map((item) => html`<li key=${item.term || item.text}>${item.term && html`<strong>${item.term}</strong>: `}${item.text}</li>`)}</ul>
-      </section>`)}
+      </section>`,
+      )}
       <div class="dialog-actions"><button id="help-close" ref=${close} type="button" class="primary" onClick=${() => dialog.current.close()}>Close</button></div>
     </div>
   </dialog>`;
@@ -207,12 +345,18 @@ const THEME_KEY = 'dashboard-theme';
 
 // The inline script in index.html has already applied the saved theme; this keeps the selector in step with it.
 function ThemeSelect() {
-  const [theme, setTheme] = useState(() => (THEMES.includes(document.documentElement.dataset.theme) ? document.documentElement.dataset.theme : 'system'));
+  const [theme, setTheme] = useState(() =>
+    THEMES.includes(document.documentElement.dataset.theme) ? document.documentElement.dataset.theme : 'system',
+  );
   const change = (e) => {
     const choice = e.target.value;
     setTheme(choice);
     document.documentElement.dataset.theme = choice;
-    try { localStorage.setItem(THEME_KEY, choice); } catch (err) { /* storage unavailable: the choice still applies to this page */ }
+    try {
+      localStorage.setItem(THEME_KEY, choice);
+    } catch {
+      /* storage unavailable: the choice still applies to this page */
+    }
   };
   return html`<select id="theme" aria-label="Theme" value=${theme} onChange=${change}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>`;
 }
@@ -232,7 +376,19 @@ function Logo() {
 }
 
 // The pill shows the last segment of the project path; the full path is its tooltip.
-export function Header({ project, version, status, olderLabel, onOlder, canNotify, onNotify, waitingCount, onlyWaiting, onToggleWaiting, onHelp }) {
+export function Header({
+  project,
+  version,
+  status,
+  olderLabel,
+  onOlder,
+  canNotify,
+  onNotify,
+  waitingCount,
+  onlyWaiting,
+  onToggleWaiting,
+  onHelp,
+}) {
   return html`<header>
     <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
@@ -251,7 +407,9 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
   const heading = useRef(null);
-  useEffect(() => { if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true }); }, [run?.id]); // only a newly opened Run takes focus, never a refresh
+  useEffect(() => {
+    if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true });
+  }, [run?.id]); // only a newly opened Run takes focus, never a refresh
   // Compact detail covers the Dashboard: the background becomes inert and stops scrolling, and Tab stays inside the detail.
   useLayoutEffect(() => {
     if (!run || !compact) return undefined;
@@ -259,23 +417,40 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     const background = [...document.querySelectorAll('#app > header, .board-wrap')];
     const previous = background.map((element) => element.inert);
     const overflow = document.body.style.overflow;
-    background.forEach((element) => { element.inert = true; });
+    background.forEach((element) => {
+      element.inert = true;
+    });
     document.body.style.overflow = 'hidden';
     if (!detail.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
     const trap = (event) => {
       if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
-      const targets = [...detail.querySelectorAll('a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-        .filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
-      if (!targets.length) { event.preventDefault(); return; }
-      const first = targets[0], last = targets[targets.length - 1], active = document.activeElement;
+      const targets = [
+        ...detail.querySelectorAll(
+          'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
+      if (!targets.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = targets[0],
+        last = targets[targets.length - 1],
+        active = document.activeElement;
       const outside = !detail.contains(active);
-      if (event.shiftKey && (active === first || outside)) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && (active === last || outside)) { event.preventDefault(); first.focus(); }
+      if (event.shiftKey && (active === first || outside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || outside)) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', trap);
     return () => {
       document.removeEventListener('keydown', trap);
-      background.forEach((element, index) => { element.inert = previous[index]; });
+      background.forEach((element, index) => {
+        element.inert = previous[index];
+      });
       document.body.style.overflow = overflow;
     };
   }, [!!run, compact]);
@@ -285,8 +460,9 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     const detail = document.getElementById('detail');
     const header = document.querySelector('#app > header');
     const fit = () => {
-      detail.style.top = (header.getBoundingClientRect().height + 20) + 'px';
-      detail.style.maxHeight = Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
+      detail.style.top = header.getBoundingClientRect().height + 20 + 'px';
+      detail.style.maxHeight =
+        Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
     };
     const observer = new ResizeObserver(fit);
     observer.observe(header);
@@ -304,11 +480,24 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
-    Promise.all(run.files.map((name) => fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
-      .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.text(); })
-      .then((text) => ({ name, text }), (err) => ({ name, error: `Cannot load ${name} (${err.message})` }))))
-      .then((files) => { if (live) setLoaded({ id: run.id, files }); });
-    return () => { live = false; };
+    Promise.all(
+      run.files.map((name) =>
+        fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+          .then((res) => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+          })
+          .then(
+            (text) => ({ name, text }),
+            (err) => ({ name, error: `Cannot load ${name} (${err.message})` }),
+          ),
+      ),
+    ).then((files) => {
+      if (live) setLoaded({ id: run.id, files });
+    });
+    return () => {
+      live = false;
+    };
   }, [key]);
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
@@ -323,19 +512,27 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       ${canGrantLoop(run) && html`<div class="actions"><button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button></div>`}
     </header>
     <${Timeline} run=${run} />
-    ${run.metrics && html`<section aria-label="Run metrics"><h3>Run metrics</h3>
+    ${
+      run.metrics &&
+      html`<section aria-label="Run metrics"><h3>Run metrics</h3>
       <div>Track: ${run.metrics.track}</div>
       ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}
       <div>Reworks: ${run.metrics.reworks}</div><div>First-pass clean rate: ${run.metrics.firstPass}</div>
       <div>Tokens: ${run.metrics.tokens}</div><div>Cost: ${run.metrics.cost}</div>
-    </section>`}
+    </section>`
+    }
     ${(run.projectReviews ?? []).length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${run.projectReviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
-    ${run.files.length > 0 && files.map((f) => html`<${Fragment} key=${f.name}>
+    ${
+      run.files.length > 0 &&
+      files.map(
+        (f) => html`<${Fragment} key=${f.name}>
       <h3>${f.name}</h3>
       ${f.error ? html`<pre>${f.error}</pre>` : f.text === undefined ? html`<pre>Loading...</pre>` : html`<${Markdown} text=${f.text} />`}
-    <//>`)}
+    <//>`,
+      )
+    }
   </section>`;
 }
 

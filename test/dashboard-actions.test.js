@@ -9,7 +9,10 @@ import { startDashboard } from '../src/dashboard.js';
 
 const cli = resolve('bin/tds-factory.js');
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
-const ok = (result) => { assert.equal(result.status, 0, result.stderr); return result.stdout.trim(); };
+const ok = (result) => {
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+};
 const read = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8'));
 const data = (value) => JSON.stringify(value);
 const PR = 'https://github.com/o/r/pull/1';
@@ -22,9 +25,13 @@ function checked() {
   writeFileSync(join(cwd, '.gitignore'), '.factory/\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'ignore');
-  const id = ok(run(cwd, 'start', '--data', data({ title: 'Actions', agent: 'claude', commands: 'true', conventions: [] })));
+  const id = ok(
+    run(cwd, 'start', '--data', data({ title: 'Actions', agent: 'claude', commands: 'true', conventions: [] })),
+  );
   const wt = read(cwd, id).worktree;
-  ok(run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })));
+  ok(
+    run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })),
+  );
   ok(run(cwd, 'transition', '--id', id, '--to', 'build'));
   writeFileSync(join(wt, 'mine.txt'), 'mine\n');
   git(wt, 'add', '-A');
@@ -35,13 +42,24 @@ function checked() {
 }
 const review = (cwd, id, security = 'pass') => {
   ok(run(cwd, 'verify', '--id', id));
-  for (const [axis, value] of [['standards', 'pass'], ['spec', 'pass'], ['security', security], ['infrastructure', 'skipped']]) ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
+  for (const [axis, value] of [
+    ['standards', 'pass'],
+    ['spec', 'pass'],
+    ['security', security],
+    ['infrastructure', 'skipped'],
+  ])
+    ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
-const waiting = (cwd, id) => ok(run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
+const waiting = (cwd, id) =>
+  ok(run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
 async function post(dash, id, action, updated) {
-  if (action === 'accept' && updated === undefined) updated = (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
+  if (action === 'accept' && updated === undefined)
+    updated = (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
   const query = action === 'accept' ? `?updated=${encodeURIComponent(updated)}` : '';
-  const response = await fetch(`${dash.url}/api/runs/${id}/${action}${query}`, { method: 'POST', headers: await writeHeaders(dash) });
+  const response = await fetch(`${dash.url}/api/runs/${id}/${action}${query}`, {
+    method: 'POST',
+    headers: await writeHeaders(dash),
+  });
   return { status: response.status, text: await response.text() };
 }
 
@@ -63,7 +81,9 @@ test('accepting a not-clean Check records the decision for the current head', as
     const again = await post(dash, id, 'accept');
     assert.equal(again.status, 409);
     assert.match(again.text, /already clean or accepted/);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('accepting is refused for a clean Check, a Run that is not waiting and an unknown Run', async () => {
@@ -78,7 +98,9 @@ test('accepting is refused for a clean Check, a Run that is not waiting and an u
     assert.match(clean.text, /already clean/);
     assert.equal(read(cwd, id).accepted, undefined);
     assert.equal((await post(dash, 'nope', 'accept')).status, 404);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('sync rebases the Run onto the moved origin and clears the Evidence', async () => {
@@ -94,7 +116,9 @@ test('sync rebases the Run onto the moved origin and clears the Evidence', async
     assert.equal(record.base_sha, git(cwd, 'rev-parse', 'main'));
     assert.equal(record.verify, undefined);
     assert.ok(existsSync(join(wt, 'upstream.txt')));
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('sync reports a refusal and leaves the Run alone', async () => {
@@ -105,7 +129,9 @@ test('sync reports a refusal and leaves the Run alone', async () => {
     const result = await post(dash, id, 'sync');
     assert.equal(result.status, 409);
     assert.match(result.text, /uncommitted/);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('clean-up keeps a Run whose PR is not merged and removes one whose PR is merged', async () => {
@@ -126,7 +152,9 @@ test('clean-up keeps a Run whose PR is not merged and removes one whose PR is me
     assert.deepEqual(await post(dash, id, 'clean'), { status: 200, text: 'cleaned' });
     assert.equal(existsSync(wt), false);
     assert.ok(existsSync(join(cwd, '.factory', 'runs', id, 'run.json')));
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('accepting is refused when the Run changed since the page showed it', async () => {
@@ -140,7 +168,9 @@ test('accepting is refused when the Run changed since the page showed it', async
     assert.match(stale.text, /changed since/);
     assert.equal(read(cwd, id).accepted, undefined);
     assert.equal(read(cwd, id).status, 'waiting');
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('a failed accept puts the Run back to waiting with its reason', async () => {
@@ -156,7 +186,9 @@ test('a failed accept puts the Run back to waiting with its reason', async () =>
     assert.equal(record.status, 'waiting');
     assert.equal(record.waiting_reason, 'accept the Check');
     assert.equal(record.accepted, undefined);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('clean-up works when the Dashboard was started inside a Run worktree', async () => {
@@ -170,19 +202,34 @@ test('clean-up works when the Dashboard was started inside a Run worktree', asyn
   try {
     assert.deepEqual(await post(dash, id, 'clean'), { status: 200, text: 'cleaned' });
     assert.equal(existsSync(wt), false);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 // ADR 0024: the extra loop. A Run in Check that waits on the user at its loop limit.
 function atLimit() {
   const { cwd, id, wt } = checked();
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
-  writeFileSync(file, JSON.stringify({ ...read(cwd, id), check_loops: 4, status: 'waiting', waiting_on_human: true, waiting_reason: 'Blocking findings remain' }));
+  writeFileSync(
+    file,
+    JSON.stringify({
+      ...read(cwd, id),
+      check_loops: 4,
+      status: 'waiting',
+      waiting_on_human: true,
+      waiting_reason: 'Blocking findings remain',
+    }),
+  );
   return { cwd, id, wt };
 }
-const updatedOf = async (dash, id) => (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
+const updatedOf = async (dash, id) =>
+  (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
 const grant = async (dash, id, query, headers) => {
-  const response = await fetch(`${dash.url}/api/runs/${id}/extra-loop${query ?? `?updated=${encodeURIComponent(await updatedOf(dash, id))}`}`, { method: 'POST', headers: headers ?? await writeHeaders(dash) });
+  const response = await fetch(
+    `${dash.url}/api/runs/${id}/extra-loop${query ?? `?updated=${encodeURIComponent(await updatedOf(dash, id))}`}`,
+    { method: 'POST', headers: headers ?? (await writeHeaders(dash)) },
+  );
   return { status: response.status, text: await response.text() };
 };
 
@@ -199,7 +246,9 @@ test('the Dashboard grants an extra loop to a Run in Check that waits at its lim
     assert.ok(view.events.some((e) => e.type === 'extra-loop' && e.granted === 1 && e.limit === 5));
     // It is not waiting any more, so a second click needs a new wait.
     assert.equal((await grant(dash, id)).status, 409);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });
 
 test('the extra loop is refused for every Run that is not at its limit in Check and waiting', async () => {
@@ -207,10 +256,23 @@ test('the extra loop is refused for every Run that is not at its limit in Check 
   const below = checked();
   waiting(below.cwd, below.id);
   let d = await dash(below.cwd);
-  try { const r = await grant(d, below.id); assert.equal(r.status, 409); assert.match(r.text, /not reached/); } finally { await d.close(); }
+  try {
+    const r = await grant(d, below.id);
+    assert.equal(r.status, 409);
+    assert.match(r.text, /not reached/);
+  } finally {
+    await d.close();
+  }
   const running = checked();
   d = await dash(running.cwd);
-  try { const r = await grant(d, running.id); assert.equal(r.status, 409); assert.match(r.text, /waits on you/); assert.equal((await grant(d, 'nope')).status, 404); } finally { await d.close(); }
+  try {
+    const r = await grant(d, running.id);
+    assert.equal(r.status, 409);
+    assert.match(r.text, /waits on you/);
+    assert.equal((await grant(d, 'nope')).status, 404);
+  } finally {
+    await d.close();
+  }
   const stale = atLimit();
   d = await dash(stale.cwd);
   try {
@@ -219,7 +281,9 @@ test('the extra loop is refused for every Run that is not at its limit in Check 
     assert.match(old.text, /changed since/);
     assert.equal((await grant(d, stale.id, '')).status, 409);
     assert.equal(read(stale.cwd, stale.id).extra_loops, undefined);
-  } finally { await d.close(); }
+  } finally {
+    await d.close();
+  }
 });
 
 test('the extra loop route refuses a request without the session token, with a wrong one or from another Origin', async () => {
@@ -228,10 +292,18 @@ test('the extra loop route refuses a request without the session token, with a w
   try {
     const query = `?updated=${encodeURIComponent(await updatedOf(dash, id))}`;
     const good = await writeHeaders(dash);
-    for (const headers of [{}, { origin: good.origin }, { ...good, 'x-factory-token': 'wrong' }, { ...good, origin: 'https://evil.example' }, { 'x-factory-token': good['x-factory-token'] }]) {
+    for (const headers of [
+      {},
+      { origin: good.origin },
+      { ...good, 'x-factory-token': 'wrong' },
+      { ...good, origin: 'https://evil.example' },
+      { 'x-factory-token': good['x-factory-token'] },
+    ]) {
       assert.equal((await grant(dash, id, query, headers)).status, 403, JSON.stringify(Object.keys(headers)));
     }
     assert.equal(read(cwd, id).extra_loops, undefined);
     assert.equal((await grant(dash, id, query)).status, 200);
-  } finally { await dash.close(); }
+  } finally {
+    await dash.close();
+  }
 });

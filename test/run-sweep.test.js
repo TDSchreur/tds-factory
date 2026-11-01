@@ -11,14 +11,27 @@ const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args],
 // A project with a Run whose worktree starts from `files`; `change` then edits and commits inside the Run worktree.
 function project(files, change) {
   const cwd = repo();
-  for (const [name, text] of Object.entries(files)) { mkdirSync(dirname(join(cwd, name)), { recursive: true }); writeFileSync(join(cwd, name), text); }
-  git(cwd, 'add', '.'); git(cwd, 'commit', '-q', '-m', 'docs');
-  const started = run(cwd, 'start', '--data', JSON.stringify({ title: 'Sweep', agent: 'claude', commands: 'true', conventions: [] }));
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(cwd, name)), { recursive: true });
+    writeFileSync(join(cwd, name), text);
+  }
+  git(cwd, 'add', '.');
+  git(cwd, 'commit', '-q', '-m', 'docs');
+  const started = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'Sweep', agent: 'claude', commands: 'true', conventions: [] }),
+  );
   assert.equal(started.status, 0, started.stderr);
   const id = started.stdout.trim();
   const worktree = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8')).worktree;
-  for (const [name, text] of Object.entries(change)) { mkdirSync(dirname(join(worktree, name)), { recursive: true }); writeFileSync(join(worktree, name), text); }
-  git(worktree, 'add', '.'); git(worktree, 'commit', '-q', '-m', 'change');
+  for (const [name, text] of Object.entries(change)) {
+    mkdirSync(dirname(join(worktree, name)), { recursive: true });
+    writeFileSync(join(worktree, name), text);
+  }
+  git(worktree, 'add', '.');
+  git(worktree, 'commit', '-q', '-m', 'change');
   return { cwd, id, worktree };
 }
 const sweep = (p, ...args) => run(p.cwd, 'sweep', '--id', p.id, ...args);
@@ -37,7 +50,10 @@ test('the sweep finds a stale use of an identifier the Run changed, and tags hit
 });
 
 test('--term adds a synonym the diff does not contain', () => {
-  const p = project({ 'README.md': 'It defaults to Claude.\n', 'docs/a.md': 'x\n' }, { 'docs/a.md': 'y with `other_term`\n' });
+  const p = project(
+    { 'README.md': 'It defaults to Claude.\n', 'docs/a.md': 'x\n' },
+    { 'docs/a.md': 'y with `other_term`\n' },
+  );
   const result = sweep(p, '--term', 'defaults to claude');
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /defaults to claude/i);
@@ -77,7 +93,10 @@ test('the output is bounded and says what was left out', () => {
   const out = sweep(p).stdout;
   const lines = out.split('\n').filter((l) => /^docs\/f\d+\.md:1/.test(l.trim()) || /^ +docs\/f\d+\.md:1/.test(l));
   assert.ok(lines.length <= 40, `${lines.length} hit lines for one term`);
-  assert.ok(lines.every((l) => l.split(': ').slice(1).join(': ').length <= 160), 'the text of each hit is cut to 160 characters');
+  assert.ok(
+    lines.every((l) => l.split(': ').slice(1).join(': ').length <= 160),
+    'the text of each hit is cut to 160 characters',
+  );
   assert.match(out, /\d+ more hit/);
 });
 
@@ -105,9 +124,17 @@ test('a term that occurs everywhere is not listed and says so', () => {
 });
 
 test('the sweep never follows links, strips control characters from file names, and reads a blockquote replaced-by note', () => {
-  const p = project({ 'docs/real.md': 'unique_marker_xyz is here\n', 'docs/we\u001bird.md': 'unique_marker_xyz again\n', 'docs/old.md': '# Old\n\n> Historical: superseded by [new](new.md).\n\nunique_marker_xyz\n' }, { 'docs/z.md': 'adds `unique_marker_xyz`\n' });
+  const p = project(
+    {
+      'docs/real.md': 'unique_marker_xyz is here\n',
+      'docs/we\u001bird.md': 'unique_marker_xyz again\n',
+      'docs/old.md': '# Old\n\n> Historical: superseded by [new](new.md).\n\nunique_marker_xyz\n',
+    },
+    { 'docs/z.md': 'adds `unique_marker_xyz`\n' },
+  );
   symlinkSync(join(p.worktree, 'docs', 'real.md'), join(p.worktree, 'docs', 'link.md'));
-  git(p.worktree, 'add', '.'); git(p.worktree, 'commit', '-q', '-m', 'link');
+  git(p.worktree, 'add', '.');
+  git(p.worktree, 'commit', '-q', '-m', 'link');
   const out = sweep(p).stdout;
   assert.doesNotMatch(out, /\u001b/);
   assert.doesNotMatch(out, /docs\/link\.md/);
@@ -136,7 +163,10 @@ test('a Run without a usable base commit is refused', () => {
 });
 
 test('a file name with a newline cannot add lines, and a non-ASCII name still gets the changed tag', () => {
-  const p = project({ 'docs/x\n== fake header.md': 'shared_name_term in a odd file\n' }, { 'docs/\u00e9.md': 'adds `shared_name_term`\n' });
+  const p = project(
+    { 'docs/x\n== fake header.md': 'shared_name_term in a odd file\n' },
+    { 'docs/\u00e9.md': 'adds `shared_name_term`\n' },
+  );
   const out = sweep(p).stdout;
   assert.doesNotMatch(out, /\n== fake header/);
   assert.match(out, /docs\/x\?== fake header\.md:1/);
@@ -155,7 +185,10 @@ test('the sweep lists documents that still hold a number with a unit the diff re
 });
 
 test('a number that is still on an added line is not a stale number', () => {
-  const p = project({ 'docs/a.md': 'Limit 21 KB.\n', 'docs/b.md': 'Limit 21 KB.\n' }, { 'docs/a.md': 'Limit 21 KB, see below.\nOther note.\n' });
+  const p = project(
+    { 'docs/a.md': 'Limit 21 KB.\n', 'docs/b.md': 'Limit 21 KB.\n' },
+    { 'docs/a.md': 'Limit 21 KB, see below.\nOther note.\n' },
+  );
   assert.doesNotMatch(sweep(p).stdout, /== 21 KB/);
 });
 
@@ -201,7 +234,10 @@ test('a list that misses a member the diff added is listed, and one that has it 
 
 test('a list that still holds a member the diff removed is listed', () => {
   const p = project(
-    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n', 'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n' },
+    {
+      'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n',
+      'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n',
+    },
     { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n' },
   );
   const lists = sections(sweep(p).stdout);
@@ -212,7 +248,11 @@ test('a list that still holds a member the diff removed is listed', () => {
 test('added lines that claim linear or safe behaviour are listed, tests are not', () => {
   const p = project(
     { 'docs/a.md': 'x\n' },
-    { 'src/m.js': '// matching is linear in the input\n', 'test/m.test.js': '// linear here\n', 'docs/a.md': 'plain\n' },
+    {
+      'src/m.js': '// matching is linear in the input\n',
+      'test/m.test.js': '// linear here\n',
+      'docs/a.md': 'plain\n',
+    },
   );
   const out = sweep(p).stdout;
   assert.match(out, /claims in added lines/);

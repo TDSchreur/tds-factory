@@ -21,9 +21,10 @@
     "test:package": "node scripts/with-temp-dir.js node scripts/test-package.js",
     "eval": "node scripts/with-temp-dir.js node eval/run.js",
     "lint": "eslint .",
-    "format:check": "prettier --check eslint.config.js package.json",
-    "format": "prettier --write",
-    "typecheck": "tsc --project tsconfig.json"
+    "format:check": "prettier --check \"**/*.{js,json,md,yml,yaml,css,html}\"",
+    "format": "prettier --write .",
+    "typecheck": "tsc --project tsconfig.json",
+    "check": "npm run lint && npm run format:check && npm run typecheck"
   },
   "engines": {
     "node": ">=20"

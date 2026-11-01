@@ -1,8 +1,13 @@
 // Turns Markdown text into a plain tree of blocks and inline spans. No DOM access, so a test can run it alone.
 export function parseMarkdown(text) {
   function inline(src) {
-    var out = [], re = /`([^`]+)`|\*\*(.+?)\*\*|\*([^\s*](?:.*?[^\s*])?)\*|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g, last = 0, m;
-    function plain(v) { if (v) out.push({ t: 'text', v: v }); }
+    const out = [];
+    const re = /`([^`]+)`|\*\*(.+?)\*\*|\*([^\s*](?:.*?[^\s*])?)\*|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
+    let last = 0;
+    let m;
+    function plain(v) {
+      if (v) out.push({ t: 'text', v: v });
+    }
     while ((m = re.exec(src))) {
       plain(src.slice(last, m.index));
       last = re.lastIndex;
@@ -15,13 +20,27 @@ export function parseMarkdown(text) {
     plain(src.slice(last));
     return out;
   }
-  function cells(line) { return line.trim().replace(/^\||\|$/g, '').split('|').map(function (c) { return inline(c.trim()); }); }
-  var blocks = [], lines = String(text).split(/\r?\n/), i = 0, m;
+  function cells(line) {
+    return line
+      .trim()
+      .replace(/^\||\|$/g, '')
+      .split('|')
+      .map(function (c) {
+        return inline(c.trim());
+      });
+  }
+  const blocks = [];
+  const lines = String(text).split(/\r?\n/);
+  let i = 0;
+  let m;
   while (i < lines.length) {
-    var line = lines[i];
-    if (!line.trim()) { i++; continue; }
+    const line = lines[i];
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
     if (/^\s*```/.test(line)) {
-      var code = [];
+      const code = [];
       for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
       i++;
       blocks.push({ type: 'code', text: code.join('\n') });
@@ -32,27 +51,37 @@ export function parseMarkdown(text) {
       blocks.push({ type: 'rule' });
       i++;
     } else if (line.indexOf('|') >= 0 && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1] || '')) {
-      var head = cells(line), rows = [];
+      const head = cells(line),
+        rows = [];
       for (i += 2; i < lines.length && lines[i].indexOf('|') >= 0; i++) rows.push(cells(lines[i]));
       blocks.push({ type: 'table', head: head, rows: rows });
     } else if (/^\s*>/.test(line)) {
-      var quote = [];
+      const quote = [];
       for (; i < lines.length && /^\s*>/.test(lines[i]); i++) quote.push(lines[i].replace(/^\s*>\s?/, ''));
       blocks.push({ type: 'quote', inline: inline(quote.join(' ')) });
     } else if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
-      var items = [], ordered = /^\s*\d+\./.test(line), base = /^\s*/.exec(line)[0].length;
+      const items = [],
+        ordered = /^\s*\d+\./.test(line),
+        base = /^\s*/.exec(line)[0].length;
       for (; i < lines.length && (m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i])); i++) {
-        var item = { inline: inline(m[3].trim()) };
+        const item = { inline: inline(m[3].trim()) };
         if (m[1].length > base && items.length) {
-          var parent = items[items.length - 1];
+          const parent = items[items.length - 1];
           parent.sub = parent.sub || { ordered: /\d/.test(m[2]), items: [] };
           parent.sub.items.push(item);
         } else items.push(item);
       }
       blocks.push({ type: 'list', ordered: ordered, items: items });
     } else {
-      var para = [];
-      for (; i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|>|([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(lines[i]); i++) para.push(lines[i].trim());
+      const para = [];
+      for (
+        ;
+        i < lines.length &&
+        lines[i].trim() &&
+        !/^\s*(```|#{1,6}\s|>|([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(lines[i]);
+        i++
+      )
+        para.push(lines[i].trim());
       blocks.push({ type: 'paragraph', inline: inline(para.join(' ')) });
     }
   }

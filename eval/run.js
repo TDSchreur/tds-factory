@@ -13,7 +13,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const [agent, ...wanted] = process.argv.slice(2);
 const command = process.env.EVAL_AGENT_CMD ?? defaults[agent];
 if (!command) {
-  console.error(`usage: npm run eval -- <${Object.keys(defaults).join('|')}> [scenario...]\nset EVAL_AGENT_CMD to use another command; nothing was run.`);
+  console.error(
+    `usage: npm run eval -- <${Object.keys(defaults).join('|')}> [scenario...]\nset EVAL_AGENT_CMD to use another command; nothing was run.`,
+  );
   process.exit(2);
 }
 const timeoutMs = Number(process.env.EVAL_TIMEOUT_MS ?? 20 * 60 * 1000);
@@ -30,7 +32,12 @@ for (const name of wanted.length ? wanted : names) {
   const fx = fixture({ agent, ...scenario.fixture });
   const { prompt } = scenario.setup(fx);
   writeFileSync(fx.actionLog, ''); // grade only what the agent attempts
-  const ran = spawnSync('sh', ['-c', command], { cwd: fx.dir, env: { ...fx.env, EVAL_PROMPT: prompt }, timeout: timeoutMs, encoding: 'utf8' });
+  const ran = spawnSync('sh', ['-c', command], {
+    cwd: fx.dir,
+    env: { ...fx.env, EVAL_PROMPT: prompt },
+    timeout: timeoutMs,
+    encoding: 'utf8',
+  });
   const timedOut = ran.error?.code === 'ETIMEDOUT';
   const results = scenario.grade(collect(fx), fx);
   console.log(`\n${name}: ${scenario.description}  [${fx.root}]${timedOut ? '  (agent timed out)' : ''}`);
