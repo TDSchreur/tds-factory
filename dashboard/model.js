@@ -74,3 +74,66 @@ export function ticketsOf(run) {
 
 // The last segment of a project path, with either kind of separator; empty when there is none.
 export const folderName = (path) => String(path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '';
+
+// Ticket progress of a card: null without a positive Ticket total, so an old Run shows no bar.
+export function progressOf(run) {
+  const total = Number.isSafeInteger(run.ticketsTotal) && run.ticketsTotal > 0 ? run.ticketsTotal : 0;
+  if (!total) return null;
+  const done = Number.isSafeInteger(run.ticketsDone) && run.ticketsDone > 0 ? run.ticketsDone : 0;
+  return { done: Math.min(done, total), total };
+}
+
+// The model line of a card. A request is labelled "requested"; only an agent-reported observed model is labelled "observed".
+export function modelOf(run) {
+  const m = run.model && typeof run.model === 'object' ? run.model : {};
+  const requested = str(m.requested), effort = str(m.effort), observed = str(m.observed);
+  if (observed) return { label: `Model (observed): ${observed}`, observed: true, ...(requested ? { title: `Requested: ${requested}` } : {}) };
+  if (requested) return { label: `Model (requested): ${requested}${effort ? `, effort ${effort}` : ''}`, observed: false };
+  if (effort) return { label: `Effort (requested): ${effort}`, observed: false };
+  return null;
+}
+
+// The agent has been quiet for this long.
+export const QUIET_MS = 10 * 60 * 1000;
+
+// "Last seen" of a card. Only a running Run can be quiet; a waiting Run shows the time without a warning; a finished or unreadable Run, or one without a last-seen time, shows nothing.
+export function lastSeenOf(run, now = Date.now()) {
+  if (run.unreadable || !['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status)) return null;
+  const at = Date.parse(str(run.lastSeen));
+  if (Number.isNaN(at)) return null;
+  const age = Math.max(0, now - at);
+  const quiet = run.status === 'running' && age >= QUIET_MS;
+  return { text: `Last seen ${ago(age)}${quiet ? ', quiet' : ''}`, quiet };
+}
+
+function duration(ms) {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+function describe(e) {
+  const fast = e.fast === true ? 'Fast ' : '';
+  switch (e.type) {
+    case 'stage': return e.from && e.to ? `Moved from ${e.from} to ${e.to}` : 'stage';
+    case 'ticket-done': return Number.isSafeInteger(e.done) && Number.isSafeInteger(e.total) ? `Ticket ${e.done} of ${e.total} done` : 'Ticket done';
+    case 'verify-start': return `${fast}Verify started`;
+    case 'verify': {
+      const took = typeof e.duration_ms === 'number' ? ` in ${duration(e.duration_ms)}` : '';
+      return `${fast}Verify ${e.exit_code === 0 ? 'passed' : 'failed'}${took}`;
+    }
+    case 'waiting': return e.reason ? `Waiting: ${e.reason}` : 'Waiting';
+    case 'released': return 'Released';
+    case 'rework': return Number.isSafeInteger(e.loops) ? `Rework, loop ${e.loops}` : 'Rework';
+    case 'status': return e.status ? `Status: ${e.status}` : 'status';
+    default: return e.type;
+  }
+}
+
+// The event timeline of the Run detail, oldest first: { text, when } with a relative time, or '' when the event has no usable time.
+export function timelineOf(run, now = Date.now()) {
+  if (!Array.isArray(run.events)) return [];
+  return run.events.filter((e) => e && typeof e === 'object' && typeof e.type === 'string').map((e) => {
+    const at = Date.parse(str(e.at));
+    return { text: describe(e), when: Number.isNaN(at) ? '' : ago(Math.max(0, now - at)) };
+  });
+}
