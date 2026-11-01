@@ -22,6 +22,16 @@ One definition of waiting is used everywhere: the Run's `waiting` flag in `/api/
 - In each Stage, waiting Runs come first, the longest wait first.
 - Paused Runs ("Verification unavailable", "Agent interrupted") keep their own line and are not waiting.
 
+## Pull request status
+
+A Run with a GitHub pull request in Finish, Follow-up or Done (and not abandoned) shows the status of that PR on its card and in its detail, read through the PR provider ([ADR 0020](adr/0020-pr-providers-sit-behind-one-seam.md)) with one `gh pr view` call:
+
+- The link to the pull request (on a card that is not Done; a Done card has its own link).
+- For an open PR: **Checks** (passing, pending, none reported, or failing with the names of up to five failing checks), **Merge** (no conflicts, conflicts with the base branch, or unknown, which GitHub says while it still works it out), **Review** (approved, changes requested, review required, none yet) and **Draft**. A failing check and a conflict are also marked in colour, but always say so in text.
+- A merged or closed PR shows no status lines: the state badge says it.
+
+The status never delays the board. `/api/views` answers from a cache per PR link and starts the lookup in the background; the card says "PR status: checking..." until the first answer. An open PR is read again after a minute, a merged or closed one after ten minutes, and a failed lookup after half a minute. When `gh` cannot answer, the card says "PR status unavailable" with the reason (`gh` not installed, not signed in, rate limit reached, or GitHub could not be read) and a **Check again** button, which reads the status from GitHub again. The rest of the board is unaffected. The Merge action and its checks do not use this status and are unchanged.
+
 ## Progress on cards and in the Run detail
 
 A card that is not Done shows how far the Run is, from the data in `/api/views` ([ADR 0021](adr/0021-run-record-model-last-seen-and-event-log.md)):
@@ -45,6 +55,7 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
 | `DELETE /api/runs/<run-id>` | Deletes a Run. Dirty worktrees return HTTP 409 with `X-Factory-Error: dirty-worktree`. A separately confirmed `?discardChanges=true` discards changes. A write route: see [Write routes](#write-routes). |
 | `GET /api/runs/<run-id>/merge-checks` | The GitHub checks of the Run's pull request. |
+| `GET /api/runs/<run-id>/pr-status[?refresh=1]` | The [PR status](#pull-request-status) of the Run's GitHub pull request as JSON: `{ checking: true }`, `{ unavailable: <reason> }` or the status. `?refresh=1` asks GitHub again instead of the cache, but not more often than every five seconds per PR. HTTP 409 for a Run that has no PR status. A read: it changes nothing and needs no session token. |
 | `POST /api/runs/<run-id>/merge` | Squash-merges the Run's pull request. A write route. |
 | `POST /api/runs/<run-id>/sync` | Runs `tds-factory run sync` for the Run: rebases its branch onto the default branch of `origin`. A refusal (a Run that is not running, uncommitted changes, a rebase already in progress, a conflict, a Run outside Build and Check) is HTTP 409 with the message. A write route. |
 | `POST /api/runs/<run-id>/clean` | Runs `tds-factory run clean` for the Run from the main checkout. A Run that is kept (PR not merged, uncommitted changes, extra commits) is HTTP 409 with the reason. A write route. |

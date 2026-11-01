@@ -61,6 +61,8 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     if (path === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(path)) return send(200, TYPES[path.split('.').pop()], readFileSync(new URL(path.slice(1), DASHBOARD)));
     if (/^\/api\/runs\/[^/]+\/merge-checks$/.test(path)) return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
+    // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
+    if (/^\/api\/runs\/[^/]+\/pr-status$/.test(path)) { (state.statusCalls ??= []).push(req.url); state.statusReply?.(); return send(200, 'application/json', JSON.stringify(state.statusBody ?? {})); }
     if (path === '/api/info') return send(200, 'application/json', JSON.stringify({ project: state.project ?? 'test', version: state.version, token: 'test-token' }));
     if (path === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
     if (path === '/api/views') return send(200, 'application/json', JSON.stringify(state.runs));

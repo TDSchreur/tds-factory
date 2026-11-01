@@ -127,3 +127,55 @@ export function listByHead(repo, branch, cwd) {
   if (!Array.isArray(all) || all.some((pr) => !pr || typeof pr.url !== 'string' || typeof pr.headRefName !== 'string' || typeof pr.headRepositoryOwner?.login !== 'string' || typeof pr.headRepository?.name !== 'string')) throw new Error('incomplete GitHub PR response');
   return all;
 }
+
+// The status of a PR for the Dashboard: checks, merge conflicts, review state and draft, from one `gh pr view` call.
+const FAILED = ['ACTION_REQUIRED', 'CANCELLED', 'FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE', 'STALE'];
+const bad = () => new Error('incomplete GitHub PR status');
+const label = (v) => String(v).slice(0, 80);
+
+// One entry of statusCheckRollup: { name, failing, pending }.
+function rollupEntry(c) {
+  if (!c || typeof c !== 'object') throw bad();
+  if (c.__typename === 'StatusContext') {
+    if (typeof c.context !== 'string' || !c.context || !['ERROR', 'FAILURE', 'PENDING', 'EXPECTED', 'SUCCESS'].includes(c.state)) throw bad();
+    return { name: label(c.context), failing: ['ERROR', 'FAILURE'].includes(c.state), pending: ['PENDING', 'EXPECTED'].includes(c.state) };
+  }
+  if (c.__typename === 'CheckRun') {
+    if (typeof c.name !== 'string' || !c.name || typeof c.status !== 'string') throw bad();
+    return { name: label(c.name), failing: c.status === 'COMPLETED' && FAILED.includes(c.conclusion), pending: c.status !== 'COMPLETED' };
+  }
+  throw bad();
+}
+
+// Parses the JSON of `gh pr view --json state,mergeable,reviewDecision,statusCheckRollup,isDraft`; throws when it has the wrong shape.
+export function parseStatus(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad();
+  const state = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' }[value.state];
+  const rollup = value.statusCheckRollup ?? [];
+  if (!state || !Array.isArray(rollup)) throw bad();
+  const entries = rollup.map(rollupEntry);
+  const failing = entries.filter((e) => e.failing).map((e) => e.name);
+  const result = failing.length ? 'failing' : entries.some((e) => e.pending) ? 'pending' : entries.length ? 'passing' : 'none';
+  return {
+    state,
+    draft: value.isDraft === true,
+    checks: { result, failing: failing.slice(0, 5) },
+    merge: { MERGEABLE: 'mergeable', CONFLICTING: 'conflicting' }[value.mergeable] ?? 'unknown',
+    review: { APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', REVIEW_REQUIRED: 'required' }[value.reviewDecision] ?? 'none',
+  };
+}
+
+const failure = (err) => /rate limit/i.test(`${err.stderr ?? ''}`) ? 'rate-limited'
+  : err.code === 'ENOENT' ? 'gh-missing'
+    : /auth|log ?in|GH_TOKEN/i.test(`${err.stderr ?? ''}`) ? 'not-signed-in' : 'error';
+
+// The same, read from GitHub without blocking the caller. `run` is the injection point for tests. A failure carries a `reason`:
+// gh-missing, not-signed-in, rate-limited or error.
+export async function statusAsync(url, { run = (args) => exec('gh', args, { timeout: 10_000, env: { ...process.env, GH_PROMPT_DISABLED: '1' } }) } = {}) {
+  if (!matches(url)) throw Object.assign(new Error('not a GitHub pull request'), { reason: 'error' });
+  let stdout;
+  try { ({ stdout } = await run(['pr', 'view', url, '--json', 'state,mergeable,reviewDecision,statusCheckRollup,isDraft'])); }
+  catch (err) { throw Object.assign(new Error('cannot read GitHub PR status'), { reason: failure(err) }); }
+  try { return parseStatus(JSON.parse(stdout)); }
+  catch { throw Object.assign(new Error('malformed GitHub PR status'), { reason: 'error' }); }
+}

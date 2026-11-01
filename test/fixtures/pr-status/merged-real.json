@@ -1,0 +1,188 @@
+{
+ "isDraft": false,
+ "mergeable": "UNKNOWN",
+ "reviewDecision": "",
+ "state": "MERGED",
+ "statusCheckRollup": [
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:52Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Analyze (actions)",
+   "startedAt": "2026-11-01T10:02:16Z",
+   "status": "COMPLETED",
+   "workflowName": "CodeQL"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:03:30Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Tests (ubuntu-latest, Node 20)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:03:12Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Analyze (javascript-typescript)",
+   "startedAt": "2026-11-01T10:02:16Z",
+   "status": "COMPLETED",
+   "workflowName": "CodeQL"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:04:08Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Tests (ubuntu-latest, Node 22)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:03:38Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Tests (ubuntu-latest, Node 24)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:03:29Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Tests (ubuntu-latest, Node lts/*)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:05:35Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Tests (macos-latest, Node lts/*)",
+   "startedAt": "2026-11-01T10:02:18Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:28Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "quality",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:03:25Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "browser",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:31Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Package install (ubuntu-latest)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:29Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Package install (macos-latest)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:50Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "Package install (windows-latest)",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:24Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "workflows",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:23Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "shellcheck",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:37Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "psscriptanalyzer",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:53Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "install.ps1 on Windows",
+   "startedAt": "2026-11-01T10:02:17Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:05:39Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "ci-ok",
+   "startedAt": "2026-11-01T10:05:37Z",
+   "status": "COMPLETED",
+   "workflowName": "ci"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-11-01T10:02:46Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/TDSchreur/tds-factory/actions/runs/0/job/0",
+   "name": "CodeQL",
+   "startedAt": "2026-11-01T10:02:43Z",
+   "status": "COMPLETED",
+   "workflowName": ""
+  }
+ ]
+}

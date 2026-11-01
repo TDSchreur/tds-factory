@@ -160,6 +160,10 @@ The proportion of observed first Check outcomes that reach Finish clean without 
 The module that handles a pull request link for a hosting service: it reads a PR's state, head and checks, merges it and finds a Run's PR, so no other module runs a hosting command. GitHub, through the `gh` command, is the only provider today. See ADR 0020.
 _Avoid_: PR backend, Host adapter
 
+**PR status**:
+What the Dashboard shows of a Run's open pull request: its checks, whether it conflicts with the base branch, its review state and whether it is a draft. The PR provider reads it, the Dashboard caches it per PR link and a lookup that fails shows as unavailable with a Check again button. Read-only; it is not Evidence and never gates a Run.
+_Avoid_: PR health, Build status
+
 **Run store**:
 The single owner of every Run record and Run folder; the CLI and the Dashboard go through it.
 _Avoid_: Run database

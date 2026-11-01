@@ -165,3 +165,28 @@ export function sortWaitingFirst(runs) {
   waiting.sort((a, b) => (a.since === b.since ? 0 : a.since < b.since ? -1 : 1));
   return [...waiting.map((x) => x.r), ...runs.filter((r) => !r.waiting)];
 }
+
+const UNAVAILABLE = {
+  'gh-missing': 'the gh command is not installed',
+  'not-signed-in': 'gh is not signed in (run gh auth login)',
+  'rate-limited': 'GitHub rate limit reached',
+};
+
+// What the PR status block shows for a Run: null without a status, otherwise { kind, lines, text } where kind is checking,
+// unavailable (text says why), closed (a merged or closed PR: the state badge says the rest) or open (lines hold the facts).
+export function prStatusOf(run) {
+  const s = run.prStatus;
+  if (!s || typeof s !== 'object') return null;
+  if (s.checking === true) return { kind: 'checking', lines: [] };
+  if (typeof s.unavailable === 'string') return { kind: 'unavailable', lines: [], text: UNAVAILABLE[s.unavailable] ?? 'GitHub could not be read' };
+  if (s.state === 'merged' || s.state === 'closed') return { kind: 'closed', lines: [] };
+  if (s.state !== 'open') return null;
+  const checks = s.checks && typeof s.checks === 'object' ? s.checks : {};
+  const failing = Array.isArray(checks.failing) ? checks.failing.filter((n) => typeof n === 'string' && n) : [];
+  const lines = [];
+  if (s.draft === true) lines.push('Draft');
+  lines.push('Checks: ' + ({ passing: 'passing', failing: 'failing' + (failing.length ? ': ' + failing.join(', ') : ''), pending: 'pending' }[checks.result] ?? 'none reported'));
+  lines.push('Merge: ' + ({ mergeable: 'no conflicts', conflicting: 'conflicts with the base branch' }[s.merge] ?? 'unknown'));
+  lines.push('Review: ' + ({ approved: 'approved', 'changes-requested': 'changes requested', required: 'review required' }[s.review] ?? 'none yet'));
+  return { kind: 'open', lines, failing: checks.result === 'failing', conflicting: s.merge === 'conflicting' };
+}

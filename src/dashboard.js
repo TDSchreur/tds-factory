@@ -18,10 +18,15 @@ const expectedRepo = async (worktree) => {
   return `${repo.owner}/${repo.name}`.toLowerCase();
 };
 const PR_CACHE_MS = 60_000;
+// PR status (ADR 0020): an open PR is looked up again after a minute, a merged or closed one after ten, a failed lookup after half a minute.
+// A refresh asked for by the user may not repeat a lookup more often than every few seconds.
+const PR_STATUS_MS = 60_000, PR_STATUS_FINAL_MS = 600_000, PR_STATUS_FAIL_MS = 30_000, PR_STATUS_REFRESH_MS = 5_000, PR_STATUS_MAX = 500;
+const STATUS_REASONS = ['gh-missing', 'not-signed-in', 'rate-limited', 'error'];
 const ghPrState = (url) => providerFor(url).stateAsync(url);
 const ghPrMerge = (url, head) => providerFor(url).merge(url, head);
 const ghPrDetails = (url) => providerFor(url).viewAsync(url);
 const ghChecks = (url) => providerFor(url).checksSummary(url);
+const ghPrStatus = (url) => providerFor(url).statusAsync(url);
 const HOST = '127.0.0.1';
 // Each repo gets its own stable port in 4300-4999, derived from its main checkout path.
 const repoPort = (dir) => 4300 + createHash('sha1').update(dir).digest().readUInt32BE(0) % 700;
@@ -64,8 +69,10 @@ export function interpretRun(entry) {
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
+// prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a `reason` when the provider fails.
+// statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
 // prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
-export async function startDashboard({ projectDir = process.cwd(), port, prState = ghPrState, prMerge = ghPrMerge, prInfo, dashboardDir = DASHBOARD_DIR } = {}) {
+export async function startDashboard({ projectDir = process.cwd(), port, prState = ghPrState, prMerge = ghPrMerge, prInfo, prStatus = ghPrStatus, statusRefreshMs = PR_STATUS_REFRESH_MS, dashboardDir = DASHBOARD_DIR } = {}) {
   const store = openRunStore(projectDir);
   // Clean-up must run from the main checkout, also when the Dashboard was started inside a Run worktree.
   const mainStore = openRunStore(store.projectDir);
@@ -80,9 +87,34 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
     prCache.set(url, { at: Date.now(), state });
     return state;
   };
+  // PR status never blocks a poll: a lookup runs in the background, one at a time per PR, and the views answer from the cache.
+  const statusCache = new Map();
+  const fetchStatus = (url) => {
+    const entry = statusCache.get(url) ?? {};
+    if (entry.pending) return entry.pending;
+    const pending = Promise.resolve().then(() => prStatus(url)).then(
+      (value) => ({ value, ttl: value?.state === 'open' ? PR_STATUS_MS : PR_STATUS_FINAL_MS }),
+      (err) => ({ value: { unavailable: STATUS_REASONS.includes(err?.reason) ? err.reason : 'error' }, ttl: PR_STATUS_FAIL_MS }),
+    ).then(({ value, ttl }) => {
+      statusCache.delete(url);
+      statusCache.set(url, { at: Date.now(), value, ttl });
+      if (statusCache.size > PR_STATUS_MAX) statusCache.delete(statusCache.keys().next().value);
+      return value;
+    });
+    statusCache.set(url, { ...entry, pending });
+    return pending;
+  };
+  const statusOf = (url) => {
+    const hit = statusCache.get(url);
+    if (hit?.value && Date.now() - hit.at < hit.ttl) return hit.value;
+    fetchStatus(url);
+    return hit?.value ?? { checking: true };
+  };
+  // Whether a Run has a PR whose status the page shows: a GitHub PR link in Finish, Follow-up or Done, on a Run that is not abandoned.
+  const hasStatus = (v) => !v.unreadable && v.status !== 'abandoned' && ['finish', 'follow-up', 'done'].includes(v.column) && !!providerFor(v.pr);
   const view = async (entry) => {
     const v = interpretRun(entry);
-    return { ...v, prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '' };
+    return { ...v, prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '', prStatus: hasStatus(v) ? statusOf(v.pr) : null };
   };
 
   const server = http.createServer(async (req, res) => {
@@ -175,6 +207,19 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         let status;
         try { status = await ghChecks(v.pr); } catch { status = 'GitHub checks: unavailable'; }
         return send(200, 'text/plain', status);
+      }
+      const statusRoute = req.method === 'GET' && path.match(/^\/api\/runs\/([^/]+)\/pr-status$/);
+      if (statusRoute) {
+        let id;
+        try { id = decodeURIComponent(statusRoute[1]); } catch { return send(400, 'text/plain', 'invalid id'); }
+        const entry = (await store.list()).find((e) => e.id === id);
+        if (!entry) return send(404, 'text/plain', 'not found');
+        const v = interpretRun(entry);
+        if (!hasStatus(v)) return send(409, 'text/plain', 'this Run has no PR status');
+        const hit = statusCache.get(v.pr);
+        const fresh = hit?.value && Date.now() - hit.at < statusRefreshMs;
+        const refresh = new URL(req.url, 'http://localhost').searchParams.get('refresh') === '1';
+        return send(200, 'application/json', JSON.stringify(refresh && !fresh ? await fetchStatus(v.pr) : statusOf(v.pr)));
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'text/plain', 'method not allowed');
       if (path === '/') {
