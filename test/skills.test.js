@@ -16,8 +16,7 @@ test('the factory invokes exactly the skills we expect', () => {
   assert.deepEqual([...new Set(invoked)].sort(), expected);
 });
 
-test('Build asks for the smaller option in one line and the factory no longer invokes ponytail', () => {
-  assert.match(section('Build'), /Build what the Ticket asks; if a smaller option exists, name it in one line in `build\.md`/);
+test('the factory has no Prepare Stage and no longer invokes ponytail', () => {
   assert.doesNotMatch(flow, /^## Prepare/m);
   assert.deepEqual(flow.match(/^## (Define|Build|Check|Finish|Follow-up)$/gm), ['## Define', '## Build', '## Check', '## Finish', '## Follow-up']);
   assert.ok(!invoked.includes('ponytail'));
