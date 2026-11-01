@@ -30,7 +30,7 @@ const USAGE = `Usage:
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID [--fast]
   tds-factory run sweep --id ID [--term TEXT]...
-  tds-factory run guides --id ID   (lists the instruction guides that apply to the Run's diff: the unscoped ones and the ones whose applyTo globs match)
+  tds-factory run guides --id ID   (lists the instruction guides recorded in the Run's conventions that apply to its diff: the unscoped ones and the ones whose applyTo globs match)
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]

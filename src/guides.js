@@ -77,9 +77,17 @@ export function linkedGuides(projectDir) {
   return [...found.values()];
 }
 
-// Every linked guide with its globs; a missing guide or a bad applyTo comes back as a problem.
-export function loadGuides(projectDir) {
-  return linkedGuides(projectDir).map(({ path: rel, exists }) => {
+// A path the coordinator recorded in `conventions`: a Markdown file inside the project, other than the conventions file itself.
+function normalizeGuidePath(projectDir, raw) {
+  if (typeof raw !== 'string' || !/\.md$/i.test(raw) || path.isAbsolute(raw) || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return undefined;
+  const rel = path.posix.normalize(raw.replace(/\\/g, '/'));
+  if (rel.startsWith('..') || CONVENTION_FILES.includes(rel)) return undefined;
+  return { path: rel, exists: !!fs.statSync(path.join(projectDir, rel), { throwIfNoEntry: false })?.isFile() };
+}
+
+// Every guide with its globs, from the links in the conventions file or from the paths given; a missing guide or a bad applyTo comes back as a problem.
+export function loadGuides(projectDir, only) {
+  return (only ? only.map((p) => normalizeGuidePath(projectDir, p)).filter(Boolean) : linkedGuides(projectDir)).map(({ path: rel, exists }) => {
     if (!exists) return { path: rel, globs: [], problem: { line: 1, message: 'the linked guide does not exist' } };
     const text = readFile(path.join(projectDir, rel));
     if (text === undefined) return { path: rel, globs: [], problem: { line: 1, message: 'the guide is not a regular file of at most 1 MiB' } };
@@ -108,7 +116,7 @@ export function guidesRun(projectDir, id) {
   const out = spawnSync('git', ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '-z', '--name-only', record.base_sha], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (out.status !== 0) throw new Error(`git diff failed: ${(out.stderr || '').trim()}`);
   const files = out.stdout.split('\0').filter(Boolean);
-  const guides = loadGuides(root);
+  const guides = loadGuides(root, record.conventions ?? []);
   const broken = guides.find((g) => g.problem);
   if (broken) throw new Error(`${broken.path}:${broken.problem.line}: ${broken.problem.message}`);
   const applying = guidesForFiles(guides, files);

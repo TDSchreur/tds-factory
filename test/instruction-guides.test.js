@@ -69,10 +69,10 @@ test('a backticked path that does not exist, or a link outside the project, is i
   assert.deepEqual(loadGuides(dir), []);
 });
 
-test('run guides lists the guides for the Run diff', () => {
+test('run guides lists the guides recorded in the Run conventions that apply to its diff', () => {
   const cwd = guides();
   git(cwd, 'add', '.'); git(cwd, 'commit', '-q', '-m', 'guides');
-  const started = run(cwd, 'start', '--data', JSON.stringify({ title: 'G', agent: 'claude', commands: 'true', conventions: [] }));
+  const started = run(cwd, 'start', '--data', JSON.stringify({ title: 'G', agent: 'claude', commands: 'true', conventions: ['AGENTS.md', 'docs/dashboard.md', 'docs/factory.md', 'docs/plain.md'] }));
   assert.equal(started.status, 0, started.stderr);
   const id = started.stdout.trim();
   const worktree = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8')).worktree;
