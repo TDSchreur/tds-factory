@@ -23,8 +23,8 @@ Show progress on the Dashboard from data that already exists. Each card gets a T
 ## Implementation Decisions
 
 - Pure helpers in `dashboard/model.js`: `progressOf(run)`, `modelOf(run)`, `lastSeenOf(run, now)` and `timelineOf(run)`. They are lenient: any field may be missing or of the wrong type.
-- Quiet threshold: `QUIET_MS = 10 * 60 * 1000`, the same length as the existing `STALE_MS`. Last seen comes from `lastSeen`, falling back to `updated`. It is a warning only while the Run is `running`. The warning is text ("quiet for N min") and a class, never colour alone.
-- Progress bar: a native `<progress>`-like element with `role="progressbar"`, `aria-valuenow` and `aria-valuemax`; shown only when `ticketsTotal` is a positive number.
+- Quiet threshold: `QUIET_MS = 10 * 60 * 1000`, the same length as the existing `STALE_MS`. Last seen comes from `lastSeen` only. A Run without it shows no last-seen text, because falling back to `updated` would repeat the card's "Updated" time and invent a sign of life. It is a warning only while the Run is `running`; a Run that is waiting, paused (`verification-unavailable`, `interrupted`), done or abandoned is never warned. The warning is text ("Last seen N min ago, quiet" with a warning sign) and a class, never colour alone.
+- Progress bar: an element with `role="progressbar"`, `aria-valuenow` and `aria-valuemax`; shown only when `ticketsTotal` is a positive number.
 - Model: "Model (requested): X, effort Y" when `observed` is empty; "Model (observed): Z" with the requested one in a tooltip when `observed` is set. Nothing when all are empty.
 - Timeline events map to text: `stage` "Moved from A to B", `ticket-done` "Ticket 2 of 3 done", `verify-start` "Verify started" (fast or full), `verify` "Verify passed/failed in 12s" (fast or full), `waiting` "Waiting: reason", `released` "Released", `rework` "Rework, loop N", `status` "Status: s". An unknown type shows its type name.
 - No change to `src/` or to the Run record. The server already returns the fields.
@@ -32,7 +32,7 @@ Show progress on the Dashboard from data that already exists. Each card gets a T
 
 ## Testing Decisions
 
-- Unit tests for the four helpers, with missing, wrong-typed and old-record inputs, in `test/dashboard-progress.test.js` (also imported by browser-free test runs).
+- Unit tests for the four helpers, with missing, wrong-typed and old-record inputs, in `test/dashboard-progress.test.js`.
 - Browser tests with the stub server in `test/browser.js`: the card shows the bar, the activity, the requested and observed labels, the last-seen text and its warning; the drawer shows the timeline and the damaged note; an old Run renders without them and without errors.
 
 ## Out of Scope

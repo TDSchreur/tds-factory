@@ -19,9 +19,9 @@ A card that is not Done shows how far the Run is, from the data in `/api/views` 
 - A Ticket progress bar, when the Run has Tickets, with the finished and total count for screen readers.
 - The activity line the agent last set.
 - The model line. A model the Factory asked for reads "Model (requested): X, effort Y". Only a model the agent reported itself reads "Model (observed): X", with the requested one as its tooltip. Nothing is shown when no model is known.
-- "Last seen N min ago", from the Run's `last_seen`. For a running Run it turns into a warning ("⚠ ... quiet", in text as well as colour) after 10 minutes. A Run that waits on you, is paused, finished or abandoned is never warned.
+- "Last seen N min ago", from the Run's `last_seen`. For a running Run it turns into a warning ("⚠ ... quiet", in text as well as colour) after 10 minutes. A Run that waits on you, is paused, finished or abandoned is never warned. A Run without `last_seen` shows no last-seen text.
 
-The Run detail lists the Run's event log as a timeline, oldest first, with relative times: Stage changes, Tickets done, Verify start and result with its duration, waiting and release, and Reworks. When some lines of the log could not be read, a note above the timeline says how many, since the timeline is then incomplete. A Run without any of this data, such as one from an older version, shows none of these parts and nothing in their place.
+The Run detail lists the Run's event log as a timeline, oldest first, with relative times: Stage changes, Tickets done, Verify start and result with its duration, waiting and release, other status changes and Reworks. When some lines of the log could not be read, a note above the timeline says how many, since the timeline is then incomplete. A Run without any of this data, such as one from an older version, shows none of these parts and nothing in their place.
 
 The page is built with Preact and htm, committed in `dashboard/vendor/` (see `dashboard/vendor/README.md` for versions and how to update them) and loaded as ES modules, so there is no build step. See `docs/adr/0003-preact-htm-dashboard.md`.
 
