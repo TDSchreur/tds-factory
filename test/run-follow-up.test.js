@@ -258,7 +258,7 @@ test('merged PR ends Follow-up without a worktree; closed PR refuses unchanged',
   const f = fixture();
   f.state.pr.state = 'CLOSED';
   f.save();
-  let before = f.read();
+  const before = f.read();
   assert.notEqual(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   assert.deepEqual(f.read(), before);
   f.state.pr.state = 'MERGED';

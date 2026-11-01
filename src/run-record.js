@@ -62,7 +62,7 @@ export function checkCommands(commands) {
 export function validate(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
   for (const [key, value] of Object.entries(data)) {
-    let ok = strings.includes(key)
+    const ok = strings.includes(key)
       ? typeof value === 'string'
       : lists.includes(key)
         ? Array.isArray(value) && value.every((v) => typeof v === 'string')

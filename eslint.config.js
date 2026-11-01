@@ -9,6 +9,7 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       eqeqeq: 'error',
+      'prefer-const': 'error',
       // Existing code intentionally matches control characters and ignores some caught errors.
       'no-control-regex': 'off',
       'no-unused-vars': ['error', { caughtErrors: 'none' }],

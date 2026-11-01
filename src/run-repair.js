@@ -116,7 +116,7 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
 }
 
 export function repairApply(projectDir, runsDir, id, expected) {
-  let plan = repairPlan(projectDir, runsDir, id);
+  const plan = repairPlan(projectDir, runsDir, id);
   if (JSON.stringify(plan) !== JSON.stringify(expected)) throw new Error('repair facts changed; inspect a new plan');
   if (plan.blockers.length) throw new Error(plan.blockers.join('; '));
   if (!plan.actions.length) return;
