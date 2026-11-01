@@ -8,4 +8,4 @@ The Sweep stays read-only and judges nothing, as in [ADR 0006](0006-run-progress
 
 The size limit (about 40 KB of diff or 15 files, and one commit per Ticket) is a warning at `run transition --to check`, not a refusal: the estimate is a judgement and a gate would block a legitimate large Run, while a warning makes it visible before reviewers get a partial diff. Check's Blocking rules and the loop cap are unchanged.
 
-Success is measured with `tds-factory run stats`: fewer Check loops and more clean first Checks.
+Success is measured with `tds-factory run stats`: fewer Check loops and more clean first Checks. [ADR 0027](0027-stale-documents-are-caught-in-build-with-a-closing-sweep-list-a-documentation-ticket-and-counted-rework-causes.md) extends this with a closing Sweep list, a documentation Ticket and counted Rework causes.

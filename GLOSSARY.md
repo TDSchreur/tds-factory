@@ -106,7 +106,7 @@ _Avoid_: Wrapper, Patch
 The per-Agent-target table in `docs/capabilities.md` of how Skills and Stage agents are invoked, how far review is isolated, how a Run resumes and what happens when an independent reviewer is unavailable.
 
 **Term sweep**:
-The read-only `tds-factory run sweep` command, step two of the Exit checklist: it lists every place in the documents that still holds a term the Run's diff changed, plus the older wordings you add with `--term`, so a stale statement is found while building. It also derives numbers with a unit and headings that only the removed lines held, lists the lines that miss a changed list member or still hold a removed one, and lists added lines that claim "linear", "bounded" or "safe". Hits in documents marked as replaced are shown apart. It judges nothing.
+The read-only `tds-factory run sweep` command, step two of the Exit checklist: it lists every place in the documents that still holds a term the Run's diff changed, plus the older wordings you add with `--term`, so a stale statement is found while building. It also derives numbers with a unit and headings that only the removed lines held, lists the lines that miss a changed list member or still hold a removed one, and lists added lines that claim "linear", "bounded" or "safe". Hits in documents marked as replaced are shown apart. It also searches the command line help and the Dashboard help text, and it ends with a list of the documents still to read. It judges nothing.
 _Avoid_: Grep pass
 
 **Exit checklist**:
@@ -123,6 +123,12 @@ A finding that is not a Blocking finding (LOW, INFO, a code smell or style judge
 **Extra loop**:
 One more Check loop that the user grants from the Dashboard to a Run that waits on them in Check at its loop limit. It raises the limit by one (`extra_loops` in the Run record), is recorded in the Event log and has no ceiling. Only the user grants it, one click at a time; an agent cannot. See ADR 0024.
 _Avoid_: Override, Bonus loop
+
+**Rework cause**:
+The reason recorded when Check sends a Run back to Build: one or more of `stale-doc`, `test-gap`, `spec-gap`, `security`, `bug`, `size` and `other`. It is optional; a Rework without one counts as unknown. `tds-factory run stats` counts the causes.
+
+**Documentation Ticket**:
+The last Ticket of a Full track Run with three or more Tickets, blocked by all the others. It brings the documents, canonical specs and help text that the Term sweep still lists in line with the finished feature.
 
 **Rework**:
 Sending a Run back from Check or Follow-up to Build to fix Blocking findings or Follow-up feedback. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
