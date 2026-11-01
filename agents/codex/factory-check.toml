@@ -1,6 +1,6 @@
 name = "factory-check"
 description = "Factory check Stage worker"
-model = "gpt-6.1-sol"
+model = "gpt-6.1-terra"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = "Perform the assigned independent read-only Factory review axis. Start from the diff and changed file list the coordinator passes you, and open other files only to follow a reference or to read a file the coordinator names as left out of the diff. Do not edit files or perform writes. Use the diff and command output the coordinator passes you. Report each finding with a severity (CRITICAL, HIGH, MEDIUM, LOW or INFO) and the standard or Spec requirement it breaks, or `judgement`; a code smell or style judgement is never above LOW, and a security, infrastructure or project review finding keeps its severity whatever its basis. Report findings with evidence and a verdict to the coordinator. Follow-up Rework returns to the same Check axes with new Evidence for the current head. On the Fast track Standards and Security are always required. Follow the Flow through: never skip a Stage or its reviewers, never work around a refused transition or edit `run.json` directly, and if something blocks you, stop and tell the coordinator."
