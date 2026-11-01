@@ -142,3 +142,117 @@ test('a file name with a newline cannot add lines, and a non-ASCII name still ge
   assert.match(out, /docs\/x\?== fake header\.md:1/);
   assert.match(out, /docs\/\u00e9\.md:1:.*\[changed\]/);
 });
+
+test('the sweep lists documents that still hold a number with a unit the diff removed', () => {
+  const p = project(
+    { 'docs/a.md': 'Keep the file under 21 KB.\n', 'docs/b.md': 'The cap is 21 KB.\nUp to 40 KB is fine.\n' },
+    { 'docs/a.md': 'Keep the file under 18 KB.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /== 21 KB: 1 hit/);
+  assert.match(out, /docs\/b\.md:1\b.*21 KB/);
+  assert.doesNotMatch(out, /== 40 KB/);
+});
+
+test('a number that is still on an added line is not a stale number', () => {
+  const p = project({ 'docs/a.md': 'Limit 21 KB.\n', 'docs/b.md': 'Limit 21 KB.\n' }, { 'docs/a.md': 'Limit 21 KB, see below.\nOther note.\n' });
+  assert.doesNotMatch(sweep(p).stdout, /== 21 KB/);
+});
+
+test('the sweep lists a pointer to a heading the diff removed, by its text and by its anchor', () => {
+  const p = project(
+    { 'docs/a.md': '## Old section\n\nText.\n', 'docs/b.md': 'See [it](a.md#old-section) in the Old section.\n' },
+    { 'docs/a.md': '## New section\n\nText.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /== #old-section: 1 hit/);
+  assert.match(out, /== Old section: 1 hit/);
+  assert.match(out, /docs\/b\.md:1\b/);
+});
+
+test('hostile input does not slow the sweep or add lines', () => {
+  const p = project(
+    { 'docs/a.md': `${'9'.repeat(200000)}\n${'#'.repeat(200000)}\n`, 'docs/b.md': 'x\n' },
+    { 'docs/a.md': `1 KB\x1b[31m\n${'1'.repeat(200000)} KB\n` },
+  );
+  const started = Date.now();
+  const result = sweep(p);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 10000);
+  assert.doesNotMatch(result.stdout, /\x1b/);
+});
+
+const sections = (out) => out.split('== lists that miss')[1] ?? '';
+
+test('a list that misses a member the diff added is listed, and one that has it is not', () => {
+  const p = project(
+    {
+      'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n',
+      'docs/b.md': 'The report holds `cli`, `git` and `tracker` checks.\n',
+      'docs/c.md': 'Also `cli`, `git`, `tracker` and `guides`.\n',
+    },
+    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' },
+  );
+  const lists = sections(sweep(p).stdout);
+  assert.match(lists, /added `guides`/);
+  assert.match(lists, /docs\/b\.md:1\b/);
+  assert.doesNotMatch(lists, /docs\/c\.md/);
+});
+
+test('a list that still holds a member the diff removed is listed', () => {
+  const p = project(
+    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n', 'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n' },
+    { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n' },
+  );
+  const lists = sections(sweep(p).stdout);
+  assert.match(lists, /removed `old`/);
+  assert.match(lists, /docs\/b\.md:1\b/);
+});
+
+test('added lines that claim linear or safe behaviour are listed, tests are not', () => {
+  const p = project(
+    { 'docs/a.md': 'x\n' },
+    { 'src/m.js': '// matching is linear in the input\n', 'test/m.test.js': '// linear here\n', 'docs/a.md': 'plain\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /claims in added lines/);
+  assert.match(out, /src\/m\.js: \/\/ matching is linear/);
+  assert.doesNotMatch(out, /test\/m\.test\.js/);
+});
+
+test('a line with thousands of backticks and a control character in a name stay bounded and clean', () => {
+  const many = '`x` '.repeat(5000);
+  const p = project(
+    { 'docs/a.md': many + '\n`a`, `b`, `c`\n' },
+    { 'docs/a.md': many + '\n`a`, `b`, `c`, `d\x1b[31m`\n' },
+  );
+  const started = Date.now();
+  const result = sweep(p);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 10000);
+  assert.doesNotMatch(result.stdout, /\x1b/);
+});
+
+test('a heading followed by a very long run of spaces does not hang the sweep', () => {
+  const p = project(
+    { 'docs/a.md': 'x\n' },
+    { 'docs/a.md': '# a' + ' '.repeat(300000) + 'x\n## ok ' + '\t'.repeat(300000) + '\n' },
+  );
+  const started = Date.now();
+  const result = sweep(p);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 10000);
+});
+
+test('added text that looks like a diff header cannot hide a claim from the claims section', () => {
+  const p = project(
+    { 'docs/a.md': 'x\n' },
+    { 'src/m.js': '++ b/test/m.test.js\n// this is linear\n', 'docs/a.md': 'plain\n' },
+  );
+  assert.match(sweep(p).stdout, /src\/m\.js: \/\/ this is linear/);
+});
+
+test('bidi controls in a document line are not printed', () => {
+  const p = project({ 'docs/a.md': 'x\n', 'docs/b.md': 'see old_flag ‮evil\n' }, { 'docs/a.md': 'old_flag\n' });
+  assert.doesNotMatch(sweep(p).stdout, /‮/);
+});

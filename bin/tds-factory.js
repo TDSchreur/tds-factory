@@ -81,7 +81,10 @@ try {
     if (op === 'start') console.log(store.start(data));
     else if (op === 'update') store.update(values.id, data);
     else if (op === 'track') store.track(values.id, values.value);
-    else if (op === 'transition') store.transition(values.id, values.to, data);
+    else if (op === 'transition') {
+      store.transition(values.id, values.to, data);
+      if (values.to === 'check') for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
+    }
     else if (op === 'follow-up') console.log(store.followUp(values.id));
     else if (op === 'rework') store.rework(values.id, data);
     else if (op === 'sync') store.sync(values.id, data);
