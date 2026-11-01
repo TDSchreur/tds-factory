@@ -65,6 +65,10 @@
   .card .model { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
   .progress { height: .5rem; margin-top: .4rem; border-radius: .25rem; background: var(--panel); border: 1px solid var(--border); overflow: hidden; }
   .progress-fill { height: 100%; background: var(--ok); }
+  .timeline { list-style: none; margin: .25rem 0 0; padding: 0; font-size: .85rem; }
+  .timeline li { padding: .15rem 0; }
+  .timeline .when { color: var(--muted); display: inline-block; min-width: 6.5rem; }
+  .timeline-damaged { color: var(--amber); font-weight: 600; font-size: .85rem; }
   .card .updated.stale { color: var(--amber); font-weight: 600; }
   .card .pr { font-size: .875rem; margin-top: .4rem; }
   .card .toggle { margin-top: .5rem; padding: .15rem 0; border-color: transparent; background: none; color: var(--primary); font-weight: 600; }

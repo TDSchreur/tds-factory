@@ -61,6 +61,17 @@ function ModelLine({ run }) {
   return m ? html`<div class=${'model' + (m.observed ? ' observed' : '')} title=${m.title}>${m.label}</div>` : null;
 }
 
+// The event log of the Run, oldest first. A damaged log is said so, because the timeline is then incomplete.
+function Timeline({ run }) {
+  const events = timelineOf(run);
+  const damaged = Number.isSafeInteger(run.eventsDamaged) ? run.eventsDamaged : 0;
+  if (!events.length && !damaged) return null;
+  return html`<section aria-label="Event timeline"><h3>Event timeline</h3>
+    ${damaged > 0 && html`<p class="timeline-damaged" role="note">${damaged} ${damaged === 1 ? 'line' : 'lines'} of the event log could not be read, so this timeline is incomplete.</p>`}
+    ${events.length > 0 && html`<ol class="timeline">${events.map((e, i) => html`<li key=${i}><span class="when">${e.when || 'time unknown'}</span> ${e.text}</li>`)}</ol>`}
+  </section>`;
+}
+
 function Tickets({ run }) {
   const tickets = ticketsOf(run);
   const mark = { done: '✓', active: '▶', todo: '○' };
@@ -257,6 +268,7 @@ export function Detail({ run, compact, onClose }) {
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
     </header>
+    <${Timeline} run=${run} />
     ${run.metrics && html`<section aria-label="Run metrics"><h3>Run metrics</h3>
       <div>Track: ${run.metrics.track}</div>
       ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}

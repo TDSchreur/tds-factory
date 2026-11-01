@@ -34,3 +34,33 @@ test('cards show progress, activity, model and last seen', async (t) => {
     assert.equal(await page.execute("return document.querySelector('[data-id=old] [role=progressbar]')"), null);
   } finally { await page.close(); }
 });
+
+test('Run detail shows the event timeline and says when the log is damaged', async (t) => {
+  const events = [
+    { type: 'stage', at: minutesAgo(30), from: 'define', to: 'build' },
+    { type: 'ticket-done', at: minutesAgo(20), done: 1, total: 3 },
+    { type: 'verify', at: minutesAgo(10), fast: false, exit_code: 0, duration_ms: 12000 },
+    { type: 'waiting', at: minutesAgo(5), reason: 'Question' },
+  ];
+  const runs = [run({ id: 'a', title: 'A', events, eventsDamaged: 2 }), run({ id: 'b', title: 'B', events: [], eventsDamaged: 0 }), run({ id: 'c', title: 'C', events: [{ type: 'released', at: minutesAgo(1) }], eventsDamaged: 0 })];
+  const page = await openPage(t, { runs });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=a]')");
+    await page.execute("document.querySelector('[data-id=a]').click()");
+    await page.waitFor("return !!document.querySelector('[aria-label=\"Event timeline\"]')");
+    const lines = await page.execute("return [...document.querySelectorAll('.timeline li')].map((li) => li.textContent)");
+    assert.equal(lines.length, 4);
+    assert.match(lines[0], /30 min ago\s+Moved from define to build/);
+    assert.match(lines[1], /Ticket 1 of 3 done/);
+    assert.match(lines[2], /Verify passed in 12s/);
+    assert.match(lines[3], /Waiting: Question/);
+    assert.match(await page.execute("return document.querySelector('.timeline-damaged').textContent"), /2 lines of the event log could not be read/);
+    await page.execute("document.querySelector('[data-id=b]').click()");
+    await page.waitFor("return document.querySelector('#detail h2').textContent === 'B'");
+    assert.equal(await page.execute("return document.querySelector('[aria-label=\"Event timeline\"]')"), null);
+    await page.execute("document.querySelector('[data-id=c]').click()");
+    await page.waitFor("return document.querySelector('#detail h2').textContent === 'C'");
+    assert.equal(await page.execute("return document.querySelectorAll('.timeline li').length + ':' + !!document.querySelector('.timeline-damaged')"), '1:false');
+  } finally { await page.close(); }
+});
