@@ -7,7 +7,7 @@ export const statuses = ['running', 'waiting', 'verification-unavailable', 'inte
 export const paused = ['verification-unavailable', 'interrupted'];
 const strings = ['title', 'activity', 'waiting_reason', 'status_reason', 'commands', 'fast_commands', 'spec_link', 'pr', 'worktree', 'base_sha', 'requested_model', 'requested_effort', 'observed_model'];
 const lists = ['conventions', 'tickets'];
-const numbers = ['tickets_total', 'tickets_done', 'check_loops'];
+const numbers = ['tickets_total', 'tickets_done', 'check_loops', 'extra_loops'];
 export const verdicts = ['standards', 'spec', 'security', 'infrastructure'];
 export const tracks = ['fast', 'full'];
 // A record without a track is a Full track Run.
@@ -15,7 +15,7 @@ export const trackOf = (record) => record?.track === 'fast' ? 'fast' : 'full';
 // Standards and Security are required on both tracks; the Spec axis may be skipped only on the Fast track.
 export const skippable = (axis, record) => axis === 'infrastructure' || (axis === 'spec' && trackOf(record) === 'fast');
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
-export const gated = ['stage', 'track', 'check_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
+export const gated = ['stage', 'track', 'check_loops', 'extra_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
 // How many times Check and Follow-up may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
 export const MAX_CHECK_LOOPS = 4;
 // A model belongs to the Stage worker that was asked for or reported it, so a change of Stage clears the three fields and
@@ -50,7 +50,7 @@ export function validate(data) {
   for (const [key, value] of Object.entries(data)) {
     let ok = strings.includes(key) ? typeof value === 'string'
       : lists.includes(key) ? Array.isArray(value) && value.every((v) => typeof v === 'string')
-      : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0 && (key !== 'check_loops' || value <= MAX_CHECK_LOOPS)
+      : numbers.includes(key) ? Number.isSafeInteger(value) && value >= 0
       : verdicts.includes(key) ? ['pass', 'fail', ...(['spec', 'infrastructure'].includes(key) ? ['skipped'] : [])].includes(value)
       : key === 'follow_up' ? value !== null && typeof value === 'object' && !Array.isArray(value)
       : key === 'stage' ? stages.includes(value)
@@ -90,6 +90,9 @@ export function apply(old, data) {
 
 // The Check attempt a Run is in: its first Check is attempt 1, each Rework starts the next.
 export const loops = (record) => record.check_loops ?? 0;
+// The loops the user granted beyond the cap (ADR 0024); absent or unreadable means none.
+export const extraLoops = (record) => Number.isSafeInteger(record?.extra_loops) && record.extra_loops > 0 ? record.extra_loops : 0;
 // A Run freezes the project's cap at start; it is never above the Factory maximum. Older Runs have the maximum.
-export const loopCap = (record) => Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS);
+// The loops the user granted are added to it.
+export const loopCap = (record) => Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS) + extraLoops(record);
 export const attempt = (record) => loops(record) + 1;

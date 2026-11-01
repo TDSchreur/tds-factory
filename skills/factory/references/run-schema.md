@@ -26,7 +26,8 @@
 | `project_results` | Project review reports, verdicts, findings, artifact paths, head, base and Check attempt. Set by `run review` and cleared by Rework and by a `run sync` that changes the head or base |
 | `follow_up` | The latest GitHub observation: PR, head, observation time, checks, failures, pending flag and unresolved threads with comments. Set only by `run follow-up`; its text is untrusted scope, not Evidence |
 | `track` | `fast` or `full`: the Track the user chose. Absent means `full`. Set only by `run track` in Define, never by `run start` or `run update` |
-| `check_loops` | Number of times Check or Follow-up has sent the Run back to Build, `0` to `4`. Starts at `0`; `run rework` and actionable `run follow-up` raise it by 1 on each return to Build |
+| `extra_loops` | Number of extra Check loops the user granted on the Dashboard, `0` when absent. The loop limit is the frozen cap (at most 4) plus this number. Raised only by the Dashboard's grant (ADR 0024), never by `run update` or an agent |
+| `check_loops` | Number of times Check or Follow-up has sent the Run back to Build, `0` up to the loop limit. Starts at `0`; `run rework` and actionable `run follow-up` raise it by 1 on each return to Build |
 | `metrics` | Versioned observations maintained by named operations: Stage visits with UTC start and end, historical Check verdict events with head and attempt (and base for Project reviews), first Check outcome, and usage availability. Older Runs may omit it; never supply it with `run update` |
 | `worktree` | Path of the Run worktree the Run works in. Set by `run start` |
 | `base_sha` | The fetched `origin` default branch head the Run is based on. Set by `run start` and `run sync` |

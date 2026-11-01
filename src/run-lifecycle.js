@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stages } from './flow.js';
 import { loadProjectConfig, frozenSettings } from './project-config.js';
-import { loopCap, tracks, trackOf, gated, validate, apply, write, checkCommands, fastCommandProblem, verifyCommandProblem, loops } from './run-record.js';
+import { loopCap, extraLoops, tracks, trackOf, gated, validate, apply, write, checkCommands, fastCommandProblem, verifyCommandProblem, loops } from './run-record.js';
 import { runRoot, changeRun, changeRunning } from './run-folder.js';
 import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
 import { finishProblems, clearEvidence } from './evidence.js';
@@ -160,6 +160,17 @@ export function reworkRun(projectDir, id, data = {}) {
     if (loops(old) >= loopCap(old)) throw new Error(`the Check loop limit of ${loopCap(old)} is reached`);
     const record = clearEvidence({ ...moveVisit(firstCheck(old, false), 'build'), stage: 'build', check_loops: loops(old) + 1 });
     return { record, activity: 'Rework: back to Build' };
+  });
+}
+// The user's decision to allow one more Rework (ADR 0024). Not reachable from the command line: only the Dashboard route calls it.
+// `updated` is the record time the user saw; a Run that changed since is refused.
+export function grantLoopRun(projectDir, id, { updated } = {}) {
+  changeRun(projectDir, id, (old) => {
+    if (old.stage !== 'check') throw new Error('only a Run in Check can be granted an extra loop');
+    if (old.status !== 'waiting' || old.waiting_on_human !== true) throw new Error('only a Run that waits on the user can be granted an extra loop');
+    if (loops(old) < loopCap(old)) throw new Error(`the Check loop limit of ${loopCap(old)} is not reached`);
+    if (updated !== undefined && updated !== old.updated) throw new Error('the Run changed since it was shown');
+    return { ...old, extra_loops: extraLoops(old) + 1, status: 'running', waiting_on_human: false, waiting_reason: '', activity: 'The user granted an extra Check loop on the Dashboard', updated: new Date().toISOString() };
   });
 }
 export function completeRun(projectDir, id, data = {}) {

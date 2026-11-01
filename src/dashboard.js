@@ -60,7 +60,7 @@ export function interpretRun(entry) {
   const links = [];
   for (const [label, values] of [['Spec', r.spec_link], ['Ticket', r.tickets], ['PR', r.pr]]) for (const value of Array.isArray(values) ? values : [values]) if (str(value)) links.push({ label, href: str(value) });
   // Only the plain, known fields of an event reach the page, and the last 50 of them.
-  const eventKeys = ['type', 'at', 'from', 'to', 'reason', 'status', 'done', 'total', 'loops', 'fast', 'exit_code', 'duration_ms', 'head', 'signal'];
+  const eventKeys = ['type', 'at', 'from', 'to', 'reason', 'status', 'done', 'total', 'loops', 'granted', 'limit', 'fast', 'exit_code', 'duration_ms', 'head', 'signal'];
   const events = (Array.isArray(entry.events?.events) ? entry.events.events : []).filter((e) => e && typeof e === 'object').slice(-50).map((e) => Object.fromEntries(eventKeys.filter((k) => ['string', 'number', 'boolean'].includes(typeof e[k])).map((k) => [k, e[k]])));
   const model = { requested: str(r.requested_model), effort: str(r.requested_effort), observed: str(r.observed_model) };
   return { id, unreadable: false, model, lastSeen: str(r.last_seen), events, eventsDamaged: num(entry.events?.damaged) ?? 0, metrics: formatMetrics(summarizeMetrics(r)), track: trackOf(r), projectReviews, column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define', status, pr: str(r.pr), tickets: strList(r.tickets), ticketsDone: num(r.tickets_done), ticketsTotal: num(r.tickets_total), standards: verdict(r.standards), spec: verdict(r.spec, true), security: verdict(r.security), infrastructure: verdict(r.infrastructure, true), loops: num(r.check_loops), loopCap: loopCap(r), waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'), reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason), title: str(r.title) || id || 'Untitled run', activity: str(r.activity), agent: str(r.agent), updated: str(r.updated), files, links };
@@ -166,7 +166,7 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
         try { await prMerge(v.pr, eligibility.head); } catch { return send(502, 'text/plain', 'gh could not merge the PR'); } finally { prCache.delete(v.pr); }
         return send(200, 'text/plain', 'merged');
       }
-      const action = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/(sync|clean|accept)$/);
+      const action = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/(sync|clean|accept|extra-loop)$/);
       if (action) {
         let id;
         try { id = decodeURIComponent(action[1]); } catch { return send(400, 'text/plain', 'invalid id'); }
@@ -182,6 +182,15 @@ export async function startDashboard({ projectDir = process.cwd(), port, prState
           if (action[2] === 'clean') {
             const { outcome, reason } = mainStore.clean(id, { prState: prInfo });
             return send(outcome === 'kept' ? 409 : 200, 'text/plain', reason ? `${outcome}: ${reason}` : outcome);
+          }
+          if (action[2] === 'extra-loop') {
+            // ADR 0024: the user's own decision, as the page showed the Run. The store refuses everything but a Run in Check that waits at its limit.
+            const updated = new URL(req.url, 'http://localhost').searchParams.get('updated');
+            if (updated === null) return send(409, 'text/plain', 'the request must name the Run record time you looked at');
+            if (!v.waiting || v.column !== 'check') return send(409, 'text/plain', 'only a Run in Check that waits on you can be granted an extra loop');
+            if (typeof v.loops === 'number' && v.loops < v.loopCap) return send(409, 'text/plain', `the Check loop limit of ${v.loopCap} is not reached`);
+            store.grantLoop(id, { updated });
+            return send(200, 'text/plain', 'granted');
           }
           if (!v.waiting || v.column !== 'check') return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
           // The user decided on the Run as the page showed it; a change since then needs a new look.

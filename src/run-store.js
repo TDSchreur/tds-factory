@@ -6,7 +6,7 @@ import { tracks } from './run-record.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
 import { worktreeState } from './worktrees.js';
 import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeReview } from './evidence.js';
-import { startRun, trackRun, updateRun, transitionRun, acceptRun, syncRun, reworkRun, completeRun } from './run-lifecycle.js';
+import { startRun, trackRun, updateRun, transitionRun, acceptRun, grantLoopRun, syncRun, reworkRun, completeRun } from './run-lifecycle.js';
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, cleanRun, cleanAll } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
@@ -32,6 +32,7 @@ export function openRunStore(callerDir) {
     sync: (id, data) => syncRun(projectDir, id, data),
     complete: (id, data) => completeRun(projectDir, id, data),
     accept: (id, data) => acceptRun(projectDir, id, data),
+    grantLoop: (id, data) => grantLoopRun(projectDir, id, data),
     verify: (id, options) => verifyRun(projectDir, id, options),
     verdict: (id, axis, value, options) => verdictRun(projectDir, id, axis, value, options),
     sweep: (id, terms) => sweepRun(projectDir, id, terms),

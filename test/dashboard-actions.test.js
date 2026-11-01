@@ -172,3 +172,66 @@ test('clean-up works when the Dashboard was started inside a Run worktree', asyn
     assert.equal(existsSync(wt), false);
   } finally { await dash.close(); }
 });
+
+// ADR 0024: the extra loop. A Run in Check that waits on the user at its loop limit.
+function atLimit() {
+  const { cwd, id, wt } = checked();
+  const file = join(cwd, '.factory', 'runs', id, 'run.json');
+  writeFileSync(file, JSON.stringify({ ...read(cwd, id), check_loops: 4, status: 'waiting', waiting_on_human: true, waiting_reason: 'Blocking findings remain' }));
+  return { cwd, id, wt };
+}
+const updatedOf = async (dash, id) => (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
+const grant = async (dash, id, query, headers) => {
+  const response = await fetch(`${dash.url}/api/runs/${id}/extra-loop${query ?? `?updated=${encodeURIComponent(await updatedOf(dash, id))}`}`, { method: 'POST', headers: headers ?? await writeHeaders(dash) });
+  return { status: response.status, text: await response.text() };
+};
+
+test('the Dashboard grants an extra loop to a Run in Check that waits at its limit', async () => {
+  const { cwd, id } = atLimit();
+  const dash = await startDashboard({ projectDir: cwd, port: 0 });
+  try {
+    assert.deepEqual(await grant(dash, id), { status: 200, text: 'granted' });
+    const record = read(cwd, id);
+    assert.equal(record.extra_loops, 1);
+    assert.equal(record.status, 'running');
+    const view = (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id);
+    assert.deepEqual([view.loops, view.loopCap, view.waiting], [4, 5, false]);
+    assert.ok(view.events.some((e) => e.type === 'extra-loop' && e.granted === 1 && e.limit === 5));
+    // It is not waiting any more, so a second click needs a new wait.
+    assert.equal((await grant(dash, id)).status, 409);
+  } finally { await dash.close(); }
+});
+
+test('the extra loop is refused for every Run that is not at its limit in Check and waiting', async () => {
+  const dash = async (cwd) => startDashboard({ projectDir: cwd, port: 0 });
+  const below = checked();
+  waiting(below.cwd, below.id);
+  let d = await dash(below.cwd);
+  try { const r = await grant(d, below.id); assert.equal(r.status, 409); assert.match(r.text, /not reached/); } finally { await d.close(); }
+  const running = checked();
+  d = await dash(running.cwd);
+  try { const r = await grant(d, running.id); assert.equal(r.status, 409); assert.match(r.text, /waits on you/); assert.equal((await grant(d, 'nope')).status, 404); } finally { await d.close(); }
+  const stale = atLimit();
+  d = await dash(stale.cwd);
+  try {
+    const old = await grant(d, stale.id, '?updated=2000-01-01T00%3A00%3A00.000Z');
+    assert.equal(old.status, 409);
+    assert.match(old.text, /changed since/);
+    assert.equal((await grant(d, stale.id, '')).status, 409);
+    assert.equal(read(stale.cwd, stale.id).extra_loops, undefined);
+  } finally { await d.close(); }
+});
+
+test('the extra loop route refuses a request without the session token, with a wrong one or from another Origin', async () => {
+  const { cwd, id } = atLimit();
+  const dash = await startDashboard({ projectDir: cwd, port: 0 });
+  try {
+    const query = `?updated=${encodeURIComponent(await updatedOf(dash, id))}`;
+    const good = await writeHeaders(dash);
+    for (const headers of [{}, { origin: good.origin }, { ...good, 'x-factory-token': 'wrong' }, { ...good, origin: 'https://evil.example' }, { 'x-factory-token': good['x-factory-token'] }]) {
+      assert.equal((await grant(dash, id, query, headers)).status, 403, JSON.stringify(Object.keys(headers)));
+    }
+    assert.equal(read(cwd, id).extra_loops, undefined);
+    assert.equal((await grant(dash, id, query)).status, 200);
+  } finally { await dash.close(); }
+});

@@ -120,6 +120,10 @@ _Avoid_: Blocker, Problem worth fixing
 **Left open**:
 A finding that is not a Blocking finding (LOW, INFO, a code smell or style judgement). It is listed in `check-N.md`, `finish.md` and the pull request description, and never causes a Rework or stops a Clean Check.
 
+**Extra loop**:
+One more Check loop that the user grants from the Dashboard to a Run that waits on them in Check at its loop limit. It raises the limit by one (`extra_loops` in the Run record), is recorded in the Event log and has no ceiling. Only the user grants it, one click at a time; an agent cannot. See ADR 0024.
+_Avoid_: Override, Bonus loop
+
 **Rework**:
 Sending a Run back from Check or Follow-up to Build to fix Blocking findings or Follow-up feedback. Each Rework counts against the same loop limit and makes the earlier Evidence stale.
 _Avoid_: Retry, Loop back

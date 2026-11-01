@@ -3,7 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
-import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, lastSeenOf, modelOf, prStatusOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
+import { COLUMNS, STALE_MS, ageMs, ago, canGrantLoop, chipsOf, folderName, lastSeenOf, modelOf, prStatusOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
 
 export const html = htm.bind(h);
 
@@ -95,7 +95,7 @@ function Tickets({ run }) {
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
 const pauseLabel = (run) => run.waiting ? 'Needs you' + (waitAgeOf(run) ? ', ' + waitAgeOf(run).text : '') : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
 
-export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, onMerge, onSync, onClean, onAccept, onDelete }) {
+export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, onGrant, onMerge, onSync, onClean, onAccept, onDelete }) {
   const done = run.column === 'done';
   const age = ageMs(run.updated);
   const stale = age !== null && !done && !run.unreadable && age > STALE_MS;
@@ -112,6 +112,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, o
     (done || (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) && html`<div class="actions">
       ${run.pr && run.prState === 'open' && run.status === 'done' && html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(e) => { stop(e); onMerge(run); }} onKeyDown=${stop}>Merge</button>`}
       ${!run.unreadable && ['build', 'check'].includes(run.column) && run.status === 'running' && html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(e) => { stop(e); onSync(run); }} onKeyDown=${stop}>Sync</button>`}
+      ${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(e) => { stop(e); onGrant(run); }} onKeyDown=${stop}>Grant extra loop</button>`}
       ${!run.unreadable && run.column === 'check' && run.status === 'waiting' && html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(e) => { stop(e); onAccept(run); }} onKeyDown=${stop}>Accept Check</button>`}
       ${run.status === 'done' && run.prState === 'merged' && html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(e) => { stop(e); onClean(run); }} onKeyDown=${stop}>Clean up</button>`}
       ${!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) && html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => { stop(e); onDelete(run); }} onKeyDown=${stop}>Delete</button>`}
@@ -144,7 +145,7 @@ export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedI
     return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
       <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
       ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
-      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
       ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
     </section>`;
   })}</main></div>`;
@@ -209,7 +210,7 @@ export function Header({ project, version, status, olderLabel, onOlder, canNotif
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
-export function Detail({ run, compact, onClose, onCheckPr }) {
+export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
   const heading = useRef(null);
@@ -284,6 +285,7 @@ export function Detail({ run, compact, onClose, onCheckPr }) {
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
+      ${canGrantLoop(run) && html`<div class="actions"><button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button></div>`}
     </header>
     <${Timeline} run=${run} />
     ${run.metrics && html`<section aria-label="Run metrics"><h3>Run metrics</h3>

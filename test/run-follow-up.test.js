@@ -158,3 +158,18 @@ test('only eligible Runs enter Follow-up and metrics preserve the visit', () => 
   assert.equal(f.read().metrics.visits.at(-1).stage, 'build');
   assert.ok(f.read().metrics.visits.some(v => v.stage === 'follow-up' && v.ended));
 });
+
+test('a loop the user granted raises the shared limit for Follow-up too', () => {
+  const f = fixture();
+  writeFileSync(f.file, JSON.stringify({ ...f.read(), check_loops: 4, extra_loops: 1 }));
+  const result = run(f.cwd, 'follow-up', '--id', f.id);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /limit of/);
+  const after = f.read();
+  assert.equal(after.stage, 'build');
+  assert.equal(after.check_loops, 5);
+  // Back at the raised limit, Follow-up retains scope again.
+  writeFileSync(f.file, JSON.stringify({ ...after, stage: 'finish', status: 'done' }));
+  const again = run(f.cwd, 'follow-up', '--id', f.id);
+  assert.match(again.stdout, /limit of 5/);
+});

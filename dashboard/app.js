@@ -94,8 +94,8 @@ function App() {
     try {
       const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/' + name + query);
       const text = await response.text();
-      await ask(response.ok ? done : 'Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : 'accept the Check'), response.ok ? (name === 'clean' ? text : done + '.') : text, 'Close', false, true);
-    } catch (err) { await ask('Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : 'accept the Check'), run.title, 'Close', false, true); }
+      await ask(response.ok ? done : 'Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : name === 'extra-loop' ? 'grant the extra loop' : 'accept the Check'), response.ok ? (name === 'clean' ? text : done + '.') : text, 'Close', false, true);
+    } catch (err) { await ask('Could not ' + (name === 'sync' ? 'sync the Run' : name === 'clean' ? 'clean up the Run' : name === 'extra-loop' ? 'grant the extra loop' : 'accept the Check'), run.title, 'Close', false, true); }
     poll();
   };
   const syncRun = (run) => runAction(run, 'sync', 'Sync with origin?', 'Rebase the branch of "' + run.title + '" onto the default branch of origin. Evidence is cleared when the code or the base changes. Conflicts leave the branch unchanged.', 'Sync', 'Synced');
@@ -105,6 +105,7 @@ function App() {
     return runAction(run, 'accept', 'Accept this Check?', 'Continue "' + run.title + '" to Finish with a Check that is not clean. ' + open + '. Only the current code is accepted; a new commit voids this.', 'Accept and continue', 'Accepted', '?updated=' + encodeURIComponent(run.updated));
   };
 
+  const grantRun = (run) => runAction(run, 'extra-loop', 'Grant an extra Check loop?', '"' + run.title + '" has used its ' + run.loopCap + ' Check loops. This allows one more Rework and raises the limit to ' + (run.loopCap + 1) + '. Then tell the agent in its chat to continue. You can grant another loop later; there is no ceiling.', 'Grant extra loop', 'Extra loop granted', '?updated=' + encodeURIComponent(run.updated));
   const removeRuns = async (runs, message, doneOnly = false) => {
     if (!await ask(runs.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true)) return;
     const failed = [];
@@ -186,6 +187,7 @@ function App() {
     sync: syncRun,
     clean: cleanRun,
     accept: acceptRun,
+    grant: grantRun,
     remove: (run) => removeRuns([run], 'Permanently delete "' + run.title + '" and its Run record, summaries, and Run worktree (if created by the Factory)?' + (!['done', 'abandoned'].includes(run.status) ? ' Stop its agent before deleting this Run.' : '')),
     deleteAll: () => removeRuns(doneRuns, 'Permanently delete all ' + doneRuns.length + ' Done Runs and their records, summaries, and Factory-created Run worktrees, including hidden older Runs?', true),
   };
@@ -195,7 +197,7 @@ function App() {
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
       <${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} onCheckPr=${actions.checkPr} />
+      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }
