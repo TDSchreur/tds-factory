@@ -2,7 +2,7 @@
 export const COLUMNS = [
   { key: 'define', label: 'Define', help: 'Settle what has to be done: the agent interviews you, writes a Spec and cuts it into Tickets.' },
   { key: 'build', label: 'Build', help: 'Implement the Tickets test-first, one commit per Ticket, running the verify command after each, then work through the Exit checklist.' },
-  { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Only Blocking findings send the Run back to Build, at most four times.' },
+  { key: 'check', label: 'Check', help: 'Independent reviewers check the changes on Standards, Spec, Security and Infrastructure. Only Blocking findings send the Run back to Build, at most four times, or more when you grant an extra loop.' },
   { key: 'finish', label: 'Finish', help: 'Write the pull request description, push the branch and open the pull request.' },
   { key: 'follow-up', label: 'Follow-up', help: 'Read PR checks and unresolved review threads; scoped Rework returns to Build under the shared loop limit.' },
   { key: 'done', label: 'Done', help: 'The Run is finished: its pull request is open, merged or closed, or the Run was abandoned.' },

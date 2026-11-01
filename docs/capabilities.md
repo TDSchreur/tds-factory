@@ -33,4 +33,4 @@ Set a model for a project in `.factory/config.json` under `models` (see [Set pro
 
 To see whether an agent follows the Flow, run the on-demand [agent evaluation](evaluation.md).
 
-The extra Check loop is the one setting that is meant for the user alone ([ADR 0024](adr/0024-the-user-can-grant-an-extra-check-loop.md)). It has no command and `run update` refuses it, but an agent with shell access could still read the Dashboard's session token and call the route, as it could for Accept Check. The Factory cannot prevent that; the grant is always visible in the Run record and the timeline.
+The extra Check loop is the one setting that is meant for the user alone ([ADR 0024](adr/0024-the-user-can-grant-an-extra-check-loop.md)). It has no command and `run update` refuses it, but an agent with shell access could still read the Dashboard's session token and call the route, as it could for Accept Check. The same goes for editing `run.json` and setting `extra_loops` directly, as for any other field of the Run record. The Factory cannot prevent that; the grant is always visible in the Run record and the timeline.

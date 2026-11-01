@@ -63,7 +63,7 @@ flowchart TB
     I -.->|scoped Rework within shared cap| E
     P --> A
     C --> E --> F
-    F -->|problems found, fewer than 4 loops so far| E
+    F -->|problems found, fewer than 4 loops so far (or fewer than the limit you raised)| E
     F -->|clean| G
     F -.->|not clean, or loop cap reached: ask first| G
 ```
