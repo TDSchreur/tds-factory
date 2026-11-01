@@ -42,43 +42,26 @@ const inline = (spans) =>
 
 function MdList({ list }) {
   const Tag = list.ordered ? 'ol' : 'ul';
-  return html`<${Tag}
-    >${list.items.map((item) => html`<li>${inline(item.inline)}${item.sub && html`<${MdList} list=${item.sub} />`}</li>`)}<//
-  >`;
+  return html`<${Tag}>${list.items.map((item) => html`<li>${inline(item.inline)}${item.sub && html`<${MdList} list=${item.sub} />`}</li>`)}<//>`;
 }
 
 // Text becomes Preact text nodes only, so file content can never inject markup.
 export function Markdown({ text }) {
-  return html`<div class="md">
-    ${parseMarkdown(text).map((b) => {
-      if (b.type === 'heading') return h('h' + Math.min(6, b.level + 3), null, inline(b.inline));
-      if (b.type === 'paragraph') return html`<p>${inline(b.inline)}</p>`;
-      if (b.type === 'quote') return html`<blockquote>${inline(b.inline)}</blockquote>`;
-      if (b.type === 'rule') return html`<hr />`;
-      if (b.type === 'code') return html`<pre><code>${b.text}</code></pre>`;
-      if (b.type === 'list') return html`<${MdList} list=${b} />`;
-      if (b.type === 'table') {
-        return html`<div class="scroll" tabindex="0">
-          <table>
-            <thead>
-              <tr>
-                ${b.head.map((c) => html`<th>${inline(c)}</th>`)}
-              </tr>
-            </thead>
-            <tbody>
-              ${b.rows.map(
-                (row) =>
-                  html`<tr>
-                    ${row.map((c) => html`<td>${inline(c)}</td>`)}
-                  </tr>`,
-              )}
-            </tbody>
-          </table>
-        </div>`;
-      }
-      return null;
-    })}
-  </div>`;
+  return html`<div class="md">${parseMarkdown(text).map((b) => {
+    if (b.type === 'heading') return h('h' + Math.min(6, b.level + 3), null, inline(b.inline));
+    if (b.type === 'paragraph') return html`<p>${inline(b.inline)}</p>`;
+    if (b.type === 'quote') return html`<blockquote>${inline(b.inline)}</blockquote>`;
+    if (b.type === 'rule') return html`<hr />`;
+    if (b.type === 'code') return html`<pre><code>${b.text}</code></pre>`;
+    if (b.type === 'list') return html`<${MdList} list=${b} />`;
+    if (b.type === 'table') {
+      return html`<div class="scroll" tabindex="0"><table>
+        <thead><tr>${b.head.map((c) => html`<th>${inline(c)}</th>`)}</tr></thead>
+        <tbody>${b.rows.map((row) => html`<tr>${row.map((c) => html`<td>${inline(c)}</td>`)}</tr>`)}</tbody>
+      </table></div>`;
+    }
+    return null;
+  })}</div>`;
 }
 
 const stop = (e) => e.stopPropagation();
@@ -86,26 +69,14 @@ const stop = (e) => e.stopPropagation();
 function Chips({ run }) {
   const chips = chipsOf(run);
   return chips.length
-    ? html`<div class="chips">
-        ${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}
-      </div>`
+    ? html`<div class="chips">${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}</div>`
     : null;
 }
 
 function Progress({ run }) {
   const p = progressOf(run);
   return p
-    ? html`<div
-        class="progress"
-        role="progressbar"
-        aria-label="Ticket progress"
-        aria-valuemin="0"
-        aria-valuenow=${p.done}
-        aria-valuemax=${p.total}
-        aria-valuetext=${p.done + ' of ' + p.total + ' Tickets done'}
-      >
-        <div class="progress-fill" style=${'width:' + Math.round((p.done / p.total) * 100) + '%'}></div>
-      </div>`
+    ? html`<div class="progress" role="progressbar" aria-label="Ticket progress" aria-valuemin="0" aria-valuenow=${p.done} aria-valuemax=${p.total} aria-valuetext=${p.done + ' of ' + p.total + ' Tickets done'}><div class="progress-fill" style=${'width:' + Math.round((p.done / p.total) * 100) + '%'}></div></div>`
     : null;
 }
 
@@ -119,15 +90,9 @@ function Timeline({ run }) {
   const events = timelineOf(run);
   const damaged = Number.isSafeInteger(run.eventsDamaged) ? run.eventsDamaged : 0;
   if (!events.length && !damaged) return null;
-  return html`<section aria-label="Event timeline">
-    <h3>Event timeline</h3>
+  return html`<section aria-label="Event timeline"><h3>Event timeline</h3>
     ${damaged > 0 && html`<p class="timeline-damaged" role="note">${damaged} ${damaged === 1 ? 'line' : 'lines'} of the event log could not be read, so this timeline is incomplete.</p>`}
-    ${
-      events.length > 0 &&
-      html`<ol class="timeline">
-        ${events.map((e, i) => html`<li key=${i}><span class="when">${e.when || 'time unknown'}</span> ${e.text}</li>`)}
-      </ol>`
-    }
+    ${events.length > 0 && html`<ol class="timeline">${events.map((e, i) => html`<li key=${i}><span class="when">${e.when || 'time unknown'}</span> ${e.text}</li>`)}</ol>`}
   </section>`;
 }
 
@@ -138,21 +103,16 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
   const link = showLink && run.column !== 'done' && safeUrl(run.pr) && html`<${Link} href=${run.pr}>Pull request<//>`;
   if (status.kind === 'closed') return link ? html`<div class="pr-status">${link}</div>` : null;
   return html`<div class="pr-status" aria-label="Pull request status">
-    ${link}${link && ' '} ${status.kind === 'checking' && html`<span>PR status: checking...</span>`}
+    ${link}${link && ' '}
+    ${status.kind === 'checking' && html`<span>PR status: checking...</span>`}
     ${
       status.kind === 'unavailable' &&
-      html`<span class="unavailable">PR status unavailable: ${status.text}</span>
-        <button
-          type="button"
-          aria-label=${'Check the PR status of ' + run.title + ' again'}
-          onClick=${(e) => {
-            stop(e);
-            onCheckPr(run);
-          }}
-          onKeyDown=${stop}
-        >
-          Check again
-        </button>`
+      html`<span class="unavailable">PR status unavailable: ${status.text}</span> <button type="button" aria-label=${'Check the PR status of ' + run.title + ' again'} onClick=${(
+        e,
+      ) => {
+        stop(e);
+        onCheckPr(run);
+      }} onKeyDown=${stop}>Check again</button>`
     }
     ${status.lines.map((line) => html`<span key=${line} class=${'pr-fact' + (/^Checks: failing|conflicts/.test(line) ? ' bad' : '')}>${line}</span>${' '}`)}
   </div>`;
@@ -162,9 +122,7 @@ function Tickets({ run }) {
   const tickets = ticketsOf(run);
   const mark = { done: '✓', active: '▶', todo: '○' };
   return tickets.length
-    ? html`<ul class="tickets" aria-label="Tickets">
-        ${tickets.map((t) => html`<li key=${t.href} class=${'ticket ' + t.state}><span aria-hidden="true">${mark[t.state]}</span> <${Link} href=${t.href}>${t.label}<//><span class="sr"> (${t.state})</span></li>`)}
-      </ul>`
+    ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => html`<li key=${t.href} class=${'ticket ' + t.state}><span aria-hidden="true">${mark[t.state]}</span> <${Link} href=${t.href}>${t.label}<//><span class="sr"> (${t.state})</span></li>`)}</ul>`
     : null;
 }
 
@@ -206,110 +164,65 @@ export function Card({
     html`<${PrStatus} run=${run} onCheckPr=${onCheckPr} />`,
     done &&
       run.pr &&
-      html`<div class="pr">
-        ${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}
-      </div>`,
+      html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
     (done ||
       (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) &&
       html`<div class="actions">
-        ${run.pr && run.prState === 'open' && run.status === 'done' && run.prCanMerge === false && html`<span class="merge-note">Merge it in ${run.prHost === 'azure-devops' ? 'Azure DevOps' : 'the pull request host'}</span>`}
-        ${
-          run.pr &&
-          run.prState === 'open' &&
-          run.status === 'done' &&
-          run.prCanMerge !== false &&
-          html`<button
-            type="button"
-            class="primary"
-            aria-label=${'Squash and merge the pull request of ' + run.title}
-            onClick=${(e) => {
-              stop(e);
-              onMerge(run);
-            }}
-            onKeyDown=${stop}
-          >
-            Merge
-          </button>`
-        }
-        ${
-          !run.unreadable &&
-          ['build', 'check'].includes(run.column) &&
-          run.status === 'running' &&
-          html`<button
-            type="button"
-            aria-label=${'Sync ' + run.title + ' with origin'}
-            onClick=${(e) => {
-              stop(e);
-              onSync(run);
-            }}
-            onKeyDown=${stop}
-          >
-            Sync
-          </button>`
-        }
-        ${
-          canGrantLoop(run) &&
-          html`<button
-            type="button"
-            aria-label=${'Grant an extra Check loop to ' + run.title}
-            onClick=${(e) => {
-              stop(e);
-              onGrant(run);
-            }}
-            onKeyDown=${stop}
-          >
-            Grant extra loop
-          </button>`
-        }
-        ${
-          !run.unreadable &&
-          run.column === 'check' &&
-          run.status === 'waiting' &&
-          html`<button
-            type="button"
-            class="primary"
-            aria-label=${'Accept the Check of ' + run.title}
-            onClick=${(e) => {
-              stop(e);
-              onAccept(run);
-            }}
-            onKeyDown=${stop}
-          >
-            Accept Check
-          </button>`
-        }
-        ${
-          run.status === 'done' &&
-          run.prState === 'merged' &&
-          html`<button
-            type="button"
-            aria-label=${'Clean up ' + run.title}
-            onClick=${(e) => {
-              stop(e);
-              onClean(run);
-            }}
-            onKeyDown=${stop}
-          >
-            Clean up
-          </button>`
-        }
-        ${
-          !run.unreadable &&
-          ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) &&
-          html`<button
-            type="button"
-            class="danger"
-            aria-label=${'Delete ' + run.title}
-            onClick=${(e) => {
-              stop(e);
-              onDelete(run);
-            }}
-            onKeyDown=${stop}
-          >
-            Delete
-          </button>`
-        }
-      </div>`,
+      ${run.pr && run.prState === 'open' && run.status === 'done' && run.prCanMerge === false && html`<span class="merge-note">Merge it in ${run.prHost === 'azure-devops' ? 'Azure DevOps' : 'the pull request host'}</span>`}
+      ${
+        run.pr &&
+        run.prState === 'open' &&
+        run.status === 'done' &&
+        run.prCanMerge !== false &&
+        html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(
+          e,
+        ) => {
+          stop(e);
+          onMerge(run);
+        }} onKeyDown=${stop}>Merge</button>`
+      }
+      ${
+        !run.unreadable &&
+        ['build', 'check'].includes(run.column) &&
+        run.status === 'running' &&
+        html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(e) => {
+          stop(e);
+          onSync(run);
+        }} onKeyDown=${stop}>Sync</button>`
+      }
+      ${
+        canGrantLoop(run) &&
+        html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(e) => {
+          stop(e);
+          onGrant(run);
+        }} onKeyDown=${stop}>Grant extra loop</button>`
+      }
+      ${
+        !run.unreadable &&
+        run.column === 'check' &&
+        run.status === 'waiting' &&
+        html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(e) => {
+          stop(e);
+          onAccept(run);
+        }} onKeyDown=${stop}>Accept Check</button>`
+      }
+      ${
+        run.status === 'done' &&
+        run.prState === 'merged' &&
+        html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(e) => {
+          stop(e);
+          onClean(run);
+        }} onKeyDown=${stop}>Clean up</button>`
+      }
+      ${
+        !run.unreadable &&
+        ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) &&
+        html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => {
+          stop(e);
+          onDelete(run);
+        }} onKeyDown=${stop}>Delete</button>`
+      }
+    </div>`,
   ];
   const toggleText = expanded ? 'Hide details' : 'Show details';
   const classes = [
@@ -321,38 +234,22 @@ export function Card({
   ]
     .filter(Boolean)
     .join(' ');
-  return html`<li
-    class=${classes}
-    data-id=${run.id}
-    tabindex="0"
-    onClick=${() => onSelect(run.id)}
-    onKeyDown=${(e) => {
-      if (e.key === 'Enter') onSelect(run.id);
-    }}
-  >
+  return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => {
+    if (e.key === 'Enter') onSelect(run.id);
+  }}>
     ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
-    <div class="meta">
-      <span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span
-      >${seen && html`<span class=${'last-seen' + (seen.quiet ? ' quiet' : '')}>${seen.quiet ? '⚠ ' : ''}${seen.text}</span>`}${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}
-    </div>
+    <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${seen && html`<span class=${'last-seen' + (seen.quiet ? ' quiet' : '')}>${seen.quiet ? '⚠ ' : ''}${seen.text}</span>`}${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
     ${done && run.prState === 'open' && html`<div class="open-pr"><span class="badge open">Open PR</span></div>`}
     ${!done && more}
     ${
       done &&
-      html`<button
-        type="button"
-        class="toggle"
-        aria-expanded=${String(expanded)}
-        aria-label=${toggleText + ': ' + run.title}
-        onClick=${(e) => {
-          stop(e);
-          onToggle(run.id);
-        }}
-        onKeyDown=${stop}
-      >
-        ${expanded ? '▾' : '▸'} ${toggleText}
-      </button>`
+      html`<button type="button" class="toggle" aria-expanded=${String(expanded)} aria-label=${toggleText + ': ' + run.title} onClick=${(
+        e,
+      ) => {
+        stop(e);
+        onToggle(run.id);
+      }} onKeyDown=${stop}>${expanded ? '▾' : '▸'} ${toggleText}</button>`
     }
     ${done && html`<div class="details" hidden=${!expanded}>${more}</div>`}
   </li>`;
@@ -360,53 +257,33 @@ export function Card({
 
 // Shown instead of the Stages when there is no Run at all.
 export function Welcome({ onHelp }) {
-  return html`<div class="board-wrap">
-    <section class="welcome" aria-labelledby="welcome-title">
-      <h2 id="welcome-title">No Runs yet</h2>
-      <p>A Run is one piece of work, from idea to pull request. Start one in your agent session:</p>
-      <p>
-        <code>/factory <em>what you want built</em></code>
-      </p>
-      <p>
-        The Run appears here and moves through the Stages while the agent works. Whenever it needs an answer from you,
-        it turns red and says so.
-      </p>
-      <p><button type="button" class="link" onClick=${onHelp}>How does this work?</button></p>
-    </section>
-  </div>`;
+  return html`<div class="board-wrap"><section class="welcome" aria-labelledby="welcome-title">
+    <h2 id="welcome-title">No Runs yet</h2>
+    <p>A Run is one piece of work, from idea to pull request. Start one in your agent session:</p>
+    <p><code>/factory <em>what you want built</em></code></p>
+    <p>The Run appears here and moves through the Stages while the agent works. Whenever it needs an answer from you, it turns red and says so.</p>
+    <p><button type="button" class="link" onClick=${onHelp}>How does this work?</button></p>
+  </section></div>`;
 }
 
 export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
   return html`<div class="board-wrap">
-    <nav class="stage-nav" aria-label="Stages">
-      ${COLUMNS.map((c) => {
-        const mine = runs.filter((r) => r.column === c.key);
-        return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
-          <span>${c.label} <span class="stage-count">(${mine.length})</span></span
-          >${' '} ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
-        </button>`;
-      })}
-    </nav>
-    <main id="board" aria-label="Runs by Stage" tabindex="-1">
-      ${COLUMNS.map((c) => {
-        const mine = runs.filter((r) => r.column === c.key);
-        return html`<section
-          key=${c.key}
-          class="column"
-          data-stage=${c.key}
-          data-active=${String(stage === c.key)}
-          aria-labelledby=${'col-' + c.key}
-        >
-          <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
-          ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
-          <ul class="cards">
-            ${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}
-          </ul>
-          ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
-        </section>`;
-      })}
-    </main>
-  </div>`;
+  <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
+    const mine = runs.filter((r) => r.column === c.key);
+    return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
+      <span>${c.label} <span class="stage-count">(${mine.length})</span></span>${' '}
+      ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
+    </button>`;
+  })}</nav>
+  <main id="board" aria-label="Runs by Stage" tabindex="-1">${COLUMNS.map((c) => {
+    const mine = runs.filter((r) => r.column === c.key);
+    return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
+      <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
+      ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
+      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+      ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
+    </section>`;
+  })}</main></div>`;
 }
 
 // The help panel: static text from help.js in a native dialog. The dialog closes itself on Esc and on the Close button; onClose tells the page.
@@ -451,24 +328,14 @@ export function HelpPanel({ open, onClose }) {
   return html`<dialog id="help-panel" ref=${dialog} aria-labelledby="help-title" onKeyDown=${trap} onClose=${closed}>
     <div class="dialog-content">
       <h2 id="help-title">Help</h2>
-      <p class="help-lead">
-        The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through
-        the Stages. Start a Run in your agent with <code>/factory</code>.
-      </p>
+      <p class="help-lead">The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Start a Run in your agent with <code>/factory</code>.</p>
       ${HELP_SECTIONS.map(
-        (section) =>
-          html`<section key=${section.id} class="help-section" aria-labelledby=${'help-' + section.id}>
-            <h3 id=${'help-' + section.id}>${section.title}</h3>
-            <ul>
-              ${section.items.map((item) => html`<li key=${item.term || item.text}>${item.term && html`<strong>${item.term}</strong>: `}${item.text}</li>`)}
-            </ul>
-          </section>`,
+        (section) => html`<section key=${section.id} class="help-section" aria-labelledby=${'help-' + section.id}>
+        <h3 id=${'help-' + section.id}>${section.title}</h3>
+        <ul>${section.items.map((item) => html`<li key=${item.term || item.text}>${item.term && html`<strong>${item.term}</strong>: `}${item.text}</li>`)}</ul>
+      </section>`,
       )}
-      <div class="dialog-actions">
-        <button id="help-close" ref=${close} type="button" class="primary" onClick=${() => dialog.current.close()}>
-          Close
-        </button>
-      </div>
+      <div class="dialog-actions"><button id="help-close" ref=${close} type="button" class="primary" onClick=${() => dialog.current.close()}>Close</button></div>
     </div>
   </dialog>`;
 }
@@ -491,45 +358,20 @@ function ThemeSelect() {
       /* storage unavailable: the choice still applies to this page */
     }
   };
-  return html`<select id="theme" aria-label="Theme" value=${theme} onChange=${change}>
-    <option value="system">System</option>
-    <option value="light">Light</option>
-    <option value="dark">Dark</option>
-  </select>`;
+  return html`<select id="theme" aria-label="Theme" value=${theme} onChange=${change}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>`;
 }
 
 // The TDS mark, traced by hand from the logo PNG. The dark parts use the theme's logo colour, the blue parts keep theirs.
 function Logo() {
   return html`<svg class="logo" viewBox="285 70 1205 570" aria-hidden="true" focusable="false">
-    <defs>
-      <linearGradient id="logo-blue" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#1a8cff" />
-        <stop offset="1" stop-color="#0553e0" />
-      </linearGradient>
-    </defs>
+    <defs><linearGradient id="logo-blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a8cff" /><stop offset="1" stop-color="#0553e0" /></linearGradient></defs>
     <rect x="584" y="177" width="40" height="40" rx="5" fill="#0a7bff" />
     <rect x="638" y="124" width="61" height="64" rx="6" fill="#0a7bff" />
     <rect x="707" y="77" width="50" height="43" rx="5" fill="#3ba6ff" />
-    <path
-      class="ink"
-      d="M287 350 385 291V338L463 291V338L540 291V352H556L563 228H622L627 357H651V431H548V636H400V431H287Z"
-    />
-    <path
-      d="M445 478 416 512 445 547M500 478 531 512 500 547M489 462 462 567"
-      fill="none"
-      stroke="#fff"
-      stroke-width="12"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <path
-      d="M669 357H905C1000 357 1066 420 1066 497C1066 575 1000 636 905 636H669V452H767V565H905C935 565 954 535 954 497C954 458 935 431 905 431H669Z"
-      fill="url(#logo-blue)"
-    />
-    <path
-      class="ink"
-      d="M1190 357H1485L1408 433H1190C1170 433 1170 467 1190 467H1390C1450 467 1485 505 1485 548C1485 600 1440 636 1385 636H1052L1125 563H1375C1393 563 1395 535 1375 535H1185C1120 535 1085 500 1085 462C1085 400 1130 357 1190 357Z"
-    />
+    <path class="ink" d="M287 350 385 291V338L463 291V338L540 291V352H556L563 228H622L627 357H651V431H548V636H400V431H287Z" />
+    <path d="M445 478 416 512 445 547M500 478 531 512 500 547M489 462 462 567" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M669 357H905C1000 357 1066 420 1066 497C1066 575 1000 636 905 636H669V452H767V565H905C935 565 954 535 954 497C954 458 935 431 905 431H669Z" fill="url(#logo-blue)" />
+    <path class="ink" d="M1190 357H1485L1408 433H1190C1170 433 1170 467 1190 467H1390C1450 467 1485 505 1485 548C1485 600 1440 636 1385 636H1052L1125 563H1375C1393 563 1395 535 1375 535H1185C1120 535 1085 500 1085 462C1085 400 1130 357 1190 357Z" />
   </svg>`;
 }
 
@@ -548,21 +390,10 @@ export function Header({
   onHelp,
 }) {
   return html`<header>
-    <div class="title">
-      <h1><${Logo} /><span class="sr">tds-factory</span></h1>
-      <span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}
-    </div>
+    <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
-    <button
-      id="needs-you"
-      type="button"
-      aria-pressed=${String(!!onlyWaiting)}
-      title="Show only the Runs that wait on you"
-      onClick=${onToggleWaiting}
-    >
-      Needs you (${waitingCount ?? 0})
-    </button>
+    <button id="needs-you" type="button" aria-pressed=${String(!!onlyWaiting)} title="Show only the Runs that wait on you" onClick=${onToggleWaiting}>Needs you (${waitingCount ?? 0})</button>
     <button id="help" type="button" aria-haspopup="dialog" onClick=${onHelp}>Help</button>
     <${ThemeSelect} />
     ${canNotify && html`<button id="notify" type="button" onClick=${onNotify}>Notify me</button>`}
@@ -670,27 +501,12 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   }, [key]);
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<section
-    id="detail"
-    aria-label="Run detail"
-    role=${compact ? 'dialog' : undefined}
-    aria-modal=${compact ? 'true' : undefined}
-  >
-    <div class="compact-back">
-      <button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button>
-    </div>
+  return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
+    <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
-      <div class="head-row">
-        <h2 ref=${heading} tabindex="-1">${run.title}</h2>
-        <button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button>
-      </div>
+      <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
-      <div class="meta">
-        <span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span
-        >${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span
-          >Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span
-        >
-      </div>
+      <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
       ${canGrantLoop(run) && html`<div class="actions"><button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button></div>`}
@@ -698,44 +514,23 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     <${Timeline} run=${run} />
     ${
       run.metrics &&
-      html`<section aria-label="Run metrics">
-        <h3>Run metrics</h3>
-        <div>Track: ${run.metrics.track}</div>
-        ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}
-        <div>Reworks: ${run.metrics.reworks}</div>
-        <div>First-pass clean rate: ${run.metrics.firstPass}</div>
-        <div>Tokens: ${run.metrics.tokens}</div>
-        <div>Cost: ${run.metrics.cost}</div>
-      </section>`
+      html`<section aria-label="Run metrics"><h3>Run metrics</h3>
+      <div>Track: ${run.metrics.track}</div>
+      ${Object.entries(run.metrics.stages).map(([stage, value]) => html`<div key=${stage}>${stage[0].toUpperCase() + stage.slice(1)}: ${value}</div>`)}
+      <div>Reworks: ${run.metrics.reworks}</div><div>First-pass clean rate: ${run.metrics.firstPass}</div>
+      <div>Tokens: ${run.metrics.tokens}</div><div>Cost: ${run.metrics.cost}</div>
+    </section>`
     }
-    ${
-      (run.projectReviews ?? []).length > 0 &&
-      html`<section aria-label="Project reviews">
-        <h3>Project reviews</h3>
-        ${run.projectReviews.map(
-          (review) =>
-            html`<div key=${review.id}>
-              <strong>${review.name}: ${review.verdict || 'pending'}</strong
-              >${review.reason && html`<p>${review.reason}</p>`}${
-                review.findings.length > 0 &&
-                html`<ul>
-                  ${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}
-                </ul>`
-              }
-            </div>`,
-        )}
-      </section>`
-    }
+    ${(run.projectReviews ?? []).length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${run.projectReviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
     ${
       run.files.length > 0 &&
       files.map(
-        (f) =>
-          html`<${Fragment} key=${f.name}>
-            <h3>${f.name}</h3>
-            ${f.error ? html`<pre>${f.error}</pre>` : f.text === undefined ? html`<pre>Loading...</pre>` : html`<${Markdown} text=${f.text} />`}
-          <//>`,
+        (f) => html`<${Fragment} key=${f.name}>
+      <h3>${f.name}</h3>
+      ${f.error ? html`<pre>${f.error}</pre>` : f.text === undefined ? html`<pre>Loading...</pre>` : html`<${Markdown} text=${f.text} />`}
+    <//>`,
       )
     }
   </section>`;
@@ -752,35 +547,13 @@ export function ConfirmDialog({ request, onClose }) {
     dialog.current.showModal();
     (request.notice ? confirm : cancel).current.focus();
   }, [request]);
-  return html`<dialog
-    id="dialog"
-    ref=${dialog}
-    aria-labelledby="dialog-title"
-    aria-describedby="dialog-message"
-    onClose=${() => onClose(dialog.current.returnValue === 'confirm')}
-  >
+  return html`<dialog id="dialog" ref=${dialog} aria-labelledby="dialog-title" aria-describedby="dialog-message" onClose=${() => onClose(dialog.current.returnValue === 'confirm')}>
     <div class="dialog-content">
       <h2 id="dialog-title">${request ? request.title : ''}</h2>
       <p id="dialog-message">${request ? request.message : ''}</p>
       <div class="dialog-actions">
-        <button
-          id="dialog-cancel"
-          ref=${cancel}
-          type="button"
-          hidden=${!!(request && request.notice)}
-          onClick=${() => dialog.current.close('cancel')}
-        >
-          Cancel
-        </button>
-        <button
-          id="dialog-confirm"
-          ref=${confirm}
-          type="button"
-          class=${request && request.danger ? 'primary danger' : 'primary'}
-          onClick=${() => dialog.current.close('confirm')}
-        >
-          ${request ? request.action : ''}
-        </button>
+        <button id="dialog-cancel" ref=${cancel} type="button" hidden=${!!(request && request.notice)} onClick=${() => dialog.current.close('cancel')}>Cancel</button>
+        <button id="dialog-confirm" ref=${confirm} type="button" class=${request && request.danger ? 'primary danger' : 'primary'} onClick=${() => dialog.current.close('confirm')}>${request ? request.action : ''}</button>
       </div>
     </div>
   </dialog>`;
