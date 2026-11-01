@@ -1,2 +1,0 @@
-### Changed
-- The `factory` Skill is about half the size (about 20 KB, from 40 KB): the progress command list, the `run.json` schema, the Stage agents, the Exit checklist, the Check details and Follow-up moved word for word into `skills/factory/references/`, and the main file names each where it is needed. `install` and `sync` ship the reference files and `tds-factory doctor` fails the skills check when an installed factory Skill lacks them (run `tds-factory install`). No rule of the Flow changes. On the Fast track `build.md` is three lines.

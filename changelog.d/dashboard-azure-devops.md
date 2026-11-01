@@ -1,2 +1,0 @@
-### Added
-- The Dashboard shows the status of an Azure DevOps pull request (policies and build, merge conflicts, reviewers) in the same block as for GitHub, and the Done Stage and Clean up work for it. It reads through the `az` command and its `azure-devops` extension, read-only. An Azure DevOps pull request has no Merge button (the card says to merge it in Azure DevOps) and Follow-up does not support it yet. A missing `az`, extension or sign-in shows "status unavailable" with the fix.

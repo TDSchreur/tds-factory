@@ -1,2 +1,0 @@
-### Added
-- `tds-factory run verdict --axis security|infrastructure --value pass|skipped --carried` keeps an earlier Security or Infrastructure verdict for the current code, so those axes need no new review. The command allows it only after a text-only Rework (documents, never code, tests, Skills, agents or instruction files; see the glossary entry Carried-over verdict) and records the revision the verdict was carried from. Standards and Spec are always reviewed again (ADR 0019).

@@ -1,2 +1,0 @@
-### Added
-- The Dashboard can grant one extra Check loop to a Run that waits on you in Check at its loop limit ("Grant extra loop", one loop per click, no ceiling). The grant is recorded as `extra_loops` in the Run record and in the Event log, raises the limit that `run rework`, Follow-up and the loop chip use, and has no command-line equivalent so that an agent cannot grant itself a loop. See ADR 0024.
