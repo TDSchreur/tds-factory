@@ -2,4 +2,11 @@ vendor/
 dashboard/vendor/
 .factory/
 node_modules/
-skills/PROVENANCE.json
+skills/
+agents/
+CHANGELOG.md
+test/fixtures/
+eval/bin/
+# The Dashboard tests read the compact source of these two files with regular expressions.
+dashboard/index.html
+dashboard/style.css

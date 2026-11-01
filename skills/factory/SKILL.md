@@ -34,7 +34,6 @@ Evidence is the Verify result and the verdicts, each tied to the head commit it 
 **Stop.** If the user tells you to stop, set `status` to `abandoned`.
 
 After changing this skill, re-run `tds-factory install` so the installed copy is updated.
-
 ### Schema
 
 `run.json` is one JSON object that the commands maintain for every Agent target; read `references/run-schema.md` for every field and add new fields only when it says so. Record the Spec, Tickets and PR as links only; never copy their content into the Run folder.

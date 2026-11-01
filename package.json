@@ -21,7 +21,7 @@
     "test:package": "node scripts/with-temp-dir.js node scripts/test-package.js",
     "eval": "node scripts/with-temp-dir.js node eval/run.js",
     "lint": "eslint .",
-    "format:check": "prettier --check \"**/*.{js,json}\"",
+    "format:check": "prettier --check \"**/*.{js,json,md,yml,yaml,css,html}\"",
     "format": "prettier --write .",
     "typecheck": "tsc --project tsconfig.json"
   },
