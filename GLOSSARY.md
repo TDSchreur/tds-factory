@@ -164,7 +164,7 @@ Observed Stage time, Reworks and their causes, Check history and token Usage for
 One continuous stay in a Stage, including time waiting for a human. Rework starts another Build visit and can lead to another Check visit.
 
 **Usage**:
-The tokens an Agent target reports for a Run, counted per Stage, model and Ticket as input, cache read, cache write and output, with reasoning shown as part of output. Usage is observed, never estimated: a Run whose Agent target reports nothing has no Usage ("not tracked"), and a Stage with no entries has "no data", never zero. Usage is counted in tokens only.
+The tokens an Agent target reports for a Run, counted per Stage, model and Ticket as input, cache read, cache write and output, with reasoning shown as "of which reasoning", part of output. Usage is observed, never estimated: a Run whose Agent target reports nothing has no Usage ("not tracked"), and a Stage with no entries has "no data", never zero. Usage is counted in tokens only.
 
 **Fresh tokens**:
 The headline Usage number: input plus cache write plus output. Cache reads are shown beside it, not inside it.
