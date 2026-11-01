@@ -71,41 +71,67 @@ export function safeUrl(v) {
 }
 
 // The chips of a card, in display order: { key, cls, text, tip }.
+const VERDICT_ICON = { pass: '✓', fail: '✗', skipped: '⊘' };
+
+// One row per fact of the Run: an icon, a label and a value. `cls` colours the row and `text` is its plain reading.
+const row = (key, cls, icon, label, value, tip) => ({ key, cls, icon, label, value, text: `${label} ${value}`, tip });
+
 export function chipsOf(run) {
   const chips = [];
   if (run.track)
-    chips.push({ key: 'track', cls: '', text: run.track === 'fast' ? 'Fast' : 'Full', tip: CHIP_HELP.track });
+    chips.push(
+      row(
+        'track',
+        'accent',
+        run.track === 'fast' ? '⚡' : '◆',
+        'Track',
+        run.track === 'fast' ? 'Fast' : 'Full',
+        CHIP_HELP.track,
+      ),
+    );
   if (run.ticketsTotal)
-    chips.push({
-      key: 'tickets',
-      cls: '',
-      text: `${Math.min(run.ticketsDone || 0, run.ticketsTotal)}/${run.ticketsTotal} tickets`,
-      tip: CHIP_HELP.tickets,
-    });
+    chips.push(
+      row(
+        'tickets',
+        'accent',
+        '▣',
+        'Tickets',
+        `${Math.min(run.ticketsDone || 0, run.ticketsTotal)}/${run.ticketsTotal}`,
+        CHIP_HELP.tickets,
+      ),
+    );
   for (const [key, label] of [
     ['standards', 'Standards'],
     ['spec', 'Spec'],
     ['security', 'Security'],
     ['infrastructure', 'Infrastructure'],
   ]) {
-    if (run[key]) chips.push({ key, cls: run[key], text: `${label} ${run[key]}`, tip: CHIP_HELP[key] });
+    if (run[key]) chips.push(row(key, run[key], VERDICT_ICON[run[key]] ?? '•', label, run[key], CHIP_HELP[key]));
   }
   for (const review of run.projectReviews ?? []) {
     if (review.verdict)
-      chips.push({
-        key: `project-${review.id}`,
-        cls: review.verdict,
-        text: `${review.name} ${review.verdict}`,
-        tip: review.reason || `Project review: ${review.name}`,
-      });
+      chips.push(
+        row(
+          `project-${review.id}`,
+          review.verdict,
+          VERDICT_ICON[review.verdict] ?? '•',
+          review.name,
+          review.verdict,
+          review.reason || `Project review: ${review.name}`,
+        ),
+      );
   }
   if (typeof run.loops === 'number')
-    chips.push({
-      key: 'loops',
-      cls: '',
-      text: `loop ${run.loops}/${Number.isSafeInteger(run.loopCap) ? run.loopCap : 4}`,
-      tip: CHIP_HELP.loops,
-    });
+    chips.push(
+      row(
+        'loops',
+        'neutral',
+        '↻',
+        'Check loops',
+        `${run.loops}/${Number.isSafeInteger(run.loopCap) ? run.loopCap : 4}`,
+        CHIP_HELP.loops,
+      ),
+    );
   return chips;
 }
 

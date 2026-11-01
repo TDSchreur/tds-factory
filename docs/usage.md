@@ -129,7 +129,7 @@ It prints an address such as `http://127.0.0.1:4521`. Each repository gets its o
 
 - Each **card** is one Run. It moves left to right through the columns Define, Build, Check, Finish, Follow-up and Done.
 - On screens up to 1024 CSS pixels wide, use the Stage buttons to show one column at a time. The buttons show visible Run counts and mark Stages with Runs that need you.
-- The **chips** show the Ticket progress, baseline and project Check verdicts (pass, fail, skipped) and how many times Check sent the Run back to Build.
+- The **facts list** has one row per fact, each with an icon, a label and a value: the track, the Ticket progress, the baseline and project Check verdicts (✓ pass in green, ✗ fail in red, ⊘ skipped in grey) and how many times Check sent the Run back to Build (Check loops).
 - A card marked **Needs you** is waiting for your answer. **Verification unavailable** means the check could not run; **Agent interrupted** means the Run needs explicit resumption. Both cards show the reason.
 - Click a card to open the **Run detail** with its links, Tickets, Stage summaries and Run metrics. On compact screens it fills the screen; use **Back to stages** or Esc to return to the same Run. On wider screens it opens on the right; click the card again, press Esc or use the close button to close it.
 - Done cards start collapsed. Press **Show details** on a Done card to see its pull request link and actions. **Merge** appears while the pull request is open and squash-merges it after you confirm. **Clean up** appears once the pull request is merged and removes the Run worktree and branch. **Sync** (a running Run in Build or Check) rebases the Run onto the default branch of `origin`, and **Accept Check** (a Check waiting on you) continues to Finish with a Check that is not clean. Each asks first. Press **Notify me** to get a browser notification when a Run starts waiting on you. **Delete** is available on every Run. Stop an unfinished Run's agent first. Delete removes its record and Factory-created worktree while keeping the branch. If the worktree has uncommitted changes, a separate confirmation lets you discard them or cancel. **Delete all** applies only to Done Runs and asks separately about each dirty worktree.
@@ -139,7 +139,7 @@ Leave the Dashboard open while you work. It refreshes every two seconds. The rou
 
 ### Run metrics
 
-The Run record keeps the track (`fast` or `full`; a Run without one is Full). It shows as a Fast or Full chip on the card and in Run detail, and `tds-factory run stats --all` adds totals per track.
+The Run record keeps the track (`fast` or `full`; a Run without one is Full). It shows as the Track row (⚡ Fast or ◆ Full) of the facts list on the card and in Run detail, and `tds-factory run stats --all` adds totals per track.
 
 Run `tds-factory run stats --id ID` for one Run or `tds-factory run stats --all` for every Run and observed totals. Run detail shows the same per-Run summary. Stage time is elapsed wall-clock time, including waiting. Repeated visits are summed, and an open visit is labeled ongoing. Completion or abandonment stops the clock. `run stats` also prints the causes of the Reworks (`stale-doc`, `test-gap`, `spec-gap`, `security`, `bug`, `size`, `other`), which Check passes with `tds-factory run rework --cause`; a Rework without a cause, and every older record, counts as `unknown`. A missing observation is `no data`; totals report observed values and identify missing or unreadable records.
 

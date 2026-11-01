@@ -105,7 +105,10 @@ test('the detail offers the grant too, and the chip and timeline show the new li
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=w]')");
-    assert.match(await page.execute("return document.querySelector('[data-id=w] .chips').textContent"), /loop 5\/5/);
+    assert.match(
+      await page.execute("return document.querySelector('[data-id=w] .chips').textContent"),
+      /Check loops\s*5\/5/,
+    );
     await page.execute("document.querySelector('[data-id=w]').click()");
     await page.waitFor("return !!document.querySelector('#detail .timeline')");
     assert.match(

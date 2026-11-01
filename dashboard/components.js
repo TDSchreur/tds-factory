@@ -69,7 +69,10 @@ const stop = (e) => e.stopPropagation();
 function Chips({ run }) {
   const chips = chipsOf(run);
   return chips.length
-    ? html`<div class="chips">${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}</div>`
+    ? html`<ul class="chips" aria-label="Run facts">${chips.map(
+        (c) =>
+          html`<li key=${c.key} class=${'chip ' + c.cls} title=${c.tip}><span class="chip-icon" aria-hidden="true">${c.icon}</span><span class="chip-label">${c.label}</span> <span class="chip-value">${c.value}</span></li>`,
+      )}</ul>`
     : null;
 }
 
