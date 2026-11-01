@@ -358,3 +358,24 @@ test('session ids stored with the Usage are checked and capped', () => {
   w.move(cwd, id, 'build');
   assert.equal(w.read(cwd, id).metrics.usage.sessions.length, 20);
 });
+
+test('a Run id at the start of a line inside a log string is found, in all three line-break escapes', () => {
+  for (const separator of ['\n', '\t', '\r']) {
+    const w = world();
+    const cwd = repo();
+    const id = w.start(cwd);
+    const session = claudeSession(w.home, 'session-a');
+    // The only mention of the Run: the first word of a line in a tool result, as `run start` prints it.
+    const line = JSON.stringify({
+      type: 'user',
+      timestamp: new Date().toISOString(),
+      message: { content: `output:${separator}${id}${separator}done` },
+    });
+    session.add(line, claudeLine({ id: 'k1', input: 4 }));
+    w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+    w.move(cwd, id, 'build');
+    const record = w.read(cwd, id);
+    assert.equal(record.metrics.usage.status, 'tracked', `a Run id after ${JSON.stringify(separator)} is a mention`);
+    assert.equal(find(record, { stage: 'define' }).input, 4);
+  }
+});

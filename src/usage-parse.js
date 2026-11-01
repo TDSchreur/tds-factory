@@ -21,6 +21,7 @@ export function readLog(fs, file) {
 
 const RUN_ID = /^[a-z0-9][a-z0-9-]*$/;
 const ID_CHAR = /[a-z0-9-]/;
+const LINE_BREAK_LETTER = /[ntr]/;
 
 /**
  * Whether a log names the Run: the id as a whole, not as the start of a longer Run id. An id of another shape never matches.
@@ -32,7 +33,9 @@ export function mentionsRun(text, runId) {
   for (let at = text.indexOf(runId); at !== -1; at = text.indexOf(runId, at + 1)) {
     const before = text[at - 1];
     const after = text[at + runId.length];
-    if (!(before && ID_CHAR.test(before)) && !(after && ID_CHAR.test(after))) return true;
+    // In the raw text of a JSON log a line break is a backslash and a letter; that letter is not part of the id.
+    const afterBreak = text[at - 2] === '\\' && before !== undefined && LINE_BREAK_LETTER.test(before);
+    if ((afterBreak || !(before && ID_CHAR.test(before))) && !(after && ID_CHAR.test(after))) return true;
   }
   return false;
 }

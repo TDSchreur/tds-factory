@@ -139,3 +139,46 @@ test('Ticket tiles show fresh tokens and models, Run detail shows the table, and
     await page.close();
   }
 });
+
+test('the Ticket tile breakdown opens when a real mouse pointer hovers the usage line and closes when it leaves', async (t) => {
+  const runs = [
+    entry('hover', {
+      tickets: ['https://github.com/o/r/issues/1'],
+      tickets_done: 1,
+      tickets_total: 1,
+      metrics: {
+        version: 1,
+        visits,
+        verdicts: [],
+        usage: {
+          status: 'tracked',
+          rows: [row('build', sonnet, { input: 1000, cache_read: 5000, cache_write: 200, output: 300 }, { ticket: 1 })],
+        },
+      },
+    }),
+  ];
+  const page = await openPage(t, { runs });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=hover] .ticket-usage')");
+    const shown = () =>
+      page.execute("return document.querySelector('[data-id=hover] .usage-breakdown').offsetHeight > 0");
+    const move = (x, y) => page.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    assert.equal(await shown(), false);
+    const at =
+      await page.execute(`const r = document.querySelector('[data-id=hover] .ticket-usage > span').getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }`);
+    await move(at.x, at.y);
+    await page.waitFor("return document.querySelector('[data-id=hover] .usage-breakdown').offsetHeight > 0");
+    assert.equal(await shown(), true);
+    assert.match(
+      await page.execute("return document.querySelector('[data-id=hover] .usage-breakdown').textContent"),
+      /sonnet-5-5.*input 1\.0k.*cache read 5\.0k.*cache write 200.*output 300/,
+    );
+    await move(1, 1);
+    await page.waitFor("return document.querySelector('[data-id=hover] .usage-breakdown').offsetHeight === 0");
+    assert.equal(await shown(), false);
+  } finally {
+    await page.close();
+  }
+});
