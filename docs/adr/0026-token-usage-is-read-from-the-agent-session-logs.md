@@ -1,0 +1,7 @@
+# Token usage is read from the Agent session logs
+
+[ADR 0013](0013-run-metrics-preserve-observed-history.md) and the [Run metrics Spec](../specs/run-metrics.md) left tokens as "not tracked" and put reading Agent session logs out of scope, because no integration exposed usage to the Factory. The probe for this change shows that Claude Code, Codex and Copilot each write per-call token counts, the model and a timestamp to local session logs. We decided to read them, for token counts only: no prices, no estimates, no money.
+
+The Run store reads the logs at each Stage transition and at `run complete`, and stores only counts per Stage, model and Ticket in the Run record. It never stores or shows log content, never fails or slows a transition when a log is missing or unrecognised (the Run then shows "not tracked", a Stage with no entries shows "no data", never zero), and a project can switch the reading off. A session belongs to a Run when its log holds the Run id and has entries inside the Run's Stage windows; the working folder is not enough, because the session folder is the main checkout shared by every Run started from it. Claude's session id, which the CLI can see, is recorded as the exact match.
+
+The trade-off is a dependency on log formats we do not own, in exchange for the one measurement users asked for. Readers are tested with fixtures per target and an unrecognised format degrades to "not tracked". This extends ADR 0013 and replaces the exclusion in the Run metrics Spec; the rule that unknown is never reported as zero stays.

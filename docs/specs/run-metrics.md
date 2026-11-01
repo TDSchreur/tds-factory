@@ -1,5 +1,7 @@
 # Run metrics
 
+> Superseded in part by [ADR 0026](../adr/0026-token-usage-is-read-from-the-agent-session-logs.md): token Usage is now read from the Agent session logs, so the statements below that tokens are not tracked and that session-log reading is out of scope no longer hold.
+>
 > Superseded in part by [ADR 0015](../adr/0015-fast-track-is-chosen-explicitly-and-keeps-the-check-gate.md) and [the Fast track Spec](fast-track.md): the track is now recorded in the Run record (absence means Full) and `run stats --all` splits by track. The statements below about leaving the track unspecified describe the original scope.
 
 ## Problem Statement
