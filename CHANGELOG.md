@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-01
+
+### Added
+- `npm run check` runs lint, format check and typecheck in one go; an `.editorconfig` matches the Prettier settings.
+- `tds-factory run rework --cause <cause>` records why Check sent a Run back to Build (`stale-doc`, `test-gap`, `spec-gap`, `security`, `bug`, `size` or `other`; repeatable). `run stats --id`, `run stats --all` and the Dashboard Run detail count the causes; a Rework without a cause, and older records, count as unknown.
+- `tds-factory run sweep` ends with the list of documents still to read (the ones the Run did not change, most hits first), and `--files` prints only that list. The Exit checklist now asks for the whole output and a Sweep paragraph in `build.md`, and the Standards reviewer reads it.
+- `tds-factory run sweep` also searches the command line help and the Dashboard help text and tags those hits as code, so a stale help line is found while building.
+- `tds-factory run stats --id` shows the tokens a Run used per Stage, model and Ticket, read from the Claude session logs at each Stage change and at completion. The headline is fresh tokens (input plus cache write plus output); cache reads, reviewer subagents, the Build wrap-up and the Rework bucket are shown apart. A Run whose logs cannot be read says `not tracked`; only counts are stored, never conversation text.
+- Token usage is also read for Runs on the Codex target, from the Codex session files. Cached input is shown as cache read, so Codex and Claude rows use the same four fields; subagent rollouts of the same session count in their Stage and model.
+- Token usage is also read for Runs on the Copilot target, from the Copilot session event files. Cache reads and writes are taken out of Copilot's input count, so all three targets show the same four fields; calls made by sub-agents count in their Stage and model.
+- The Dashboard shows token usage: Run detail has a table per Stage, model and Ticket with the same labels as `run stats`, and each Ticket on a card is a two-line tile with its fresh tokens and models (the active one says "so far"; hover or focus shows the breakdown). Work after a Rework has its own tile.
+- `"usage": false` in `.factory/config.json` stops the Factory reading the agent session logs for token usage. It is on by default, frozen into each Run at start, and a value that is not `true` or `false` fails `doctor` with its line.
+- `tds-factory run stats --all` adds the tokens per model over all Runs with tracked usage, and names the Runs that are left out of the totals.
+
+### Changed
+- Define names the concrete documents in the Spec's Documents bullet, found with the Sweep on the feature's key terms, and a Full track Run with three or more Tickets gets one last documentation Ticket blocked by all the others.
+- Prettier now formats and checks JavaScript, JSON, Markdown and YAML across the repository, with the formatting commits listed in `.git-blame-ignore-revs`.
+- ESLint also enforces `eqeqeq`, `prefer-const`, `no-var` and `no-shadow`.
+- `tsconfig.json` covers every JavaScript folder; files opt in to typechecking with `// @ts-check`, and eleven more small modules now do.
+- The Dashboard shows the facts of a Run (track, Tickets, Check verdicts and Check loops) as a list with an icon, a label and a value per row, in colour for pass, fail and skipped, so the facts are easier to tell apart.
+
+### Fixed
+- `tds-factory doctor` and `tds-factory run start` no longer hang for 20 seconds when origin needs a login that Git Credential Manager would ask for in a browser or dialog; the git check now fails at once, and a timeout says what to check.
+- The Dashboard no longer shows `Merge: no conflicts` in the alert colour on the PR status. Only failing checks and a conflict with the base branch are red.
+- Token usage now finds a Run whose id appears only at the start of a line inside a session log string (after an escaped newline, tab or carriage return), so such a session is no longer undercounted.
+
 ## [0.6.0] - 2026-11-01
 
 ### Added
