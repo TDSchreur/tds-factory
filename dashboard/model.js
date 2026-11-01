@@ -170,10 +170,15 @@ export function sortWaitingFirst(runs) {
   return [...waiting.map((x) => x.r), ...runs.filter((r) => !r.waiting)];
 }
 
+const HOSTS = { 'azure-devops': 'Azure DevOps' };
+const hostOf = (run) => HOSTS[run.prHost] ?? 'GitHub';
 const UNAVAILABLE = {
-  'gh-missing': 'the gh command is not installed',
-  'not-signed-in': 'gh is not signed in (run gh auth login)',
-  'rate-limited': 'GitHub rate limit reached',
+  'gh-missing': () => 'the gh command is not installed',
+  'not-signed-in': () => 'gh is not signed in (run gh auth login)',
+  'az-missing': () => 'the az command is not installed (install the Azure CLI)',
+  'az-extension-missing': () => 'the Azure DevOps extension is missing (run az extension add --name azure-devops)',
+  'az-not-signed-in': () => 'az is not signed in (run az login)',
+  'rate-limited': (run) => hostOf(run) + ' rate limit reached',
 };
 
 // What the PR status block shows for a Run: null without a status, otherwise { kind, lines, text } where kind is checking,
@@ -182,7 +187,7 @@ export function prStatusOf(run) {
   const s = run.prStatus;
   if (!s || typeof s !== 'object') return null;
   if (s.checking === true) return { kind: 'checking', lines: [] };
-  if (typeof s.unavailable === 'string') return { kind: 'unavailable', lines: [], text: UNAVAILABLE[s.unavailable] ?? 'GitHub could not be read' };
+  if (typeof s.unavailable === 'string') return { kind: 'unavailable', lines: [], text: UNAVAILABLE[s.unavailable]?.(run) ?? hostOf(run) + ' could not be read' };
   if (s.state === 'merged' || s.state === 'closed') return { kind: 'closed', lines: [] };
   if (s.state !== 'open') return null;
   const checks = s.checks && typeof s.checks === 'object' ? s.checks : {};

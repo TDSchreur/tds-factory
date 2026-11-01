@@ -41,13 +41,25 @@ One definition of waiting is used everywhere: the Run's `waiting` flag in `/api/
 
 ## Pull request status
 
-A Run with a GitHub pull request in Finish, Follow-up or Done (and not abandoned) shows the status of that PR on its card and in its detail, read through the PR provider ([ADR 0020](adr/0020-pr-providers-sit-behind-one-seam.md)) with one `gh pr view` call:
+A Run with a GitHub or Azure DevOps pull request in Finish, Follow-up or Done (and not abandoned) shows the status of that PR on its card and in its detail, read through the PR provider ([ADR 0020](adr/0020-pr-providers-sit-behind-one-seam.md)) with one `gh pr view` call, or for Azure DevOps with `az repos pr show` and `az repos pr policy list`:
 
 - The link to the pull request (on a card that is not Done; a Done card has its own link).
 - For an open PR: **Checks** (passing, pending, none reported, or failing with the names of up to five failing checks), **Merge** (no conflicts, conflicts with the base branch, or unknown, which GitHub says while it still works it out), **Review** (approved, changes requested, review required, none yet) and **Draft**. A failing check and a conflict are also marked in colour, but always say so in text.
 - A merged or closed PR shows no status lines: the state badge says it.
 
-The status never delays the board. `/api/views` answers from a cache per PR link and starts the lookup in the background; the card says "PR status: checking..." until the first answer. An open PR is read again after a minute, a merged or closed one after ten minutes, and a failed lookup after half a minute. When `gh` cannot answer, the card says "PR status unavailable" with the reason (`gh` not installed, not signed in, rate limit reached, or GitHub could not be read) and a **Check again** button, which reads the status from GitHub again. The rest of the board is unaffected. The Merge action and its checks do not use this status and are unchanged.
+The status never delays the board. `/api/views` answers from a cache per PR link and starts the lookup in the background; the card says "PR status: checking..." until the first answer. An open PR is read again after a minute, a merged or closed one after ten minutes, and a failed lookup after half a minute. When `gh` or `az` cannot answer, the card says "PR status unavailable" with the reason and the fix (`gh` or `az` not installed, the Azure DevOps extension missing (`az extension add --name azure-devops`), not signed in (`gh auth login` or `az login`), rate limit reached, or the host could not be read) and a **Check again** button, which reads the status from GitHub again. The rest of the board is unaffected. The Merge action and its checks do not use this status and are unchanged.
+
+### Azure DevOps
+
+An Azure DevOps link has the form `https://dev.azure.com/<organisation>/<project>/_git/<repository>/pullrequest/<id>` (the older `visualstudio.com` form is not supported). The Azure CLI with its `azure-devops` extension and a signed-in user (`az login`) are needed, and every call only reads. The same lines are shown, taken from the PR and its policies:
+
+- **Checks** are the blocking policies that are not about reviewers (build validation, comment requirements, status checks): a rejected or broken one is failing and is named, a running or queued one is pending.
+- **Merge** is conflicts when Azure DevOps reports a merge conflict.
+- **Review** is changes requested when a reviewer voted "rejected" or "waiting for the author", review required while a required reviewer has not voted or a reviewers policy is not met (a creator's own vote does not count unless the policy allows it), approved when someone approved.
+- The Done Stage shows the PR as open, merged (completed) or closed (abandoned), and Clean up works after it is merged.
+- **Merge** is not offered: an open Azure DevOps PR in Done shows "Merge it in Azure DevOps" instead of the button, the Merge route answers 409, and Follow-up refuses an Azure DevOps PR with "Follow-up does not support Azure DevOps yet".
+
+The Factory never writes to Azure DevOps. The tests use output recorded from the sandbox repository `Kahoot` (`test/fixtures/pr-status/azure/`) and never call `az`.
 
 ## Progress on cards and in the Run detail
 
@@ -71,8 +83,8 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 | `/api/runs` | A JSON list of Run records, each with its raw event log (`events`). Use `/api/views` for the interpreted data. A record that cannot be read comes back with `unreadable: true`. |
 | `/files/<run-id>/<name>.md` | A Markdown file from a Run folder. |
 | `DELETE /api/runs/<run-id>` | Deletes a Run. Dirty worktrees return HTTP 409 with `X-Factory-Error: dirty-worktree`. A separately confirmed `?discardChanges=true` discards changes. A write route: see [Write routes](#write-routes). |
-| `GET /api/runs/<run-id>/merge-checks` | The GitHub checks of the Run's pull request. |
-| `GET /api/runs/<run-id>/pr-status[?refresh=1]` | The [PR status](#pull-request-status) of the Run's GitHub pull request as JSON: `{ checking: true }`, `{ unavailable: <reason> }` or the status. `?refresh=1` asks GitHub again instead of the cache, but not more often than every five seconds per PR. HTTP 409 for a Run that has no PR status. A read: it changes nothing and needs no session token. |
+| `GET /api/runs/<run-id>/merge-checks` | The GitHub checks of the Run's pull request (409 for a host without them, such as Azure DevOps). |
+| `GET /api/runs/<run-id>/pr-status[?refresh=1]` | The [PR status](#pull-request-status) of the Run's pull request as JSON: `{ checking: true }`, `{ unavailable: <reason> }` or the status. `?refresh=1` asks GitHub again instead of the cache, but not more often than every five seconds per PR. HTTP 409 for a Run that has no PR status. A read: it changes nothing and needs no session token. |
 | `POST /api/runs/<run-id>/merge` | Squash-merges the Run's pull request. A write route. |
 | `POST /api/runs/<run-id>/sync` | Runs `tds-factory run sync` for the Run: rebases its branch onto the default branch of `origin`. A refusal (a Run that is not running, uncommitted changes, a rebase already in progress, a conflict, a Run outside Build and Check) is HTTP 409 with the message. A write route. |
 | `POST /api/runs/<run-id>/clean` | Runs `tds-factory run clean` for the Run from the main checkout. A Run that is kept (PR not merged, uncommitted changes, extra commits) is HTTP 409 with the reason. A write route. |
