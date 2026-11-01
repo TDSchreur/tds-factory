@@ -137,3 +137,31 @@ export function timelineOf(run, now = Date.now()) {
     return { text: describe(e), when: Number.isNaN(at) ? '' : ago(Math.max(0, now - at)) };
   });
 }
+
+// When the current wait began, in ms, or null when the event log cannot tell: the latest waiting event counts only if nothing released the Run or changed its status after it.
+export function waitingSince(run) {
+  if (!Array.isArray(run.events)) return null;
+  for (let i = run.events.length - 1; i >= 0; i--) {
+    const e = run.events[i];
+    if (!e || typeof e !== 'object') continue;
+    if (e.type === 'released' || e.type === 'status') return null;
+    if (e.type === 'waiting') { const t = Date.parse(str(e.at)); return Number.isNaN(t) ? null : t; }
+  }
+  return null;
+}
+
+// "waiting 12 min" for a Run that waits on the user and whose wait start is known; otherwise null, never a guess.
+export function waitAgeOf(run, now = Date.now()) {
+  if (run.waiting !== true) return null;
+  const since = waitingSince(run);
+  if (since === null) return null;
+  const m = Math.floor(Math.max(0, now - since) / 60000);
+  return { text: `waiting ${m < 1 ? 'less than a minute' : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h` : `${Math.floor(m / 1440)} d`}` };
+}
+
+// Waiting Runs first, the longest wait first and unknown starts after known ones; the other Runs keep their order. Returns a new list.
+export function sortWaitingFirst(runs) {
+  const waiting = runs.filter((r) => r.waiting).map((r) => ({ r, since: waitingSince(r) ?? Infinity }));
+  waiting.sort((a, b) => (a.since === b.since ? 0 : a.since < b.since ? -1 : 1));
+  return [...waiting.map((x) => x.r), ...runs.filter((r) => !r.waiting)];
+}
