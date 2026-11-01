@@ -133,3 +133,11 @@ test('the Skills the factory invokes are found in its reference files too', () =
   const invoked = invokedByFactory(SKILLS_DIR);
   for (const name of ['diagnosing-bugs', 'pr', 'unslop', 'tdd', 'implement-spec', 'grill-with-docs']) assert.ok(invoked.has(name), name);
 });
+
+test('many ** segments against a very deep path still match quickly', () => {
+  const started = Date.now();
+  const deep = `${'a/'.repeat(1900)}x.js`;
+  assert.ok(!matchesGlob(deep, ['**/'.repeat(60) + 'y.js']));
+  assert.ok(matchesGlob(deep, ['**/'.repeat(60) + 'x.js']));
+  assert.ok(Date.now() - started < 2000, 'finished quickly');
+});

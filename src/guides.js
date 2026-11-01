@@ -7,6 +7,7 @@ import { readRun } from './run-folder.js';
 // (Copilot's format); a guide without them is unscoped and applies to every Run. See ADR 0022.
 const CONVENTION_FILES = ['AGENTS.md', 'CLAUDE.md'];
 const MAX_FILE = 1 << 20;
+const MAX_GUIDES = 200;
 
 // True when `file` resolves, symbolic links included, to a place inside the project.
 export function insideProject(projectDir, file) {
@@ -25,7 +26,7 @@ const readFile = (file) => {
 
 // A glob is repo-relative with `/` separators: `*` stays inside a folder, `**` as a whole segment crosses folders, `?` is one character.
 // A glob without a `/` matches the file name at any depth, as `*.js` does in a .gitignore. No regular expression is built from a glob,
-// so a hostile glob cannot make the match take more than a few steps per character of path and glob (ADR 0022).
+// and the work is bounded by the length of the path times the length of the glob: at most 4096 and 200 characters (ADR 0022).
 export const MAX_GLOB_LENGTH = 200;
 
 // One path segment against one glob segment, with the linear two-pointer walk that remembers only the last `*`.
@@ -41,22 +42,29 @@ function segmentMatches(name, pattern) {
   return p === pattern.length;
 }
 
+const MAX_PATH_LENGTH = 4096;
+
 export function globMatches(file, glob) {
-  const pattern = (glob.includes('/') ? glob.replace(/^\.\//, '') : `**/${glob}`).split('/').map((seg) => (/^\*{2,}$/.test(seg) ? '**' : seg.replace(/\*+/g, '*')));
+  if (file.length > MAX_PATH_LENGTH) return false;
+  const pattern = [];
+  for (const seg of (glob.includes('/') ? glob.replace(/^\.\//, '') : `**/${glob}`).split('/')) {
+    const next = /^\*{2,}$/.test(seg) ? '**' : seg.replace(/\*+/g, '*');
+    if (next !== '**' || pattern.at(-1) !== '**') pattern.push(next);
+  }
   const parts = file.split('/');
-  // reachable[i] after pattern segment k: path segments consumed so far.
-  let reachable = new Set([0]);
+  // reachable[i] is true when the pattern so far can consume the first i path segments. After a `**` every index from the lowest one on is
+  // reachable, so that step is one pass; a final `**` needs at least one segment below it.
+  let reachable = new Uint8Array(parts.length + 1);
+  reachable[0] = 1;
   pattern.forEach((seg, k) => {
-    const next = new Set();
-    for (const i of reachable) {
-      if (seg === '**') {
-        // A final `**` needs at least one segment below it; elsewhere it may match none.
-        for (let j = k === pattern.length - 1 ? i + 1 : i; j <= parts.length; j++) next.add(j);
-      } else if (i < parts.length && segmentMatches(parts[i], seg)) next.add(i + 1);
-    }
+    const next = new Uint8Array(parts.length + 1);
+    if (seg === '**') {
+      const low = reachable.indexOf(1);
+      if (low >= 0) next.fill(1, k === pattern.length - 1 ? low + 1 : low);
+    } else for (let i = 0; i < parts.length; i++) if (reachable[i] && segmentMatches(parts[i], seg)) next[i + 1] = 1;
     reachable = next;
   });
-  return reachable.has(parts.length);
+  return reachable[parts.length] === 1;
 }
 
 export const matchesGlob = (file, globs) => globs.some((g) => globMatches(file, g));
@@ -93,8 +101,8 @@ export const conventionsFile = (projectDir) => CONVENTION_FILES.find((f) => fs.s
 export function linkedGuides(projectDir) {
   const file = conventionsFile(projectDir);
   if (!file) return [];
-  const text = readFile(path.join(projectDir, file));
-  if (text === undefined) throw new Error(`${file} is not a regular file of at most 1 MiB`);
+  const text = insideProject(projectDir, path.join(projectDir, file)) ? readFile(path.join(projectDir, file)) : undefined;
+  if (text === undefined) throw new Error(`${file} is not a regular file of at most 1 MiB inside the project`);
   const found = new Map();
   const add = (raw, link) => {
     const target = raw.split('#')[0].trim();
@@ -104,8 +112,8 @@ export function linkedGuides(projectDir) {
     const exists = !!fs.statSync(path.join(projectDir, rel), { throwIfNoEntry: false })?.isFile();
     if (link || exists) found.set(rel, { path: rel, exists });
   };
-  for (const m of text.matchAll(/\[[^\]\n]{0,200}\]\(([^)\s]{1,300})\)/g)) add(m[1], true);
-  for (const m of text.matchAll(/`([^`\n]{1,300}\.md)`/gi)) add(m[1], false);
+  for (const m of text.matchAll(/\[[^\]\n]{0,200}\]\(([^)\s]{1,300})\)/g)) if (found.size < MAX_GUIDES) add(m[1], true);
+  for (const m of text.matchAll(/`([^`\n]{1,300}\.md)`/gi)) if (found.size < MAX_GUIDES) add(m[1], false);
   return [...found.values()];
 }
 

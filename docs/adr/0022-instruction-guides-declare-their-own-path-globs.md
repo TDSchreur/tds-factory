@@ -4,4 +4,6 @@ Every Run read all instruction guides and gave them to the Standards and Securit
 
 We put the globs in the guide, not in a routing line in `AGENTS.md`, so the scope sits next to the rules it scopes and cannot drift from them, and Copilot reads the same file in place. We keep `conventions` an array of paths and read the globs again at Check, so a guide that changes during a Run is respected.
 
+Globs are matched by the Factory's own matcher with no regular expression, because `path.matchesGlob` is not stable on Node 20 and a glob in a project file is untrusted: the work is bounded by the length of the path times the length of the glob, and a glob is at most 200 characters.
+
 Claude Code reads `.claude/rules/*.md` with `paths:`, so `tds-factory rules` generates those files from `.github/instructions/*.instructions.md` and they are committed, like the Skill copies in [ADR 0001](0001-committed-skill-copies.md). Codex only reads nested `AGENTS.md` files and has no globs, so it gets no copy; Check scoping covers it.
