@@ -142,3 +142,45 @@ export const codexUsage = (turn, responseId, { input, cached = 0, output = 1, re
       },
     },
   });
+
+// A Copilot session event file. Copilot counts cache reads and cache writes inside inputTokens.
+export function copilotSession(home, id) {
+  const dir = join(home, '.copilot', 'session-state', id);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'events.jsonl');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      type: 'session.start',
+      timestamp: new Date().toISOString(),
+      data: { sessionId: id, context: { cwd: '/home/user/project' } },
+    }) + '\n',
+  );
+  return { add: (...lines) => appendFileSync(file, lines.join('\n') + '\n'), file };
+}
+export const copilotMention = (runId) =>
+  JSON.stringify({
+    type: 'tool.execution_start',
+    timestamp: new Date().toISOString(),
+    data: { arguments: { command: `tds-factory run update --id ${runId}` } },
+  });
+export const copilotUsage = (
+  callId,
+  { model = 'claude-sonnet-5.5', input, cacheRead = 0, cacheWrite = 0, output = 1, reasoning = 0, subagent = false },
+) =>
+  JSON.stringify({
+    type: 'session.usage_record',
+    timestamp: new Date().toISOString(),
+    data: {
+      usage: {
+        apiCallId: callId,
+        model,
+        initiator: subagent ? 'sub-agent' : 'agent',
+        inputTokens: input,
+        outputTokens: output,
+        cacheReadTokens: cacheRead,
+        cacheWriteTokens: cacheWrite,
+        reasoningTokens: reasoning,
+      },
+    },
+  });
