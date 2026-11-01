@@ -11,6 +11,13 @@ const runs = () => [
   run({ id: 'm', title: 'Mergeable', column: 'done', status: 'done', pr: 'https://github.com/o/r/pull/4', prState: 'open', standards: 'pass', spec: 'pass', security: 'pass', infrastructure: 'skipped' }),
 ];
 
+// Switches the transitions off for a test that reads colours or shadows, and waits until that has taken effect:
+// a transition that has just started still reads its old value, and the emulation reaches the page a moment after the command.
+const calm = async (page, extra = []) => {
+  await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }, ...extra] });
+  await page.waitFor("return matchMedia('(prefers-reduced-motion: reduce)').matches && getComputedStyle(document.querySelector('button')).transitionDuration === '0s'");
+};
+
 // Forces :hover, :active or :focus-visible on the first element that matches the selector, as a pointer or the keyboard would.
 const force = async (page, selector, states) => {
   await page.cdp('DOM.enable', {});
@@ -46,7 +53,7 @@ for (const theme of ['light', 'dark']) {
     const page = await openPage(t, { runs: runs() });
     if (!page) return;
     try {
-      await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }); // no colour transition is half way when the colours are read
+      await calm(page);
       await page.waitFor("return !!document.querySelector('[data-id=w]')");
       await page.execute(`document.documentElement.dataset.theme = '${theme}'`);
       assert.ok(await page.execute("return !!document.querySelector('[data-id=x].abandoned')"), 'the sample holds an abandoned card');
@@ -67,7 +74,7 @@ for (const theme of ['light', 'dark']) {
     const page = await openPage(t, state);
     if (!page) return;
     try {
-      await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await calm(page);
       await page.waitFor("return !!document.querySelector('.welcome')");
       await page.execute(`document.documentElement.dataset.theme = '${theme}'`);
       const welcome = await page.execute(SAMPLE);
@@ -139,7 +146,7 @@ test('forced colours keep the button colours of the primary and pressed buttons 
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=m] .primary')");
-    await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'forced-colors', value: 'active' }, { name: 'prefers-reduced-motion', value: 'reduce' }] }); // no colour is half way when it is read
+    await calm(page, [{ name: 'forced-colors', value: 'active' }]);
     const read = (selector) => page.execute(`
       const probe = (value) => { const p = document.createElement('i'); p.style.color = value; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
       const s = getComputedStyle(document.querySelector(${JSON.stringify(selector)}));
@@ -163,7 +170,7 @@ test('a hovered or selected card keeps its inner focus ring', async (t) => {
   const page = await openPage(t, { runs: runs() });
   if (!page) return;
   try {
-    await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }); // no shadow is half way when it is read
+    await calm(page);
     await page.waitFor("return !!document.querySelector('[data-id=b]')");
     const ring = () => page.execute(`
       const p = document.createElement('i'); p.style.color = 'var(--colorStrokeFocus1)'; document.body.append(p); const focus = getComputedStyle(p).color; p.remove();
@@ -177,6 +184,7 @@ test('a hovered or selected card keeps its inner focus ring', async (t) => {
     assert.ok(seen.shadow.includes(seen.focus + ' 0px 0px 0px 2px'), 'focused and hovered: ' + seen.shadow);
     await page.execute("document.querySelector('[data-id=b]').click()");
     await page.waitFor("return document.querySelector('[data-id=b]').classList.contains('selected')");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')"); // opening the detail takes the focus after the next frame; only then is the card ours to focus
     await page.execute("document.querySelector('[data-id=b]').focus()");
     assert.equal(await page.execute("return document.querySelector('[data-id=b]').matches('.selected:focus-visible')"), true, 'the selected card is focused as the keyboard would');
     seen = await ring();
