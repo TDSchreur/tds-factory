@@ -22,9 +22,9 @@ An optional `.factory/config.json`, committed in the project, holds the project'
 
 ## Implementation Decisions
 
-- `.factory/config.json` is a JSON object with the optional keys `models` (Stage name or `interactive-check` to model name), `max_check_loops` (whole number 0 to 4), `labels` (`ticket`, default `ready-for-agent`) and `reviews` (same entries as `.factory/reviews.json`). Unknown keys are `fail`.
+- `.factory/config.json` is a JSON object with the optional keys `models` (Stage name or `interactive-check` to model name), `max_check_loops` (whole number 0 to 4), `labels` (`ticket`, default `ready-for-agent`), `usage` (`true` or `false`, default `true`; `false` stops the reading of the Agent session logs for token Usage, see [ADR 0026](../adr/0026-token-usage-is-read-from-the-agent-session-logs.md)) and `reviews` (same entries as `.factory/reviews.json`). Unknown keys are `fail`.
 - Review IDs are unique across `reviews.json` and `config.json`; the legacy file is read first.
-- `run start` stores `models`, `max_check_loops` and `labels` as `project_config` next to `project_reviews`. A Run without it uses the defaults. `run config --id ID` prints it.
+- `run start` stores `models`, `max_check_loops`, `labels` and `usage` as `project_config` next to `project_reviews`. A Run without it uses the defaults. `run config --id ID` prints it.
 - `max_check_loops` is the lower of the project value and the Factory maximum, in Rework and in Follow-up. The Dashboard chip shows it.
 - Doctor adds a `config` check: `pass` without the file or with a valid one, `fail` with a message that names the line.
 - The agent files stay the defaults. The coordinator passes the configured model when it dispatches the Stage agent; the CLI cannot set it.

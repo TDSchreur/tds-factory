@@ -534,10 +534,10 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       ${
         run.metrics.usage?.rows?.length > 0 &&
         html`<div class="usage-table-wrap" tabindex="0" role="region" aria-label="Token usage table"><table class="usage-table"><caption>Token usage per Stage, model and Ticket</caption>
-        <thead><tr><th scope="col">Where</th><th scope="col">Fresh</th><th scope="col">Input</th><th scope="col">Cache read</th><th scope="col">Cache write</th><th scope="col">Output</th><th scope="col">Subagents</th></tr></thead>
-        <tbody>${run.metrics.usage.rows.map((r) => html`<tr key=${r.label}><th scope="row">${r.label}</th><td>${r.fresh}</td><td>${r.input}</td><td>${r.cacheRead}</td><td>${r.cacheWrite}</td><td>${r.output}</td><td>${r.subagents}</td></tr>`)}</tbody></table></div>`
+        <thead><tr><th scope="col">Where</th><th scope="col">Fresh</th><th scope="col">Input</th><th scope="col">Cache read</th><th scope="col">Cache write</th><th scope="col">Output</th><th scope="col">Reasoning</th><th scope="col">Subagents</th></tr></thead>
+        <tbody>${run.metrics.usage.rows.map((r) => html`<tr key=${r.label}><th scope="row">${r.label}</th><td>${r.fresh}</td><td>${r.input}</td><td>${r.cacheRead}</td><td>${r.cacheWrite}</td><td>${r.output}</td><td>${r.reasoning ?? 'n/a'}</td><td>${r.subagents}</td></tr>`)}</tbody></table></div>`
       }
-      ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label}: no data</div>`)}
+      ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label} · no data</div>`)}
       <div>Cost: ${run.metrics.cost}</div>
     </section>`
     }

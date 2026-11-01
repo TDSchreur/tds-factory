@@ -23,7 +23,8 @@ const entry = (id, record) =>
   interpretRun({ id, record: { title: id, stage: 'build', status: 'running', ...record }, files: [] });
 const visits = [
   { stage: 'define', started: '2026-01-01T00:00:00Z', ended: '2026-01-01T00:01:00Z' },
-  { stage: 'build', started: '2026-01-01T00:01:00Z' },
+  { stage: 'build', started: '2026-01-01T00:01:00Z', ended: '2026-01-01T00:02:00Z' },
+  { stage: 'check', started: '2026-01-01T00:02:00Z' },
 ];
 
 test('Ticket tiles show fresh tokens and models, Run detail shows the table, and untracked Runs keep their wording', async (t) => {
@@ -100,8 +101,21 @@ test('Ticket tiles show fresh tokens and models, Run detail shows the table, and
       return t && { caption: t.caption.textContent, heads: [...t.querySelectorAll('th[scope=col]')].map((h) => h.textContent), text: t.textContent }`);
     assert.ok(table, 'the Run detail has a usage table');
     assert.match(table.caption, /Token usage/);
-    assert.deepEqual(table.heads.slice(0, 3), ['Where', 'Fresh', 'Input']);
+    assert.deepEqual(table.heads, [
+      'Where',
+      'Fresh',
+      'Input',
+      'Cache read',
+      'Cache write',
+      'Output',
+      'Reasoning',
+      'Subagents',
+    ]);
     assert.match(table.text, /Define · claude-sonnet-5-5/);
+    assert.match(
+      await page.execute('return document.querySelector(\'[aria-label="Run metrics"]\').textContent'),
+      /Check · no data/,
+    );
     assert.match(table.text, /Build · Ticket 1 · claude-opus-5-5/);
     assert.match(table.text, /Build · Rework · claude-sonnet-5-5/);
     assert.match(

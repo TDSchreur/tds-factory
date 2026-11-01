@@ -19,6 +19,24 @@ export function readLog(fs, file) {
   return fs.readFileSync(file, 'utf8');
 }
 
+const RUN_ID = /^[a-z0-9][a-z0-9-]*$/;
+const ID_CHAR = /[a-z0-9-]/;
+
+/**
+ * Whether a log names the Run: the id as a whole, not as the start of a longer Run id. An id of another shape never matches.
+ * @param {string} text
+ * @param {string} runId
+ */
+export function mentionsRun(text, runId) {
+  if (!RUN_ID.test(runId)) return false;
+  for (let at = text.indexOf(runId); at !== -1; at = text.indexOf(runId, at + 1)) {
+    const before = text[at - 1];
+    const after = text[at + runId.length];
+    if (!(before && ID_CHAR.test(before)) && !(after && ID_CHAR.test(after))) return true;
+  }
+  return false;
+}
+
 /** A token count from a log, or null when the log does not hold a usable one. @param {unknown} value */
 export const count = (value) => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null);
 

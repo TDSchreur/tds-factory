@@ -163,6 +163,9 @@ The tokens an Agent target reports for a Run, counted per Stage, model and Ticke
 **Fresh tokens**:
 The headline Usage number: input plus cache write plus output. Cache reads are shown beside it, not inside it.
 
+**Build wrap-up**:
+The Usage of the first Build visit after the last Ticket is done: the Exit checklist, Run sync and the final Verify. It belongs to the Run, not to a Ticket, and is a row of the Usage table without a tile.
+
 **Rework bucket**:
 The Usage of Build visits after a Rework. It belongs to the Run, not to a Ticket, and is shown as its own tile.
 

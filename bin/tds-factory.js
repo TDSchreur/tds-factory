@@ -35,7 +35,7 @@ const USAGE = `Usage:
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
   tds-factory run repair --id ID [--apply]
-  tds-factory run config --id ID   (prints the project settings frozen for the Run: models, Check loop cap, labels)
+  tds-factory run config --id ID   (prints the project settings frozen for the Run: models, Check loop cap, labels, usage)
   tds-factory run reviews --id ID
   tds-factory run materialize-review --id ID --axis ID
   tds-factory run review --id ID --axis ID --data JSON

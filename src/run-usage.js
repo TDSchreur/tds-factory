@@ -5,6 +5,7 @@ import { readEvents } from './run-events.js';
 import { readClaudeUsage } from './usage-claude.js';
 import { readCodexUsage } from './usage-codex.js';
 import { readCopilotUsage } from './usage-copilot.js';
+import { modelName } from './usage-parse.js';
 
 // Token Usage of a Run (ADR 0026): counts per Stage, model and Ticket, read from the Agent session logs at each Stage
 // change and at completion. Unknown is never zero: a Run without a readable log is "not tracked" and a Stage without
@@ -152,7 +153,12 @@ export function readUsage(record, dir, { home = os.homedir(), now = Date.now(), 
       return untracked(
         `no usage found for this Run in the ${record.agent[0].toUpperCase()}${record.agent.slice(1)} session logs`,
       );
-    return { status: 'tracked', read_at: new Date(now).toISOString(), sessions: result.sessions, rows };
+    return {
+      status: 'tracked',
+      read_at: new Date(now).toISOString(),
+      sessions: result.sessions.filter((/** @type {string} */ session) => SESSION_ID.test(session)).slice(0, 20),
+      rows,
+    };
   } catch {
     return untracked('the session logs could not be read');
   }
@@ -185,7 +191,7 @@ export function summarizeUsage(usage, record) {
       noData: [],
     };
   const rows = usage.rows
-    .filter((/** @type {any} */ r) => r && stages.includes(r.stage) && typeof r.model === 'string')
+    .filter((/** @type {any} */ r) => r && stages.includes(r.stage) && modelName(r.model))
     .map((/** @type {any} */ r) => ({
       stage: r.stage,
       model: r.model,

@@ -1,7 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { count, keepLargest, modelName, readLog } from './usage-parse.js';
+import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Copilot session event files under ~/.copilot/session-state/<session>/events.jsonl. Only
 // the model, the token counts and the timestamp of each call are kept. Copilot counts cache reads and cache writes
@@ -64,7 +64,7 @@ export function readCopilotUsage({ home, runId, sessions, from, deadline }) {
       if (fs.lstatSync(file).mtimeMs < from) continue;
       const text = readLog(fs, file);
       if (text === null) continue;
-      if (!sessions.includes(dir.name) && !text.includes(runId)) continue;
+      if (!sessions.includes(dir.name) && !mentionsRun(text, runId)) continue;
       found.add(dir.name);
       parse(text, seen, dir.name);
     } catch {

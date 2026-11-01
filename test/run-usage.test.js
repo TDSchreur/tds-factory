@@ -307,3 +307,54 @@ test('a field the log does not report shows n/a, and a visited Stage without ent
   );
   assert.match(out, /Build · no data/);
 });
+
+test('a Run id that is the start of another Run id does not take that Run session', () => {
+  const w = world();
+  const cwd = repo();
+  const short = w.start(cwd, 'Alpha');
+  const long = w.start(cwd, 'Alpha');
+  assert.ok(long.startsWith(short), `${long} should extend ${short}`);
+  const session = claudeSession(w.home, 'session-a');
+  session.add(mention(long), claudeLine({ id: 'p1', input: 5 }));
+  for (const id of [short, long]) w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  w.move(cwd, short, 'build');
+  w.move(cwd, long, 'build');
+  assert.equal(w.read(cwd, short).metrics.usage.status, 'not tracked');
+  assert.equal(find(w.read(cwd, long), { stage: 'define' }).input, 5);
+});
+
+test('a plain update never reads the logs, and a damaged stored row cannot reach the terminal', () => {
+  const w = world();
+  const cwd = repo();
+  const id = w.start(cwd);
+  const session = claudeSession(w.home, 'session-a');
+  session.add(mention(id), claudeLine({ id: 'u1', input: 3 }));
+  w.update(cwd, id, { activity: 'working' });
+  assert.deepEqual(w.read(cwd, id).metrics.usage, { tokens: 'not tracked', cost: 'not tracked' });
+  const file = join(cwd, '.factory', 'runs', id, 'run.json');
+  const record = JSON.parse(readFileSync(file, 'utf8'));
+  record.metrics.usage = {
+    status: 'tracked',
+    rows: [
+      { stage: 'define', model: 'bad\u001b[31mmodel', input: 1, output: 1 },
+      { stage: 'define', model: 'good-model', input: 2, output: 2 },
+    ],
+  };
+  writeFileSync(file, JSON.stringify(record));
+  const out = w.command(cwd, 'stats', '--id', id);
+  assert.match(out, /good-model/);
+  assert.doesNotMatch(out, /[\u0000-\u0008\u000b-\u001f\u007f]/);
+});
+
+test('session ids stored with the Usage are checked and capped', () => {
+  const w = world();
+  const cwd = repo();
+  const id = w.start(cwd);
+  for (let i = 0; i < 30; i++) {
+    const s = claudeSession(w.home, `session-${i}`);
+    s.add(mention(id), claudeLine({ id: `s${i}`, input: 1 }));
+  }
+  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  w.move(cwd, id, 'build');
+  assert.equal(w.read(cwd, id).metrics.usage.sessions.length, 20);
+});

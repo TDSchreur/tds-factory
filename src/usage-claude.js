@@ -1,7 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { count, keepLargest, modelName, readLog } from './usage-parse.js';
+import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Claude Code session transcripts under ~/.claude/projects. Only the model, the token
 // counts and the timestamp of each response are kept; no conversation text leaves this module.
@@ -72,12 +72,13 @@ export function readClaudeUsage({ home, runId, sessions, from, deadline }) {
         if (fs.lstatSync(full).mtimeMs < from) continue;
         const text = readLog(fs, full);
         if (text === null) continue;
-        if (!sessions.includes(sessionId) && !text.includes(runId)) continue;
+        if (!sessions.includes(sessionId) && !mentionsRun(text, runId)) continue;
         found.add(sessionId);
         parse(text, false, seen);
         const subDir = path.join(root, slug.name, sessionId, 'subagents');
         for (const sub of fs.existsSync(subDir) ? fs.readdirSync(subDir) : []) {
           if (!sub.endsWith('.jsonl')) continue;
+          if (Date.now() > deadline) return { problem: 'reading the Claude session logs took too long' };
           const subText = readLog(fs, path.join(subDir, sub));
           if (subText !== null) parse(subText, true, seen);
         }

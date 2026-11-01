@@ -1,7 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { count, keepLargest, modelName, readLog } from './usage-parse.js';
+import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Codex rollout files under ~/.codex/sessions/YYYY/MM/DD. Only the model, the token counts
 // and the timestamp of each response are kept. Codex counts cached input inside input, so the cached part is moved to
@@ -34,6 +34,30 @@ function rolloutFiles(root, from) {
           if (file.isFile() && /^rollout-.*\.jsonl$/.test(file.name)) files.push(path.join(dir, file.name));
       }
   return files;
+}
+
+/**
+ * The ids of a rollout, from its session_meta line alone.
+ * @param {string} text
+ */
+function parseMeta(text) {
+  /** @type {{ id?: string, root?: string, subagent: boolean }} */
+  const meta = { subagent: false };
+  const at = text.indexOf('"session_meta"');
+  if (at < 0) return meta;
+  const start = text.lastIndexOf('\n', at) + 1;
+  const end = text.indexOf('\n', at);
+  try {
+    const payload = JSON.parse(text.slice(start, end < 0 ? undefined : end))?.payload;
+    if (payload && typeof payload.id === 'string') {
+      meta.id = payload.id;
+      meta.root = typeof payload.session_id === 'string' ? payload.session_id : payload.id;
+      meta.subagent = Boolean(payload.source?.subagent) || meta.root !== payload.id;
+    }
+  } catch {
+    // A damaged first line leaves the ids unknown.
+  }
+  return meta;
 }
 
 /**
@@ -107,12 +131,12 @@ export function readCodexUsage({ home, runId, sessions, from, deadline }) {
       if (fs.lstatSync(file).mtimeMs < from) continue;
       const text = readLog(fs, file);
       if (text === null) continue;
+      // The ids come first and cheaply; a rollout that neither names the Run nor can be its subagent is not parsed.
+      const head = parseMeta(text);
+      const direct = mentionsRun(text, runId) || (head.id !== undefined && sessions.includes(head.id));
+      if (!direct && !head.subagent) continue;
       const { meta, uses } = parse(text);
-      rollouts.push({
-        meta,
-        uses,
-        direct: text.includes(runId) || (meta.id !== undefined && sessions.includes(meta.id)),
-      });
+      rollouts.push({ meta, uses, direct });
     } catch {
       // An unreadable rollout is skipped; the others still count.
     }
