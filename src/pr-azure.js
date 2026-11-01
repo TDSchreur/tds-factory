@@ -38,10 +38,11 @@ const label = (v) => String(v).slice(0, 80);
 
 // The status of a PR for the Dashboard, from `az repos pr show` and `az repos pr policy list`; throws when they have the wrong shape.
 const STATE = { active: 'open', completed: 'merged', abandoned: 'closed' };
+const MERGE = { succeeded: 'mergeable', conflicts: 'conflicting' };
 const POLICY_STATUS = ['approved', 'rejected', 'running', 'queued', 'broken', 'notApplicable'];
 export function parseStatus(pr, policies) {
   if (!pr || typeof pr !== 'object' || Array.isArray(pr) || !Array.isArray(policies)) throw bad();
-  const state = STATE[pr.status];
+  const state = Object.hasOwn(STATE, pr.status) ? STATE[pr.status] : undefined;
   const reviewers = pr.reviewers ?? [];
   if (!state || !Array.isArray(reviewers) || reviewers.some((r) => !r || typeof r.vote !== 'number')) throw bad();
   const checks = [], reviewPolicies = [];
@@ -62,7 +63,7 @@ export function parseStatus(pr, policies) {
     state,
     draft: pr.isDraft === true,
     checks: { result, failing: failing.slice(0, 5) },
-    merge: { succeeded: 'mergeable', conflicts: 'conflicting' }[pr.mergeStatus] ?? 'unknown',
+    merge: Object.hasOwn(MERGE, pr.mergeStatus) ? MERGE[pr.mergeStatus] : 'unknown',
     review,
   };
 }
@@ -100,7 +101,7 @@ export async function statusAsync(url, { run = defaultRun } = {}) {
 const GIT_STATE = { active: 'OPEN', completed: 'MERGED', abandoned: 'CLOSED' };
 function viewOf(pr, target) {
   belongsTo(pr, target);
-  const state = GIT_STATE[pr?.status];
+  const state = Object.hasOwn(GIT_STATE, pr?.status) ? GIT_STATE[pr.status] : undefined;
   if (!state) throw new Error('incomplete Azure DevOps PR state');
   return { state, headRefOid: pr.lastMergeSourceCommit?.commitId };
 }

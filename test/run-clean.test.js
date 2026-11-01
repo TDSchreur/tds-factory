@@ -210,3 +210,20 @@ test('run complete tells the user how to clean up once the PR is merged', () => 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`tds-factory run clean --id ${id}`));
 });
+
+test('clean works for a merged Azure DevOps PR through the provider seam, and keeps a Run whose PR is still open', async () => {
+  const { providerFor } = await import('../src/pr-provider.js');
+  const recorded = (key) => JSON.parse(readFileSync(new URL(`./fixtures/pr-status/azure/${key}.pr.json`, import.meta.url), 'utf8'));
+  for (const [key, outcome] of [['completed', 'cleaned'], ['passing', 'kept']]) {
+    const main = repo();
+    const { store, id, wt, head } = finished(main);
+    const pr = `https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/${recorded(key).pullRequestId}`;
+    store.update(id, { pr });
+    // What the default lookup does for a Run: ask the adapter of the PR link for state and head (here from the recorded answer, with the head of this branch).
+    const answer = { ...recorded(key), lastMergeSourceCommit: { commitId: head } };
+    const prState = (url) => { const { state, headRefOid } = providerFor(url).view(url, { run: () => ({ status: 0, stdout: JSON.stringify(answer) }) }); return { state, head: headRefOid }; };
+    const result = store.clean(id, { prState });
+    assert.equal(result.outcome, outcome, key);
+    assert.equal(existsSync(wt), outcome === 'kept', key);
+  }
+});

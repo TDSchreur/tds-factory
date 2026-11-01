@@ -141,3 +141,10 @@ test('no source or test file names the production repository', () => {
   const named = files.filter((f) => /Aanvragen[ -]?App/i.test(readFileSync(f, 'utf8')));
   assert.deepEqual(named, []);
 });
+
+test('a status that is a prototype key is not a state', () => {
+  const { pr, policies } = fixture('passing');
+  for (const status of ['constructor', '__proto__', 'toString']) assert.throws(() => parseStatus({ ...pr, status }, policies), /incomplete Azure DevOps PR status/, status);
+  assert.equal(parseStatus({ ...pr, mergeStatus: 'constructor' }, policies).merge, 'unknown');
+  assert.throws(() => view(link('passing'), { run: () => ({ status: 0, stdout: JSON.stringify({ ...pr, status: 'constructor' }) }) }), /incomplete Azure DevOps PR state/);
+});
