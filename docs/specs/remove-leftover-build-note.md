@@ -1,0 +1,3 @@
+# Remove the leftover Build note instruction
+
+Removing the ponytail Prepare Stage left one Build instruction behind: "Build what the Ticket asks; if a smaller ... exists, name it in one line in `build.md`." We no longer want it. Delete the sentence from `skills/factory/SKILL.md` and from the three Build agents (`agents/claude/factory-build.md`, `agents/copilot/factory-build.agent.md`, `agents/codex/factory-build.toml`), drop the clause about naming an alternative from the README Build bullet, and rename the skills test that asserted the sentence while keeping its other assertions (no `## Prepare` heading, the Stage headings, and no invoked `ponytail`). Add a changelog fragment. Archived specs and past `CHANGELOG.md` entries stay untouched.
