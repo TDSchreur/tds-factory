@@ -1,7 +1,7 @@
 ---
 name: factory-define
 description: Factory define Stage worker
-model: claude-haiku-4.5
+model: claude-sonnet-5.5
 include-custom-instructions: true
 ---
 
