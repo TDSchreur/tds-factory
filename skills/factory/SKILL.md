@@ -99,4 +99,4 @@ Start with `tds-factory run transition --id <id> --to finish`, then read `refere
 
 ## Follow-up
 
-When asked to address PR feedback after Finish, read `references/follow-up.md` and follow it. The Check and Follow-up Reworks share the cap of four.
+When asked to address PR feedback after Finish, read `references/follow-up.md` and follow it. The Check and Follow-up Reworks share the cap of four (plus any extra loops the user granted).

@@ -228,7 +228,7 @@ Put the project's settings in a committed `.factory/config.json`; every key is o
 ```
 
 - `models` names a model per Stage (`define`, `build`, `check`, `finish`, `follow-up`) or for `interactive-check`. The coordinator passes it when it dispatches the Stage agent, so you do not edit agent files or run `install --force`.
-- `max_check_loops` lowers how many times Check or Follow-up may send a Run back to Build. The Factory maximum is 4; a higher value fails.
+- `max_check_loops` lowers how many times Check or Follow-up may send a Run back to Build. The Factory maximum is 4; a higher value fails. A loop you grant on the Dashboard is added on top of it.
 - `labels.ticket` is the label `to-tickets` puts on Tickets.
 - `reviews` holds [Project reviews](project-reviews.md), with the same entries as `.factory/reviews.json`, which keeps working.
 
