@@ -125,7 +125,7 @@ Sending a Run back from Check or Follow-up to Build to fix Blocking findings or 
 _Avoid_: Retry, Loop back
 
 **Conventions**:
-The project's own rules: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists, read at Preflight and given to the Standards and Security axes.
+The project's own rules: `AGENTS.md` or `CLAUDE.md`, the instruction guides it routes to and the canonical specs it lists. Preflight reads `AGENTS.md` and the unscoped guides; a guide with `applyTo` globs is given to the Standards and Security axes only when it matches the diff.
 _Avoid_: Standards
 
 **Spec**:
