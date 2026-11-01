@@ -106,11 +106,11 @@ _Avoid_: Wrapper, Patch
 The per-Agent-target table in `docs/capabilities.md` of how Skills and Stage agents are invoked, how far review is isolated, how a Run resumes and what happens when an independent reviewer is unavailable.
 
 **Term sweep**:
-The read-only `tds-factory run sweep` command, step two of the Exit checklist: it lists every place in the documents that still holds a term the Run's diff changed, plus the older wordings you add with `--term`, so a stale statement is found while building. Hits in documents marked as replaced are shown apart. It judges nothing.
+The read-only `tds-factory run sweep` command, step two of the Exit checklist: it lists every place in the documents that still holds a term the Run's diff changed, plus the older wordings you add with `--term`, so a stale statement is found while building. It also derives numbers with a unit and headings that only the removed lines held, lists the lines that miss a changed list member or still hold a removed one, and lists added lines that claim "linear", "bounded" or "safe". Hits in documents marked as replaced are shown apart. It judges nothing.
 _Avoid_: Grep pass
 
 **Exit checklist**:
-The inline steps Build runs after the last Ticket and after every Rework, before moving on: the project's static checks, a term sweep (`tds-factory run sweep`), the required artifacts, a story trace, a security check and a self-check of its own diff. It records no verdict or Evidence; Check still owns the review.
+The inline steps Build runs after the last Ticket and after every Rework, before moving on: the project's static checks, a term sweep (`tds-factory run sweep`), the required artifacts, a story trace, a security check, a hostile-input step for code over untrusted input and a self-check of its own diff, with a hit list of the usual Check findings. It records no verdict or Evidence; Check still owns the review.
 _Avoid_: Self-review
 
 **Blocking finding**:
