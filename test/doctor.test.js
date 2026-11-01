@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 import { SKILLS_DIR, AGENTS_DIR } from '../src/paths.js';
 import { targets } from '../src/flow.js';
@@ -37,6 +37,17 @@ function doctorAt(home, dir, ...args) {
     env: { ...process.env, HOME: home },
   });
   return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stderr: result.stderr };
+}
+// The doctor report without blocking this process, so a server started by the test can answer the doctor's git.
+async function doctorAsync(dir, ...args) {
+  const child = spawn(process.execPath, [cli, 'doctor', '--json', ...args], {
+    cwd: dir,
+    env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), 'doctor-home-')) },
+  });
+  let stdout = '';
+  child.stdout.on('data', (d) => (stdout += d));
+  await new Promise((done) => child.once('close', done));
+  return JSON.parse(stdout);
 }
 // A shared check, else a check of an Agent target: the only one in the report, or Claude's in the default report.
 const check = (report, id, agent = report.agents.length === 1 ? report.agents[0].id : 'claude') =>
@@ -153,6 +164,42 @@ test('doctor fails the git check without a repository, a commit or an origin', (
   assert.equal(result.status, 'fail');
   assert.match(result.message, /origin/);
 });
+
+// A credential helper that, like Git Credential Manager, ignores GIT_TERMINAL_PROMPT and waits for a person
+// (a browser or dialog) unless GCM_INTERACTIVE=never; the origin is a server that always asks for credentials.
+test(
+  'doctor fails the git check at once when origin needs a login that no one can give',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const dir = project();
+    const helper = join(dir, '..', 'interactive-credential-helper');
+    writeFileSync(
+      helper,
+      '#!/bin/sh\n[ "$GCM_INTERACTIVE" = never ] && { echo "fatal: interactivity is disabled" >&2; exit 1; }\nsleep 60\n',
+      { mode: 0o755 },
+    );
+    const server = spawn(
+      process.execPath,
+      [
+        '-e',
+        `require('http').createServer((_, r) => { r.writeHead(401, { 'WWW-Authenticate': 'Basic realm="x"' }); r.end(); }).listen(0, '127.0.0.1', function () { console.log(this.address().port); });`,
+      ],
+      { stdio: ['ignore', 'pipe', 'inherit'] },
+    );
+    try {
+      const port = await new Promise((done) => server.stdout.once('data', (d) => done(Number(d))));
+      git(dir, 'remote', 'set-url', 'origin', `http://127.0.0.1:${port}/project.git`);
+      git(dir, 'config', 'credential.helper', helper);
+      const started = Date.now();
+      const result = check(await doctorAsync(dir), 'git');
+      assert.equal(result.status, 'fail');
+      assert.match(result.message, /cannot determine the origin default branch/);
+      assert.ok(Date.now() - started < 10000, `origin took ${Date.now() - started} ms to answer`);
+    } finally {
+      server.kill();
+    }
+  },
+);
 
 test('doctor tells a missing Verify command from a malformed or unusable one', () => {
   assert.equal(check(doctor(project('# A\n\n## Agent skills\n')).report, 'verify-command').status, 'missing');
