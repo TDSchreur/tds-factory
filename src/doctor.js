@@ -8,6 +8,7 @@ import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
 import { verifyCommandProblem, fastCommandProblem, mergedLeftovers } from './run-store.js';
 import { loadProjectConfig } from './project-config.js';
+import { guidesCheck } from './guides.js';
 
 // The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
 const read = (file) => {
@@ -134,7 +135,7 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
   if (root.status === 0 && worktreeRoot) projectDir = worktreeRoot;
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
   const attempt = ([id, check]) => { let result; try { result = check(); } catch (err) { result = ['fail', err.message]; } return { id, status: result[0], message: result[1] }; };
-  const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)], ['verify-fast', () => verifyFastCheck(projectDir)]].map(attempt);
+  const checks = [['cli', cliCheck], ['tracker', () => trackerCheck(projectDir)], ['git', () => gitCheck(projectDir)], ['verify-command', () => verifyCommandCheck(projectDir)], ['verify-fast', () => verifyFastCheck(projectDir)], ['guides', () => guidesCheck(projectDir)]].map(attempt);
   const agents = (agent === undefined ? Object.keys(targets) : [agent]).map((id) => {
     const has = isInstalled(id, projectDir, homeDir);
     const list = [['binary', () => binaryCheck(id)], ['skills', () => skillsCheck(has)], ['config', () => configCheck(id, projectDir, homeDir)], ['review', () => reviewCheck(id, projectDir, homeDir, has)]].map(attempt);

@@ -8,7 +8,11 @@ import { hashLine, modifiedLocally } from './tree-hash.js';
 // Skills the factory flow invokes; the model must be able to call them, so upstream's
 // disable-model-invocation flag is removed from their copies.
 export function invokedByFactory(skillsDir) {
-  const flow = fs.readFileSync(path.join(skillsDir, 'factory', 'SKILL.md'), 'utf8');
+  // The main file and its reference files: a Stage's text may live in a reference.
+  const dir = path.join(skillsDir, 'factory');
+  const references = path.join(dir, 'references');
+  const names = fs.existsSync(references) ? fs.readdirSync(references, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => path.join('references', e.name)).sort() : [];
+  const flow = ['SKILL.md', ...names].map((n) => fs.readFileSync(path.join(dir, n), 'utf8')).join('\n');
   return new Set([...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]));
 }
 

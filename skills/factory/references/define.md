@@ -1,0 +1,3 @@
+# Define: tracker labels
+
+Before you ask about a label the tracker needs, look it up: use the label from `labels.ticket` in `tds-factory run config` (default `ready-for-agent`); on GitHub run `gh label list --search <name> --json name` and match the exact name in the output, because a search also returns labels that only resemble it. Ask the user to create the label only when no result matches the exact name, and never run `gh label create` before the lookup. If `gh label create` fails because the label already exists, treat the label as present and carry on. On another tracker, if a label it needs does not exist, ask the user before creating it.
