@@ -1,6 +1,6 @@
 {
   "name": "tds-factory",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A simple software factory: curated agent skills installed into Claude, Codex and Copilot.",
   "type": "module",
   "bin": {
