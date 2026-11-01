@@ -123,6 +123,8 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         await request('POST', base + '/goog/cdp/execute', { cmd: 'Emulation.setDeviceMetricsOverride', params: { width, height, deviceScaleFactor: 1, mobile: false } });
         assert.deepEqual(await execute('return { width: window.innerWidth, height: window.innerHeight }'), { width, height });
       },
+      // A DevTools protocol command, for example to emulate prefers-reduced-motion or forced-colors.
+      cdp: (cmd, params) => request('POST', base + '/goog/cdp/execute', { cmd, params }),
       key: (value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value }, { type: 'keyUp', value }] }] }),
       keyChord: (modifier, value) => request('POST', base + '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: modifier }, { type: 'keyDown', value }, { type: 'keyUp', value }, { type: 'keyUp', value: modifier }] }] }),
       wait: delay,

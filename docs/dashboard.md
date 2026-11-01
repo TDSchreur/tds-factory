@@ -12,6 +12,17 @@ Selecting a Run opens its detail across the screen at compact widths. Use **Back
 
 Each card carries a Fast or Full chip for its track (a Run without a track is Full), and Run detail shows it too, with Stage time, Reworks and first-pass clean rate using the same calculations as `tds-factory run stats --id ID`. Time includes waiting and repeated visits; an active visit is labeled ongoing. Old or missing observations show `no data`. Tokens and cost are `not tracked` for current Agent targets. See [Run metrics in the usage guide](usage.md#run-metrics) for the rate and totals.
 
+## Design
+
+The Dashboard follows Fluent 2 ([ADR 0025](adr/0025-the-dashboard-adopts-fluent-2-through-design-tokens.md)): neutral surfaces, a brand blue accent, 14 px type, 4 px corners and soft elevation. `dashboard/style.css` starts with a layer of Fluent design tokens, named as Fluent names them (`--colorNeutralBackground1`, `--fontSizeBase300`, `--shadow4`, ...), taken from `@fluentui/tokens` 1.0.0-alpha.24 (`webLightTheme` and `webDarkTheme`). Every rule below the layer uses only those tokens; a test checks that no rule uses a literal colour and that every token is used. No font is shipped: the font list starts with Segoe UI and continues with the system fonts. To update the tokens, follow ADR 0025.
+
+- **Themes.** Light, dark and System work as before: the theme selector sets `data-theme`, and System follows `prefers-color-scheme`.
+- **Contrast.** Every text and background pair keeps at least 4.5:1, and borders, focus rings and the progress fill keep 3:1, in both themes. A unit test computes this from the token values and a browser test measures the rendered text. Pass, fail, quiet and waiting states also say so in text and symbols, never by colour alone.
+- **Focus.** Every control that can take keyboard focus shows a two-colour ring (an inner and an outer ring), so it shows on every surface in both themes.
+- **Reduced motion.** With `prefers-reduced-motion: reduce` the Dashboard has no transitions or animations.
+- **High contrast.** With forced colours (`forced-colors: active`) the browser uses your system colours. The progress fill, the status dot, the primary and pressed buttons, the selected card and the focus ring are redrawn in the system highlight colours, and a waiting card also gets a double border.
+- **Narrow screens.** Up to 1024 CSS pixels the Stage navigation and the full-screen detail work as before, with 44 px touch targets.
+
 ## Runs that wait on you
 
 One definition of waiting is used everywhere: the Run's `waiting` flag in `/api/views`, which is true while its status is `waiting` or `waiting_on_human` is set and the Run is not done or abandoned. The card border, the banner, the filter, the sort, the tab title count and the browser notification all read it.

@@ -380,3 +380,19 @@
     #detail header { position: static; padding-top: var(--spacingVerticalS); }
     #detail .close { display: none; }
   }
+
+  /* Reduced motion: no transitions or animations. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  }
+  /* High contrast: the browser replaces the colours with the user's system colours. These rules keep what colour alone would carry: the
+     progress fill, the pressed and primary buttons, the status dot, the selected card and the focus ring. */
+  @media (forced-colors: active) {
+    :focus-visible { outline-color: Highlight; box-shadow: none; }
+    .progress { border: var(--strokeWidthThin) solid CanvasText; }
+    .progress-fill, #status::before { forced-color-adjust: none; background: Highlight; }
+    .actions .primary, .dialog-actions .primary, .dialog-actions .danger, #needs-you[aria-pressed="true"], .stage-nav button[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+    .card.selected { outline: var(--strokeWidthThick) solid Highlight; outline-offset: 2px; }
+    .card.waiting { border-style: double; }
+    .chip, .badge, #project { border-color: CanvasText; }
+  }

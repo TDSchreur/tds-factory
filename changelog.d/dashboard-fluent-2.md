@@ -1,0 +1,2 @@
+### Changed
+- The Dashboard has a new design based on Fluent 2: a design token layer in the stylesheet, a Fluent brand blue and status colours, 14 px type, and the same light, dark and System themes. Every text and background pair keeps 4.5:1 contrast, focus rings show in both themes, reduced motion switches transitions off, and high contrast mode redraws the progress fill, status dot, primary buttons and selected card in system colours.
