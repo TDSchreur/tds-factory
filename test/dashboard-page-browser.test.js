@@ -17,8 +17,7 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
   ] });
   if (!page) return;
   try {
-    assert.equal(await page.execute("return document.querySelector('#intro').open"), false);
-    assert.match(await page.execute("return document.querySelector('#intro summary').textContent"), /What is this\?/);
+    assert.equal(await page.execute("return document.getElementById('help').textContent"), 'Help');
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('#board h2')].map(h => [h.textContent, h.tabIndex, h.title.length > 20])"),
       ['Define', 'Build', 'Check', 'Finish', 'Follow-up', 'Done'].map((label) => [label, 0, true]));
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('[data-stage=check] .chip')].map(c => [c.textContent, c.className, c.title.length > 10])"), [

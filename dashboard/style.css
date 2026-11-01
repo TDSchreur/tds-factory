@@ -251,11 +251,14 @@
   select:hover, button:hover { background: var(--colorNeutralBackground1Hover); }
   button:active { background: var(--colorNeutralBackground1Pressed); }
 
-  #intro { margin: var(--spacingVerticalL) var(--spacingHorizontalXL) 0; padding: var(--spacingVerticalS) var(--spacingHorizontalM); background: var(--colorNeutralBackground1); border: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusMedium); font-size: var(--fontSizeBase300); }
-  #intro summary { cursor: pointer; font-weight: var(--fontWeightSemibold); }
-  #intro p, #intro ol { margin: var(--spacingVerticalS) 0; color: var(--colorNeutralForeground2); }
   .board-wrap { min-width: 0; }
   .stage-nav { display: none; }
+  .welcome { max-width: 36rem; margin: var(--spacingVerticalXXL) auto; padding: var(--spacingVerticalXXL) var(--spacingHorizontalXXL); background: var(--colorNeutralBackground1); border: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusXLarge); box-shadow: var(--shadow4); }
+  .welcome h2 { font-size: var(--fontSizeBase500); line-height: var(--lineHeightBase500); font-weight: var(--fontWeightSemibold); margin: 0 0 var(--spacingVerticalS); }
+  .welcome p { margin: var(--spacingVerticalS) 0; color: var(--colorNeutralForeground2); }
+  .welcome code { font-family: var(--fontFamilyMonospace); font-size: var(--fontSizeBase300); background: var(--colorNeutralBackground3); border: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusSmall); padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); }
+  .welcome .link { border-color: transparent; background: none; color: var(--colorBrandForegroundLink); padding: var(--spacingVerticalXXS) 0; }
+  .welcome .link:hover { background: none; text-decoration: underline; }
   #board { display: grid; grid-template-columns: repeat(6, minmax(12rem, 1fr)); gap: var(--spacingHorizontalL); padding: var(--spacingVerticalXL) var(--spacingHorizontalXL); overflow-x: auto; align-items: start; }
   .column { background: var(--colorNeutralBackground3); border-radius: var(--borderRadiusLarge); padding: var(--spacingVerticalM) var(--spacingHorizontalM); min-width: 0; }
   .column h2 { font-size: var(--fontSizeBase200); line-height: var(--lineHeightBase200); font-weight: var(--fontWeightSemibold); text-transform: uppercase; letter-spacing: .08em; margin: var(--spacingVerticalXXS) var(--spacingHorizontalXS) var(--spacingVerticalM); color: var(--colorNeutralForeground3); }
@@ -355,6 +358,12 @@
   .dialog-content { padding: var(--spacingVerticalXXL) var(--spacingHorizontalXXL); }
   .dialog-content h2 { font-size: var(--fontSizeBase500); line-height: var(--lineHeightBase500); font-weight: var(--fontWeightSemibold); margin: 0 0 var(--spacingVerticalS); }
   .dialog-content p { margin: 0; color: var(--colorNeutralForeground2); overflow-wrap: anywhere; white-space: pre-wrap; }
+  #help-panel { width: min(40rem, calc(100% - 2rem)); }
+  .dialog-content .help-lead { margin: 0 0 var(--spacingVerticalM); white-space: normal; }
+  .help-lead code { font-family: var(--fontFamilyMonospace); font-size: var(--fontSizeBase200); background: var(--colorNeutralBackground3); border: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: var(--borderRadiusSmall); padding: 0 var(--spacingHorizontalXS); }
+  .help-section h3 { font-size: var(--fontSizeBase300); line-height: var(--lineHeightBase300); font-weight: var(--fontWeightSemibold); margin: var(--spacingVerticalL) 0 var(--spacingVerticalXS); }
+  .help-section ul { margin: 0; padding-left: var(--spacingHorizontalXL); color: var(--colorNeutralForeground2); }
+  .help-section li { padding: var(--spacingVerticalXXS) 0; }
   .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--spacingHorizontalS); margin-top: var(--spacingVerticalXXL); }
   .dialog-actions .primary { background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); border-color: transparent; }
   .dialog-actions .primary:hover { background: var(--colorBrandBackgroundHover); }
@@ -363,12 +372,12 @@
     header { padding: var(--spacingVerticalMNudge) var(--spacingHorizontalL); }
     #status { order: 1; }
     #project { order: 2; }
-    #theme, #older, #notify, #needs-you { order: 3; }
+    #help, #theme, #older, #notify, #needs-you { order: 3; }
     #status { min-width: 0; overflow-wrap: anywhere; }
     #project { max-width: min(16rem, 100%); }
-    #theme, #older, #notify, #needs-you, .column > button, .tickets a, .card .toggle, .actions button, #intro summary, .dialog-actions button { min-height: 44px; }
+    #theme, #older, #notify, #needs-you, .column > button, .tickets a, .card .toggle, .actions button, .dialog-actions button, #help, .welcome .link { min-height: 44px; }
     .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; }
-    #intro summary { padding: var(--spacingVerticalMNudge) 0; }
+    #help-panel { width: 100%; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; }
     .stage-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: var(--spacingHorizontalS); padding: var(--spacingVerticalL) var(--spacingHorizontalL) 0; }
     .stage-nav button { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--spacingVerticalXS) var(--spacingHorizontalS); min-width: 0; min-height: 44px; }
     .stage-nav button[aria-pressed="true"] { background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); border-color: transparent; }

@@ -33,7 +33,7 @@ for (const width of [320, 375, 390, 768, 1024]) {
       assert.equal(await page.execute('return document.documentElement.scrollWidth <= window.innerWidth'), true);
       assert.equal(await page.execute("return document.querySelector('#factory-version').textContent"), 'v1.2.3');
       assert.equal(await page.execute("return document.getElementById('project').title"), '/work/' + 'long-project-name-'.repeat(12));
-      const sizes = await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button, #theme, #intro summary, #board .column[data-active=true] .actions button')].map((e) => Math.round(e.getBoundingClientRect().height))");
+      const sizes = await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button, #theme, #help, #board .column[data-active=true] .actions button')].map((e) => Math.round(e.getBoundingClientRect().height))");
       assert.ok(sizes.length >= 8 && sizes.every((h) => h >= 44), `touch heights: ${sizes}`);
       assert.equal(await page.execute(clickStage, ['Done']), true);
       assert.deepEqual(await page.execute(visibleStages), ['done']);
@@ -41,13 +41,17 @@ for (const width of [320, 375, 390, 768, 1024]) {
   });
 }
 
-test('empty and nonempty dashboards choose a useful initial Stage', async (t) => {
-  for (const [runs, stage] of [[[], 'define'], [[run({ column: 'check' })], 'check']]) {
+test('an empty dashboard shows the welcome card and a nonempty one chooses a useful initial Stage', async (t) => {
+  for (const [runs, stage] of [[[], null], [[run({ column: 'check' })], 'check']]) {
     const page = await openPage(t, { runs }, { width: 390 });
     if (!page) return;
     try {
       await page.waitFor("return /^Updated/.test(document.getElementById('status').textContent)");
-      assert.deepEqual(await page.execute(visibleStages), [stage]);
+      if (stage) assert.deepEqual(await page.execute(visibleStages), [stage]);
+      else {
+        assert.deepEqual(await page.execute(visibleStages), [], 'no Stage columns');
+        assert.equal(await page.execute("return !!document.querySelector('.welcome') && document.documentElement.scrollWidth <= window.innerWidth && document.querySelector('.welcome .link').getBoundingClientRect().height >= 44"), true);
+      }
     } finally { await page.close(); }
   }
 });

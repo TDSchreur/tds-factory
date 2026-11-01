@@ -61,6 +61,27 @@ for (const theme of ['light', 'dark']) {
   });
 }
 
+for (const theme of ['light', 'dark']) {
+  test(`the help panel and the welcome card keep 4.5:1 text contrast in the ${theme} theme`, async (t) => {
+    const state = { runs: [] };
+    const page = await openPage(t, state);
+    if (!page) return;
+    try {
+      await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await page.waitFor("return !!document.querySelector('.welcome')");
+      await page.execute(`document.documentElement.dataset.theme = '${theme}'`);
+      const welcome = await page.execute(SAMPLE);
+      assert.ok(welcome.some(([, , , text]) => text === 'No Runs yet'), 'the welcome card was sampled');
+      await page.execute("document.getElementById('help').click()");
+      await page.waitFor("return document.getElementById('help-panel').open");
+      const panel = await page.execute(SAMPLE);
+      assert.ok(panel.some(([, , , text]) => text === 'Help'), 'the help panel was sampled');
+      const low = [...welcome, ...panel].map(([cls, fg, bg, text]) => [cls, text, contrast(hex(fg), hex(bg))]).filter(([, , ratio]) => ratio < 4.5);
+      assert.deepEqual(low.map(([cls, text, ratio]) => `${cls} "${text}": ${ratio.toFixed(2)}`), []);
+    } finally { await page.close(); }
+  });
+}
+
 test('every control shows a focus ring in two colours that do not depend on the theme', async (t) => {
   const page = await openPage(t, { runs: runs() });
   if (!page) return;
