@@ -124,6 +124,14 @@ try {
         print('Total observed', report.total);
         for (const [track, { runs, total }] of Object.entries(report.byTrack))
           if (runs) print(`Total observed, ${track[0].toUpperCase()}${track.slice(1)} track (${runs} Run(s))`, total);
+        if (report.usage.tracked) {
+          console.log(`Token usage of ${report.usage.tracked} tracked Run(s)`);
+          for (const row of report.usage.rows) console.log(`  ${rowLine(row)}`);
+        }
+        if (report.usage.left.length)
+          console.log(
+            `Left out of the token totals (not tracked): ${report.usage.left.map((id) => id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')).join(', ')}`,
+          );
         const missing = report.runs.filter(
           (run) =>
             !run.summary ||

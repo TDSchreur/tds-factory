@@ -198,3 +198,26 @@ test('the Claude session id the CLI sees is recorded and matches a transcript th
   assert.deepEqual(record.metrics.sessions, ['session-exact']);
   assert.equal(find(record, { stage: 'define' }).input, 9);
 });
+
+test('run stats --all adds the tokens per model of tracked Runs and names the Runs it leaves out', () => {
+  const w = world();
+  const cwd = repo();
+  const one = w.start(cwd, 'One');
+  const two = w.start(cwd, 'Two');
+  const three = w.start(cwd, 'Three');
+  const a = claudeSession(w.home, 'session-a');
+  const b = claudeSession(w.home, 'session-b');
+  a.add(mention(one), claudeLine({ id: 'a1', input: 10, cacheRead: 100, cacheWrite: 20, output: 5 }));
+  b.add(
+    mention(two),
+    claudeLine({ id: 'b1', input: 1, cacheRead: 10, cacheWrite: 2, output: 3 }),
+    claudeLine({ id: 'b2', model: 'claude-opus-5-5', input: 7, output: 7 }),
+  );
+  for (const id of [one, two, three]) w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  for (const id of [one, two, three]) w.move(cwd, id, 'build');
+  const out = w.command(cwd, 'stats', '--all');
+  assert.match(out, /Token usage of 2 tracked Run\(s\)/);
+  assert.match(out, /claude-sonnet-5-5 {2}fresh 41 {2}input 11 {2}cache read 110 {2}cache write 22 {2}output 8/);
+  assert.match(out, /claude-opus-5-5 {2}fresh 14 {2}input 7 /);
+  assert.match(out, new RegExp(`Left out of the token totals \\(not tracked\\): ${three}`));
+});

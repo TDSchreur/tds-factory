@@ -262,3 +262,50 @@ export function rowLine(row) {
   if (row.subagent_fresh > 0) parts.push(`subagents ${row.subagents}`);
   return parts.join('  ');
 }
+
+/**
+ * Tokens per model over the Runs whose Usage is tracked; the others are named and left out, never counted as zero.
+ * @param {{ id: string, summary: any }[]} runs
+ */
+export function totalUsage(runs) {
+  /** @type {Map<string, any>} */
+  const models = new Map();
+  const left = [];
+  let tracked = 0;
+  for (const { id, summary } of runs) {
+    const usage = summary?.usage;
+    if (!usage?.tracked) {
+      left.push(id);
+      continue;
+    }
+    tracked++;
+    for (const row of usage.rows) {
+      const total = models.get(row.model) ?? {
+        model: row.model,
+        input: null,
+        cache_read: null,
+        cache_write: null,
+        output: null,
+        reasoning: null,
+        subagent_fresh: 0,
+      };
+      for (const field of FIELDS) total[field] = add(total[field], row[field]);
+      total.subagent_fresh += row.subagent_fresh;
+      models.set(row.model, total);
+    }
+  }
+  const rows = [...models.values()]
+    .sort((a, b) => (fresh(b) ?? 0) - (fresh(a) ?? 0) || a.model.localeCompare(b.model))
+    .map((r) => ({
+      label: r.model,
+      fresh: tokenText(fresh(r)),
+      input: tokenText(r.input),
+      cacheRead: tokenText(r.cache_read),
+      cacheWrite: tokenText(r.cache_write),
+      output: tokenText(r.output),
+      reasoning: r.reasoning === null ? null : tokenText(r.reasoning),
+      subagent_fresh: r.subagent_fresh,
+      subagents: tokenText(r.subagent_fresh),
+    }));
+  return { tracked, rows, left };
+}
