@@ -47,7 +47,7 @@ CI runs the lint, formatting and type checks. ESLint uses recommended correctnes
 
 ## PR providers
 
-Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter behind `src/pr-provider.js`. `providerFor(url)` returns the adapter for a PR link and `remoteRepo(remote)` the adapter and repository of a git remote URL. The Dashboard, Run clean-up, Follow-up and Run repair ask the provider and judge the answer themselves, and a test pins that no other file runs `gh`. A new host is one more adapter in that list. See [ADR 0020](adr/0020-pr-providers-sit-behind-one-seam.md).
+Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter behind `src/pr-provider.js`. `providerFor(url)` returns the adapter for a PR link and `remoteRepo(remote)` the adapter and repository of a git remote URL. The Dashboard, Run clean-up, Follow-up and Run repair ask the provider and judge the answer themselves, and a test pins that no other file runs `gh`. The Dashboard's PR status is `statusAsync` in the adapter: `parseStatus` turns one `gh pr view` answer into the status, and `test/fixtures/pr-status/merged-real.json` is real output of it. A new host is one more adapter in that list. See [ADR 0020](adr/0020-pr-providers-sit-behind-one-seam.md).
 
 ## Switching between the Release and your checkout
 

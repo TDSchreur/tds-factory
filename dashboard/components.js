@@ -3,7 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
-import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, lastSeenOf, modelOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
+import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, lastSeenOf, modelOf, prStatusOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
 
 export const html = htm.bind(h);
 
@@ -72,6 +72,20 @@ function Timeline({ run }) {
   </section>`;
 }
 
+// The status of the Run's pull request. The PR link is shown here for a Run that is not Done; a Done card has its own link.
+function PrStatus({ run, onCheckPr, showLink = true }) {
+  const status = prStatusOf(run);
+  if (!status) return null;
+  const link = showLink && run.column !== 'done' && safeUrl(run.pr) && html`<${Link} href=${run.pr}>Pull request<//>`;
+  if (status.kind === 'closed') return link ? html`<div class="pr-status">${link}</div>` : null;
+  return html`<div class="pr-status" aria-label="Pull request status">
+    ${link}${link && ' '}
+    ${status.kind === 'checking' && html`<span>PR status: checking...</span>`}
+    ${status.kind === 'unavailable' && html`<span class="unavailable">PR status unavailable: ${status.text}</span> <button type="button" aria-label=${'Check the PR status of ' + run.title + ' again'} onClick=${(e) => { stop(e); onCheckPr(run); }} onKeyDown=${stop}>Check again</button>`}
+    ${status.lines.map((line) => html`<span key=${line} class=${'pr-fact' + (/^Checks: failing|conflicts/.test(line) ? ' bad' : '')}>${line}</span>${' '}`)}
+  </div>`;
+}
+
 function Tickets({ run }) {
   const tickets = ticketsOf(run);
   const mark = { done: '✓', active: '▶', todo: '○' };
@@ -81,7 +95,7 @@ function Tickets({ run }) {
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
 const pauseLabel = (run) => run.waiting ? 'Needs you' + (waitAgeOf(run) ? ', ' + waitAgeOf(run).text : '') : run.status === 'verification-unavailable' ? 'Verification unavailable' : run.status === 'interrupted' ? 'Agent interrupted' : '';
 
-export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onSync, onClean, onAccept, onDelete }) {
+export function Card({ run, selected, expanded, onSelect, onToggle, onCheckPr, onMerge, onSync, onClean, onAccept, onDelete }) {
   const done = run.column === 'done';
   const age = ageMs(run.updated);
   const stale = age !== null && !done && !run.unreadable && age > STALE_MS;
@@ -93,6 +107,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onS
     html`<${Progress} run=${run} />`,
     html`<${Tickets} run=${run} />`,
     html`<${Chips} run=${run} />`,
+    html`<${PrStatus} run=${run} onCheckPr=${onCheckPr} />`,
     done && run.pr && html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
     (done || (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) && html`<div class="actions">
       ${run.pr && run.prState === 'open' && run.status === 'done' && html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(e) => { stop(e); onMerge(run); }} onKeyDown=${stop}>Merge</button>`}
@@ -129,7 +144,7 @@ export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedI
     return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
       <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
       ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
-      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
       ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
     </section>`;
   })}</main></div>`;
@@ -194,7 +209,7 @@ export function Header({ project, version, status, olderLabel, onOlder, canNotif
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
-export function Detail({ run, compact, onClose }) {
+export function Detail({ run, compact, onClose, onCheckPr }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(null);
   const heading = useRef(null);
@@ -268,6 +283,7 @@ export function Detail({ run, compact, onClose }) {
       ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
       <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
       <${Chips} run=${run} />
+      <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
     </header>
     <${Timeline} run=${run} />
     ${run.metrics && html`<section aria-label="Run metrics"><h3>Run metrics</h3>

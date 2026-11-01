@@ -181,6 +181,7 @@ function App() {
       setSelectedId((now) => (now === id ? null : id));
     },
     toggle: (id) => setExpandedIds((now) => { const next = new Set(now); if (!next.delete(id)) next.add(id); return next; }),
+    checkPr: async (run) => { try { await fetch('/api/runs/' + encodeURIComponent(run.id) + '/pr-status?refresh=1', { cache: 'no-store' }); } catch {} poll(); },
     merge: mergeRun,
     sync: syncRun,
     clean: cleanRun,
@@ -194,7 +195,7 @@ function App() {
     <${Intro} />
     <div id="layout" class=${openRun ? 'open' : ''}>
       <${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />
-      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} />
+      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} onCheckPr=${actions.checkPr} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />`;
 }
