@@ -49,7 +49,7 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
     const remote = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: projectDir, encoding: 'utf8' });
     const url = remote.status === 0 ? remote.stdout.trim() : '';
     const host = remoteRepo(url);
-    if (!host) notes.push('GitHub origin unresolved or not GitHub; reconcile any PR manually before repeating work');
+    if (!host || typeof host.provider.listByHead !== 'function') notes.push('GitHub origin unresolved or not GitHub; reconcile any PR manually before repeating work');
     else {
       const repo = `${host.owner}/${host.name}`;
       try {

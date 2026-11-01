@@ -6,6 +6,7 @@ const exec = promisify(execFile);
 const PR = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
 
 export const name = 'github';
+export const title = 'GitHub';
 // Whether a PR link is a GitHub one; only such a link is ever passed to gh.
 export const matches = (url) => typeof url === 'string' && PR.test(url);
 // The repository (owner and name) a git remote URL points at, or undefined when it is not GitHub.

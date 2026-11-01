@@ -11,6 +11,7 @@ const REMOTE_HTTPS = new RegExp(`^https://(?:[\\w.-]+@)?dev\\.azure\\.com/(${ORG
 const REMOTE_SSH = new RegExp(`^(?:ssh://)?git@ssh\\.dev\\.azure\\.com[:/]v3/(${ORG})/(${NAME})/(${NAME})$`);
 
 export const name = 'azure-devops';
+export const title = 'Azure DevOps';
 // Whether a PR link is an Azure DevOps one; only such a link is ever passed to az.
 const decode = (value) => { try { return decodeURIComponent(value); } catch { return undefined; } };
 // A decoded name is one path segment of plain text: no slash, no control character, not a dot segment.

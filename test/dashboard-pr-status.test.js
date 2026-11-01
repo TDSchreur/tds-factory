@@ -106,3 +106,28 @@ test('a merged PR is not looked up again within ten minutes', async () => {
     assert.equal(calls.length, 1);
   });
 });
+
+test('an Azure DevOps PR gets a status from the same cache and shows its host and reasons', async () => {
+  const AZ = 'https://dev.azure.com/o/p/_git/r/pullrequest/1';
+  const calls = [];
+  const records = [{ stage: 'finish', status: 'running', pr: AZ }, { stage: 'finish', status: 'running', pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/2' }];
+  await withDashboard(records, async (url) => {
+    calls.push(url);
+    if (url === AZ) return OPEN;
+    throw Object.assign(new Error('x'), { reason: 'az-extension-missing' });
+  }, async ({ views }) => {
+    await views();
+    await settle();
+    const list = await views();
+    assert.deepEqual(list.map((r) => [r.prHost, r.prCanMerge, r.prStatus.unavailable ?? r.prStatus.state]), [['azure-devops', false, 'open'], ['azure-devops', false, 'az-extension-missing']]);
+    assert.deepEqual(calls.sort(), records.map((r) => r.pr));
+  });
+});
+
+test('an unknown reason of a provider shows as a plain error', async () => {
+  await withDashboard([finish], async () => { throw Object.assign(new Error('x'), { reason: 'whatever' }); }, async ({ views }) => {
+    await views();
+    await settle();
+    assert.deepEqual((await views())[0].prStatus, { unavailable: 'error' });
+  });
+});

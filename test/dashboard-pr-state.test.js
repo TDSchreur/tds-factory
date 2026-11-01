@@ -150,6 +150,7 @@ test('Merge refuses other origins, unknown runs, active runs and non-GitHub link
     [{ record: { status: 'running' } }, undefined, undefined, 409],
     [{ record: { status: 'abandoned' } }, undefined, undefined, 409],
     [{ record: { pr: 'https://example.com/pr/1' } }, undefined, undefined, 409],
+    [{ record: { pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/1' } }, undefined, undefined, 409],
   ]) {
     const setup = await mergeSetup(options);
     try { assert.equal((await setup.post(id, origin)).status, want); assert.deepEqual(merges(setup), []); }
@@ -182,5 +183,26 @@ test('confirmation data names failing, pending and unavailable GitHub checks', a
     setup.configure({ checks: [{ name: 'CI', bucket: 'pass', state: 'SUCCESS' }] });
     assert.match(await (await setup.checks()).text(), /checks: passing/i);
     assert.deepEqual(merges(setup), []);
+  } finally { await setup.close(); }
+});
+
+test('an Azure DevOps PR cannot be merged or checked from the Dashboard, and the view says so', async () => {
+  const setup = await mergeSetup({ record: { pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/1' } });
+  try {
+    const view = (await (await fetch(`${setup.dash.url}/api/views`)).json())[0];
+    assert.deepEqual([view.prHost, view.prCanMerge], ['azure-devops', false]);
+    const post = await setup.post();
+    assert.equal(post.status, 409);
+    assert.match(await post.text(), /cannot merge from the Dashboard/);
+    assert.equal((await setup.checks()).status, 409);
+    assert.deepEqual(setup.readCalls(), [], 'neither gh nor az was called');
+  } finally { await setup.close(); }
+});
+
+test('a GitHub PR can be merged and the view says so', async () => {
+  const setup = await mergeSetup();
+  try {
+    const view = (await (await fetch(`${setup.dash.url}/api/views`)).json())[0];
+    assert.deepEqual([view.prHost, view.prCanMerge], ['github', true]);
   } finally { await setup.close(); }
 });

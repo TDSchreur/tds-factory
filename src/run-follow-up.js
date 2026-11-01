@@ -3,12 +3,13 @@ import { ownWorktrees, worktreeState } from './worktrees.js';
 import { loops, loopCap } from './run-record.js';
 import { clearEvidence } from './evidence.js';
 import { moveVisit } from './run-metrics.js';
-import { providerFor } from './pr-provider.js';
+import { can, providerFor } from './pr-provider.js';
 
 // The provider of a PR link, or the error Follow-up has always given for a link it cannot read.
 function providerOrThrow(url) {
   const provider = typeof url === 'string' && providerFor(url);
   if (!provider) throw new Error('Follow-up needs a GitHub PR URL');
+  if (!can(url, 'strictView')) throw new Error(`Follow-up does not support ${provider.title} yet`);
   return provider;
 }
 
