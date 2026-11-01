@@ -33,7 +33,7 @@ for (const width of [320, 375, 390, 768, 1024]) {
       assert.equal(await page.execute('return document.documentElement.scrollWidth <= window.innerWidth'), true);
       assert.equal(await page.execute("return document.querySelector('#factory-version').textContent"), 'v1.2.3');
       assert.equal(await page.execute("return document.getElementById('project').title"), '/work/' + 'long-project-name-'.repeat(12));
-      const sizes = await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button, #theme, #intro summary, #board .column[data-active=true] .actions button')].map((e) => Math.round(e.getBoundingClientRect().height))");
+      const sizes = await page.execute("return [...document.querySelectorAll('nav[aria-label=\"Stages\"] button, #theme, #help, #board .column[data-active=true] .actions button')].map((e) => Math.round(e.getBoundingClientRect().height))");
       assert.ok(sizes.length >= 8 && sizes.every((h) => h >= 44), `touch heights: ${sizes}`);
       assert.equal(await page.execute(clickStage, ['Done']), true);
       assert.deepEqual(await page.execute(visibleStages), ['done']);

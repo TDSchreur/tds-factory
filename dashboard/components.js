@@ -3,6 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
+import { HELP_SECTIONS } from './help.js';
 import { COLUMNS, STALE_MS, ageMs, ago, canGrantLoop, chipsOf, folderName, lastSeenOf, modelOf, prStatusOf, progressOf, safeUrl, ticketsOf, timelineOf, waitAgeOf } from './model.js';
 
 export const html = htm.bind(h);
@@ -151,19 +152,41 @@ export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedI
   })}</main></div>`;
 }
 
-export function Intro() {
-  return html`<details id="intro">
-    <summary>What is this?</summary>
-    <p>The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Hover or focus a Stage heading or a chip for details.</p>
-    <ol>
-      <li><strong>Define</strong>: settle what to build, write a Spec and cut it into Tickets.</li>
-      <li><strong>Build</strong>: implement the Tickets test-first.</li>
-      <li><strong>Check</strong>: independent reviews of Standards, Spec, Security and Infrastructure.</li>
-      <li><strong>Finish</strong>: open the pull request.</li>
-      <li><strong>Follow-up</strong>: collect PR feedback and return to Build when needed.</li>
-    </ol>
-    <p>A red card with a "Needs you" banner is waiting for your answer in the agent session; the Needs you button in the header shows only those Runs, and they come first in their Stage. Chips show Check verdicts (pass, fail, skipped), Ticket progress and how often Check sent the Run back to Build.</p>
-  </details>`;
+// The help panel: static text from help.js in a native dialog. The dialog closes itself on Esc and on the Close button; onClose tells the page.
+export function HelpPanel({ open, onClose }) {
+  const dialog = useRef(null);
+  const close = useRef(null);
+  const opener = useRef(null);
+  useEffect(() => {
+    const element = dialog.current;
+    if (open && !element.open) { opener.current = document.activeElement; element.showModal(); close.current.focus(); }
+    else if (!open && element.open) element.close();
+  }, [open]);
+  // The page behind the dialog is inert; Tab cycles inside it instead of leaving for the browser's own controls.
+  const trap = (event) => {
+    if (event.key !== 'Tab') return;
+    const targets = [...dialog.current.querySelectorAll('button:not([disabled]), a[href]')];
+    const first = targets[0], last = targets[targets.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
+  // The focus goes back to what opened the panel, or to the Help button when that did not take the focus (some browsers do not focus a clicked button).
+  const closed = () => {
+    const back = opener.current && opener.current !== document.body && opener.current.isConnected ? opener.current : document.getElementById('help');
+    back?.focus();
+    onClose();
+  };
+  return html`<dialog id="help-panel" ref=${dialog} aria-labelledby="help-title" onKeyDown=${trap} onClose=${closed}>
+    <div class="dialog-content">
+      <h2 id="help-title">Help</h2>
+      <p class="help-lead">The Factory walks a piece of work from idea to pull request. Each card is one Run, moving left to right through the Stages. Start a Run in your agent with <code>/factory</code>.</p>
+      ${HELP_SECTIONS.map((section) => html`<section key=${section.id} class="help-section" aria-labelledby=${'help-' + section.id}>
+        <h3 id=${'help-' + section.id}>${section.title}</h3>
+        <ul>${section.items.map((item) => html`<li key=${item.term || item.text}>${item.term && html`<strong>${item.term}</strong>: `}${item.text}</li>`)}</ul>
+      </section>`)}
+      <div class="dialog-actions"><button id="help-close" ref=${close} type="button" class="primary" onClick=${() => dialog.current.close()}>Close</button></div>
+    </div>
+  </dialog>`;
 }
 
 const THEMES = ['system', 'light', 'dark'];
@@ -196,12 +219,13 @@ function Logo() {
 }
 
 // The pill shows the last segment of the project path; the full path is its tooltip.
-export function Header({ project, version, status, olderLabel, onOlder, canNotify, onNotify, waitingCount, onlyWaiting, onToggleWaiting }) {
+export function Header({ project, version, status, olderLabel, onOlder, canNotify, onNotify, waitingCount, onlyWaiting, onToggleWaiting, onHelp }) {
   return html`<header>
     <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
     ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
     <button id="needs-you" type="button" aria-pressed=${String(!!onlyWaiting)} title="Show only the Runs that wait on you" onClick=${onToggleWaiting}>Needs you (${waitingCount ?? 0})</button>
+    <button id="help" type="button" aria-haspopup="dialog" onClick=${onHelp}>Help</button>
     <${ThemeSelect} />
     ${canNotify && html`<button id="notify" type="button" onClick=${onNotify}>Notify me</button>`}
     <button id="older" type="button" hidden=${!olderLabel} onClick=${onOlder}>${olderLabel}</button>
@@ -219,7 +243,7 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   useLayoutEffect(() => {
     if (!run || !compact) return undefined;
     const detail = document.getElementById('detail');
-    const background = [...document.querySelectorAll('#app > header, #intro, .board-wrap')];
+    const background = [...document.querySelectorAll('#app > header, .board-wrap')];
     const previous = background.map((element) => element.inert);
     const overflow = document.body.style.overflow;
     background.forEach((element) => { element.inert = true; });
@@ -242,19 +266,17 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       document.body.style.overflow = overflow;
     };
   }, [!!run, compact]);
-  // The desktop drawer starts below the intro as well as the header. Measure its actual top so its bottom stays in view.
+  // The desktop drawer starts below the header. Measure its actual top so its bottom stays in view.
   useLayoutEffect(() => {
     if (!run || compact) return undefined;
     const detail = document.getElementById('detail');
     const header = document.querySelector('#app > header');
-    const intro = document.getElementById('intro');
     const fit = () => {
       detail.style.top = (header.getBoundingClientRect().height + 20) + 'px';
       detail.style.maxHeight = Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
     };
     const observer = new ResizeObserver(fit);
     observer.observe(header);
-    observer.observe(intro);
     window.addEventListener('resize', fit);
     window.addEventListener('scroll', fit, { passive: true });
     fit();

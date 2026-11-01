@@ -113,7 +113,7 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
     await page.waitFor("return !!document.querySelector('[data-id=r] .danger')");
     await page.execute("const b=document.querySelector('[data-id=r] .danger'); b.scrollIntoView(); b.click()");
     await page.waitFor("return document.querySelector('dialog').open");
-    const touch = await page.execute("return [...document.querySelectorAll('dialog button')].map(b => b.getBoundingClientRect().height)");
+    const touch = await page.execute("return [...document.querySelectorAll('#dialog button')].map(b => b.getBoundingClientRect().height)");
     assert.ok(touch.every((h) => h >= 44), JSON.stringify(touch));
     await page.execute("const b=document.getElementById('dialog-confirm'); b.scrollIntoView(); b.click()");
     await page.waitFor("return document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?' && document.querySelector('dialog').open && document.activeElement === document.getElementById('dialog-cancel')");
