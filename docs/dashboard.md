@@ -20,7 +20,7 @@ The Dashboard follows Fluent 2 ([ADR 0025](adr/0025-the-dashboard-adopts-fluent-
 - **Contrast.** Every text and background pair keeps at least 4.5:1, and borders, focus rings and the progress fill keep 3:1, in both themes. A unit test computes this from the token values and a browser test measures the rendered text. Pass, fail, quiet and waiting states also say so in text and symbols, never by colour alone.
 - **Focus.** Every control that can take keyboard focus shows a two-colour ring (an inner and an outer ring), so it shows on every surface in both themes.
 - **Reduced motion.** With `prefers-reduced-motion: reduce` the Dashboard has no transitions or animations.
-- **High contrast.** With forced colours (`forced-colors: active`) the browser uses your system colours. The progress fill, the status dot, the primary and pressed buttons, the selected card and the focus ring are redrawn in the system highlight colours, and a waiting card also gets a double border.
+- **High contrast.** With forced colours (`forced-colors: active`) the browser uses your system colours. The progress fill, the status dot, the primary and pressed buttons (also when hovered or pressed), the selected card and the focus ring are redrawn in the system highlight colours, and a waiting card also gets a 3 px double border. An abandoned Run has a dashed card in a muted surface, not faded text, so its text keeps the same contrast.
 - **Narrow screens.** Up to 1024 CSS pixels the Stage navigation and the full-screen detail work as before, with 44 px touch targets.
 
 ## Runs that wait on you

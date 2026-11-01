@@ -297,7 +297,8 @@
   .actions .primary:active { background: var(--colorBrandBackgroundPressed); }
   .actions .danger { color: var(--colorPaletteRedForeground1); border-color: var(--colorPaletteRedBorder2); background: transparent; }
   .actions .danger:hover { background: var(--colorPaletteRedBackground1); }
-  .card.abandoned { opacity: .7; }
+  .card.abandoned { background: var(--colorNeutralBackground3); border-style: dashed; box-shadow: none; }
+  .card.abandoned .title { color: var(--colorNeutralForeground2); }
   .tickets { list-style: none; margin: var(--spacingVerticalS) 0 0; padding: 0; font-size: var(--fontSizeBase200); }
   .ticket.done { color: var(--colorPaletteGreenForeground1); }
   .ticket.active { font-weight: var(--fontWeightSemibold); }
@@ -311,6 +312,9 @@
 
   .card.selected { border-color: var(--colorCompoundBrandStroke); box-shadow: 0 0 0 var(--strokeWidthThick) var(--colorCompoundBrandStroke); }
   .card.waiting { border: var(--strokeWidthThick) solid var(--colorPaletteRedBorder2); background: var(--colorPaletteRedBackground1); }
+  /* :hover, abandoned and selected set the box-shadow, so a focused card repeats its inner focus ring here, after them. */
+  .card:focus-visible, .card:hover:focus-visible, .card.selected:focus-visible { box-shadow: 0 0 0 2px var(--colorStrokeFocus1), var(--shadow8); }
+  .card.abandoned:focus-visible, .card.abandoned:hover:focus-visible { box-shadow: 0 0 0 2px var(--colorStrokeFocus1); }
   #needs-you[aria-pressed="true"] { background: var(--colorPaletteRedBackground3); color: var(--colorNeutralForegroundOnBrand); border-color: var(--colorPaletteRedBackground3); }
   .reason.needs-you::before { content: "\23F8\FE0E  "; }
   .card .reason.needs-you, #detail .reason.needs-you { border-left: 4px solid var(--colorPaletteRedForeground1); padding-left: var(--spacingHorizontalSNudge); }
@@ -388,11 +392,11 @@
   /* High contrast: the browser replaces the colours with the user's system colours. These rules keep what colour alone would carry: the
      progress fill, the pressed and primary buttons, the status dot, the selected card and the focus ring. */
   @media (forced-colors: active) {
-    :focus-visible { outline-color: Highlight; box-shadow: none; }
+    :focus-visible, .card:focus-visible, .card:hover:focus-visible, .card.selected:focus-visible { outline-color: Highlight; box-shadow: none; }
     .progress { border: var(--strokeWidthThin) solid CanvasText; }
     .progress-fill, #status::before { forced-color-adjust: none; background: Highlight; }
-    .actions .primary, .dialog-actions .primary, .dialog-actions .danger, #needs-you[aria-pressed="true"], .stage-nav button[aria-pressed="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+    .actions .primary, .actions .primary:hover, .actions .primary:active, .dialog-actions .primary, .dialog-actions .primary:hover, .dialog-actions .primary:active, .dialog-actions .danger, .dialog-actions .danger:hover, .dialog-actions .danger:active, #needs-you[aria-pressed="true"], #needs-you[aria-pressed="true"]:hover, #needs-you[aria-pressed="true"]:active, .stage-nav button[aria-pressed="true"], .stage-nav button[aria-pressed="true"]:hover, .stage-nav button[aria-pressed="true"]:active { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
     .card.selected { outline: var(--strokeWidthThick) solid Highlight; outline-offset: 2px; }
-    .card.waiting { border-style: double; }
+    .card.waiting { border-style: double; border-width: calc(var(--strokeWidthThick) + var(--strokeWidthThin)); } /* a double border needs 3px to show two lines */
     .chip, .badge, #project { border-color: CanvasText; }
   }
