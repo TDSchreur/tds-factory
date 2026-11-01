@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
@@ -215,7 +215,7 @@ test('hostile input does not slow the sweep or add lines', () => {
   assert.doesNotMatch(result.stdout, /\x1b/);
 });
 
-const sections = (out) => out.split('== lists that miss')[1] ?? '';
+const sections = (out) => (out.split('== lists that miss')[1] ?? '').split('== documents to read')[0];
 
 test('a list that misses a member the diff added is listed, and one that has it is not', () => {
   const p = project(
@@ -295,4 +295,106 @@ test('added text that looks like a diff header cannot hide a claim from the clai
 test('bidi controls in a document line are not printed', () => {
   const p = project({ 'docs/a.md': 'x\n', 'docs/b.md': 'see old_flag ‮evil\n' }, { 'docs/a.md': 'old_flag\n' });
   assert.doesNotMatch(sweep(p).stdout, /‮/);
+});
+
+const toRead = (out) => out.slice(out.indexOf('== documents to read')).split('\n').slice(1);
+
+test('the sweep ends with the documents still to read: not the changed ones, most hits first', () => {
+  const p = project(
+    {
+      'docs/many.md': 'old_flag one\nold_flag two\nold_flag three\n',
+      'docs/few.md': 'old_flag once\n',
+      'docs/touched.md': 'old_flag here too\n',
+    },
+    { 'docs/touched.md': 'now `new_flag`\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /== documents to read \(not changed in this Run\)/);
+  const list = toRead(out).filter(Boolean);
+  assert.deepEqual(
+    list.map((l) => l.trim()),
+    ['docs/many.md: 3 hit(s)', 'docs/few.md: 1 hit(s)'],
+  );
+  assert.ok(out.trimEnd().endsWith(list.at(-1)), 'the list is the end of the output');
+});
+
+test('--files prints only that list, and the list is capped with a count of the rest', () => {
+  const files = { 'docs/z.md': 'Use `old_flag`.\n' };
+  for (let i = 0; i < 20; i += 1) files[`docs/f${String(i).padStart(2, '0')}.md`] = 'old_flag\n';
+  const p = project(files, { 'docs/z.md': 'Use `new_flag`.\n' });
+  const result = sweep(p, '--files');
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /^== old_flag/m);
+  const shown = result.stdout.split('\n').filter((l) => /^\s+docs\/f\d+\.md: /.test(l));
+  assert.equal(shown.length, 15);
+  assert.match(result.stdout, /5 more documents/);
+});
+
+test('the closing list is empty-safe: a Run with nothing to read says so', () => {
+  const p = project({ 'docs/a.md': 'text\n' }, { 'docs/a.md': 'text, now with `new_flag`\n' });
+  const out = sweep(p, '--files').stdout;
+  assert.match(out, /no other document holds a changed term/i);
+});
+
+test('the sweep finds a changed term in the command line help and the Dashboard help, tagged as code, and in no other source file', () => {
+  const p = project(
+    {
+      'bin/tds-factory.js': 'const USAGE = `\n  tds-factory run thing --old_flag\n`;\n',
+      'dashboard/help.js': "export const help = [{ term: 'x', text: 'use old_flag' }];\n",
+      'src/other.js': "throw new Error('old_flag is gone');\n",
+      'docs/a.md': 'Use `old_flag`.\n',
+    },
+    { 'docs/a.md': 'Use `new_flag`.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /bin\/tds-factory\.js:2: .*old_flag.*\[code\]/);
+  assert.match(out, /dashboard\/help\.js:1: .*old_flag.*\[code\]/);
+  assert.doesNotMatch(out, /src\/other\.js/);
+  const list = toRead(out).join('\n');
+  assert.match(list, /bin\/tds-factory\.js: 1 hit\(s\)/);
+  assert.match(list, /dashboard\/help\.js: 1 hit\(s\)/);
+});
+
+test('an oversized or linked code file is skipped, and code lines never make a list hit', () => {
+  const p = project(
+    {
+      'bin/tds-factory.js': 'Checks: `cli`, `git`, `tracker`.\n',
+      'dashboard/help.js': `${'x'.repeat(1 << 20)} old_flag\n`,
+      'docs/a.md': 'Use `old_flag`.\n',
+    },
+    { 'docs/a.md': 'Use `new_flag`.\n', 'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /dashboard\/help\.js/);
+  assert.doesNotMatch(out.split('== lists that miss')[1] ?? '', /bin\/tds-factory\.js/);
+});
+
+test('a linked code file is never followed', () => {
+  const p = project(
+    { 'bin/tds-factory.js': 'plain\n', 'docs/a.md': 'Use `old_flag`.\n' },
+    { 'docs/a.md': 'Use `new_flag`.\n' },
+  );
+  writeFileSync(join(p.cwd, 'secret.txt'), 'old_flag in a file outside the Run\n');
+  rmSync(join(p.worktree, 'bin', 'tds-factory.js'));
+  symlinkSync(join(p.cwd, 'secret.txt'), join(p.worktree, 'bin', 'tds-factory.js'));
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
+});
+
+test('a linked folder around a code file is never followed, and a line matched by two terms counts once', () => {
+  const p = project(
+    {
+      'bin/tds-factory.js': 'plain\n',
+      'docs/a.md': 'Use `old_flag` and `old_other`.\n',
+      'docs/b.md': 'old_flag and old_other\n',
+    },
+    { 'docs/a.md': 'Use `new_flag` and `new_other`.\n' },
+  );
+  mkdirSync(join(p.cwd, 'elsewhere'), { recursive: true });
+  writeFileSync(join(p.cwd, 'elsewhere', 'tds-factory.js'), 'old_flag in a folder outside the Run\n');
+  rmSync(join(p.worktree, 'bin'), { recursive: true });
+  symlinkSync(join(p.cwd, 'elsewhere'), join(p.worktree, 'bin'));
+  const out = sweep(p).stdout;
+  assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
+  assert.match(toRead(out).join('\n'), /docs\/b\.md: 1 hit\(s\)/);
 });

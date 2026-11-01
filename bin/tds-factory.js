@@ -25,12 +25,12 @@ const USAGE = `Usage:
   tds-factory run track --id ID --value fast|full   (in Define, after the user chose or confirmed the track)
   tds-factory run transition --id ID --to build|check|finish|follow-up [--data JSON]
   tds-factory run follow-up --id ID
-  tds-factory run rework --id ID [--data JSON]
+  tds-factory run rework --id ID [--cause CAUSE]... [--data JSON]   (CAUSE: stale-doc, test-gap, spec-gap, security, bug, size or other)
   tds-factory run sync --id ID [--data JSON]   (rebases the Run branch onto origin's default branch)
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID [--fast]
-  tds-factory run sweep --id ID [--term TEXT]...
+  tds-factory run sweep --id ID [--term TEXT]... [--files]   (--files prints only the documents still to read)
   tds-factory run guides --id ID   (lists the instruction guides recorded in the Run's conventions that apply to its diff: the unscoped ones and the ones whose applyTo globs match)
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
@@ -63,6 +63,8 @@ const { values, positionals } = parseArgs({
     json: { type: 'boolean', default: false },
     apply: { type: 'boolean', default: false },
     all: { type: 'boolean', default: false },
+    files: { type: 'boolean', default: false },
+    cause: { type: 'string', multiple: true },
     fast: { type: 'boolean', default: false },
     carried: { type: 'boolean', default: false },
     term: { type: 'string', multiple: true },
@@ -87,7 +89,7 @@ try {
       if (values.to === 'check')
         for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
     } else if (op === 'follow-up') console.log(store.followUp(values.id));
-    else if (op === 'rework') store.rework(values.id, data);
+    else if (op === 'rework') store.rework(values.id, data, values.cause ?? []);
     else if (op === 'sync') store.sync(values.id, data);
     else if (op === 'complete') {
       store.complete(values.id, data);
@@ -110,7 +112,7 @@ try {
             .map(([stage, value]) => `  ${stage[0].toUpperCase()}${stage.slice(1)}: ${value}`)
             .join(
               '\n',
-            )}\n  Reworks: ${formatted.reworks}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`,
+            )}\n  Reworks: ${formatted.reworks}\n  Rework causes: ${formatted.reworkCauses}\n  First-pass clean rate: ${formatted.firstPass}\n  Tokens: ${formatted.tokens}\n  Cost: ${formatted.cost}`,
         );
         for (const row of formatted.usage.rows) console.log(`    ${rowLine(row)}`);
         for (const gap of formatted.usage.gaps ?? []) console.log(`    ${gap.label} · no data`);
@@ -175,7 +177,8 @@ try {
           `verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`,
         );
       if (result.exit_code !== 0) process.exitCode = 1;
-    } else if (op === 'sweep') console.log(formatSweep(store.sweep(values.id, values.term ?? [])));
+    } else if (op === 'sweep')
+      console.log(formatSweep(store.sweep(values.id, values.term ?? []), { filesOnly: values.files }));
     else if (op === 'guides') console.log(formatGuides(store.guides(values.id)));
     else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
     else if (op === 'review') store.review(values.id, values.axis, data);

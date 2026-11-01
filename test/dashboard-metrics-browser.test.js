@@ -17,6 +17,15 @@ test('Run detail shows observed metrics and legacy no data', async (t) => {
         first_check: 'unclean',
       },
     }),
+    entry('caused', {
+      check_loops: 2,
+      metrics: {
+        version: 1,
+        visits: [{ stage: 'define', started: '2026-01-01T00:00:00Z', ended: '2026-01-01T00:01:00Z' }],
+        verdicts: [],
+        rework_causes: [{ attempt: 1, causes: ['stale-doc', 'bug'], at: '2026-01-01T00:02:00Z' }],
+      },
+    }),
     entry('legacy', {}),
   ];
   const page = await openPage(t, { runs });
@@ -29,13 +38,19 @@ test('Run detail shows observed metrics and legacy no data', async (t) => {
     assert.match(await page.execute("return document.querySelector('[data-id=measured]').textContent"), /Fast/);
     assert.match(text, /Define: 1m 0s/);
     assert.match(text, /Reworks: 1/);
+    assert.match(text, /Rework causes: unknown 1/);
     assert.match(text, /First-pass clean rate: 0% \(0\/1\)/);
     assert.match(text, /Tokens: not tracked/);
     assert.match(text, /Cost: not tracked/);
+    await page.execute("document.querySelector('[data-id=caused]').click()");
+    text = await page.execute('return document.querySelector(\'[aria-label="Run metrics"]\').textContent');
+    assert.match(text, /Reworks: 2/);
+    assert.match(text, /Rework causes: stale-doc 1, bug 1, unknown 1/);
     await page.execute("document.querySelector('[data-id=legacy]').click()");
     text = await page.execute('return document.querySelector(\'[aria-label="Run metrics"]\').textContent');
     assert.match(text, /Track: Full/);
     assert.match(text, /Define: no data/);
+    assert.match(text, /Rework causes: no data/);
     assert.match(text, /First-pass clean rate: no data/);
   } finally {
     await page.close();

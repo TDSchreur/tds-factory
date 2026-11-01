@@ -413,7 +413,7 @@ test('the Exit checklist sweeps terms with the sweep command and the Standards r
   assert.match(checklist, /add each older or other wording of a changed term with `--term`/);
   assert.match(checklist, /A hit marked as replaced is history and needs no change/);
   assert.match(check, /the output of `tds-factory run sweep --id <id>` for the Standards reviewer/);
-  assert.match(flow, /`tds-factory run sweep --id <id> \[--term TEXT\]\.\.\.` lists, read-only/);
+  assert.match(flow, /`tds-factory run sweep --id <id> \[--term TEXT\]\.\.\. \[--files\]` lists, read-only/);
 });
 
 test('after a Rework the reviewers get the previous findings, and only Security and Infrastructure can be carried over', () => {
@@ -500,4 +500,40 @@ test('Define decides build or borrow and splits oversized work, and the Exit che
     /a symlink or a path outside the folder.*a control character in output.*a silent drop.*one commit for more than one Ticket/,
   );
   assert.match(checklist, /find the sibling members and update every list/);
+});
+
+test('the Exit checklist asks for the whole Sweep output and a Sweep paragraph, and the Standards reviewer reads it', () => {
+  const checklist = section('Build').slice(
+    section('Build').indexOf('### Exit checklist'),
+    section('Build').indexOf('### After a Rework'),
+  );
+  assert.match(checklist, /Read the whole output, never filtered or cut with `head` or `grep`/);
+  assert.match(checklist, /ends with a list of the documents still to read/);
+  assert.match(checklist, /`tds-factory run sweep --id <id> --files` prints only that list/);
+  assert.match(
+    checklist,
+    /Sweep paragraph.*files you changed because of the Sweep and the hits you judged unaffected/s,
+  );
+  assert.match(checklist, /the command line help and the Dashboard help text \(hits there are tagged `code`\)/);
+  assert.match(check, /the Sweep paragraph of `build\.md`/);
+  assert.match(flow, /`--files` prints only the closing list of documents still to read/);
+});
+
+test('Define names the documents in the Spec and adds a documentation Ticket to a Full track Run of three or more Tickets', () => {
+  const define = section('Define');
+  assert.match(
+    define,
+    /Its Documents bullet names concrete files from a Sweep, including canonical specs and help text/,
+  );
+  assert.match(define, /three or more Tickets gets one last documentation Ticket blocked by every other Ticket/);
+  assert.match(references['define.md'], /## Documents/);
+  assert.match(references['define.md'], /tds-factory run sweep --id <id> --term/);
+  assert.match(references['define.md'], /The Fast track and a Run with fewer than three Tickets get no extra Ticket/);
+  assert.match(references['invoked-skills.md'], /documentation Ticket/);
+});
+
+test('Check passes the cause of each Blocking finding to run rework, and the command reference and schema name it', () => {
+  assert.match(references['check.md'], /passing `--cause <cause>` for each cause of the Blocking findings/);
+  assert.match(references['progress-commands.md'], /`tds-factory run rework --id <id> \[--cause <cause>\]\.\.\.`/);
+  assert.match(references['run-schema.md'], /`rework_causes`/);
 });

@@ -12,6 +12,7 @@ const MAX_TOKENS = 30;
 const MAX_CLAIMS = 40;
 const CLAIM = /\b(?:linear|bounded|constant[- ]time|safe|safely|sanitized|injection-proof)\b|\bO\([^()\n]{1,20}\)/i;
 const PER_TERM = 40;
+const TO_READ = 15;
 const TOTAL = 250;
 const TOO_COMMON = 100;
 const LINE = 160;
@@ -19,6 +20,8 @@ const MAX_FILE = 1 << 20;
 const SKIP = new Set(['.git', 'node_modules', '.factory', 'vendor']);
 const ROOT_DOCS = ['README.md', 'CONTRIBUTING.md', 'GLOSSARY.md', 'AGENTS.md', 'CLAUDE.md', 'SECURITY.md'];
 const DOC_DIRS = ['docs', 'skills', 'agents', 'changelog.d'];
+// User-facing text that lives in code: the command line help and the Dashboard help. Other source files and their error messages are not searched.
+const CODE_FILES = ['bin/tds-factory.js', 'dashboard/help.js'];
 const REPLACED_NOTE = /^[_>].*\b(?:replaced|changed|superseded) by\b/im;
 // Newlines and tabs go too: a file name with a newline must not be able to add a line of its own.
 const clean = (text) =>
@@ -161,13 +164,15 @@ function termsFromDiff(diff) {
     .map((x) => x.term);
 }
 
-// The documents the sweep reads: regular Markdown and TOML files of sane size, never links.
+// The documents the sweep reads: regular Markdown and TOML files of sane size, never links, and the two code files that hold help text.
 function documents(root) {
   const found = [];
-  const take = (file) => {
+  const take = (file, code = false) => {
+    // A code file sits in a folder of the Run worktree; a linked folder would lead out of it.
+    if (code && !fs.lstatSync(path.dirname(file), { throwIfNoEntry: false })?.isDirectory()) return;
     const stat = fs.lstatSync(file, { throwIfNoEntry: false });
-    if (!stat || !stat.isFile() || stat.size >= MAX_FILE || !/\.(md|toml)$/.test(file)) return;
-    found.push(file);
+    if (!stat || !stat.isFile() || stat.size >= MAX_FILE || !(code || /\.(md|toml)$/.test(file))) return;
+    found.push({ file, code });
   };
   const walk = (dir) => {
     const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
@@ -181,7 +186,8 @@ function documents(root) {
   };
   for (const name of ROOT_DOCS) take(path.join(root, name));
   for (const dir of DOC_DIRS) walk(path.join(root, dir));
-  return found.sort();
+  for (const name of CODE_FILES) take(path.join(root, name), true);
+  return found.sort((a, b) => a.file.localeCompare(b.file));
 }
 
 export function sweepRun(projectDir, id, extra = []) {
@@ -203,11 +209,12 @@ export function sweepRun(projectDir, id, extra = []) {
   ];
   const given = [...new Set(extra.map((t) => t.trim()).filter(Boolean))];
   const terms = [...fromDiff, ...given.filter((t) => !fromDiff.some((d) => d.toLowerCase() === t.toLowerCase()))];
-  const files = documents(root).map((file) => {
+  const files = documents(root).map(({ file, code }) => {
     const rel = path.relative(root, file).split(path.sep).join('/');
     const lines = fs.readFileSync(file, 'utf8').split('\n');
-    const replaced = rel.startsWith('docs/specs/archive/') || REPLACED_NOTE.test(lines.slice(0, 12).join('\n'));
-    return { rel, lines, replaced, changed: changed.has(rel) };
+    const replaced =
+      !code && (rel.startsWith('docs/specs/archive/') || REPLACED_NOTE.test(lines.slice(0, 12).join('\n')));
+    return { rel, lines, replaced, code, changed: changed.has(rel) };
   });
   const results = terms.map((term) => {
     const needle = term.toLowerCase();
@@ -215,7 +222,13 @@ export function sweepRun(projectDir, id, extra = []) {
     for (const f of files)
       f.lines.forEach((text, i) => {
         if (text.toLowerCase().includes(needle))
-          hits[f.replaced ? 'replaced' : 'current'].push({ file: f.rel, line: i + 1, text, changed: f.changed });
+          hits[f.replaced ? 'replaced' : 'current'].push({
+            file: f.rel,
+            line: i + 1,
+            text,
+            changed: f.changed,
+            code: f.code,
+          });
       });
     return { term, ...hits };
   });
@@ -225,7 +238,7 @@ export function sweepRun(projectDir, id, extra = []) {
       const names = [...siblings];
       const hits = [];
       for (const f of files) {
-        if (f.replaced) continue;
+        if (f.replaced || f.code) continue;
         f.lines.forEach((text, i) => {
           if (text.length > 4000 || names.filter((n) => text.includes(`\`${n}\``)).length < 2) return;
           if (text.includes(`\`${member}\``) === (kind === 'removed'))
@@ -241,9 +254,23 @@ export function sweepRun(projectDir, id, extra = []) {
     for (const text of added)
       if (text.length < 4000 && CLAIM.test(text) && claims.length < MAX_CLAIMS) claims.push({ file, text });
   }
+  // The documents still to read: current documents the Run did not change, with the distinct lines that hold a shown term or a list hit.
+  const lines = new Map();
+  const code = new Set();
+  const note = (hit) => {
+    if (hit.changed) return;
+    if (hit.code) code.add(hit.file);
+    lines.set(hit.file, (lines.get(hit.file) ?? new Set()).add(hit.line));
+  };
+  for (const r of results) if (r.current.length + r.replaced.length <= TOO_COMMON) r.current.forEach(note);
+  for (const l of lists) l.hits.forEach(note);
+  const toRead = [...lines]
+    .map(([file, set]) => ({ file, hits: set.size, code: code.has(file) }))
+    .sort((a, b) => b.hits - a.hits || a.file.localeCompare(b.file));
   return {
     id,
     base: record.base_sha,
+    toRead,
     fromDiff: fromDiff.length,
     given: terms.length - fromDiff.length,
     files: files.length,
@@ -253,7 +280,18 @@ export function sweepRun(projectDir, id, extra = []) {
   };
 }
 
-export function formatSweep(report) {
+// The closing list, also printed alone by `run sweep --files`, so a reader who cuts the long output still sees the files.
+function formatToRead(report) {
+  const out = ['== documents to read (not changed in this Run)'];
+  if (!report.toRead.length) return [...out, '  no other document holds a changed term'];
+  for (const { file, hits, code } of report.toRead.slice(0, TO_READ))
+    out.push(`  ${clean(file)}: ${hits} hit(s)${code ? ' [code]' : ''}`);
+  if (report.toRead.length > TO_READ) out.push(`  ${report.toRead.length - TO_READ} more documents`);
+  return out;
+}
+
+export function formatSweep(report, { filesOnly = false } = {}) {
+  if (filesOnly) return formatToRead(report).join('\n');
   const out = [
     `Term sweep for ${report.id}: ${report.fromDiff} term(s) from the diff, ${report.given} given with --term, ${report.files} documents searched.`,
   ];
@@ -270,7 +308,8 @@ export function formatSweep(report) {
     cut += left;
     return {
       lines: take.map(
-        (h) => `    ${clean(h.file)}:${h.line}: ${clean(h.text.trim().slice(0, LINE))}${h.changed ? ' [changed]' : ''}`,
+        (h) =>
+          `    ${clean(h.file)}:${h.line}: ${clean(h.text.trim().slice(0, LINE))}${h.changed ? ' [changed]' : ''}${h.code ? ' [code]' : ''}`,
       ),
       left,
     };
@@ -314,5 +353,6 @@ export function formatSweep(report) {
     for (const c of report.claims) out.push(`    ${clean(c.file)}: ${clean(c.text.trim().slice(0, LINE))}`);
   }
   if (cut) out.push('', `${cut} hit(s) left out in total; narrow the terms with --term to see them.`);
+  out.push('', ...formatToRead(report));
   return out.join('\n');
 }

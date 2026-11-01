@@ -1,4 +1,4 @@
-_The Exit checklist now has a seventh step, hostile input, between the security check and the self-check: see [Reduce the number of Check loops](reduce-check-loops.md). The term sweep below is now the command `tds-factory run sweep`: see [Term sweep as a command](term-sweep-command.md), which replaced the manual search it describes._
+_The Exit checklist now has a seventh step, hostile input, between the security check and the self-check: see [Reduce the number of Check loops](reduce-check-loops.md). The term sweep below is now the command `tds-factory run sweep`: see [Term sweep as a command](term-sweep-command.md), which replaced the manual search it describes. The Sweep now ends with the list of documents still to read, also searches the command line help and the Dashboard help text, and the checklist asks for a Sweep paragraph in `build.md`: see [Stale documents in Build](stale-documents-in-build.md)._
 
 ## Problem Statement
 
@@ -42,7 +42,7 @@ Give Build the means to catch what Check keeps catching, without touching Check.
 ## Implementation Decisions
 
 - The Exit checklist is part of the Build section of the `factory` Skill and is canonical there. It runs after the last Ticket (before the sync and the move to Check; after the sync, Build runs the Verify command again and fixes failures, so a clash brought in by the sync fails before Check) and again after every Rework, before the rework is committed. Its steps, in order: static checks; term sweep; required artifacts; story trace in `build.md`; security check; hostile input; self-check of the full diff. Anything left open is named in `build.md`.
-- Term sweep: search the README, the docs, the Specs, the ADRs, the glossary and the Factory Skill for each term, flag, number or behavior the diff changed, and make every hit say the same thing in one wording. Count the places a sentence lives; if it lives in more than one, check that the wording is the same.
+- Term sweep: search the README, the docs, the Specs, the ADRs, the glossary, the Factory Skill, the command line help and the Dashboard help text for each term, flag, number or behavior the diff changed, and make every hit say the same thing in one wording. Count the places a sentence lives; if it lives in more than one, check that the wording is the same.
 - Required artifacts: a changelog fragment under the right heading, the glossary updated with Avoid terms respected, the canonical spec for the changed area, pointers between ADRs where one supersedes or extends another.
 - Story trace: a Markdown table in `build.md` with a row per Spec story and the test that proves it. A story with no test is a gap to close or to name as left open.
 - Security check: a list in `build.md` of each trust boundary the diff touches and how it is handled, checked against the project's Universal safeguards text when its conventions have one. A project without it uses the generic boundaries named above.
