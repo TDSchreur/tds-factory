@@ -72,7 +72,7 @@ Q1 - Format: export plain CSV, not Excel?
 - The agent may update `GLOSSARY.md` and add a decision record in `docs/adr/` while you talk. Those are normal files and show up in the pull request.
 - When nothing is left to ask, the agent tells you what it understood and waits for you to confirm. Read that summary carefully. Changes are cheap now and expensive after Build.
 
-The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHub Issues, without asking you to approve either. Each Ticket is a small slice that can be built and checked alone.
+The agent then writes a Spec in `docs/specs/`, and cuts it into Tickets in GitHub Issues, without asking you to approve either. Each Ticket is a small slice that can be built and checked alone. On the Full track, a Run with three or more Tickets also gets a last documentation Ticket that brings the documents, canonical specs and help text in line with the finished feature.
 
 ## 3. What happens without you
 

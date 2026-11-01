@@ -518,3 +518,16 @@ test('the Exit checklist asks for the whole Sweep output and a Sweep paragraph, 
   assert.match(check, /the Sweep paragraph of `build\.md`/);
   assert.match(flow, /`--files` prints only the closing list of documents still to read/);
 });
+
+test('Define names the documents in the Spec and adds a documentation Ticket to a Full track Run of three or more Tickets', () => {
+  const define = section('Define');
+  assert.match(
+    define,
+    /Its Documents bullet names concrete files from a Sweep, including canonical specs and help text/,
+  );
+  assert.match(define, /three or more Tickets gets one last documentation Ticket blocked by every other Ticket/);
+  assert.match(references['define.md'], /## Documents/);
+  assert.match(references['define.md'], /tds-factory run sweep --id <id> --term/);
+  assert.match(references['define.md'], /The Fast track and a Run with fewer than three Tickets get no extra Ticket/);
+  assert.match(references['invoked-skills.md'], /documentation Ticket/);
+});

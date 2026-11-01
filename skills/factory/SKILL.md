@@ -75,8 +75,8 @@ Only a clean Check goes on to Finish without asking, on both tracks. The Fast tr
 First check the criteria in Tracks. When the work meets one, recommend the Fast track and name the criterion in the confirmation; once the Fast track applies (named by the user or confirmed), read `references/fast-track.md` and do that instead of the three steps below.
 
 1. Invoke `grill-with-docs` to settle what has to be done, starting from the work description the user gave with `/factory`; do not ask for it again. Update `GLOSSARY.md` and `docs/adr/` as it goes.
-2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`. Choose the test seams yourself and proceed without asking for seam confirmation or Spec sign-off.
-3. Invoke `to-tickets` to cut the Spec into Tickets, published to the Issue tracker named in `docs/agents/issue-tracker.md`, local Markdown when that file names no tracker. Choose the breakdown and publish it without asking the user to review or approve it. Read `references/define.md` before you cut Tickets (build or borrow, size) and before you ask about a tracker label.
+2. Invoke `to-spec` to write the Spec as a Markdown file in `docs/specs/`. Choose the test seams yourself and proceed without asking for seam confirmation or Spec sign-off. Its Documents bullet names concrete files from a Sweep, including canonical specs and help text.
+3. Invoke `to-tickets` to cut the Spec into Tickets, published to the Issue tracker named in `docs/agents/issue-tracker.md`, local Markdown when that file names no tracker. Choose the breakdown and publish it without asking the user to review or approve it. A Full track Run with three or more Tickets gets one last documentation Ticket blocked by every other Ticket; the Fast track gets none. Read `references/define.md` before you cut Tickets (build or borrow, size) and before you ask about a tracker label.
 
 ## Build
 
