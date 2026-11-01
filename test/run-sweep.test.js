@@ -215,7 +215,7 @@ test('hostile input does not slow the sweep or add lines', () => {
   assert.doesNotMatch(result.stdout, /\x1b/);
 });
 
-const sections = (out) => out.split('== lists that miss')[1] ?? '';
+const sections = (out) => (out.split('== lists that miss')[1] ?? '').split('== documents to read')[0];
 
 test('a list that misses a member the diff added is listed, and one that has it is not', () => {
   const p = project(
@@ -295,4 +295,43 @@ test('added text that looks like a diff header cannot hide a claim from the clai
 test('bidi controls in a document line are not printed', () => {
   const p = project({ 'docs/a.md': 'x\n', 'docs/b.md': 'see old_flag ‮evil\n' }, { 'docs/a.md': 'old_flag\n' });
   assert.doesNotMatch(sweep(p).stdout, /‮/);
+});
+
+const toRead = (out) => out.slice(out.indexOf('== documents to read')).split('\n').slice(1);
+
+test('the sweep ends with the documents still to read: not the changed ones, most hits first', () => {
+  const p = project(
+    {
+      'docs/many.md': 'old_flag one\nold_flag two\nold_flag three\n',
+      'docs/few.md': 'old_flag once\n',
+      'docs/touched.md': 'old_flag here too\n',
+    },
+    { 'docs/touched.md': 'now `new_flag`\n' },
+  );
+  const out = sweep(p).stdout;
+  assert.match(out, /== documents to read \(not changed in this Run\)/);
+  const list = toRead(out).filter(Boolean);
+  assert.deepEqual(
+    list.map((l) => l.trim()),
+    ['docs/many.md: 3 hit(s)', 'docs/few.md: 1 hit(s)'],
+  );
+  assert.ok(out.trimEnd().endsWith(list.at(-1)), 'the list is the end of the output');
+});
+
+test('--files prints only that list, and the list is capped with a count of the rest', () => {
+  const files = { 'docs/z.md': 'Use `old_flag`.\n' };
+  for (let i = 0; i < 20; i += 1) files[`docs/f${String(i).padStart(2, '0')}.md`] = 'old_flag\n';
+  const p = project(files, { 'docs/z.md': 'Use `new_flag`.\n' });
+  const result = sweep(p, '--files');
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /^== old_flag/m);
+  const shown = result.stdout.split('\n').filter((l) => /^\s+docs\/f\d+\.md: /.test(l));
+  assert.equal(shown.length, 15);
+  assert.match(result.stdout, /5 more documents/);
+});
+
+test('the closing list is empty-safe: a Run with nothing to read says so', () => {
+  const p = project({ 'docs/a.md': 'text\n' }, { 'docs/a.md': 'text, now with `new_flag`\n' });
+  const out = sweep(p, '--files').stdout;
+  assert.match(out, /no other document holds a changed term/i);
 });

@@ -12,6 +12,7 @@ const MAX_TOKENS = 30;
 const MAX_CLAIMS = 40;
 const CLAIM = /\b(?:linear|bounded|constant[- ]time|safe|safely|sanitized|injection-proof)\b|\bO\([^()\n]{1,20}\)/i;
 const PER_TERM = 40;
+const TO_READ = 15;
 const TOTAL = 250;
 const TOO_COMMON = 100;
 const LINE = 160;
@@ -241,9 +242,21 @@ export function sweepRun(projectDir, id, extra = []) {
     for (const text of added)
       if (text.length < 4000 && CLAIM.test(text) && claims.length < MAX_CLAIMS) claims.push({ file, text });
   }
+  // The documents still to read: current documents the Run did not change, with the distinct lines that hold a shown term or a list hit.
+  const lines = new Map();
+  const note = (hit) => {
+    if (hit.changed) return;
+    lines.set(hit.file, (lines.get(hit.file) ?? new Set()).add(hit.line));
+  };
+  for (const r of results) if (r.current.length + r.replaced.length <= TOO_COMMON) r.current.forEach(note);
+  for (const l of lists) l.hits.forEach(note);
+  const toRead = [...lines]
+    .map(([file, set]) => ({ file, hits: set.size }))
+    .sort((a, b) => b.hits - a.hits || a.file.localeCompare(b.file));
   return {
     id,
     base: record.base_sha,
+    toRead,
     fromDiff: fromDiff.length,
     given: terms.length - fromDiff.length,
     files: files.length,
@@ -253,7 +266,17 @@ export function sweepRun(projectDir, id, extra = []) {
   };
 }
 
-export function formatSweep(report) {
+// The closing list, also printed alone by `run sweep --files`, so a reader who cuts the long output still sees the files.
+function formatToRead(report) {
+  const out = ['== documents to read (not changed in this Run)'];
+  if (!report.toRead.length) return [...out, '  no other document holds a changed term'];
+  for (const { file, hits } of report.toRead.slice(0, TO_READ)) out.push(`  ${clean(file)}: ${hits} hit(s)`);
+  if (report.toRead.length > TO_READ) out.push(`  ${report.toRead.length - TO_READ} more documents`);
+  return out;
+}
+
+export function formatSweep(report, { filesOnly = false } = {}) {
+  if (filesOnly) return formatToRead(report).join('\n');
   const out = [
     `Term sweep for ${report.id}: ${report.fromDiff} term(s) from the diff, ${report.given} given with --term, ${report.files} documents searched.`,
   ];
@@ -314,5 +337,6 @@ export function formatSweep(report) {
     for (const c of report.claims) out.push(`    ${clean(c.file)}: ${clean(c.text.trim().slice(0, LINE))}`);
   }
   if (cut) out.push('', `${cut} hit(s) left out in total; narrow the terms with --term to see them.`);
+  out.push('', ...formatToRead(report));
   return out.join('\n');
 }

@@ -30,7 +30,7 @@ const USAGE = `Usage:
   tds-factory run complete --id ID [--data JSON]
   tds-factory run accept --id ID --data '{"findings":"...","decision":"..."}'
   tds-factory run verify --id ID [--fast]
-  tds-factory run sweep --id ID [--term TEXT]...
+  tds-factory run sweep --id ID [--term TEXT]... [--files]   (--files prints only the documents still to read)
   tds-factory run guides --id ID   (lists the instruction guides recorded in the Run's conventions that apply to its diff: the unscoped ones and the ones whose applyTo globs match)
   tds-factory run stats --id ID | --all
   tds-factory run inspect [--id ID] [--json]
@@ -63,6 +63,7 @@ const { values, positionals } = parseArgs({
     json: { type: 'boolean', default: false },
     apply: { type: 'boolean', default: false },
     all: { type: 'boolean', default: false },
+    files: { type: 'boolean', default: false },
     fast: { type: 'boolean', default: false },
     carried: { type: 'boolean', default: false },
     term: { type: 'string', multiple: true },
@@ -175,7 +176,8 @@ try {
           `verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`,
         );
       if (result.exit_code !== 0) process.exitCode = 1;
-    } else if (op === 'sweep') console.log(formatSweep(store.sweep(values.id, values.term ?? [])));
+    } else if (op === 'sweep')
+      console.log(formatSweep(store.sweep(values.id, values.term ?? []), { filesOnly: values.files }));
     else if (op === 'guides') console.log(formatGuides(store.guides(values.id)));
     else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
     else if (op === 'review') store.review(values.id, values.axis, data);
