@@ -371,3 +371,17 @@ test('on the Fast track build.md is three lines and the story trace and security
   assert.match(checklist, /On the Fast track `build\.md` is three lines/);
   assert.match(checklist, /written only when the diff touches a trust boundary/);
 });
+
+test('Define decides build or borrow and splits oversized work, and the Exit checklist has a hostile-input step and a hit list', () => {
+  const define = references['define.md'];
+  assert.match(define, /names the approach in the Spec or the Ticket before Build starts: a dependency, a simpler syntax/);
+  assert.match(define, /passes about 40 KB or about 15 files, split the work/);
+  assert.match(define, /warns, without refusing/);
+  assert.match(main, /before you cut Tickets \(build or borrow, size\)/);
+  const checklist = references['exit-checklist.md'];
+  assert.match(checklist, /write an adversarial test: very long input, deep nesting/);
+  assert.match(checklist, /every "linear", "bounded", "safe"/);
+  assert.match(checklist, /It applies again after every Rework/);
+  assert.match(checklist, /a symlink or a path outside the folder.*a control character in output.*a silent drop.*one commit for more than one Ticket/);
+  assert.match(checklist, /find the sibling members and update every list/);
+});
