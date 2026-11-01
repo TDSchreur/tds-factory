@@ -96,10 +96,10 @@ export function modelOf(run) {
 // The agent has been quiet for this long.
 export const QUIET_MS = 10 * 60 * 1000;
 
-// "Last seen" of a card. Only a running Run can be quiet; a waiting Run shows the time without a warning; a finished or unreadable Run shows nothing.
+// "Last seen" of a card. Only a running Run can be quiet; a waiting Run shows the time without a warning; a finished or unreadable Run, or one without a last-seen time, shows nothing.
 export function lastSeenOf(run, now = Date.now()) {
   if (run.unreadable || !['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status)) return null;
-  const at = Date.parse(str(run.lastSeen) || str(run.updated));
+  const at = Date.parse(str(run.lastSeen));
   if (Number.isNaN(at)) return null;
   const age = Math.max(0, now - at);
   const quiet = run.status === 'running' && age >= QUIET_MS;

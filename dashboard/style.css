@@ -61,6 +61,10 @@
   .card .meta { display: flex; flex-wrap: wrap; gap: .1rem .75rem; margin-top: .25rem; font-size: .8rem; color: var(--muted); }
   .card.unreadable { border: 2px dashed var(--flag); background: var(--flag-bg); }
   .card.unreadable .title { color: var(--flag); }
+  .card .last-seen.quiet { color: var(--amber); font-weight: 600; }
+  .card .model { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
+  .progress { height: .5rem; margin-top: .4rem; border-radius: .25rem; background: var(--panel); border: 1px solid var(--border); overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--ok); }
   .card .updated.stale { color: var(--amber); font-weight: 600; }
   .card .pr { font-size: .875rem; margin-top: .4rem; }
   .card .toggle { margin-top: .5rem; padding: .15rem 0; border-color: transparent; background: none; color: var(--primary); font-weight: 600; }

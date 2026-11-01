@@ -31,7 +31,7 @@ test('lastSeenOf warns after ten minutes, only while running', () => {
   assert.equal(lastSeenOf(run('waiting', minutesAgo(30)), NOW).quiet, false);
   assert.equal(lastSeenOf(run('done', minutesAgo(30)), NOW), null);
   assert.equal(lastSeenOf(run('abandoned', minutesAgo(30)), NOW), null);
-  assert.deepEqual(lastSeenOf(run('running', '', { updated: minutesAgo(12) }), NOW), { text: 'Last seen 12 min ago, quiet', quiet: true });
+  assert.equal(lastSeenOf(run('running', '', { updated: minutesAgo(12) }), NOW), null);
   assert.equal(lastSeenOf(run('running', 'nonsense'), NOW), null);
   assert.equal(lastSeenOf({ unreadable: true, lastSeen: minutesAgo(1) }, NOW), null);
 });

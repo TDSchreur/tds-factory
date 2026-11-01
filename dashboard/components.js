@@ -3,7 +3,7 @@ import { Fragment, h } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
-import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, safeUrl, ticketsOf } from './model.js';
+import { COLUMNS, STALE_MS, ageMs, ago, chipsOf, folderName, lastSeenOf, modelOf, progressOf, safeUrl, ticketsOf, timelineOf } from './model.js';
 
 export const html = htm.bind(h);
 
@@ -51,6 +51,16 @@ function Chips({ run }) {
   return chips.length ? html`<div class="chips">${chips.map((c) => html`<span key=${c.key} class=${'chip ' + c.cls} title=${c.tip}>${c.text}</span>`)}</div>` : null;
 }
 
+function Progress({ run }) {
+  const p = progressOf(run);
+  return p ? html`<div class="progress" role="progressbar" aria-label="Ticket progress" aria-valuemin="0" aria-valuenow=${p.done} aria-valuemax=${p.total} aria-valuetext=${p.done + ' of ' + p.total + ' Tickets done'}><div class="progress-fill" style=${'width:' + Math.round(p.done / p.total * 100) + '%'}></div></div>` : null;
+}
+
+function ModelLine({ run }) {
+  const m = modelOf(run);
+  return m ? html`<div class=${'model' + (m.observed ? ' observed' : '')} title=${m.title}>${m.label}</div>` : null;
+}
+
 function Tickets({ run }) {
   const tickets = ticketsOf(run);
   const mark = { done: '✓', active: '▶', todo: '○' };
@@ -64,9 +74,12 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onS
   const done = run.column === 'done';
   const age = ageMs(run.updated);
   const stale = age !== null && !done && !run.unreadable && age > STALE_MS;
+  const seen = lastSeenOf(run);
   const prLabel = { open: 'Open', merged: 'Merged', closed: 'Closed' }[run.prState];
   const more = [
     run.activity && html`<div class="activity">${run.activity}</div>`,
+    html`<${ModelLine} run=${run} />`,
+    html`<${Progress} run=${run} />`,
     html`<${Tickets} run=${run} />`,
     html`<${Chips} run=${run} />`,
     done && run.pr && html`<div class="pr">${safeUrl(run.pr) ? html`<${Link} href=${run.pr}>Pull request<//>` : 'PR: ' + run.pr}${prLabel && html` <span class=${'badge ' + run.prState}>${prLabel}</span>`}</div>`,
@@ -83,7 +96,7 @@ export function Card({ run, selected, expanded, onSelect, onToggle, onMerge, onS
   return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => { if (e.key === 'Enter') onSelect(run.id); }}>
     ${pauseLabel(run) && html`<div class="reason">${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
-    <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
+    <div class="meta"><span class=${'updated' + (stale ? ' stale' : '')}>Updated: ${age === null ? 'unknown' : ago(age)}</span>${seen && html`<span class=${'last-seen' + (seen.quiet ? ' quiet' : '')}>${seen.quiet ? '⚠ ' : ''}${seen.text}</span>`}${run.agent && html`<span class="agent">Agent: ${run.agent}</span>`}${run.status === 'abandoned' && html`<span class="agent">Abandoned</span>`}</div>
     ${done && run.prState === 'open' && html`<div class="open-pr"><span class="badge open">Open PR</span></div>`}
     ${!done && more}
     ${done && html`<button type="button" class="toggle" aria-expanded=${String(expanded)} aria-label=${toggleText + ': ' + run.title} onClick=${(e) => { stop(e); onToggle(run.id); }} onKeyDown=${stop}>${expanded ? '▾' : '▸'} ${toggleText}</button>`}
