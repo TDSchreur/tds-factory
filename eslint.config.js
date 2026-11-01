@@ -10,6 +10,7 @@ export default [
       ...js.configs.recommended.rules,
       eqeqeq: 'error',
       'prefer-const': 'error',
+      'no-var': 'error',
       // Existing code intentionally matches control characters and ignores some caught errors.
       'no-control-regex': 'off',
       'no-unused-vars': ['error', { caughtErrors: 'none' }],
