@@ -53,6 +53,7 @@
     "dashboard-waiting.test.js",
     "dashboard.test.js",
     "doctor-broken-package.test.js",
+    "doctor.test.js",
     "eval-root.js",
     "evidence-invalidation.test.js",
     "fake-command.js",
@@ -67,6 +68,7 @@
     "run-events.test.js",
     "run-extra-loop.test.js",
     "run-follow-up.test.js",
+    "run-gates.test.js",
     "run-metrics.test.js",
     "run-repair.test.js",
     "run-rework-cause.test.js",
@@ -78,6 +80,7 @@
     "run-usage-copilot.test.js",
     "run-usage.test.js",
     "run-view.js",
+    "run-worktrees.test.js",
     "update.test.js",
     "usage-fixtures.js",
     "verify-fast.test.js"
