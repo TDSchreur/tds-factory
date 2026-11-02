@@ -3,12 +3,20 @@
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { messageOf } from '../src/narrow.js';
 
 export const CATEGORIES = ['Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security'];
 
 // Entries by category from fragment text or an [Unreleased] body: `### Category` headings over `- ` lines, indented lines continue the entry above.
+/**
+ * @param {string} text
+ * @param {string} source
+ * @returns {Record<string, string[]>}
+ */
 export function parseEntries(text, source) {
+  /** @type {Record<string, string[]>} */
   const entries = {};
+  /** @type {string | null} */
   let category = null;
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
@@ -24,11 +32,16 @@ export function parseEntries(text, source) {
   }
   return entries;
 }
+/**
+ * @param {string} text
+ * @param {string} [source]
+ */
 export function parseFragment(text, source = 'fragment') {
   const entries = parseEntries(text, source);
   if (!Object.keys(entries).length) throw new Error(`${source}: no entries`);
   return entries;
 }
+/** @param {string} dir */
 const fragmentFiles = (dir) =>
   existsSync(dir)
     ? readdirSync(dir)
@@ -37,9 +50,10 @@ const fragmentFiles = (dir) =>
     : [];
 
 // Moves the fragments and the [Unreleased] entries into a section for `version`, and deletes the fragments.
+/** @param {{ root?: string, version?: string, date?: string }} options */
 export function release({ root = '.', version, date }) {
-  if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error(`not a version: ${version}`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? '')) throw new Error(`not a date: ${date}`);
+  if (!version || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`not a version: ${version}`);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`not a date: ${date}`);
   const changelogPath = join(root, 'CHANGELOG.md'),
     fragmentsDir = join(root, 'changelog.d');
   const changelog = readFileSync(changelogPath, 'utf8');
@@ -53,10 +67,9 @@ export function release({ root = '.', version, date }) {
   const files = fragmentFiles(fragmentsDir);
   for (const name of files)
     sources.push(parseFragment(readFileSync(join(fragmentsDir, name), 'utf8'), `changelog.d/${name}`));
-  const sections = CATEGORIES.map((category) => [
-    category,
-    sources.flatMap((entries) => entries[category] ?? []),
-  ]).filter(([, lines]) => lines.length);
+  /** @type {[string, string[]][]} */
+  const all = CATEGORIES.map((category) => [category, sources.flatMap((entries) => entries[category] ?? [])]);
+  const sections = all.filter(([, lines]) => lines.length);
   if (!sections.length) throw new Error('nothing to release: no fragments and nothing under [Unreleased]');
   const body = sections.map(([category, lines]) => `### ${category}\n${lines.join('\n')}\n`).join('\n');
   writeFileSync(
@@ -76,7 +89,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       `Released ${version}: folded ${files.length} fragment${files.length === 1 ? '' : 's'} into CHANGELOG.md`,
     );
   } catch (err) {
-    console.error(`error: ${err.message}`);
+    console.error(`error: ${messageOf(err)}`);
     process.exitCode = 1;
   }
 }

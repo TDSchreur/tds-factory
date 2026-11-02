@@ -9,6 +9,6 @@
     "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["**/*.js", "../scripts/**/*.js", "../eval/**/*.js"],
+  "include": ["**/*.js"],
   "exclude": ["../node_modules", "../vendor", "../dashboard/vendor", "../.factory"]
 }

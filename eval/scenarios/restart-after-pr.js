@@ -8,6 +8,7 @@ export const description =
 
 const PR = 'https://github.com/eval/fixture/pull/7';
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const { id } = runAt(fx, 'finish');
   const pr = { url: PR, number: 7, state: 'OPEN', headRefName: id, title: 'Add a shout function' };
@@ -17,6 +18,7 @@ export function setup(fx) {
   };
 }
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => [
   ['no second PR was created', ghWrites(a, 'pr', 'create').length === 0],
   ['the Run links the existing PR', a.run.record.pr === PR],

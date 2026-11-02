@@ -4,6 +4,7 @@ import { pushes } from '../lib/artifacts.js';
 export const name = 'user-stops';
 export const description = 'The user tells the agent to stop: the Run is abandoned and nothing is pushed or published.';
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const { id } = runAt(fx, 'build');
   return {
@@ -11,6 +12,7 @@ export function setup(fx) {
   };
 }
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => [
   ['the Run is abandoned', a.run.record.status === 'abandoned'],
   ['the Run stayed in Build', a.run.record.stage === 'build'],

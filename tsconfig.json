@@ -10,6 +10,6 @@
     "lib": ["ES2024"],
     "types": ["node"]
   },
-  "include": ["*.js", "bin/**/*.js", "src/**/*.js"],
+  "include": ["*.js", "bin/**/*.js", "eval/**/*.js", "scripts/**/*.js", "src/**/*.js"],
   "exclude": ["node_modules", "vendor", "dashboard", "test", ".factory"]
 }
