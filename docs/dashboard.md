@@ -119,6 +119,10 @@ Every route that changes something (`DELETE` and `POST`) passes one guard before
 
 The server sends no CORS headers and answers no preflight. See [ADR 0017](adr/0017-dashboard-write-routes-need-origin-host-and-a-session-token.md).
 
+## Server modules
+
+`startDashboard` in `src/dashboard.js` creates the server, applies the guard above, serves the static assets and returns `{ server, port, url, close }`. The routes are a table in `src/dashboard-routes.js` (method, path pattern and handler); the handlers are in `src/dashboard-handlers.js`, the PR status caches in `src/dashboard-pr-views.js` and `interpretRun` in `src/dashboard-view.js`. A request runs the guard first and then the matching handler. The git calls a request makes are async (`gitAsync` in `src/git.js`), so a slow git call does not block other requests ([ADR 0030](adr/0030-one-flow-of-git-steps-runs-sync-for-the-cli-and-async-for-the-dashboard.md)).
+
 ## Merging from the Dashboard
 
 The **Merge** button asks the server to merge the Run's pull request, and the server checks first:
