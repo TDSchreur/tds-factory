@@ -96,9 +96,7 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
     // Shipped skills are plain files: a link could make the rewrite below touch files outside the skill.
     for (const e of fs.readdirSync(src, { recursive: true, withFileTypes: true })) {
       if (e.isSymbolicLink())
-        throw new Error(
-          `skill ${name} contains a symlink: ${path.relative(src, path.join(e.parentPath, e.name))}`,
-        );
+        throw new Error(`skill ${name} contains a symlink: ${path.relative(src, path.join(e.parentPath, e.name))}`);
     }
     const unflag =
       invoked.has(name) && /^disable-model-invocation:/m.test(fs.readFileSync(path.join(src, 'SKILL.md'), 'utf8'));

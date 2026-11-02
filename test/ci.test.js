@@ -67,8 +67,8 @@ test('every third-party action in the CI workflow is pinned to a commit SHA', ()
 });
 
 test('the Windows unit tests run in two shards and only the first shard runs the static checks', () => {
-  const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
-  const job = ci.slice(ci.indexOf('  windows:'), ci.indexOf('  package:'));
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const job = workflow.slice(workflow.indexOf('  windows:'), workflow.indexOf('  package:'));
   assert.match(job, /shard: \[1, 2\]/);
   assert.match(job, /if: matrix\.shard == 1\n\s+run: npm run check/);
   assert.match(job, /npm run test:unit -- --test-shard=\$\{\{ matrix\.shard \}\}\/2/);
