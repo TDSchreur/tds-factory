@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -12,36 +12,14 @@ const TYPES = { css: 'text/css', js: 'text/javascript' };
 const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
 const WINDOWS = process.platform === 'win32';
-const onPath = (name) =>
-  spawnSync(WINDOWS ? 'where' : 'sh', WINDOWS ? [name] : ['-c', `command -v ${name}`]).status === 0;
-
-// On Windows Edge is preferred (it ships with Windows, only msedgedriver has to be installed); Chrome is the fallback.
-// Neither browser is on PATH there, so look in the install folders (CHROME_BIN overrides the Chrome lookup).
-const windowsFile = (...parts) =>
-  ['PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA']
-    .map((base) => process.env[base] && join(process.env[base], ...parts))
-    .find((file) => file && existsSync(file));
+const onPath = (name) => spawnSync('sh', ['-c', `command -v ${name}`]).status === 0;
 
 // The driver, browser and WebDriver vocabulary to use, or null when this machine has none.
-const target = () => {
-  if (WINDOWS) {
-    // The browser tests are slow under Windows for now; they run there only when asked for.
-    if (!process.env.TDS_WINDOWS_BROWSER && !process.env.REQUIRE_BROWSER) return null;
-    const edge = windowsFile('Microsoft', 'Edge', 'Application', 'msedge.exe');
-    if (onPath('msedgedriver') && edge)
-      return { driver: 'msedgedriver', binary: edge, name: 'MicrosoftEdge', options: 'ms:edgeOptions', cdp: 'ms' };
-    const chrome =
-      (process.env.CHROME_BIN && existsSync(process.env.CHROME_BIN) && process.env.CHROME_BIN) ||
-      windowsFile('Google', 'Chrome', 'Application', 'chrome.exe') ||
-      windowsFile('Chromium', 'Application', 'chrome.exe');
-    if (onPath('chromedriver') && chrome)
-      return { driver: 'chromedriver', binary: chrome, name: 'chrome', options: 'goog:chromeOptions', cdp: 'goog' };
-    return null;
-  }
-  return onPath('chromedriver') && (onPath('chromium') || onPath('google-chrome'))
+// The browser tests do not run on Windows.
+const target = () =>
+  !WINDOWS && onPath('chromedriver') && (onPath('chromium') || onPath('google-chrome'))
     ? { driver: 'chromedriver', name: 'chrome', options: 'goog:chromeOptions', cdp: 'goog' }
     : null;
-};
 
 export const hasBrowser = () => target() !== null;
 
@@ -103,11 +81,15 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
 export async function openPage(t, state, { args = [], width = 1200, height = 700 } = {}) {
+  if (WINDOWS) {
+    t.skip('the browser tests are not supported on Windows');
+    return null;
+  }
   const browser = target();
   if (!browser) {
     // CI sets REQUIRE_BROWSER so that a runner without a browser fails instead of silently skipping these tests.
     if (process.env.REQUIRE_BROWSER) throw new Error('A browser and its driver are required (REQUIRE_BROWSER is set)');
-    t.skip('A browser and its driver (ChromeDriver, or msedgedriver on Windows) are required');
+    t.skip('A browser and its driver (ChromeDriver and Chromium) are required');
     return null;
   }
   const calls = [];
@@ -215,7 +197,6 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
           alwaysMatch: {
             browserName: browser.name,
             [browser.options]: {
-              ...(browser.binary ? { binary: browser.binary } : {}),
               args: [
                 '--headless',
                 '--no-sandbox',
