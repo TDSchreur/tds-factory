@@ -1,16 +1,20 @@
+/** @import { PrStatus } from './pr-provider.js' */
+/** @import { PrLookup } from './run-clean.js' */
 import http from 'node:http';
 import { openRunStore, summarizeMetrics, formatMetrics, trackOf, loopCap } from './run-store.js';
-import { stages } from './flow.js';
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { can, providerFor, remoteRepo } from './pr-provider.js';
+import { can, providerFor, providerWith, remoteRepo } from './pr-provider.js';
+import { messageOf, codeOf, oneOf } from './narrow.js';
+import { isStage } from './flow.js';
 
 const exec = promisify(execFile);
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
+/** @param {string} worktree */
 const expectedRepo = async (worktree) => {
   const origin = (await exec('git', ['remote', 'get-url', 'origin'], { cwd: worktree, timeout: 10_000 })).stdout.trim();
   const repo = remoteRepo(origin);
@@ -34,17 +38,31 @@ const STATUS_REASONS = [
   'az-not-signed-in',
   'error',
 ];
-const ghPrState = (url) => providerFor(url).stateAsync(url);
-const ghPrMerge = (url, head) => providerFor(url).merge(url, head);
-const ghPrDetails = (url) => providerFor(url).viewAsync(url);
-const ghChecks = (url) => providerFor(url).checksSummary(url);
-const ghPrStatus = (url) => providerFor(url).statusAsync(url);
+// A PR link no provider handles, or one whose provider lacks the operation, throws here, as it always did.
+/** @param {string} url */
+const ghPrState = (url) => providerWith(url, 'statusAsync').stateAsync(url);
+/** @param {string} url @param {string} head */
+const ghPrMerge = (url, head) => providerWith(url, 'merge').merge(url, head);
+/** @param {string} url */
+const ghPrDetails = (url) => providerWith(url, 'viewAsync').viewAsync(url);
+/** @param {string} url */
+const ghChecks = (url) => providerWith(url, 'checksSummary').checksSummary(url);
+/** @param {string} url */
+const ghPrStatus = (url) => providerWith(url, 'statusAsync').statusAsync(url);
 const HOST = '127.0.0.1';
+/** @param {http.Server} server */
+const addressPort = (server) => {
+  const address = server.address();
+  if (address === null || typeof address === 'string') throw new Error('the Dashboard is not listening on a port');
+  return address.port;
+};
 // Each repo gets its own stable port in 4300-4999, derived from its main checkout path.
+/** @param {string} dir */
 const repoPort = (dir) => 4300 + (createHash('sha1').update(dir).digest().readUInt32BE(0) % 700);
 const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
 // The only files served besides the page; a request never picks a path, only one of these names.
 const JS = 'text/javascript';
+/** @type {Record<string, string>} */
 const ASSETS = {
   '/style.css': 'text/css',
   '/favicon.svg': 'image/svg+xml',
@@ -63,8 +81,13 @@ const FALLBACK_PAGE = `<!doctype html>
 <h1>TDS Factory</h1>
 <p>The Dashboard page is not installed. Run records are available at <a href="/api/runs">/api/runs</a>.</p>
 `;
+/** @param {unknown} v */
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
+/** @param {unknown} v @returns {string[]} */
 const strList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
+/**
+ * @param {any} entry An entry of the Run store. Its record is read from disk and may have any shape, so every field is checked as it is read.
+ */
 export function interpretRun(entry) {
   const id = typeof entry?.id === 'string' ? entry.id : '',
     files = strList(entry?.files);
@@ -91,18 +114,28 @@ export function interpretRun(entry) {
   const r = entry.record,
     status = str(r.status),
     stage = str(r.stage).toLowerCase();
+  /** @param {unknown} v */
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : null);
-  const verdict = (v, skip) => {
-    v = str(v).toLowerCase();
+  /**
+   * @param {unknown} value
+   * @param {boolean} [skip]
+   */
+  const verdict = (value, skip) => {
+    const v = str(value).toLowerCase();
     return v === 'pass' || v === 'fail' || (skip && v === 'skipped') ? v : '';
   };
+  // The record is untrusted data: the `any` parameters below are checked field by field.
   const projectReviews = (Array.isArray(r.project_reviews) ? r.project_reviews : [])
-    .filter((x) => x && typeof x === 'object' && str(x.id) && str(x.name))
-    .map((x) => {
+    .filter((/** @type {any} */ x) => x && typeof x === 'object' && str(x.id) && str(x.name))
+    .map((/** @type {any} */ x) => {
       const result = r.project_results?.[x.id] ?? {};
       const findings = (Array.isArray(result.findings) ? result.findings : [])
-        .filter((f) => f && typeof f === 'object')
-        .map((f) => ({ severity: str(f.severity), description: str(f.description), location: str(f.location) }));
+        .filter((/** @type {any} */ f) => f && typeof f === 'object')
+        .map((/** @type {any} */ f) => ({
+          severity: str(f.severity),
+          description: str(f.description),
+          location: str(f.location),
+        }));
       return {
         id: str(x.id),
         name: str(x.name),
@@ -111,12 +144,15 @@ export function interpretRun(entry) {
         findings,
       };
     });
+  /** @type {{ label: string, href: string }[]} */
   const links = [];
-  for (const [label, values] of [
+  /** @type {[string, unknown][]} */
+  const linkSources = [
     ['Spec', r.spec_link],
     ['Ticket', r.tickets],
     ['PR', r.pr],
-  ])
+  ];
+  for (const [label, values] of linkSources)
     for (const value of Array.isArray(values) ? values : [values])
       if (str(value)) links.push({ label, href: str(value) });
   // Only the plain, known fields of an event reach the page, and the last 50 of them.
@@ -139,9 +175,9 @@ export function interpretRun(entry) {
     'signal',
   ];
   const events = (Array.isArray(entry.events?.events) ? entry.events.events : [])
-    .filter((e) => e && typeof e === 'object')
+    .filter((/** @type {any} */ e) => e && typeof e === 'object')
     .slice(-50)
-    .map((e) =>
+    .map((/** @type {any} */ e) =>
       Object.fromEntries(
         eventKeys.filter((k) => ['string', 'number', 'boolean'].includes(typeof e[k])).map((k) => [k, e[k]]),
       ),
@@ -157,7 +193,7 @@ export function interpretRun(entry) {
     metrics: formatMetrics(summarizeMetrics(r)),
     track: trackOf(r),
     projectReviews,
-    column: ['done', 'abandoned'].includes(status) ? 'done' : stages.includes(stage) ? stage : 'define',
+    column: ['done', 'abandoned'].includes(status) ? 'done' : isStage(stage) ? stage : 'define',
     status,
     pr: str(r.pr),
     tickets: strList(r.tickets),
@@ -186,6 +222,17 @@ export function interpretRun(entry) {
 // prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a `reason` when the provider fails.
 // statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
 // prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
+/**
+ * @param {object} [options]
+ * @param {string} [options.projectDir]
+ * @param {number} [options.port] An explicit port is used exactly; 0 is a random free port.
+ * @param {(url: string) => Promise<string>} [options.prState]
+ * @param {(url: string, head: string) => Promise<unknown>} [options.prMerge]
+ * @param {PrLookup} [options.prInfo]
+ * @param {(url: string) => Promise<PrStatus>} [options.prStatus]
+ * @param {number} [options.statusRefreshMs]
+ * @param {string} [options.dashboardDir]
+ */
 export async function startDashboard({
   projectDir = process.cwd(),
   port,
@@ -200,9 +247,13 @@ export async function startDashboard({
   // Clean-up must run from the main checkout, also when the Dashboard was started inside a Run worktree.
   const mainStore = openRunStore(store.projectDir);
   const token = randomBytes(32).toString('hex');
+  /** @param {string} value */
   const digest = (value) => createHash('sha256').update(value).digest();
+  /** @param {unknown} given */
   const tokenOk = (given) => typeof given === 'string' && timingSafeEqual(digest(given), digest(token)); // equal-length digests, so any header value compares safely
+  /** @type {Map<string, { at: number, state: Promise<string> }>} */
   const prCache = new Map();
+  /** @param {string} url */
   const lookup = (url) => {
     const hit = prCache.get(url);
     if (hit && Date.now() - hit.at < PR_CACHE_MS) return hit.state;
@@ -217,7 +268,9 @@ export async function startDashboard({
     return state;
   };
   // PR status never blocks a poll: a lookup runs in the background, one at a time per PR, and the views answer from the cache.
+  /** @type {Map<string, { at?: number, value?: unknown, ttl?: number, pending?: Promise<unknown> }>} */
   const statusCache = new Map();
+  /** @param {string} url */
   const fetchStatus = (url) => {
     const entry = statusCache.get(url) ?? {};
     if (entry.pending) return entry.pending;
@@ -225,7 +278,7 @@ export async function startDashboard({
       .then(() => prStatus(url))
       .then(
         (value) => ({ value, ttl: value?.state === 'open' ? PR_STATUS_MS : PR_STATUS_FINAL_MS }),
-        (err) => ({
+        (/** @type {any} */ err) => ({
           value: { unavailable: STATUS_REASONS.includes(err?.reason) ? err.reason : 'error' },
           ttl: PR_STATUS_FAIL_MS,
         }),
@@ -233,24 +286,28 @@ export async function startDashboard({
       .then(({ value, ttl }) => {
         statusCache.delete(url);
         statusCache.set(url, { at: Date.now(), value, ttl });
-        if (statusCache.size > PR_STATUS_MAX) statusCache.delete(statusCache.keys().next().value);
+        const oldest = statusCache.keys().next().value;
+        if (statusCache.size > PR_STATUS_MAX && oldest !== undefined) statusCache.delete(oldest);
         return value;
       });
     statusCache.set(url, { ...entry, pending });
     return pending;
   };
+  /** @param {string} url */
   const statusOf = (url) => {
     const hit = statusCache.get(url);
-    if (hit?.value && Date.now() - hit.at < hit.ttl) return hit.value;
+    if (hit?.value && Date.now() - (hit.at ?? 0) < (hit.ttl ?? 0)) return hit.value;
     fetchStatus(url);
     return hit?.value ?? { checking: true };
   };
   // Whether a Run has a PR whose status the page shows: a GitHub PR link in Finish, Follow-up or Done, on a Run that is not abandoned.
+  /** @param {ReturnType<typeof interpretRun>} v */
   const hasStatus = (v) =>
     !v.unreadable &&
     v.status !== 'abandoned' &&
     ['finish', 'follow-up', 'done'].includes(v.column) &&
     !!providerFor(v.pr);
+  /** @param {any} entry */
   const view = async (entry) => {
     const v = interpretRun(entry);
     return {
@@ -263,15 +320,16 @@ export async function startDashboard({
   };
 
   const server = http.createServer(async (req, res) => {
+    /** @param {number} status @param {string} type @param {string | undefined} body */
     const send = (status, type, body) => {
       res.writeHead(status, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store' });
       res.end(body);
     };
     // Only our own loopback names, so a web page can't reach us through DNS rebinding.
-    const { port: own } = server.address();
-    if (![`127.0.0.1:${own}`, `localhost:${own}`].includes(req.headers.host))
-      return send(403, 'text/plain', 'forbidden');
-    const path = (req.url ?? '/').split('?')[0];
+    const own = addressPort(server);
+    if (!oneOf([`127.0.0.1:${own}`, `localhost:${own}`], req.headers.host)) return send(403, 'text/plain', 'forbidden');
+    const target = req.url ?? '/';
+    const path = target.split('?')[0];
     // Every write passes the same guard (ADR 0017): own Origin and a per-session token; the Host check above covers all routes.
     if (
       req.method !== 'GET' &&
@@ -281,13 +339,14 @@ export async function startDashboard({
       return send(403, 'text/plain', 'forbidden');
     try {
       if (req.method === 'DELETE' && path.startsWith('/api/runs/')) {
+        /** @type {string} */
         let id;
         try {
           id = decodeURIComponent(path.slice('/api/runs/'.length));
         } catch {
           return send(400, 'text/plain', 'invalid id');
         }
-        const query = new URL(req.url, 'http://localhost').searchParams;
+        const query = new URL(target, 'http://localhost').searchParams;
         const options = [...query.entries()];
         if (
           options.some(
@@ -296,6 +355,7 @@ export async function startDashboard({
           )
         )
           return send(400, 'text/plain', 'invalid delete option');
+        /** @type {string | undefined} */
         let reason;
         const outcome = store.remove(
           id,
@@ -304,17 +364,20 @@ export async function startDashboard({
           },
           { discardChanges: query.has('discardChanges'), doneOnly: query.has('doneOnly') },
         );
-        const status = {
+        /** @type {Record<string, number>} */
+        const statuses = {
           deleted: 200,
           invalid: 400,
           'not-found': 404,
           'not-allowed': 409,
           'worktree-refused': 409,
           'dirty-worktree': 409,
-        }[outcome];
+        };
+        const status = statuses[outcome] ?? 500;
         if (outcome === 'dirty-worktree') res.setHeader('x-factory-error', outcome);
-        const text =
-          { deleted: 'deleted', 'worktree-refused': reason, 'dirty-worktree': reason }[outcome] ?? 'cannot delete Run';
+        /** @type {Record<string, string | undefined>} */
+        const texts = { deleted: 'deleted', 'worktree-refused': reason, 'dirty-worktree': reason };
+        const text = texts[outcome] ?? 'cannot delete Run';
         return send(status, 'text/plain', text);
       }
       const merge = req.method === 'POST' && path.match(/^\/api\/runs\/([^/]+)\/merge$/);
@@ -328,14 +391,14 @@ export async function startDashboard({
         const entry = (await store.list()).find((e) => e.id === id);
         if (!entry) return send(404, 'text/plain', 'not found');
         const v = interpretRun(entry);
-        if (v.status !== 'done' || !providerFor(v.pr)) return send(409, 'text/plain', 'cannot merge this Run');
-        if (!can(v.pr, 'merge'))
-          return send(409, 'text/plain', `${providerFor(v.pr).title} cannot merge from the Dashboard`);
+        const provider = providerFor(v.pr);
+        if (v.status !== 'done' || !provider) return send(409, 'text/plain', 'cannot merge this Run');
+        if (!can(v.pr, 'merge')) return send(409, 'text/plain', `${provider.title} cannot merge from the Dashboard`);
         let eligibility;
         try {
           eligibility = store.mergeEligibility(id);
         } catch (err) {
-          return send(409, 'text/plain', `cannot check Run Evidence: ${err.message}`);
+          return send(409, 'text/plain', `cannot check Run Evidence: ${messageOf(err)}`);
         }
         if (eligibility.problems.length)
           return send(409, 'text/plain', `Run needs a clean or Accepted Check: ${eligibility.problems.join('; ')}`);
@@ -343,7 +406,7 @@ export async function startDashboard({
         try {
           repo = await expectedRepo(eligibility.worktree);
         } catch (err) {
-          return send(409, 'text/plain', err.message);
+          return send(409, 'text/plain', messageOf(err));
         }
         const prRepo = new URL(v.pr).pathname.split('/').slice(1, 3).join('/').toLowerCase();
         if (repo !== prRepo) return send(409, 'text/plain', 'the PR does not belong to the Run repository');
@@ -392,7 +455,7 @@ export async function startDashboard({
           }
           if (action[2] === 'extra-loop') {
             // ADR 0024: the user's own decision, as the page showed the Run. The store refuses everything but a Run in Check that waits at its limit.
-            const updated = new URL(req.url, 'http://localhost').searchParams.get('updated');
+            const updated = new URL(target, 'http://localhost').searchParams.get('updated');
             if (updated === null)
               return send(409, 'text/plain', 'the request must name the Run record time you looked at');
             if (!v.waiting || v.column !== 'check')
@@ -405,7 +468,7 @@ export async function startDashboard({
           if (!v.waiting || v.column !== 'check')
             return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
           // The user decided on the Run as the page showed it; a change since then needs a new look.
-          if (new URL(req.url, 'http://localhost').searchParams.get('updated') !== v.updated)
+          if (new URL(target, 'http://localhost').searchParams.get('updated') !== v.updated)
             return send(409, 'text/plain', 'the Run changed since you looked at it; reload and look again');
           const { problems } = store.mergeEligibility(id);
           if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
@@ -423,7 +486,7 @@ export async function startDashboard({
           }
           return send(200, 'text/plain', 'accepted');
         } catch (err) {
-          return send(409, 'text/plain', String(err.message).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
+          return send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
         }
       }
       const checks = req.method === 'GET' && path.match(/^\/api\/runs\/([^/]+)\/merge-checks$/);
@@ -459,8 +522,8 @@ export async function startDashboard({
         const v = interpretRun(entry);
         if (!hasStatus(v)) return send(409, 'text/plain', 'this Run has no PR status');
         const hit = statusCache.get(v.pr);
-        const fresh = hit?.value && Date.now() - hit.at < statusRefreshMs;
-        const refresh = new URL(req.url, 'http://localhost').searchParams.get('refresh') === '1';
+        const fresh = hit?.value && hit.at !== undefined && Date.now() - hit.at < statusRefreshMs;
+        const refresh = new URL(target, 'http://localhost').searchParams.get('refresh') === '1';
         return send(
           200,
           'application/json',
@@ -502,6 +565,10 @@ export async function startDashboard({
     }
   });
 
+  /**
+   * @param {number} p
+   * @returns {Promise<void>}
+   */
   const listen = (p) =>
     new Promise((ok, fail) => {
       server.once('error', fail);
@@ -510,10 +577,10 @@ export async function startDashboard({
   if (port !== undefined) await listen(port);
   else
     await listen(repoPort(store.projectDir)).catch((err) => {
-      if (err.code !== 'EADDRINUSE') throw err;
+      if (codeOf(err) !== 'EADDRINUSE') throw err;
       return listen(0);
     });
-  const actual = server.address().port;
+  const actual = addressPort(server);
   return {
     server,
     port: actual,

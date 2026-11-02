@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { dirname, posix, resolve } from 'node:path';
 
 const read = (file) => readFileSync(resolve(file), 'utf8');
 const scripts = JSON.parse(read('package.json')).scripts;
@@ -20,7 +20,11 @@ test('every folder with tracked JavaScript is inside the lint, format and typech
   assert.equal(scripts.lint, 'eslint .');
   assert.match(scripts['format:check'], /"\*\*\/\*\.\{[^}]*\bjs\b[^}]*\}"/);
   const tracked = execFileSync('git', ['ls-files', '*.js'], { encoding: 'utf8' }).split('\n').filter(Boolean);
-  const { include } = JSON.parse(read('tsconfig.json'));
+  // Each project lists its folders relative to its own tsconfig; together they must cover every tracked file.
+  const include = ['tsconfig.json', 'dashboard/tsconfig.json', 'test/tsconfig.json'].flatMap((config) => {
+    const dir = dirname(config);
+    return JSON.parse(read(config)).include.map((glob) => posix.normalize(posix.join(dir, glob)));
+  });
   const matches = (glob, file) =>
     new RegExp(
       '^' +
@@ -34,5 +38,18 @@ test('every folder with tracked JavaScript is inside the lint, format and typech
     (file) =>
       !file.startsWith('vendor/') && !file.startsWith('dashboard/vendor/') && !include.some((g) => matches(g, file)),
   );
-  assert.deepEqual(outside, [], 'add the folder to the include list in tsconfig.json');
+  assert.deepEqual(outside, [], 'add the folder to the include list of a tsconfig.json');
+});
+
+test('the typecheck runs three projects, and only test/ still checks just the files that opt in', () => {
+  assert.equal(
+    scripts.typecheck,
+    'tsc -p tsconfig.json && tsc -p dashboard/tsconfig.json && tsc -p test/tsconfig.json',
+  );
+  const options = (config) => JSON.parse(read(config)).compilerOptions;
+  assert.equal(options('tsconfig.json').checkJs, true);
+  assert.equal(options('test/tsconfig.json').checkJs, false);
+  for (const config of ['tsconfig.json', 'dashboard/tsconfig.json', 'test/tsconfig.json'])
+    assert.equal(options(config).strict, true, `${config} is not strict`);
+  assert.equal(options('tsconfig.json').target, 'ES2024');
 });

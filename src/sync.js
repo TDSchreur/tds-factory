@@ -7,6 +7,7 @@ import { hashLine, modifiedLocally } from './tree-hash.js';
 
 // Skills the factory flow invokes; the model must be able to call them, so upstream's
 // disable-model-invocation flag is removed from their copies.
+/** @param {string} skillsDir */
 export function invokedByFactory(skillsDir) {
   // The main file and its reference files: a Stage's text may live in a reference.
   const dir = path.join(skillsDir, 'factory');
@@ -22,10 +23,15 @@ export function invokedByFactory(skillsDir) {
   return new Set([...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]));
 }
 
+/** @param {string} text */
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // One Markdown file of a shipped skill: set the name and rewrite `/from` mentions when renamed,
 // and drop the model-invocation flag when the factory has to call the skill.
+/**
+ * @param {string} text
+ * @param {{ skillFile: boolean, from: string, to: string, unflag: boolean }} options
+ */
 function rewrite(text, { skillFile, from, to, unflag }) {
   if (from !== to) {
     if (skillFile) text = text.replace(/^name:.*$/m, () => `name: ${to}`);
@@ -35,6 +41,10 @@ function rewrite(text, { skillFile, from, to, unflag }) {
 }
 
 // HEAD of the vendor submodule a skill comes from; null when it is not checked out.
+/**
+ * @param {string} root
+ * @param {string} rel
+ */
 function upstreamCommit(root, rel) {
   const dir = path.join(root, rel.split('/').slice(0, 2).join('/'));
   if (!fs.existsSync(path.join(dir, '.git'))) return null;
@@ -45,6 +55,7 @@ function upstreamCommit(root, rel) {
   }
 }
 
+/** @param {string} base @param {string} target */
 const leaves = (base, target) => {
   const rel = path.relative(base, target);
   return rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
@@ -53,6 +64,7 @@ const leaves = (base, target) => {
 // Copies the skills listed in the manifest from the vendor submodules into skills/.
 // An entry is a path, or { path, as } to ship the skill under another name.
 // Our own skills (no marker) are never touched, and a marked skill edited by hand is kept unless forced.
+/** @param {{ root?: string, skillsDir?: string, force?: boolean }} [options] */
 export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}) {
   const manifestPath = path.join(root, 'skills.manifest.json');
   // The installed package ships skills/ but not the manifest or vendor/, so sync only works in a checkout.
@@ -63,8 +75,10 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
   const { skills, upstreams = {} } = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const invoked = invokedByFactory(skillsDir);
   // Validate every entry first, so a bad one leaves the skills folder untouched.
+  /** @type {Set<string>} */
   const seen = new Set();
-  const plan = skills.map((entry) => {
+  const plan = skills.map((/** @type {string | { path: string, as?: string }} */ entry) => {
+    /** @param {string} why */
     const bad = (why) => new Error(`manifest entry ${JSON.stringify(entry)} ${why}`);
     const shaped =
       typeof entry === 'string' ||
@@ -109,6 +123,7 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
       console.log(`removed ${e.name}`);
     }
   }
+  /** @type {Record<string, object>} */
   const provenance = {};
   for (const { rel, name, src, dest, unflag } of plan) {
     const upstream = upstreams[rel.split('/').slice(0, 2).join('/')] ?? {};

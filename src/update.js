@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { messageOf } from './narrow.js';
 
 const REPO = 'TDSchreur/tds-factory';
 const ASSET = 'tds-factory.tgz';
@@ -10,6 +11,13 @@ const ATTEMPTS = 3;
 const DOWNLOADS = `/${REPO}/releases/download/`;
 const USER_AGENT = { 'User-Agent': 'tds-factory' };
 
+/** @typedef {{ core: number[], pre: string | undefined }} Version */
+/** @typedef {{ sleep: (ms: number) => Promise<unknown>, warn: (message: string) => void }} Retry */
+
+/**
+ * @param {string} text
+ * @returns {Version}
+ */
 function parseVersion(text) {
   const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(text);
   if (!m) throw new Error(`Cannot parse version '${text}'`);
@@ -17,6 +25,10 @@ function parseVersion(text) {
 }
 
 // Negative when a < b, 0 when equal, positive when a > b. A prerelease sorts below its release; identifiers compare per semver.
+/**
+ * @param {string} a
+ * @param {string} b
+ */
 export function compareVersions(a, b) {
   const x = parseVersion(a);
   const y = parseVersion(b);
@@ -34,6 +46,11 @@ export function compareVersions(a, b) {
 }
 
 // npm and tds-factory are .cmd shims on Windows, which spawn only runs through a shell.
+/**
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{ inherit?: boolean, cwd?: string }} [options]
+ */
 function defaultRun(cmd, args, { inherit = false, cwd } = {}) {
   const win = process.platform === 'win32';
   // cmd.exe looks in the current folder before PATH; this switch and the cwd the caller passes keep a file planted there from running.
@@ -44,6 +61,7 @@ function defaultRun(cmd, args, { inherit = false, cwd } = {}) {
 }
 
 // Parsed, not prefix-matched: a URL with `..` or encoded separators must not resolve into another repository.
+/** @param {string} text */
 function isReleaseAsset(text) {
   try {
     const url = new URL(text);
@@ -62,26 +80,53 @@ function isReleaseAsset(text) {
 }
 
 // A rate limit or an error answer from the server may pass; any other status will not, so it is not worth waiting for.
+/** @param {number} status */
 const transient = (status) => status === 429 || status >= 500;
 
-function statusError(what, status) {
-  const err = new Error(`${what} answered ${status}`);
-  err.permanent = !transient(status);
-  return err;
+class StatusError extends Error {
+  /**
+   * @param {string} what
+   * @param {number} status
+   */
+  constructor(what, status) {
+    super(`${what} answered ${status}`);
+    this.permanent = !transient(status);
+  }
 }
 
+/**
+ * @param {string} what
+ * @param {number} status
+ */
+function statusError(what, status) {
+  return new StatusError(what, status);
+}
+
+/**
+ * @template T
+ * @param {string} what
+ * @param {() => Promise<T>} action
+ * @param {Retry} retry
+ * @returns {Promise<T>}
+ */
 async function withRetry(what, action, { sleep, warn }) {
   for (let attempt = 1; ; attempt++) {
     try {
       return await action();
     } catch (err) {
-      if (attempt === ATTEMPTS || err.permanent) throw err;
-      warn(`${what} failed (attempt ${attempt}/${ATTEMPTS}): ${err.message}`);
+      if (attempt === ATTEMPTS || (err instanceof StatusError && err.permanent)) throw err;
+      warn(`${what} failed (attempt ${attempt}/${ATTEMPTS}): ${messageOf(err)}`);
       await sleep(1000 * 2 ** attempt);
     }
   }
 }
 
+/**
+ * @param {typeof fetch} fetchFn
+ * @param {string} url
+ * @param {RequestInit} options
+ * @param {string} what
+ */
 async function fetchOk(fetchFn, url, options, what) {
   const response = await fetchFn(url, options);
   if (!response.ok) throw statusError(what, response.status);
@@ -89,10 +134,16 @@ async function fetchOk(fetchFn, url, options, what) {
 }
 
 // The API is rate limited when unauthenticated, so fall back to where /releases/latest redirects to.
+/**
+ * @param {{ fetchFn: typeof fetch, env: NodeJS.ProcessEnv, retry: Retry }} options
+ * @returns {Promise<{ version: Version, tag: string, url: string, hasChecksum: boolean }>}
+ */
 async function latestRelease({ fetchFn, env, retry }) {
+  /** @type {Record<string, string>} */
   const headers = { ...USER_AGENT, Accept: 'application/vnd.github+json' };
   if (env.GITHUB_TOKEN) headers.Authorization = `Bearer ${env.GITHUB_TOKEN}`;
   try {
+    /** @type {any} The GitHub API answer: data, whose fields are checked below. */
     const release = await withRetry(
       'GitHub API',
       async () =>
@@ -101,7 +152,9 @@ async function latestRelease({ fetchFn, env, retry }) {
         ).json(),
       retry,
     );
-    const asset = release.assets?.find((a) => a.name === ASSET);
+    /** @type {{ name: string, browser_download_url: string }[] | undefined} */
+    const assets = release.assets;
+    const asset = assets?.find((a) => a.name === ASSET);
     if (!asset) throw new Error(`Release ${release.tag_name} has no asset '${ASSET}'`);
     // The API answer is data: only a download from this repository's Releases is ever fetched.
     if (!isReleaseAsset(asset.browser_download_url)) throw new Error(`the asset URL is not a Release asset of ${REPO}`);
@@ -109,10 +162,10 @@ async function latestRelease({ fetchFn, env, retry }) {
       version: parseVersion(release.tag_name),
       tag: release.tag_name,
       url: asset.browser_download_url,
-      hasChecksum: release.assets.some((a) => a.name === `${ASSET}.sha256`),
+      hasChecksum: !!assets?.some((a) => a.name === `${ASSET}.sha256`),
     };
   } catch (err) {
-    retry.warn(`API lookup failed (${err.message}); falling back to the release redirect`);
+    retry.warn(`API lookup failed (${messageOf(err)}); falling back to the release redirect`);
     const response = await withRetry(
       'redirect lookup',
       async () => {
@@ -127,7 +180,7 @@ async function latestRelease({ fetchFn, env, retry }) {
       retry,
     );
     const tag = /\/tag\/([^/]+)$/.exec(response.headers.get('location') ?? '')?.[1];
-    if (!tag) throw new Error(`Could not determine the latest Release (${err.message})`);
+    if (!tag) throw new Error(`Could not determine the latest Release (${messageOf(err)})`);
     return {
       version: parseVersion(tag),
       tag,
@@ -139,6 +192,11 @@ async function latestRelease({ fetchFn, env, retry }) {
 
 // The Release's `<asset>.sha256` holds the hash and file name as `sha256sum` prints them. Releases from before the file
 // existed answer 404; those warn instead of failing. Anything else wrong with the file stops the update.
+/**
+ * @param {string} url
+ * @param {boolean} required
+ * @param {{ fetchFn: typeof fetch, retry: Retry }} options
+ */
 async function expectedHash(url, required, { fetchFn, retry }) {
   const response = await withRetry(
     'checksum download',
@@ -159,11 +217,26 @@ async function expectedHash(url, required, { fetchFn, retry }) {
   return hash.toLowerCase();
 }
 
+/** @param {Version} version */
 const formatVersion = ({ core, pre }) => core.join('.') + (pre ? `-${pre}` : '');
+/** @param {string} what @param {{ status: number | null }} result */
 const exitText = (what, result) => `'${what}' failed with exit code ${result.status}`;
 
 // Installs the latest Release when the installed version is older, then refreshes the Skills and Stage agents with the
 // freshly installed code, so the two always match. Everything that touches the world is a parameter, for tests.
+/**
+ * @param {object} options
+ * @param {string} options.installed
+ * @param {boolean} [options.force]
+ * @param {typeof fetch} [options.fetchFn]
+ * @param {(cmd: string, args: string[], options?: { inherit?: boolean, cwd?: string }) => { status: number | null, stdout?: string | null }} [options.run]
+ * @param {(ms: number) => Promise<unknown>} [options.sleep]
+ * @param {string} [options.tmpdir]
+ * @param {string} [options.home]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {(message: string) => void} [options.log]
+ * @param {(message: string) => void} [options.warn]
+ */
 export async function update({
   installed,
   force = true,

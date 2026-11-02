@@ -11,6 +11,7 @@ import { syncRules } from '../src/rules.js';
 import { startDashboard } from '../src/dashboard.js';
 import { doctor } from '../src/doctor.js';
 import { update } from '../src/update.js';
+import { messageOf } from '../src/narrow.js';
 
 const USAGE = `Usage:
   tds-factory --version
@@ -81,30 +82,38 @@ try {
     const data = values.data === undefined ? undefined : JSON.parse(values.data);
     const store = openRunStore(process.cwd());
     const [, op] = positionals;
+    // A missing flag reaches the store as an empty id or the text "undefined", which it refuses with its usual message.
+    const runId = values.id ?? '';
+    const to = String(values.to);
+    const axis = String(values.axis);
+    const verdictValue = values.value ?? '';
     if (op === 'start') console.log(store.start(data));
-    else if (op === 'update') store.update(values.id, data);
-    else if (op === 'track') store.track(values.id, values.value);
+    else if (op === 'update') store.update(runId, data);
+    else if (op === 'track') store.track(runId, verdictValue);
     else if (op === 'transition') {
-      store.transition(values.id, values.to, data);
-      if (values.to === 'check')
-        for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
-    } else if (op === 'follow-up') console.log(store.followUp(values.id));
-    else if (op === 'rework') store.rework(values.id, data, values.cause ?? []);
-    else if (op === 'sync') store.sync(values.id, data);
+      store.transition(runId, to, data);
+      if (values.to === 'check') for (const warning of store.sizeWarnings(runId)) console.error(`warning: ${warning}`);
+    } else if (op === 'follow-up') console.log(store.followUp(runId));
+    else if (op === 'rework') store.rework(runId, data, values.cause ?? []);
+    else if (op === 'sync') store.sync(runId, data);
     else if (op === 'complete') {
-      store.complete(values.id, data);
+      store.complete(runId, data);
       console.log(
         `Done. After the PR is merged, run \`tds-factory run clean --id ${values.id}\` from the main checkout to remove the Run worktree and branch.`,
       );
     } else if (op === 'clean') {
-      if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all, not both');
-      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)])
+      if (Boolean(runId) === values.all) throw new Error('run clean needs --id ID or --all, not both');
+      for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(runId)])
         console.log(
           (reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'),
         );
     } else if (op === 'stats') {
-      if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
+      if (Boolean(runId) === values.all) throw new Error('run stats needs --id ID or --all, not both');
       const report = await store.stats(values.id);
+      /**
+       * @param {string} label
+       * @param {import('../src/run-metrics.js').MetricsSummary} summary
+       */
       const print = (label, summary) => {
         const formatted = formatMetrics(summary);
         console.log(
@@ -120,7 +129,7 @@ try {
       for (const run of report.runs) {
         const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
         if (run.unreadable) console.log(`${name}: unreadable (no data)`);
-        else print(name, run.summary);
+        else if (run.summary) print(name, run.summary);
       }
       if (values.all) {
         print('Total observed', report.total);
@@ -143,7 +152,7 @@ try {
         if (missing)
           console.log(`${missing} Run(s) have missing or unreadable data; totals include observed values only.`);
       }
-    } else if (op === 'accept') store.accept(values.id, data);
+    } else if (op === 'accept') store.accept(runId, data);
     else if (op === 'inspect') {
       const report = await store.inspect(values.id);
       if (values.json) console.log(JSON.stringify(report, null, 2));
@@ -153,7 +162,7 @@ try {
         if (report.every((r) => !r.problems.length)) console.log('no problems found');
       }
     } else if (op === 'repair') {
-      const plan = store.repairPlan(values.id);
+      const plan = store.repairPlan(runId);
       console.log(
         [
           `Proposed repair for ${plan.id}:`,
@@ -163,11 +172,11 @@ try {
         ].join('\n'),
       );
       if (values.apply) {
-        store.repairApply(values.id, plan);
+        store.repairApply(runId, plan);
         console.log('Repair applied.');
       }
     } else if (op === 'verify') {
-      const result = store.verify(values.id, { fast: values.fast });
+      const result = store.verify(runId, { fast: values.fast });
       if (result.fast) {
         console.log(
           `fast verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}; not Evidence: run the full verify before Check`,
@@ -178,13 +187,13 @@ try {
         );
       if (result.exit_code !== 0) process.exitCode = 1;
     } else if (op === 'sweep')
-      console.log(formatSweep(store.sweep(values.id, values.term ?? []), { filesOnly: values.files }));
-    else if (op === 'guides') console.log(formatGuides(store.guides(values.id)));
-    else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
-    else if (op === 'review') store.review(values.id, values.axis, data);
-    else if (op === 'config') console.log(JSON.stringify(store.config(values.id), null, 2));
-    else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
-    else if (op === 'verdict') store.verdict(values.id, values.axis, values.value, { carried: values.carried });
+      console.log(formatSweep(store.sweep(runId, values.term ?? []), { filesOnly: values.files }));
+    else if (op === 'guides') console.log(formatGuides(store.guides(runId)));
+    else if (op === 'materialize-review') console.log(store.materializeReview(runId, axis));
+    else if (op === 'review') store.review(runId, axis, data);
+    else if (op === 'config') console.log(JSON.stringify(store.config(runId), null, 2));
+    else if (op === 'reviews') console.log(JSON.stringify(store.reviews(runId), null, 2));
+    else if (op === 'verdict') store.verdict(runId, axis, verdictValue, { carried: values.carried });
     else
       throw new Error(
         'expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, sweep, guides, verdict, inspect, repair or clean',
@@ -195,6 +204,7 @@ try {
   else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
   else if (command === 'doctor') {
     const report = doctor({ projectDir: process.cwd(), agent: values.agent });
+    /** @param {string} text */
     const clean = (text) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?');
     if (values.json) console.log(JSON.stringify(report, null, 2));
     else {
@@ -218,6 +228,6 @@ try {
     process.exitCode = command ? 1 : 0;
   }
 } catch (err) {
-  console.error(`error: ${String(err.message).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
+  console.error(`error: ${messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
   process.exitCode = 1;
 }
