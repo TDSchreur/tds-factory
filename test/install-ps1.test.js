@@ -38,7 +38,7 @@ test('CI has the PowerShell it asks for', { skip: !process.env.REQUIRE_POWERSHEL
 
 // node, npm and tds-factory are stubs on a PATH of their own that record what they were asked to do, so a real node or
 // npm on the machine never takes part. On Windows the stubs are .cmd files, elsewhere sh scripts.
-function sandbox({ node = true, npm = true, major = '22', npmFails = false, cli = true, shims = false } = {}) {
+function sandbox({ node = true, npm = true, major = '24', npmFails = false, cli = true, shims = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'install-ps1-test-'));
   const bin = join(dir, 'bin');
   mkdirSync(bin);
@@ -224,7 +224,7 @@ test(
   () => {
     for (const [options, message] of [
       [{ node: false }, /node not found.*nodejs\.org/],
-      [{ major: '18' }, /need 20 or newer/],
+      [{ major: '22' }, /need 24 or newer/],
       [{ npm: false }, /npm not found.*nodejs\.org/],
     ]) {
       const s = sandbox(options);

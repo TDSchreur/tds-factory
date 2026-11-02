@@ -40,13 +40,16 @@ function afterRework(initial = {}) {
   const first = git(worktree, 'rev-parse', 'HEAD');
   assert.equal(run(cwd, 'rework', '--id', id).status, 0);
   force(cwd, id, { stage: 'check' });
+  const base = git(worktree, 'rev-parse', 'HEAD');
+  // Lets a test try many changes on one Run; each start costs several processes, which is slow on Windows.
+  const reset = () => git(worktree, 'reset', '-q', '--hard', base);
   const change = (name, text = 'text\n') => {
     mkdirSync(dirname(join(worktree, name)), { recursive: true });
     writeFileSync(join(worktree, name), text);
     git(worktree, 'add', '.');
     git(worktree, 'commit', '-q', '-m', `edit ${name}`);
   };
-  return { cwd, id, worktree, first, change };
+  return { cwd, id, worktree, first, change, reset };
 }
 
 test('a text-only Rework carries Security and Infrastructure, and records where they came from', () => {
@@ -69,6 +72,7 @@ test('a text-only Rework carries Security and Infrastructure, and records where 
 });
 
 test('a carried verdict is refused when anything outside the allowlist changed', () => {
+  const { cwd, id, change, reset } = afterRework();
   for (const [name, why] of [
     ['src/a.js', 'code'],
     ['test/a.test.js', 'a test'],
@@ -76,13 +80,13 @@ test('a carried verdict is refused when anything outside the allowlist changed',
     ['agents/claude/factory-check.md', 'an agent'],
     ['docs/notes.txt', 'a non-Markdown file'],
   ]) {
-    const { cwd, id, change } = afterRework();
     change('docs/guide.md');
     change(name);
     const result = verdict(cwd, id, 'security', 'pass', '--carried');
     assert.notEqual(result.status, 0, why);
     assert.ok(result.stderr.includes(name), `${why}: ${result.stderr}`);
     assert.equal(read(cwd, id).security, undefined, `${why}: nothing recorded`);
+    reset();
   }
 });
 
@@ -138,6 +142,7 @@ test('the allowed files are an allowlist: README, GLOSSARY, docs outside docs/ag
 });
 
 test('instruction files and every Skill or agent folder are refused, in this repository and in an installed project', () => {
+  const { cwd, id, change, reset } = afterRework();
   for (const name of [
     'AGENTS.md',
     'CLAUDE.md',
@@ -167,11 +172,11 @@ test('instruction files and every Skill or agent folder are refused, in this rep
     'docs/prompts/x.md',
     'docs/instructions/x.md',
   ]) {
-    const { cwd, id, change } = afterRework();
     change(name);
     const result = verdict(cwd, id, 'security', 'pass', '--carried');
     assert.notEqual(result.status, 0, name);
     assert.ok(result.stderr.includes(name), `${name}: ${result.stderr}`);
+    reset();
   }
 });
 

@@ -211,6 +211,23 @@ test('every control shows a focus ring in two colours that do not depend on the 
   }
 });
 
+test('the first Tab stop is a skip link that is hidden until focused and moves focus to the board', async (t) => {
+  const page = await openPage(t, { runs: runs() });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=w]')");
+    const top = "return Math.round(document.querySelector('.skip-link').getBoundingClientRect().bottom)";
+    assert.ok((await page.execute(top)) <= 0, 'off screen until focused');
+    await page.key('\uE004'); // Tab
+    assert.equal(await page.execute('return document.activeElement.className'), 'skip-link');
+    assert.ok((await page.execute(top)) > 0, 'visible when focused');
+    await page.key('\uE007'); // Enter
+    assert.equal(await page.execute('return document.activeElement.id'), 'board');
+  } finally {
+    await page.close();
+  }
+});
+
 test('reduced motion switches the transitions off', async (t) => {
   const page = await openPage(t, { runs: runs() });
   if (!page) return;

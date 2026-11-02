@@ -7,7 +7,7 @@ Installing the Factory is two commands, and updating it is the same two commands
 Add an Update command to the CLI and two Bootstrap installers attached to every Release.
 
 - `tds-factory update` looks up the latest Release, installs it with npm when the installed version is older, and then refreshes the Skills and Stage agents with `tds-factory install --force`. `--no-force` keeps edited agent files and skills.
-- `install.sh` (macOS, Linux) and `install.ps1` (Windows) are thin: check Node 20 or newer and npm, run the existing `npm install -g` command on the latest Release URL, run `tds-factory install`, print next steps.
+- `install.sh` (macOS, Linux) and `install.ps1` (Windows) are thin: check Node 24 or newer and npm, run the existing `npm install -g` command on the latest Release URL, run `tds-factory install`, print next steps.
 - `release.yml` attaches `tds-factory.tgz.sha256`, `install.sh` and `install.ps1` to the Release in the same call that creates it, and the existing install URL checks cover them.
 - README and install guide start with the two one-liners and keep the manual commands.
 
@@ -21,7 +21,7 @@ Add an Update command to the CLI and two Bootstrap installers attached to every 
 6. As a user who edited agent files or skills, I want `update --no-force` to keep them, so that my model choices survive.
 7. As a user, I want `update` to verify the download against the published checksum and stop on a mismatch, so that a corrupted download is not installed. An older Release without a checksum warns and continues.
 8. As a user behind a rate-limited GitHub API, I want `update` to fall back to the `/releases/latest` redirect and retry transient failures, so that a busy network does not break the update.
-9. As a user with Node missing or older than 20, I want the Bootstrap installer to say so and where to get Node, instead of failing inside npm.
+9. As a user with Node missing or older than 24, I want the Bootstrap installer to say so and where to get Node, instead of failing inside npm.
 10. As a Linux user whose npm cannot write its global folder, I want the Bootstrap installer to print the user-prefix and nvm fix, never a `sudo` suggestion.
 11. As a user, I want to pass `TDS_FACTORY_FORCE=1` or `TDS_FACTORY_SKIP_SKILLS=1` to the Bootstrap installers, since `irm | iex` cannot take parameters, and the same variables on both.
 12. As a maintainer, I want the Release to carry the Bootstrap installers and checksum from the moment it is Latest, so that the one-liners never return 404.

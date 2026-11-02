@@ -11,6 +11,12 @@ const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media quer
 const notifyPermission = () =>
   typeof window.Notification === 'function' ? window.Notification.permission : 'unsupported';
 
+// The hash alone would leave focus in the header, and the board is not focusable by link in every browser.
+function skipToBoard(event) {
+  event.preventDefault();
+  document.getElementById('board')?.focus();
+}
+
 function App() {
   const [entries, setEntries] = useState([]);
   const [project, setProject] = useState('');
@@ -368,7 +374,9 @@ function App() {
   };
   const olderLabel = older.length ? (showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')') : '';
 
-  return html`<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
+  const showsBoard = !(loaded && !entries.length);
+
+  return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout" class=${openRun ? 'open' : ''}>
       ${loaded && !entries.length ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />`}
       <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />

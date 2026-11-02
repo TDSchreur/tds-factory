@@ -42,18 +42,18 @@ test('the CI browser job requires a browser instead of skipping', () => {
   assert.match(browser, /run: npm run test:browser/);
 });
 
-test('the CI workflow lints both Bootstrap installers with pinned tools and runs install.ps1 on PowerShell 7 on Windows', () => {
+test('the CI workflow lints every shell and PowerShell script with pinned tools and runs install.ps1 on PowerShell 7 on Windows', () => {
   const shellcheck = ci.slice(ci.indexOf('  shellcheck:'), ci.indexOf('  psscriptanalyzer:'));
   assert.match(shellcheck, /SHELLCHECK_SHA256: [0-9a-f]{64}/, 'the shellcheck download is checksum-verified');
   assert.match(shellcheck, /sha256sum --check/);
-  assert.match(shellcheck, /shellcheck-v\d+\.\d+\.\d+\/shellcheck" scripts\/install\.sh/);
+  assert.match(shellcheck, /shellcheck-v\d+\.\d+\.\d+\/shellcheck" scripts\/\*\.sh/);
   const analyzer = ci.slice(ci.indexOf('  psscriptanalyzer:'), ci.indexOf('  install-windows:'));
   assert.match(
     analyzer,
     /Install-Module PSScriptAnalyzer -RequiredVersion \d+\.\d+\.\d+/,
     'the analyzer version is pinned',
   );
-  assert.match(analyzer, /Invoke-ScriptAnalyzer -Path scripts\/install\.ps1/);
+  assert.match(analyzer, /Invoke-ScriptAnalyzer -Path scripts -Recurse/);
   assert.match(analyzer, /if \(\$findings\) \{ exit 1 \}/, 'findings fail the job');
   const windows = ci.slice(ci.indexOf('  install-windows:'));
   assert.match(windows, /runs-on: windows-latest/);
@@ -64,4 +64,20 @@ test('the CI workflow lints both Bootstrap installers with pinned tools and runs
 
 test('every third-party action in the CI workflow is pinned to a commit SHA', () => {
   for (const [, ref] of ci.matchAll(/uses: \S+@(\S+)/g)) assert.match(ref, /^[0-9a-f]{40}$/);
+});
+
+test('the Windows unit tests run in two shards and only the first shard runs the static checks', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const job = workflow.slice(workflow.indexOf('  windows:'), workflow.indexOf('  package:'));
+  assert.match(job, /shard: \[1, 2\]/);
+  assert.match(job, /if: matrix\.shard == 1\n\s+run: npm run check/);
+  assert.match(job, /npm run test:unit -- --test-shard=\$\{\{ matrix\.shard \}\}\/2/);
+});
+
+test('CI and release test only the active LTS lines, matching engines', () => {
+  const release = readFileSync('.github/workflows/release.yml', 'utf8');
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const engines = JSON.parse(readFileSync('package.json', 'utf8')).engines.node;
+  assert.equal(engines, '>=24');
+  for (const file of [workflow, release]) assert.match(file, /node: \['24', 'lts\/\*'\]/);
 });

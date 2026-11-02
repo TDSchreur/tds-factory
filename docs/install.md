@@ -6,7 +6,7 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 
 | You need                                                                                     | Check it with                             | Notes                                                                                                                                                       |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node 20 or newer                                                                             | `node --version`                          | Installs from nodejs.org, your package manager or nvm.                                                                                                      |
+| Node 24 or newer                                                                             | `node --version`                          | Installs from nodejs.org, your package manager or nvm.                                                                                                      |
 | git (2.38 or later)                                                                          | `git --version`                           | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote.                                                        |
 | GitHub CLI, signed in                                                                        | `gh auth status`                          | Tickets and pull requests go through `gh`. Sign in with `gh auth login`.                                                                                    |
 | Azure CLI with the `azure-devops` extension, signed in (only for Azure DevOps pull requests) | `az extension list` and `az account show` | The Dashboard reads the status of an Azure DevOps pull request with `az`. Run `az extension add --name azure-devops` and `az login`. Nothing else needs it. |
@@ -20,13 +20,13 @@ One line installs the CLI and the skills. On macOS and Linux:
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 ```
 
-On Windows (PowerShell 7, `pwsh`; install it from https://aka.ms/powershell if you do not have it):
+On Windows (PowerShell 7, `pwsh`; install it from the [PowerShell download page](https://aka.ms/powershell) if you do not have it):
 
 ```powershell
 pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 ```
 
-The script checks that Node 20 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip part 3. It never installs Node, and it never asks for `sudo`.
+The script checks that Node 24 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip part 3. It never installs Node, and it never asks for `sudo`.
 
 If you prefer to read before you run, open the script first (the same URL in a browser) or run the two commands yourself, which work the same on macOS, Linux and Windows. This is the install:
 
@@ -126,7 +126,7 @@ Commit the new files. Now `/factory` can start; the [usage guide](usage.md) show
 
 ## Troubleshooting
 
-**The one-line install fails.** Read the error it printed: it says whether Node is missing or older than 20, whether npm cannot write its global folder (`EACCES`, see that entry below) or whether `tds-factory` is installed but not on your PATH. Behind a proxy, check that `curl` or `irm` can reach `github.com`. Running it again is safe. As a last resort use the manual commands in part 2.
+**The one-line install fails.** Read the error it printed: it says whether Node is missing or older than 24, whether npm cannot write its global folder (`EACCES`, see that entry below) or whether `tds-factory` is installed but not on your PATH. Behind a proxy, check that `curl` or `irm` can reach `github.com`. Running it again is safe. As a last resort use the manual commands in part 2.
 
 **`tds-factory: command not found` (or "not recognized").** The folder where npm puts global commands is not on your PATH. Find it with `npm prefix -g`, add its `bin` folder (on Windows the folder itself) to PATH, and open a new terminal.
 

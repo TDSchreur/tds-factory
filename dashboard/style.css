@@ -317,6 +317,8 @@
   .usage-table caption { text-align: left; color: var(--colorNeutralForeground3); padding-bottom: var(--spacingVerticalXS); }
   .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; white-space: nowrap; }
   .usage-table th[scope="col"]:first-child, .usage-table th[scope="row"] { text-align: left; }
+  .skip-link { position: absolute; left: var(--spacingHorizontalM); top: -100px; z-index: 100; padding: var(--spacingVerticalS) var(--spacingHorizontalM); background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); border: 1px solid var(--colorStrokeFocus2); border-radius: var(--borderRadiusMedium); }
+  .skip-link:focus { top: var(--spacingVerticalS); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .chips { list-style: none; margin: var(--spacingVerticalS) 0 0; padding: 0; display: grid; gap: var(--spacingVerticalXXS); font-size: var(--fontSizeBase200); }
   .chip { display: grid; grid-template-columns: var(--spacingHorizontalXL) minmax(0, 1fr) auto; align-items: center; gap: var(--spacingHorizontalXS); padding: var(--spacingVerticalXXS) var(--spacingHorizontalSNudge); border-left: var(--strokeWidthThick) solid var(--colorNeutralStroke1); border-radius: var(--borderRadiusSmall); background: var(--colorNeutralBackground3); color: var(--colorNeutralForeground2); line-height: var(--lineHeightBase200); overflow: hidden; white-space: nowrap; }

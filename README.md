@@ -6,7 +6,7 @@ New here? Read the [install guide](docs/install.md) to set the Factory up, then 
 
 ## Setup
 
-You need Node 20 or newer. One line installs the latest Release and its skills.
+You need Node 24 or newer. One line installs the latest Release and its skills.
 
 macOS and Linux:
 
@@ -14,7 +14,7 @@ macOS and Linux:
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 ```
 
-Windows (PowerShell 7, `pwsh`; install it from https://aka.ms/powershell first if you do not have it):
+Windows (PowerShell 7, `pwsh`; install it from the [PowerShell download page](https://aka.ms/powershell) first if you do not have it):
 
 ```powershell
 pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
