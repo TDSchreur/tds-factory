@@ -10,7 +10,9 @@ function Say($message) { Write-Output "==> $message" }
 
 # A failing native command does not stop a PowerShell script by itself.
 function Invoke-Checked {
-    & $args[0] $args[1..($args.Length - 1)]
+    # npm.ps1 re-parses its own call statement and breaks on an indirect call, so run the application (npm.cmd on Windows).
+    $exe = (Get-Command $args[0] -CommandType Application | Select-Object -First 1).Source
+    & $exe @($args | Select-Object -Skip 1)
     if ($LASTEXITCODE -ne 0) { throw "$($args -join ' ') failed with exit code $LASTEXITCODE" }
 }
 
