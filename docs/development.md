@@ -92,3 +92,7 @@ Besides the skills the Factory ships, a few skills help while developing the Fac
 | `principle-prove-it-works`, `principle-test-behavior-not-implementation` | Guide Build and Check: prove behaviour, do not test internals.                                                                |
 | `github-release`, `conventional-commit`                                  | Write release notes for the per-merge Releases and consistent commit messages.                                                |
 | `create-agentsmd`                                                        | Flesh out `AGENTS.md` with build, test and architecture hints.                                                                |
+| `npm-trusted-publishing`                                                 | Move the Release workflow from a long-lived npm token to OIDC trusted publishing.                                             |
+| `github-actions-runtime-upgrade-conventions`                             | Keep the Node and action versions in `.github/workflows/` current.                                                            |
+| `agent-supply-chain`, `sandbox-npm-install`                              | Check the supply chain of what `install` and `dev-install` fetch, and try unknown npm packages in a sandbox.                  |
+| `dependabot`                                                             | Review `.github/dependabot.yml` for npm and Actions updates.                                                                  |
