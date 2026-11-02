@@ -4,16 +4,20 @@ import { existsSync } from 'node:fs';
 import { isRunning, openPage } from './browser.js';
 
 // Chromium's per-session scratch directories (about 2 MB each); the ones that piled up in /tmp.
+/** @param {string} name */
 const isScoped = (name) => name.startsWith('org.chromium.Chromium.scoped_dir.');
 const alive = isRunning;
 
 test('closing a page leaves no browser process and no scoped directory', async (t) => {
   const page = await openPage(t, { runs: [] });
   if (!page) return;
-  assert.ok(alive(page.driverPid), 'the driver group runs while the page is open');
+  const pid = page.driverPid;
+  assert.ok(pid !== undefined, 'the driver started');
+  assert.ok(alive(pid), 'the driver group runs while the page is open');
   await page.close();
   await page.close();
-  assert.equal(alive(page.driverPid), false, 'no ChromeDriver or Chromium process remains');
+  assert.equal(alive(pid), false, 'no ChromeDriver or Chromium process remains');
+  assert.ok(page.leftovers, 'close() lists what the browser left behind');
   assert.deepEqual(page.leftovers.filter(isScoped), [], 'Chromium removed its scoped directories itself');
   assert.equal(existsSync(page.tmp), false, 'the private temp directory is removed');
 });

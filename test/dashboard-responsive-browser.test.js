@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { RunStub } from './browser.js' */
+
 const clickStage = `const button = [...document.querySelectorAll('nav[aria-label="Stages"] button')].find((b) => b.textContent.includes(arguments[0])); if (button) button.click(); return !!button`;
 const visibleStages = `return [...document.querySelectorAll('#board section')].filter((s) => s.getBoundingClientRect().height > 0).map((s) => s.dataset.stage)`;
 
@@ -59,6 +61,7 @@ for (const width of [320, 375, 390, 768, 1024]) {
         await page.execute("return document.getElementById('project').title"),
         '/work/' + 'long-project-name-'.repeat(12),
       );
+      /** @type {number[]} */
       const sizes = await page.execute(
         'return [...document.querySelectorAll(\'nav[aria-label="Stages"] button, #theme, #help, #board .column[data-active=true] .actions button\')].map((e) => Math.round(e.getBoundingClientRect().height))',
       );
@@ -72,10 +75,12 @@ for (const width of [320, 375, 390, 768, 1024]) {
 }
 
 test('an empty dashboard shows the welcome card and a nonempty one chooses a useful initial Stage', async (t) => {
-  for (const [runs, stage] of [
+  /** @type {[RunStub[], string | null][]} */
+  const cases = [
     [[], null],
     [[run({ column: 'check' })], 'check'],
-  ]) {
+  ];
+  for (const [runs, stage] of cases) {
     const page = await openPage(t, { runs }, { width: 390 });
     if (!page) return;
     try {
@@ -188,6 +193,7 @@ test('Show older and Delete all are touch sized on compact screens', async (t) =
   try {
     await page.waitFor("return !!document.querySelector('.card')");
     assert.equal(await page.execute(clickStage, ['Done']), true);
+    /** @type {number[]} */
     const sizes = await page.execute(
       "return ['#older', '.column[data-stage=done] > button'].map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height))",
     );

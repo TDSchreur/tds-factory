@@ -18,7 +18,18 @@ import { envWith, fakeCommand } from './fake-command.js';
 import { openRunStore } from '../src/run-store.js';
 
 const cli = resolve('bin/tds-factory.js');
+/** @param {string} stdout The JSON that inspect prints. */
+const problemsOf = (stdout) => {
+  /** @type {{ problems: { code: string, message: string }[] }[]} */
+  const reports = JSON.parse(stdout);
+  return reports[0].problems;
+};
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/** @param {string} cwd */
 const start = (cwd) => {
   const result = run(
     cwd,
@@ -29,8 +40,21 @@ const start = (cwd) => {
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const recordPath = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const lockPath = (cwd, id) => join(cwd, '.factory', 'runs', `.lock-${createHash('sha256').update(id).digest('hex')}`);
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {...string} args
+ */
 const repair = (cwd, id, ...args) => run(cwd, 'repair', '--id', id, ...args);
 
 test('repair proposes and then reconstructs a dirty orphan without repeating work', () => {
@@ -42,7 +66,7 @@ test('repair proposes and then reconstructs a dirty orphan without repeating wor
   rmSync(join(cwd, '.factory', 'runs', id), { recursive: true });
   const inspect = run(cwd, 'inspect', '--id', id, '--json');
   assert.equal(inspect.status, 0, inspect.stderr);
-  assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'orphan'));
+  assert.ok(problemsOf(inspect.stdout).some((p) => p.code === 'orphan'));
   const before = git(cwd, 'rev-parse', id);
   const plan = repair(cwd, id);
   assert.equal(plan.status, 0, plan.stderr);
@@ -113,6 +137,7 @@ test('repair reconciles the exact GitHub repository and existing PR before adopt
     'gh',
     `require('fs').appendFileSync(${JSON.stringify(calls)}, process.argv.slice(2).join(' ') + '\\n');\nconsole.log(${JSON.stringify(JSON.stringify([pr]))});\n`,
   );
+  /** @param {...string} args */
   const invoke = (...args) =>
     spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id, ...args], {
       cwd,
@@ -136,15 +161,18 @@ test('ambiguous, unavailable, and conflicting GitHub results do not rewrite a PR
     file = recordPath(cwd, id);
   git(cwd, 'remote', 'set-url', 'origin', 'https://github.com/example/project.git');
   const tools = mkdtempSync(join(tmpdir(), 'repair-gh-'));
+  /** @param {number} n */
   const pr = (n) => ({
     url: `https://github.com/example/project/pull/${n}`,
     headRefName: id,
     headRepositoryOwner: { login: 'example' },
     headRepository: { name: 'project' },
   });
+  /** @param {unknown} data */
   const fixture = (data) => {
     fakeCommand(tools, 'gh', `console.log(${JSON.stringify(JSON.stringify(data))});\n`);
   };
+  /** @param {...string} args */
   const invoke = (...args) =>
     spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id, ...args], {
       cwd,
@@ -172,7 +200,7 @@ test('dangling lock symlinks and incomplete GitHub responses remain unresolved',
   const target = join(cwd, 'missing-lock-target');
   fsSymlink(target, lock);
   const inspect = run(cwd, 'inspect', '--id', id, '--json');
-  assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'lock'));
+  assert.ok(problemsOf(inspect.stdout).some((p) => p.code === 'lock'));
   assert.notEqual(repair(cwd, id, '--apply').status, 0);
   assert.ok(fsLstat(lock).isSymbolicLink());
   rmSync(lock);
@@ -195,7 +223,7 @@ test('a leftover repair coordination lock is diagnosed and preserved for investi
   const owner = JSON.stringify({ pid: 2147483647, host: hostname(), started: '2000-01-01T00:00:00.000Z' });
   writeFileSync(guard, owner);
   const inspect = run(cwd, 'inspect', '--id', id, '--json');
-  assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'repair-lock' && p.message.includes('dead')));
+  assert.ok(problemsOf(inspect.stdout).some((p) => p.code === 'repair-lock' && p.message.includes('dead')));
   assert.notEqual(repair(cwd, id, '--apply').status, 0);
   assert.equal(readFileSync(guard, 'utf8'), owner);
 });
@@ -226,7 +254,7 @@ test('inspect and repair diagnose a missing registered worktree with no Run fold
   assert.ok(git(cwd, 'worktree', 'list', '--porcelain').includes(`worktree ${worktree.replaceAll('\\', '/')}`));
   const inspect = run(cwd, 'inspect', '--id', id, '--json');
   assert.equal(inspect.status, 0, inspect.stderr);
-  assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'worktree-missing'));
+  assert.ok(problemsOf(inspect.stdout).some((p) => p.code === 'worktree-missing'));
   const plan = repair(cwd, id);
   assert.equal(plan.status, 0, plan.stderr);
   assert.match(plan.stdout, /missing.*manual|manual.*missing/i);
@@ -249,7 +277,7 @@ test('repair never reconstructs records for registered symlinked worktrees', () 
     fsSymlink(target, worktree);
     const inspect = run(cwd, 'inspect', '--id', id, '--json');
     assert.equal(inspect.status, 0, inspect.stderr);
-    assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'worktree-unknown'));
+    assert.ok(problemsOf(inspect.stdout).some((p) => p.code === 'worktree-unknown'));
     const result = repair(cwd, id, '--apply');
     assert.notEqual(result.status, 0);
     assert.match(result.stdout, /unsafe|symlinked/);

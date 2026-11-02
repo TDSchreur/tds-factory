@@ -9,19 +9,35 @@ import { matches, name, parseStatus, repoOfRemote, stateAsync, statusAsync, view
 
 // Recorded `az repos pr show` and `az repos pr policy list` output from the sandbox repository Kahoot (see the README of the fixtures folder).
 const DIR = new URL('./fixtures/pr-status/azure/', import.meta.url);
+/** @param {string} key */
 const fixture = (key) => ({
   pr: JSON.parse(readFileSync(new URL(`${key}.pr.json`, DIR), 'utf8')),
   policies: JSON.parse(readFileSync(new URL(`${key}.policies.json`, DIR), 'utf8')),
 });
+/** @param {string} key */
 const status = (key) => {
   const { pr, policies } = fixture(key);
   return parseStatus(pr, policies);
 };
+/** @param {string} key */
 const link = (key) =>
   `https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/${fixture(key).pr.pullRequestId}`;
+// An error from the adapter with this reason, and optionally a message that matches.
+/**
+ * @param {string} reason
+ * @param {RegExp} [message]
+ * @returns {(err: unknown) => boolean}
+ */
+const failsWith = (reason, message) => (err) =>
+  err instanceof Error && 'reason' in err && err.reason === reason && (message?.test(err.message) ?? true);
 // A stand-in for the `az` command that answers from the fixtures.
+/**
+ * @param {string} key
+ * @param {{ pr?: Record<string, unknown>, policies?: unknown }} [overrides]
+ */
 const az =
   (key, { pr = {}, policies } = {}) =>
+  /** @param {string[]} args */
   async (args) => {
     const f = fixture(key);
     if (args[2] === 'show') return { stdout: JSON.stringify({ ...f.pr, ...pr }) };
@@ -91,6 +107,10 @@ test('a rejected blocking policy is a failing check named by its policy', () => 
 
 test('reviewer votes: rejected or waiting for the author asks for changes, approvals approve', () => {
   const { pr, policies } = fixture('passing');
+  /**
+   * @param {number} n
+   * @param {Record<string, unknown>} [extra]
+   */
   const vote = (n, extra = {}) => parseStatus({ ...pr, reviewers: [{ vote: n, ...extra }] }, policies).review;
   assert.equal(vote(10), 'approved');
   assert.equal(vote(5), 'approved');
@@ -178,7 +198,9 @@ test('a git remote of Azure DevOps resolves to organisation and project, and rep
 });
 
 test('statusAsync asks az for the pull request and its policies, read-only, and parses the answers', async () => {
+  /** @type {string[][]} */
   const calls = [];
+  /** @param {string[]} args */
   const run = async (args) => {
     calls.push(args);
     return az('passing')(args);
@@ -205,11 +227,11 @@ test('statusAsync asks az for the pull request and its policies, read-only, and 
 test('a link that points at another repository than the pull request is refused', async () => {
   await assert.rejects(
     statusAsync('https://dev.azure.com/example-org/Projects/_git/Other/pullrequest/525', { run: az('passing') }),
-    (err) => err.reason === 'error' && /does not belong/.test(err.message),
+    failsWith('error', /does not belong/),
   );
   await assert.rejects(
     statusAsync('https://dev.azure.com/example-org/Elsewhere/_git/Kahoot/pullrequest/525', { run: az('passing') }),
-    (err) => err.reason === 'error',
+    failsWith('error'),
   );
   assert.equal(
     (
@@ -223,14 +245,16 @@ test('a link that points at another repository than the pull request is refused'
 });
 
 test('failures carry a reason that names what to fix', async () => {
+  /** @param {unknown} err */
   const fail = (err) => async () => {
     throw err;
   };
+  /** @param {unknown} err */
   const reason = async (err) => {
     try {
       await statusAsync(link('passing'), { run: fail(err) });
     } catch (e) {
-      return e.reason;
+      return e instanceof Error && 'reason' in e ? e.reason : undefined;
     }
   };
   assert.equal(await reason(Object.assign(new Error('x'), { code: 'ENOENT' })), 'az-missing');
@@ -271,25 +295,20 @@ test('failures carry a reason that names what to fix', async () => {
     'rate-limited',
   );
   assert.equal(await reason(Object.assign(new Error('x'), { stderr: 'something else' })), 'error');
-  await assert.rejects(
-    statusAsync(link('passing'), { run: async () => ({ stdout: 'not json' }) }),
-    (err) => err.reason === 'error',
-  );
-  await assert.rejects(
-    statusAsync('https://github.com/o/r/pull/1', { run: az('passing') }),
-    (err) => err.reason === 'error',
-  );
+  await assert.rejects(statusAsync(link('passing'), { run: async () => ({ stdout: 'not json' }) }), failsWith('error'));
+  await assert.rejects(statusAsync('https://github.com/o/r/pull/1', { run: az('passing') }), failsWith('error'));
 });
 
 test('stateAsync and view give the state the callers use and the head commit', async () => {
   assert.equal(await stateAsync(link('completed'), { run: az('completed') }), 'MERGED');
   assert.equal(await stateAsync(link('abandoned'), { run: az('abandoned') }), 'CLOSED');
   assert.equal(await stateAsync(link('passing'), { run: az('passing') }), 'OPEN');
+  /** @type {string[][]} */
   const calls = [];
   const out = view(link('passing'), {
     run: (args) => {
       calls.push(args);
-      return { status: 0, stdout: JSON.stringify(fixture('passing').pr) };
+      return { status: 0, stdout: JSON.stringify(fixture('passing').pr), stderr: '' };
     },
   });
   assert.deepEqual(out, { state: 'OPEN', headRefOid: fixture('passing').pr.lastMergeSourceCommit.commitId });
@@ -399,7 +418,9 @@ test('a status that is a prototype key is not a state', () => {
   assert.equal(parseStatus({ ...pr, mergeStatus: 'constructor' }, policies).merge, 'unknown');
   assert.throws(
     () =>
-      view(link('passing'), { run: () => ({ status: 0, stdout: JSON.stringify({ ...pr, status: 'constructor' }) }) }),
+      view(link('passing'), {
+        run: () => ({ status: 0, stdout: JSON.stringify({ ...pr, status: 'constructor' }), stderr: '' }),
+      }),
     /incomplete Azure DevOps PR state/,
   );
 });

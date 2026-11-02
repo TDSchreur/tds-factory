@@ -217,6 +217,7 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
     await page.waitFor("return !!document.querySelector('[data-id=r] .danger')");
     await page.execute("const b=document.querySelector('[data-id=r] .danger'); b.scrollIntoView(); b.click()");
     await page.waitFor("return document.querySelector('dialog').open");
+    /** @type {number[]} */
     const touch = await page.execute(
       "return [...document.querySelectorAll('#dialog button')].map(b => b.getBoundingClientRect().height)",
     );

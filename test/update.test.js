@@ -7,10 +7,13 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { update, compareVersions } from '../src/update.js';
+import { defined } from './run-view.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';
+/** @param {string} tag */
 const tgzUrl = (tag) => `https://github.com/TDSchreur/tds-factory/releases/download/${tag}/tds-factory.tgz`;
+/** @param {string} tag */
 const releaseJson = (tag, { checksum = true } = {}) =>
   Response.json({
     tag_name: tag,
@@ -24,16 +27,32 @@ const HASH = createHash('sha256').update(TGZ).digest('hex');
 
 // A fake world: the GitHub endpoints, npm and the tds-factory binary. `routes` maps a URL to a response or a function
 // returning one; `world.calls` records every command that ran, in order.
+/** @typedef {Response | Error | ((options: RequestInit) => Response | Error)} Route */
+/**
+ * @param {object} [config]
+ * @param {string} [config.latest]
+ * @param {Record<string, Route>} [config.routes]
+ * @param {string} [config.installedAfter]
+ * @param {number} [config.npmStatus]
+ * @param {number} [config.installStatus]
+ */
 function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, installStatus = 0 } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'update-test-'));
+  /** @type {{ calls: string[], cwds: (string | undefined)[], logs: string[], warns: string[], fetched: string[], sleeps: number[], version: string | undefined }} */
   const state = { calls: [], cwds: [], logs: [], warns: [], fetched: [], sleeps: [], version: undefined };
+  /** @type {Record<string, Route>} */
   const defaults = {
     [API]: () => releaseJson(latest),
     [tgzUrl(latest)]: () => new Response(TGZ),
     [tgzUrl(latest) + '.sha256']: () => new Response(`${HASH}  tds-factory.tgz\n`),
   };
   const table = { ...defaults, ...routes };
-  const fetchFn = async (url, options = {}) => {
+  /**
+   * @param {string | URL | Request} input
+   * @param {RequestInit} [options]
+   */
+  const fetchFn = async (input, options = {}) => {
+    const url = String(input);
     state.fetched.push(url);
     const route = table[url];
     if (!route) return new Response('not found', { status: 404 });
@@ -41,6 +60,11 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
     if (response instanceof Error) throw response;
     return response;
   };
+  /**
+   * @param {string} cmd
+   * @param {string[]} args
+   * @param {{ inherit?: boolean, cwd?: string }} [options]
+   */
   const run = (cmd, args, options = {}) => {
     state.calls.push([cmd, ...args].join(' '));
     state.cwds.push(options.cwd);
@@ -58,13 +82,16 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
       fetchFn,
       run,
       home: '/home-for-test',
+      /** @param {number} ms */
       sleep: async (ms) => {
         state.sleeps.push(ms);
       },
       tmpdir: tmp,
       env: {},
-      log: (m) => state.logs.push(m),
-      warn: (m) => state.warns.push(m),
+      /** @param {string} m */
+      log: (m) => void state.logs.push(m),
+      /** @param {string} m */
+      warn: (m) => void state.warns.push(m),
     },
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   };
@@ -80,8 +107,9 @@ test('an older installed version installs the latest Release, then refreshes the
       'npm install -g tds-factory.tgz',
       'a relative name, so a path with spaces never reaches a shell',
     );
-    assert.match(w.state.cwds[0], /tds-factory-/);
-    assert.ok(w.state.cwds[0].startsWith(w.tmp), 'npm runs inside the temp download folder');
+    const npmCwd = defined(w.state.cwds[0], 'npm ran in a folder');
+    assert.match(npmCwd, /tds-factory-/);
+    assert.ok(npmCwd.startsWith(w.tmp), 'npm runs inside the temp download folder');
     assert.equal(w.state.calls[1], 'tds-factory --version');
     assert.equal(w.state.calls[2], 'tds-factory install --force');
     assert.deepEqual(readdirSync(w.tmp), [], 'the temp download is removed');
@@ -366,11 +394,12 @@ test('the failing update command exits with 1 and prints the error', () => {
 });
 
 test('the GITHUB_TOKEN is sent to the API when set', async () => {
+  /** @type {unknown} */
   let auth;
   const w = world({
     routes: {
       [API]: (o) => {
-        auth = o.headers?.Authorization;
+        auth = new Headers(o.headers).get('Authorization');
         return releaseJson('v0.4.0');
       },
     },

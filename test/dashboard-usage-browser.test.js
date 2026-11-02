@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { openPage } from './browser.js';
 import { interpretRun } from '../src/dashboard.js';
 
+/** @import { Run, UsageRow } from '../src/run-record.js' */
+
+/**
+ * @param {string} stage
+ * @param {string} model
+ * @param {Partial<UsageRow>} fields
+ * @param {Partial<UsageRow>} [extra]
+ */
 const row = (stage, model, fields, extra = {}) => ({
   stage,
   model,
@@ -19,8 +27,15 @@ const row = (stage, model, fields, extra = {}) => ({
 });
 const sonnet = 'claude-sonnet-5-5';
 const opus = 'claude-opus-5-5';
-const entry = (id, record) =>
-  interpretRun({ id, record: { title: id, stage: 'build', status: 'running', ...record }, files: [] });
+/**
+ * @param {string} id
+ * @param {Partial<Run>} record
+ */
+const entry = (id, record) => {
+  /** @type {Run} */
+  const full = { worktree: '/work', title: id, stage: 'build', status: 'running', ...record };
+  return interpretRun({ id, unreadable: false, record: full, files: [], events: { events: [], damaged: 0 } });
+};
 const visits = [
   { stage: 'define', started: '2026-01-01T00:00:00Z', ended: '2026-01-01T00:01:00Z' },
   { stage: 'build', started: '2026-01-01T00:01:00Z', ended: '2026-01-01T00:02:00Z' },
@@ -163,6 +178,10 @@ test('the Ticket tile breakdown opens when a real mouse pointer hovers the usage
     await page.waitFor("return !!document.querySelector('[data-id=hover] .ticket-usage')");
     const shown = () =>
       page.execute("return document.querySelector('[data-id=hover] .usage-breakdown').offsetHeight > 0");
+    /**
+     * @param {number} x
+     * @param {number} y
+     */
     const move = (x, y) => page.cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
     assert.equal(await shown(), false);
     const at =

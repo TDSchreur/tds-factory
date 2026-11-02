@@ -7,6 +7,10 @@ import { spawnSync } from 'node:child_process';
 import { repo } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 function run(cwd, ...args) {
   return spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 }
@@ -31,7 +35,7 @@ test('Run record command creates and safely updates a record', () => {
   assert.equal(start.status, 0, start.stderr);
   const id = start.stdout.trim();
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
-  const created = JSON.parse(readFileSync(file));
+  const created = JSON.parse(readFileSync(file, 'utf8'));
   assert.equal(created.stage, 'define');
   const update = run(
     cwd,
@@ -42,12 +46,12 @@ test('Run record command creates and safely updates a record', () => {
     JSON.stringify({ status: 'waiting', waiting_reason: 'answer', activity: 'asking' }),
   );
   assert.equal(update.status, 0, update.stderr);
-  const waiting = JSON.parse(readFileSync(file));
+  const waiting = JSON.parse(readFileSync(file, 'utf8'));
   assert.equal(waiting.waiting_on_human, true);
   assert.equal(waiting.created, created.created);
   const bad = run(cwd, 'update', '--id', id, '--data', JSON.stringify({ stage: 'wrong' }));
   assert.notEqual(bad.status, 0);
-  assert.deepEqual(JSON.parse(readFileSync(file)), waiting);
+  assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), waiting);
 });
 test('a Run command without its --id, --to, --axis or --value flag is refused with the store messages', () => {
   const cwd = repo();
@@ -58,6 +62,7 @@ test('a Run command without its --id, --to, --axis or --value flag is refused wi
     JSON.stringify({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: ['AGENTS.md'] }),
   );
   const id = start.stdout.trim();
+  /** @param {...string} args */
   const error = (...args) =>
     run(cwd, ...args)
       .stderr.split('\n')

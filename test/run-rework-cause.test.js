@@ -4,19 +4,44 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo } from './git-repo.js';
+import { metricsOf, fromJson } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const command = (cwd, ...args) => {
   const r = run(cwd, ...args);
   assert.equal(r.status, 0, r.stderr);
   return r.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
+/** @param {string} cwd */
 const start = (cwd, title = 'Cause') =>
   command(cwd, 'start', '--data', JSON.stringify({ title, agent: 'codex', commands: 'true', conventions: [] }));
 // A Run in Check with its only Ticket done.
+/**
+ * @param {string} cwd
+ * @param {string} [title]
+ */
 function inCheck(cwd, title) {
   const id = start(cwd, title);
   command(
@@ -39,7 +64,7 @@ test('rework takes causes from a fixed list, stores them with the Rework and run
   const record = read(cwd, id);
   assert.equal(record.check_loops, 1);
   assert.deepEqual(
-    record.metrics.rework_causes.map((r) => r.causes),
+    metricsOf(record).rework_causes?.map((r) => r.causes),
     [['stale-doc', 'test-gap']],
   );
   const out = command(cwd, 'stats', '--id', id);
@@ -87,7 +112,7 @@ test('a damaged stored cause list shows only the known causes', () => {
   const id = inCheck(cwd);
   command(cwd, 'rework', '--id', id, '--cause', 'bug');
   const record = read(cwd, id);
-  record.metrics.rework_causes.push({ attempt: 9, causes: ['evil\u001b[31m', 'size', 7, null], at: 'x' });
+  metricsOf(record).rework_causes?.push(fromJson({ attempt: 9, causes: ['evil\u001b[31m', 'size', 7, null], at: 'x' }));
   record.check_loops = 2;
   writeFileSync(file(cwd, id), JSON.stringify(record));
   const out = command(cwd, 'stats', '--id', id);
@@ -103,7 +128,7 @@ test('a repeated cause counts once, and one unknown cause among valid ones refus
   assert.equal(read(cwd, id).check_loops, 0);
   command(cwd, 'rework', '--id', id, '--cause', 'bug', '--cause', 'bug');
   assert.deepEqual(
-    read(cwd, id).metrics.rework_causes.map((r) => r.causes),
+    metricsOf(read(cwd, id)).rework_causes?.map((r) => r.causes),
     [['bug']],
   );
   assert.match(command(cwd, 'stats', '--id', id), /Rework causes: bug 1\n/);

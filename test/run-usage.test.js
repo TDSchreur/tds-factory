@@ -3,10 +3,17 @@ import assert from 'node:assert/strict';
 import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repo } from './git-repo.js';
-import { world, claudeLine, mention, claudeSession } from './usage-fixtures.js';
+import { findRow as find, world, claudeLine, mention, claudeSession } from './usage-fixtures.js';
+import { metricsOf, usageOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 // A Run on the Claude target driven through real transitions; fixture log lines are written between the commands,
 // so their timestamps fall into the Stage visit the real operations recorded.
+/**
+ * @param {ReturnType<typeof world>} w
+ * @param {string} cwd
+ */
 function twoTicketRun(w, cwd) {
   const id = w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
@@ -25,8 +32,8 @@ function twoTicketRun(w, cwd) {
   );
   return { id, session };
 }
-const rows = (record) => record.metrics.usage.rows;
-const find = (record, match) => rows(record).find((r) => Object.entries(match).every(([k, v]) => r[k] === v));
+/** @param {Run} record */
+const rows = (record) => usageOf(record).rows ?? [];
 
 test('transitions store Usage per Stage, model, Ticket and the Build wrap-up, with subagents in their Stage', () => {
   const w = world();
@@ -34,7 +41,7 @@ test('transitions store Usage per Stage, model, Ticket and the Build wrap-up, wi
   const { id } = twoTicketRun(w, cwd);
   w.command(cwd, 'rework', '--id', id);
   const record = w.read(cwd, id);
-  assert.equal(record.metrics.usage.status, 'tracked');
+  assert.equal(usageOf(record).status, 'tracked');
   assert.deepEqual(find(record, { stage: 'define' }), {
     stage: 'define',
     model: 'claude-sonnet-5-5',
@@ -106,12 +113,12 @@ test('two Runs started from the same folder never mix, and reading twice gives t
   );
   w.update(cwd, one, { tickets_done: 1 });
   w.move(cwd, one, 'check');
-  const first = JSON.stringify(rows(w.read(cwd, one)));
+  const first = structuredClone(rows(w.read(cwd, one)));
   w.command(cwd, 'rework', '--id', one);
   w.move(cwd, one, 'check');
   assert.deepEqual(
     rows(w.read(cwd, one)).filter((r) => r.stage === 'define'),
-    JSON.parse(first).filter((r) => r.stage === 'define'),
+    first.filter((r) => r.stage === 'define'),
   );
 });
 
@@ -127,7 +134,7 @@ test('a Run resumed in a second session counts both sessions', () => {
   w.move(cwd, id, 'build');
   const record = w.read(cwd, id);
   assert.equal(find(record, { stage: 'define' }).input, 3);
-  assert.deepEqual(record.metrics.usage.sessions.sort(), ['session-a', 'session-b']);
+  assert.deepEqual(usageOf(record).sessions?.sort(), ['session-a', 'session-b']);
 });
 
 test('a missing, truncated or unknown log never fails a transition and shows not tracked with a reason', () => {
@@ -137,8 +144,8 @@ test('a missing, truncated or unknown log never fails a transition and shows not
   w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
   w.move(cwd, id, 'build');
   let record = w.read(cwd, id);
-  assert.equal(record.metrics.usage.status, 'not tracked');
-  assert.match(record.metrics.usage.reason, /no Claude session logs/);
+  assert.equal(usageOf(record).status, 'not tracked');
+  assert.match(usageOf(record).reason ?? '', /no Claude session logs/);
   const session = claudeSession(w.home, 'session-a');
   session.add(
     mention(id),
@@ -150,7 +157,7 @@ test('a missing, truncated or unknown log never fails a transition and shows not
   w.move(cwd, id, 'check');
   record = w.read(cwd, id);
   assert.equal(record.stage, 'check');
-  assert.equal(record.metrics.usage.status, 'not tracked');
+  assert.equal(usageOf(record).status, 'not tracked');
   assert.match(w.command(cwd, 'stats', '--id', id), /Tokens: not tracked \(no usage found/);
 });
 
@@ -165,7 +172,7 @@ test('earlier Usage survives when the logs are gone, and a legacy record stays r
   assert.equal(JSON.stringify(rows(w.read(cwd, id))), before);
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
   const legacy = JSON.parse(readFileSync(file, 'utf8'));
-  legacy.metrics.usage = { tokens: 'not tracked', cost: 'not tracked' };
+  metricsOf(legacy).usage = { tokens: 'not tracked', cost: 'not tracked' };
   writeFileSync(file, JSON.stringify(legacy));
   assert.match(w.command(cwd, 'stats', '--id', id), /Tokens: not tracked/);
 });
@@ -178,7 +185,7 @@ test('only counts reach the Run record, never conversation text', () => {
   session.add(mention(id), claudeLine({ id: 'x1', text: 'SECRET-CONVERSATION-TEXT' }));
   w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
   w.move(cwd, id, 'build');
-  assert.equal(w.read(cwd, id).metrics.usage.status, 'tracked');
+  assert.equal(usageOf(w.read(cwd, id)).status, 'tracked');
   const everything =
     readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8') +
     readFileSync(join(cwd, '.factory', 'runs', id, 'events.jsonl'), 'utf8');
@@ -195,7 +202,7 @@ test('the Claude session id the CLI sees is recorded and matches a transcript th
   w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
   w.move(cwd, id, 'build');
   const record = w.read(cwd, id);
-  assert.deepEqual(record.metrics.sessions, ['session-exact']);
+  assert.deepEqual(metricsOf(record).sessions, ['session-exact']);
   assert.equal(find(record, { stage: 'define' }).input, 9);
 });
 
@@ -280,7 +287,7 @@ test('reading stops at its time budget and reports it, instead of holding the tr
   };
   const late = readUsage(record, '/nowhere/run-1', { home: w.home, budgetMs: -1 });
   assert.equal(late.status, 'not tracked');
-  assert.match(late.reason, /took too long/);
+  assert.match(late.reason ?? '', /took too long/);
   const ok = readUsage(record, '/nowhere/run-1', { home: w.home });
   assert.equal(ok.status, 'tracked');
 });
@@ -319,7 +326,7 @@ test('a Run id that is the start of another Run id does not take that Run sessio
   for (const id of [short, long]) w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
   w.move(cwd, short, 'build');
   w.move(cwd, long, 'build');
-  assert.equal(w.read(cwd, short).metrics.usage.status, 'not tracked');
+  assert.equal(usageOf(w.read(cwd, short)).status, 'not tracked');
   assert.equal(find(w.read(cwd, long), { stage: 'define' }).input, 5);
 });
 
@@ -330,10 +337,10 @@ test('a plain update never reads the logs, and a damaged stored row cannot reach
   const session = claudeSession(w.home, 'session-a');
   session.add(mention(id), claudeLine({ id: 'u1', input: 3 }));
   w.update(cwd, id, { activity: 'working' });
-  assert.deepEqual(w.read(cwd, id).metrics.usage, { tokens: 'not tracked', cost: 'not tracked' });
+  assert.deepEqual(usageOf(w.read(cwd, id)), { tokens: 'not tracked', cost: 'not tracked' });
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
   const record = JSON.parse(readFileSync(file, 'utf8'));
-  record.metrics.usage = {
+  metricsOf(record).usage = {
     status: 'tracked',
     rows: [
       { stage: 'define', model: 'bad\u001b[31mmodel', input: 1, output: 1 },
@@ -356,7 +363,7 @@ test('session ids stored with the Usage are checked and capped', () => {
   }
   w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
   w.move(cwd, id, 'build');
-  assert.equal(w.read(cwd, id).metrics.usage.sessions.length, 20);
+  assert.equal(usageOf(w.read(cwd, id)).sessions?.length, 20);
 });
 
 test('a Run id at the start of a line inside a log string is found, in all three line-break escapes', () => {
@@ -375,7 +382,7 @@ test('a Run id at the start of a line inside a log string is found, in all three
     w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
     w.move(cwd, id, 'build');
     const record = w.read(cwd, id);
-    assert.equal(record.metrics.usage.status, 'tracked', `a Run id after ${JSON.stringify(separator)} is a mention`);
+    assert.equal(usageOf(record).status, 'tracked', `a Run id after ${JSON.stringify(separator)} is a mention`);
     assert.equal(find(record, { stage: 'define' }).input, 4);
   }
 });

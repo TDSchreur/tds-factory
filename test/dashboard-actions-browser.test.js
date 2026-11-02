@@ -2,17 +2,33 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { Page } from './browser.js' */
+
+/**
+ * @param {Page} page
+ * @param {string} selector
+ */
 const click = (page, selector) => page.execute(`document.querySelector(${JSON.stringify(selector)}).click()`);
+/** @param {Page} page */
 const dialog = (page) =>
   page.execute(
     "return document.getElementById('dialog').open ? [document.getElementById('dialog-title').textContent, document.getElementById('dialog-message').textContent] : null",
   );
+/**
+ * @param {Page} page
+ * @param {string} selector
+ * @param {string} title
+ */
 const confirmed = async (page, selector, title) => {
   await click(page, selector);
   await page.waitFor(
     `return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === ${JSON.stringify(title)}`,
   );
 };
+/**
+ * @param {Page} page
+ * @param {string} title
+ */
 const answer = async (page, title) => {
   await click(page, '#dialog-confirm');
   await page.waitFor(
@@ -99,6 +115,10 @@ test('Accept Check is offered only to a Check that waits on you, and names the v
 });
 
 test('Clean up is offered for a merged Done Run and shows why a clean-up is refused', async (t) => {
+  /**
+   * @param {string} id
+   * @param {string} prState
+   */
   const done = (id, prState) =>
     run({ id, title: id, column: 'done', status: 'done', pr: 'https://github.com/a/b/pull/1', prState });
   const page = await openPage(t, {

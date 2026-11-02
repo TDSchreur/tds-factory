@@ -6,7 +6,7 @@
 
 ## Solution
 
-Every JavaScript file in `bin/`, `src/`, `scripts/`, `eval/` and `dashboard/` is checked under `strict` with `checkJs: true` and no per-file opt-outs. Shared JSDoc typedefs describe the Run record. The config is split into a root project, a Dashboard project and a `test/` project that keeps today's behaviour; `npm run typecheck` runs all three. Behaviour does not change, except real bugs that `tsc` exposes, each fixed with a test and a changelog line. The choice of JSDoc over TypeScript is recorded in [ADR 0029](../adr/0029-jsdoc-and-checkjs-rather-than-a-typescript-migration.md).
+Every JavaScript file in `bin/`, `src/`, `scripts/`, `eval/` and `dashboard/` is checked under `strict` with `checkJs: true` and no per-file opt-outs. Shared JSDoc typedefs describe the Run record. The config is split into a root project, a Dashboard project and a `test/` project that keeps today's behaviour (it is brought under the check in [the tests spec](typecheck-tests-strict-checkjs.md)); `npm run typecheck` runs all three. Behaviour does not change, except real bugs that `tsc` exposes, each fixed with a test and a changelog line. The choice of JSDoc over TypeScript is recorded in [ADR 0029](../adr/0029-jsdoc-and-checkjs-rather-than-a-typescript-migration.md).
 
 ## User Stories
 
@@ -20,7 +20,7 @@ Every JavaScript file in `bin/`, `src/`, `scripts/`, `eval/` and `dashboard/` is
 8. As a user of the CLI, I want behaviour unchanged by the typing work, so that nothing regresses.
 9. As a Dashboard contributor, I want `dashboard/` checked with the DOM libraries and without Node types, so that browser code cannot use Node APIs unnoticed.
 10. As a contributor, I want `src/`, `bin/`, `scripts/` and `eval/` checked as ES2024 with Node types, so that the target matches the supported Node versions.
-11. As a contributor, I want `test/` to keep today's opt-in checking until its own Run, so that this Run stays reviewable.
+11. As a contributor, I want `test/` to keep today's opt-in checking until its own Run ([the tests spec](typecheck-tests-strict-checkjs.md)), so that this Run stays reviewable.
 12. As a contributor, I want `npm run typecheck` to run three plain `tsc -p` calls chained with `&&`, so that it works with no build mode and no emit.
 13. As a maintainer, I want `vendor/`, `dashboard/vendor/` and `.factory/` excluded, so that third-party and generated code is not checked.
 14. As a maintainer, I want a new top-level JavaScript folder to fail the quality-tools test unless a tsconfig covers it, so that nothing falls outside the check.
@@ -48,7 +48,7 @@ Every JavaScript file in `bin/`, `src/`, `scripts/`, `eval/` and `dashboard/` is
 
 ## Out of Scope
 
-- `test/` under `checkJs` (Run 1b).
+- `test/` under `checkJs` (Run 1b, [the tests spec](typecheck-tests-strict-checkjs.md)).
 - Migrating to TypeScript or adding a build step.
 - `vendor/`, `dashboard/vendor/` and `.factory/`.
 - Stricter flags beyond `strict`, such as `noUncheckedIndexedAccess`.

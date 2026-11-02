@@ -6,11 +6,20 @@ import { spawnSync } from 'node:child_process';
 import { openRunStore } from '../src/run-store.js';
 import { git, repo } from './git-repo.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
+/** @type {Partial<Run>} */
 const start = { title: 'Example', agent: 'claude', commands: 'npm test', conventions: [] };
 const PR = 'https://github.com/o/r/pull/1';
 const cli = resolve('bin/tds-factory.js');
+/** @param {string} main */
 const branches = (main) => git(main, 'branch', '--format=%(refname:short)').split('\n');
 
+/**
+ * @param {string} main
+ * @param {string} id
+ * @param {Record<string, unknown>} change
+ */
 const setRecord = (main, id, change) => {
   const file = join(main, '.factory', 'runs', id, 'run.json');
   writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), ...change }));
@@ -18,6 +27,7 @@ const setRecord = (main, id, change) => {
 let prs = 0;
 
 // A done Run with a recorded PR whose branch has one commit; `state` is what the injected lookup says about the PR.
+/** @param {string} main */
 function finished(main, state = 'MERGED') {
   const store = openRunStore(main);
   const id = store.start(start);
@@ -46,15 +56,15 @@ test('clean keeps a Run whose PR is open, closed, unknown or missing', () => {
     const { store, id, wt, prState } = finished(main, state);
     const result = store.clean(id, { prState });
     assert.equal(result.outcome, 'kept');
-    assert.match(result.reason, /not merged/);
+    assert.match(result.reason ?? '', /not merged/);
     assert.ok(existsSync(wt));
     assert.ok(branches(main).includes(id));
   }
   const main = repo();
   const { store, id, wt } = finished(main);
-  assert.match(store.clean(id, { prState: () => undefined }).reason, /PR state/);
+  assert.match(store.clean(id, { prState: () => undefined }).reason ?? '', /PR state/);
   const noPr = openRunStore(main).start(start);
-  assert.match(store.clean(noPr, { prState: () => assert.fail('no PR to look up') }).reason, /no PR/);
+  assert.match(store.clean(noPr, { prState: () => assert.fail('no PR to look up') }).reason ?? '', /no PR/);
   assert.ok(existsSync(wt));
 });
 
@@ -64,14 +74,14 @@ test('clean keeps a worktree with uncommitted changes, and a branch that moved p
   writeFileSync(join(dirty.wt, 'scratch.txt'), 'x');
   const kept = dirty.store.clean(dirty.id, { prState: dirty.prState });
   assert.equal(kept.outcome, 'kept');
-  assert.match(kept.reason, /uncommitted/);
+  assert.match(kept.reason ?? '', /uncommitted/);
   assert.ok(existsSync(dirty.wt));
 
   const moved = finished(main);
   git(moved.wt, 'commit', '-q', '--allow-empty', '-m', 'after the PR');
   const result = moved.store.clean(moved.id, { prState: moved.prState });
   assert.equal(result.outcome, 'kept');
-  assert.match(result.reason, /not in the merged PR/);
+  assert.match(result.reason ?? '', /not in the merged PR/);
   assert.ok(branches(main).includes(moved.id));
 });
 
@@ -79,7 +89,7 @@ test('clean keeps a merged Run that is not done yet, and a branch that moves whi
   const main = repo();
   const going = finished(main);
   setRecord(main, going.id, { status: 'running' });
-  assert.match(going.store.clean(going.id, { prState: going.prState }).reason, /run complete/);
+  assert.match(going.store.clean(going.id, { prState: going.prState }).reason ?? '', /run complete/);
   assert.ok(existsSync(going.wt));
 
   const racing = finished(main);
@@ -89,7 +99,7 @@ test('clean keeps a merged Run that is not done yet, and a branch that moves whi
   };
   const result = racing.store.clean(racing.id, { prState });
   assert.equal(result.outcome, 'kept');
-  assert.match(result.reason, /not in the merged PR/);
+  assert.match(result.reason ?? '', /not in the merged PR/);
   assert.ok(existsSync(racing.wt) && branches(main).includes(racing.id));
 });
 
@@ -97,7 +107,7 @@ test('clean from a subfolder of the Run worktree is refused, also when the folde
   const main = repo();
   const { id, wt, prState } = finished(main);
   mkdirSync(join(wt, '..notes'));
-  assert.match(openRunStore(join(wt, '..notes')).clean(id, { prState }).reason, /main checkout/);
+  assert.match(openRunStore(join(wt, '..notes')).clean(id, { prState }).reason ?? '', /main checkout/);
 });
 
 test('clean removes a clean worktree that has an initialised submodule', () => {
@@ -114,7 +124,7 @@ test('clean removes a clean worktree that has an initialised submodule', () => {
   const dirty = finished(main);
   git(dirty.wt, '-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '-q');
   writeFileSync(join(dirty.wt, 'vendor', 'new.txt'), 'x');
-  assert.match(dirty.store.clean(dirty.id, { prState: dirty.prState }).reason, /uncommitted/);
+  assert.match(dirty.store.clean(dirty.id, { prState: dirty.prState }).reason ?? '', /uncommitted/);
   assert.ok(existsSync(dirty.wt));
 });
 
@@ -138,7 +148,7 @@ test('clean keeps a worktree whose submodule holds a commit or stash that exists
     const head = git(wt, 'rev-parse', 'HEAD');
     const result = store.clean(id, { prState: () => ({ state: 'MERGED', head }) });
     assert.equal(result.outcome, 'kept', local);
-    assert.match(result.reason, /submodule/);
+    assert.match(result.reason ?? '', /submodule/);
     assert.ok(existsSync(wt) && branches(main).includes(id));
   }
 });
@@ -147,7 +157,7 @@ test('clean keeps a Run whose record does not name the worktree this store made,
   const main = repo();
   const { id, store, prState } = finished(main);
   setRecord(main, id, { worktree: join(main, 'elsewhere') });
-  assert.match(store.clean(id, { prState }).reason, /does not name the worktree this store created/);
+  assert.match(store.clean(id, { prState }).reason ?? '', /does not name the worktree this store created/);
   assert.deepEqual(openRunStore(repo()).cleanAll({ prState }), []);
 });
 
@@ -158,7 +168,7 @@ test('clean keeps a branch that is checked out in another worktree', () => {
   git(main, 'checkout', '-q', id);
   const result = store.clean(id, { prState });
   assert.equal(result.outcome, 'kept');
-  assert.match(result.reason, /checked out/);
+  assert.match(result.reason ?? '', /checked out/);
   assert.ok(branches(main).includes(id));
 });
 
@@ -167,7 +177,7 @@ test('clean refuses to run from inside the worktree it would remove', () => {
   const { id, wt, prState } = finished(main);
   const result = openRunStore(wt).clean(id, { prState });
   assert.equal(result.outcome, 'kept');
-  assert.match(result.reason, /main checkout/);
+  assert.match(result.reason ?? '', /main checkout/);
   assert.ok(existsSync(wt));
 });
 
@@ -204,6 +214,10 @@ test('clean --all sweeps merged Runs and leaves the others', () => {
   assert.ok(!existsSync(a.wt) && existsSync(b.wt));
 });
 
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const runCli = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 
 test('the CLI clean needs --id or --all, and reports a Run without a PR as kept', () => {
@@ -229,6 +243,7 @@ test('run complete tells the user how to clean up once the PR is merged', () => 
 
 test('clean works for a merged Azure DevOps PR through the provider seam, and keeps a Run whose PR is still open', async () => {
   const { providerFor } = await import('../src/pr-provider.js');
+  /** @param {string} key */
   const recorded = (key) =>
     JSON.parse(readFileSync(new URL(`./fixtures/pr-status/azure/${key}.pr.json`, import.meta.url), 'utf8'));
   for (const [key, outcome] of [
@@ -241,8 +256,11 @@ test('clean works for a merged Azure DevOps PR through the provider seam, and ke
     store.update(id, { pr });
     // What the default lookup does for a Run: ask the adapter of the PR link for state and head (here from the recorded answer, with the head of this branch).
     const answer = { ...recorded(key), lastMergeSourceCommit: { commitId: head } };
+    /** @param {string} url */
     const prState = (url) => {
-      const { state, headRefOid } = providerFor(url).view(url, {
+      const provider = providerFor(url);
+      assert.ok(provider, 'the PR link has a provider');
+      const { state, headRefOid } = provider.view(url, {
         run: () => ({ status: 0, stdout: JSON.stringify(answer) }),
       });
       return { state, head: headRefOid };

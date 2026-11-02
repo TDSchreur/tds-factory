@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // With no PATH there is no browser. Reports what openPage does about it.
+/** @param {NodeJS.ProcessEnv} env */
 const withoutBrowser = (env) =>
   spawnSync(
     process.execPath,

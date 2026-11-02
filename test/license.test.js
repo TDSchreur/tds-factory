@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+/** @param {string} file */
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
 test('the repository has an MIT LICENSE, as package.json says', () => {
@@ -37,7 +38,9 @@ test('the packed tarball carries the license and the third-party notices', () =>
   });
   assert.equal(packed.status, 0, packed.stderr);
   const info = JSON.parse(packed.stdout); // an array in npm 10 and 11, an object keyed by package name in npm 12
-  const files = (Array.isArray(info) ? info[0] : Object.values(info)[0]).files.map((f) => f.path);
+  /** @type {{ files: { path: string }[] }} */
+  const pack = Array.isArray(info) ? info[0] : Object.values(info)[0];
+  const files = pack.files.map((f) => f.path);
   assert.ok(files.includes('LICENSE'), 'LICENSE');
   assert.ok(files.includes('THIRD-PARTY-NOTICES.md'), 'THIRD-PARTY-NOTICES.md');
 });
@@ -49,7 +52,9 @@ test('the packed tarball carries a complete provenance entry for every synced sk
   });
   assert.equal(packed.status, 0, packed.stderr);
   const info = JSON.parse(packed.stdout);
-  const files = (Array.isArray(info) ? info[0] : Object.values(info)[0]).files.map((f) => f.path);
+  /** @type {{ files: { path: string }[] }} */
+  const pack = Array.isArray(info) ? info[0] : Object.values(info)[0];
+  const files = pack.files.map((f) => f.path);
   assert.ok(files.includes('skills/PROVENANCE.json'), 'skills/PROVENANCE.json');
   const { skills } = JSON.parse(read('skills/PROVENANCE.json'));
   const synced = readdirSync(resolve('skills'), { withFileTypes: true })

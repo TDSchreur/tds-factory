@@ -55,6 +55,10 @@ function setup() {
   return { base, clone, log, bin };
 }
 
+/**
+ * @param {{ clone: string, bin: string }} s
+ * @param {...string} flags
+ */
 const run = (s, ...flags) =>
   spawnSync(process.execPath, [join(s.clone, 'scripts', 'dev-install.js'), '--skip-dev-skills', ...flags], {
     cwd: s.clone,

@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { clearEvidence } from '../src/evidence.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
+/** @returns {Run} */
 const record = () => ({
+  worktree: '/work',
   stage: 'check',
   title: 'Keep me',
   check_loops: 2,
@@ -12,18 +16,19 @@ const record = () => ({
   spec: 'pass',
   security: 'pass',
   infrastructure: 'skipped',
-  verify: { head: 'h' },
+  verify: { command: 'npm test', head: 'h', dirty: false, exit_code: 0, started: '', ended: '', log: '' },
   reviewed: { standards: { head: 'h', attempt: 1 } },
   accepted: { head: 'h' },
-  project_results: { a11y: { head: 'h' } },
-  metrics: { verdicts: [{ axis: 'standards', value: 'pass', head: 'h' }] },
-  follow_up: { head: 'h' },
+  project_results: { a11y: { verdict: 'pass', head: 'h', attempt: 1 } },
+  metrics: { version: 1, visits: [], verdicts: [{ axis: 'standards', value: 'pass', head: 'h', at: '' }] },
+  follow_up: { pr: '', head: 'h', observed: '', checks: [], failures: [], pending: false, threads: [] },
 });
 
 test('clearEvidence drops every current Evidence field and keeps the rest, including history', () => {
   const before = record();
   const after = clearEvidence(before);
-  for (const key of [
+  /** @type {(keyof Run)[]} */
+  const evidence = [
     'standards',
     'spec',
     'security',
@@ -32,20 +37,10 @@ test('clearEvidence drops every current Evidence field and keeps the rest, inclu
     'reviewed',
     'accepted',
     'project_results',
-  ])
-    assert.equal(key in after, false, key);
+  ];
+  for (const key of evidence) assert.equal(key in after, false, key);
   const rest = record();
-  for (const key of [
-    'standards',
-    'spec',
-    'security',
-    'infrastructure',
-    'verify',
-    'reviewed',
-    'accepted',
-    'project_results',
-  ])
-    delete rest[key];
+  for (const key of evidence) delete rest[key];
   assert.deepEqual(after, rest);
-  assert.equal(before.verify.head, 'h', 'the input is not changed');
+  assert.equal(before.verify?.head, 'h', 'the input is not changed');
 });

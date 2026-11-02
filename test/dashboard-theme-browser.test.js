@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage } from './browser.js';
 
+/** @param {string} value */
 const choose = (value) =>
   `var s = document.getElementById('theme'); s.value = '${value}'; s.dispatchEvent(new Event('change', { bubbles: true }));`;
 const theme =

@@ -36,6 +36,12 @@ function nodeCopy() {
 }
 
 // Writes the command `name` into `dir`; `source` is CommonJS and reads its arguments from process.argv.slice(2).
+/**
+ * @param {string} dir
+ * @param {string} name
+ * @param {string} source
+ * @returns {string} The path of the command file.
+ */
 export function fakeCommand(dir, name, source) {
   const file = join(dir, name);
   if (!WINDOWS) {
@@ -56,9 +62,15 @@ export function fakeCommand(dir, name, source) {
 }
 
 // The value of PATH with `dir` first.
+/** @param {string} dir */
 export const pathWith = (dir) => `${dir}${delimiter}${process.env.PATH}`;
 
 // An environment for a child process with `dir` first on PATH; on Windows the variable is spelled Path.
+/**
+ * @param {string} dir
+ * @param {NodeJS.ProcessEnv} [extra]
+ * @returns {NodeJS.ProcessEnv}
+ */
 export function envWith(dir, extra = {}) {
   const key = Object.keys(process.env).find((name) => name.toLowerCase() === 'path') ?? 'PATH';
   return { ...process.env, [key]: pathWith(dir), ...extra };

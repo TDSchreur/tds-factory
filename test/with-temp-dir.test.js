@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const runner = resolve('scripts/with-temp-dir.js');
+/** @param {...string} command */
 const run = (...command) => spawnSync(process.execPath, [runner, process.execPath, ...command], { encoding: 'utf8' });
 // A command that leaks a folder with a file in it into the temp directory and reports where it is.
 const leak =
