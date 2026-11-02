@@ -12,7 +12,8 @@ const TYPES = { css: 'text/css', js: 'text/javascript' };
 const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
 const WINDOWS = process.platform === 'win32';
-const onPath = (name) => spawnSync(WINDOWS ? 'where' : 'sh', WINDOWS ? [name] : ['-c', `command -v ${name}`]).status === 0;
+const onPath = (name) =>
+  spawnSync(WINDOWS ? 'where' : 'sh', WINDOWS ? [name] : ['-c', `command -v ${name}`]).status === 0;
 
 // On Windows Chrome and Edge are not on PATH, so look in their install folders (or CHROME_BIN).
 const windowsBrowser = () =>
