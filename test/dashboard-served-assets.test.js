@@ -2,13 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, posix } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, posix, sep } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
 
 // The files the page loads, worked out the way a browser does (#368: a module missing from the server's allowlist stopped the whole page),
 // asked from the real server, not from a stub.
-const DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
+const DIR = join(import.meta.dirname, '..', 'dashboard') + sep;
 /** @type {Record<string, RegExp>} */
 const TYPE = { '.js': /^text\/javascript/, '.css': /^text\/css/, '.svg': /^image\/svg\+xml/ };
 /** @param {string} path */

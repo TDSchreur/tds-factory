@@ -14,9 +14,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.join(import.meta.dirname, '..');
 const MARKER = '.tds-factory-dev';
 const DEV_SKILLS = [
   'vendor/awesome-copilot/skills/docs-sync-audit',

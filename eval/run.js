@@ -3,14 +3,13 @@
 // Needs the agent CLI on PATH (or EVAL_AGENT_CMD). Not part of `npm test`.
 import { readdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { codeOf } from '../src/narrow.js';
 import { defaults } from './lib/agents.js';
 import { fixture } from './lib/fixture.js';
 import { collect } from './lib/artifacts.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
+const here = import.meta.dirname;
 const [agent, ...wanted] = process.argv.slice(2);
 const command = process.env.EVAL_AGENT_CMD ?? defaults[agent];
 if (!command) {

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleepFor } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { messageOf, codeOf } from './narrow.js';
@@ -253,7 +254,7 @@ export async function update({
   force = true,
   fetchFn = fetch,
   run = defaultRun,
-  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep = sleepFor,
   tmpdir = os.tmpdir(),
   home = os.homedir(),
   env = process.env,
