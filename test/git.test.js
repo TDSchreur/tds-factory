@@ -74,7 +74,8 @@ test('gitAsync closes stdin when no input is given, passes env and kills on time
       env: { ...process.env, GIT_AUTHOR_NAME: 'Zed Async', GIT_AUTHOR_EMAIL: 'z@example.com' },
     });
     assert.match(ident.stdout, /^Zed Async /);
-    const slow = await gitAsync(dir, ['-c', 'alias.slow=!sleep 5', 'slow'], { timeout: 100 });
+    // Run outside the temp repo: on Windows the killed child's shell can still hold its folder.
+    const slow = await gitAsync(os.tmpdir(), ['-c', 'alias.slow=!sleep 5', 'slow'], { timeout: 100 });
     assert.equal(slow.status, null);
     assert.ok(slow.error);
   } finally {
