@@ -1,3 +1,4 @@
+/** @import { PrStatus, PrView } from './pr-provider.js' */
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -13,6 +14,7 @@ const REMOTE_SSH = new RegExp(`^(?:ssh://)?git@ssh\\.dev\\.azure\\.com[:/]v3/(${
 export const name = 'azure-devops';
 export const title = 'Azure DevOps';
 // Whether a PR link is an Azure DevOps one; only such a link is ever passed to az.
+/** @param {string} value */
 const decode = (value) => {
   try {
     return decodeURIComponent(value);
@@ -21,14 +23,17 @@ const decode = (value) => {
   }
 };
 // A decoded name is one path segment of plain text: no slash, no control character, not a dot segment.
+/** @param {unknown} value @returns {value is string} */
 const plain = (value) =>
   typeof value === 'string' && !/[\x00-\x1f\x7f\\/]/.test(value) && value !== '.' && value !== '..';
+/** @param {unknown} url */
 export const matches = (url) => {
   if (typeof url !== 'string' || url.length > 600) return false;
   const match = PR.exec(url);
   return !!match && plain(decode(match[2])) && plain(decode(match[3]));
 };
 // Organisation and project (as owner) and repository a git remote URL points at, or undefined when it is not Azure DevOps.
+/** @param {unknown} remote */
 export function repoOfRemote(remote) {
   const match = REMOTE_HTTPS.exec(String(remote).trim()) ?? REMOTE_SSH.exec(String(remote).trim());
   if (!match) return undefined;
@@ -36,8 +41,12 @@ export function repoOfRemote(remote) {
   return plain(project) && plain(repo) ? { owner: `${match[1]}/${project}`, name: repo } : undefined;
 }
 
+/**
+ * @param {string} url A link that `matches` accepted.
+ * @returns {Target}
+ */
 const parts = (url) => {
-  const match = PR.exec(url);
+  const match = /** @type {RegExpExecArray} */ (PR.exec(url));
   return {
     organization: `https://dev.azure.com/${match[1]}`,
     project: decode(match[2]),
@@ -45,19 +54,30 @@ const parts = (url) => {
     id: match[4],
   };
 };
+/** @typedef {{ organization: string, project: string | undefined, repository: string | undefined, id: string }} Target */
 const bad = () => new Error('incomplete Azure DevOps PR status');
+/** @param {unknown} v */
 const label = (v) => String(v).slice(0, 80);
 
 // The status of a PR for the Dashboard, from `az repos pr show` and `az repos pr policy list`; throws when they have the wrong shape.
+/** @type {Record<string, PrStatus['state']>} */
 const STATE = { active: 'open', completed: 'merged', abandoned: 'closed' };
+/** @type {Record<string, string>} */
 const MERGE = { succeeded: 'mergeable', conflicts: 'conflicting' };
 const POLICY_STATUS = ['approved', 'rejected', 'running', 'queued', 'broken', 'notApplicable'];
+/**
+ * @param {any} pr parsed JSON from the CLI, checked field by field
+ * @param {any} policies parsed JSON from the CLI, checked field by field
+ * @returns {PrStatus}
+ */
 export function parseStatus(pr, policies) {
   if (!pr || typeof pr !== 'object' || Array.isArray(pr) || !Array.isArray(policies)) throw bad();
   const state = Object.hasOwn(STATE, pr.status) ? STATE[pr.status] : undefined;
   const reviewers = pr.reviewers ?? [];
   if (!state || !Array.isArray(reviewers) || reviewers.some((r) => !r || typeof r.vote !== 'number')) throw bad();
+  /** @type {{ name: string, status: string }[]} */
   const checks = [],
+    /** @type {string[]} */
     reviewPolicies = [];
   for (const policy of policies) {
     const config = policy?.configuration;
@@ -68,6 +88,7 @@ export function parseStatus(pr, policies) {
     else checks.push({ name: label(config.settings?.displayName ?? kind), status: policy.status });
   }
   const failing = checks.filter((c) => ['rejected', 'broken'].includes(c.status)).map((c) => c.name);
+  /** @type {PrStatus['checks']['result']} */
   const result = failing.length
     ? 'failing'
     : checks.some((c) => ['running', 'queued'].includes(c.status))
@@ -94,6 +115,7 @@ export function parseStatus(pr, policies) {
 }
 
 // Why az could not answer: az-missing, az-extension-missing, az-not-signed-in, rate-limited or error.
+/** @param {any} err The error of a failed command: an Error with its stderr and code, as execFile gives it. */
 const failure = (err) => {
   const text = `${err.stderr ?? ''}`;
   return err.code === 'ENOENT'
@@ -106,6 +128,10 @@ const failure = (err) => {
           ? 'rate-limited'
           : 'error';
 };
+/**
+ * @param {string[]} subcommand
+ * @param {Target} target
+ */
 const args = (subcommand, { organization, id }) => [
   'repos',
   'pr',
@@ -121,19 +147,36 @@ const args = (subcommand, { organization, id }) => [
 const SHOW = ['show'],
   POLICIES = ['policy', 'list'];
 const env = () => ({ ...process.env, AZURE_CORE_NO_COLOR: '1', AZURE_CORE_COLLECT_TELEMETRY: 'false' });
+/** @param {string[]} argv */
 const defaultRun = (argv) => exec('az', argv, { timeout: 20_000, maxBuffer: 16 * 1024 * 1024, env: env() });
+/**
+ * @param {(argv: string[]) => Promise<{ stdout: string }>} run
+ * @param {Target} target
+ * @param {string[]} subcommand
+ */
 const read = async (run, target, subcommand) => JSON.parse((await run(args(subcommand, target))).stdout);
 // The PR must be the one the link names: a PR id is unique in an organisation, so a link with the wrong project or repository is refused.
+/**
+ * @param {any} pr parsed JSON from the CLI, checked field by field
+ * @param {Target} target
+ */
 function belongsTo(pr, target) {
+  /** @param {unknown} a @param {unknown} b */
   const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
   if (!same(pr?.repository?.name, target.repository) || !same(pr?.repository?.project?.name, target.project))
     throw new Error('the Azure DevOps PR does not belong to the repository in its link');
 }
 
 // Read from Azure DevOps without blocking the caller. `run` is the injection point for tests. A failure carries a `reason`.
+/**
+ * @param {string} url
+ * @param {{ run?: (argv: string[]) => Promise<{ stdout: string }> }} [options]
+ * @returns {Promise<PrStatus>}
+ */
 export async function statusAsync(url, { run = defaultRun } = {}) {
   if (!matches(url)) throw Object.assign(new Error('not an Azure DevOps pull request'), { reason: 'error' });
   const target = parts(url);
+  /** @type {unknown} */
   let pr, policies;
   try {
     [pr, policies] = await Promise.all([read(run, target, SHOW), read(run, target, POLICIES)]);
@@ -146,11 +189,17 @@ export async function statusAsync(url, { run = defaultRun } = {}) {
     belongsTo(pr, target);
     return parseStatus(pr, policies);
   } catch (err) {
-    throw Object.assign(err, { reason: 'error' });
+    throw err instanceof Error ? Object.assign(err, { reason: 'error' }) : err;
   }
 }
 
+/** @type {Record<string, PrView['state']>} */
 const GIT_STATE = { active: 'OPEN', completed: 'MERGED', abandoned: 'CLOSED' };
+/**
+ * @param {any} pr parsed JSON from the CLI, checked field by field
+ * @param {Target} target
+ * @returns {PrView}
+ */
 function viewOf(pr, target) {
   belongsTo(pr, target);
   const state = Object.hasOwn(GIT_STATE, pr?.status) ? GIT_STATE[pr.status] : undefined;
@@ -158,12 +207,22 @@ function viewOf(pr, target) {
   return { state, headRefOid: pr.lastMergeSourceCommit?.commitId };
 }
 // Only the state: OPEN, MERGED or CLOSED.
+/**
+ * @param {string} url
+ * @param {{ run?: (argv: string[]) => Promise<{ stdout: string }> }} [options]
+ * @returns {Promise<string>}
+ */
 export async function stateAsync(url, { run = defaultRun } = {}) {
   if (!matches(url)) throw new Error('not an Azure DevOps pull request');
   const target = parts(url);
   return viewOf(await read(run, target, SHOW), target).state;
 }
 // State and head commit of a PR, read without blocking the caller more than `timeout`; throws when az cannot say.
+/**
+ * @param {string} url
+ * @param {{ cwd?: string, timeout?: number, run?: (argv: string[]) => { status: number | null, stdout: string, stderr: string, error?: Error } }} [options]
+ * @returns {PrView}
+ */
 export function view(url, { cwd, timeout = 20_000, run } = {}) {
   if (!matches(url)) throw new Error('not an Azure DevOps pull request');
   const target = parts(url);

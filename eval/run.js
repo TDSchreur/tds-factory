@@ -5,6 +5,7 @@ import { readdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { codeOf } from '../src/narrow.js';
 import { defaults } from './lib/agents.js';
 import { fixture } from './lib/fixture.js';
 import { collect } from './lib/artifacts.js';
@@ -38,7 +39,8 @@ for (const name of wanted.length ? wanted : names) {
     timeout: timeoutMs,
     encoding: 'utf8',
   });
-  const timedOut = ran.error?.code === 'ETIMEDOUT';
+  const timedOut = codeOf(ran.error) === 'ETIMEDOUT';
+  /** @type {[string, boolean][]} */
   const results = scenario.grade(collect(fx), fx);
   console.log(`\n${name}: ${scenario.description}  [${fx.root}]${timedOut ? '  (agent timed out)' : ''}`);
   for (const [check, ok] of results) console.log(`  ${ok ? 'PASS' : 'FAIL'} ${check}`);

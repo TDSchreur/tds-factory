@@ -8,6 +8,11 @@ import { spawnSync } from 'node:child_process';
 // An optional tarball argument lets Release verify the exact asset it publishes.
 const temp = mkdtempSync(join(tmpdir(), 'tds-package-'));
 const windows = process.platform === 'win32';
+/**
+ * @param {string} command
+ * @param {string[]} args
+ * @param {string} [cwd]
+ */
 function run(command, args, cwd = temp) {
   const shell = windows && command.endsWith('.cmd');
   const result = spawnSync(shell ? `"${command}"` : command, shell ? args.map((arg) => `"${arg}"`) : args, {
@@ -22,15 +27,15 @@ function run(command, args, cwd = temp) {
 // A bare quoted npm.cmd resolves its own folder to the current directory in cmd.exe, so run npm's script with node when npm started us.
 const npmCli = process.env.npm_execpath?.endsWith('.js') ? process.env.npm_execpath : undefined;
 const npm = npmCli ? process.execPath : windows ? 'npm.cmd' : 'npm';
+/** @param {string[]} args */
 const npmArgs = (args) => (npmCli ? [npmCli, ...args] : args);
 try {
   let tarball = process.argv[2] && resolve(process.argv[2]);
   if (!tarball) {
     run(npm, npmArgs(['pack', '--pack-destination', temp]), process.cwd());
-    tarball = join(
-      temp,
-      readdirSync(temp).find((file) => file.endsWith('.tgz')),
-    );
+    const packed = readdirSync(temp).find((file) => file.endsWith('.tgz'));
+    if (!packed) throw new Error('npm pack made no tarball');
+    tarball = join(temp, packed);
   }
   const prefix = join(temp, 'prefix');
   run(

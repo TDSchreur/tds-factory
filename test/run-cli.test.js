@@ -49,3 +49,24 @@ test('Run record command creates and safely updates a record', () => {
   assert.notEqual(bad.status, 0);
   assert.deepEqual(JSON.parse(readFileSync(file)), waiting);
 });
+test('a Run command without its --id, --to, --axis or --value flag is refused with the store messages', () => {
+  const cwd = repo();
+  const start = run(
+    cwd,
+    'start',
+    '--data',
+    JSON.stringify({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: ['AGENTS.md'] }),
+  );
+  const id = start.stdout.trim();
+  const error = (...args) =>
+    run(cwd, ...args)
+      .stderr.split('\n')
+      .find((line) => line.startsWith('error'));
+  assert.equal(error('transition'), 'error: invalid Run id');
+  assert.equal(error('transition', '--id', id), 'error: a Run in define can only move to build, not undefined');
+  assert.equal(error('verdict'), 'error: unknown Check axis: undefined');
+  assert.equal(error('verdict', '--id', id, '--value', 'pass'), 'error: unknown Check axis: undefined');
+  assert.equal(error('verdict', '--id', id, '--axis', 'standards'), 'error: invalid field or value: standards');
+  assert.equal(error('track', '--id', id), 'error: track must be fast or full');
+  assert.equal(error('materialize-review', '--id', id), 'error: unknown project review: undefined');
+});

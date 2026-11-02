@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+/** @import { Run } from './run-record.js' */
+import { messageOf, oneOf } from './narrow.js';
 import { validId, paused, write } from './run-record.js';
 import {
   runRoot,
@@ -17,23 +19,33 @@ import { ownWorktrees, worktreeState } from './worktrees.js';
 import { remoteRepo } from './pr-provider.js';
 
 // Produce a reviewable plan from current git, Run and GitHub facts. No writes occur here.
+/**
+ * @param {string} projectDir
+ * @param {string} runsDir
+ * @param {string | undefined} id
+ * @param {boolean} [ignoreLock]
+ */
 export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
   if (!validId(id)) throw new Error('invalid Run id');
   const dir = path.join(runsDir, id),
     file = path.join(dir, 'run.json'),
     lock = lockFile(runsDir, id);
+  /** @type {string[]} */
   const actions = [],
+    /** @type {string[]} */
     notes = [],
+    /** @type {string[]} */
     blockers = [];
   const worktrees = ownWorktrees(projectDir),
     wt = worktrees.get(id);
+  /** @type {Run | undefined} */
   let record;
   if (fs.existsSync(dir) && fs.realpathSync(dir) !== dir) throw new Error('Run folder must not be a symlink');
   if (fs.existsSync(file)) {
     try {
       record = readRun(projectDir, id).record;
     } catch (err) {
-      blockers.push(`existing record is unreadable; preserve it: ${err.message}`);
+      blockers.push(`existing record is unreadable; preserve it: ${messageOf(err)}`);
     }
   } else if (fs.existsSync(dir) && fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink())
     blockers.push('existing record is a symlink; preserve it');
@@ -71,7 +83,7 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
         ].filter(Boolean);
         if (seen.some((head) => head !== state.head)) notes.push('Evidence is stale; review before continuing');
       } catch (err) {
-        blockers.push(`cannot read worktree: ${err.message}`);
+        blockers.push(`cannot read worktree: ${messageOf(err)}`);
       }
     }
   }
@@ -83,12 +95,13 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
     const remote = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: projectDir, encoding: 'utf8' });
     const url = remote.status === 0 ? remote.stdout.trim() : '';
     const host = remoteRepo(url);
-    if (!host || typeof host.provider.listByHead !== 'function')
+    const listByHead = host?.provider.listByHead;
+    if (!host || typeof listByHead !== 'function')
       notes.push('GitHub origin unresolved or not GitHub; reconcile any PR manually before repeating work');
     else {
       const repo = `${host.owner}/${host.name}`;
       try {
-        const all = host.provider.listByHead(repo, id, projectDir);
+        const all = listByHead(repo, id, projectDir);
         const prs = all.filter(
           (pr) =>
             pr.headRefName === id &&
@@ -107,7 +120,7 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
         } else if (!prs.length && record?.pr) notes.push('recorded PR not found in GitHub results; reconcile manually');
         else notes.push(prs.length ? `GitHub PR confirmed: ${prs[0].url}` : 'no matching GitHub PR found');
       } catch (err) {
-        notes.push(`GitHub reconciliation unavailable: ${err.message}`);
+        notes.push(`GitHub reconciliation unavailable: ${messageOf(err)}`);
       }
     }
   }
@@ -115,7 +128,14 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
   return { id, actions, notes, blockers };
 }
 
+/**
+ * @param {string} projectDir
+ * @param {string} runsDir
+ * @param {string | undefined} id
+ * @param {unknown} expected The plan the user was shown.
+ */
 export function repairApply(projectDir, runsDir, id, expected) {
+  if (!validId(id)) throw new Error('invalid Run id');
   const plan = repairPlan(projectDir, runsDir, id);
   if (JSON.stringify(plan) !== JSON.stringify(expected)) throw new Error('repair facts changed; inspect a new plan');
   if (plan.blockers.length) throw new Error(plan.blockers.join('; '));
@@ -143,6 +163,7 @@ export function repairApply(projectDir, runsDir, id, expected) {
         throw new Error('repair facts changed; inspect a new plan');
       const dir = path.join(root, id),
         file = path.join(dir, 'run.json');
+      /** @type {Run | undefined} */
       let record;
       if (fresh.actions.some((a) => a.startsWith('recreate'))) {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir);
@@ -176,7 +197,22 @@ export function repairApply(projectDir, runsDir, id, expected) {
 }
 
 // Read-only health report: what would stop each Run from carrying on. Finished Runs only report records, locks and uncommitted work.
+/**
+ * @typedef {object} InspectEntry
+ * @property {string} id
+ * @property {boolean} [unreadable]
+ * @property {Run | null} [record]
+ * @property {boolean} [orphan]
+ * @property {string} [worktree]
+ * @property {ReturnType<typeof ownWorktrees> extends Map<string, infer T> ? T : never} [worktreeInfo]
+ */
+/**
+ * @param {string} projectDir
+ * @param {string} runsDir
+ * @param {string} [only]
+ */
 export async function inspectRuns(projectDir, runsDir, only) {
+  /** @type {InspectEntry[]} */
   const runs = await listRuns(runsDir);
   for (const [id, wt] of ownWorktrees(projectDir)) {
     const existing = runs.find((r) => r.id === id);
@@ -192,7 +228,9 @@ export async function inspectRuns(projectDir, runsDir, only) {
     [...listed.matchAll(/^worktree (.+)$/gm)].map((m) => (fs.existsSync(m[1]) ? fs.realpathSync(m[1]) : m[1])),
   );
   return selected.map(({ id, unreadable, record, orphan, worktree, worktreeInfo }) => {
+    /** @type {{ code: string, message: string }[]} */
     const found = [];
+    /** @param {string} code @param {string} message */
     const add = (code, message) => found.push({ code, message });
     if (pathExists(repairLockFile(runsDir, id))) {
       const owner = lockOwner(repairLockFile(runsDir, id));
@@ -214,20 +252,22 @@ export async function inspectRuns(projectDir, runsDir, only) {
     }
     if (orphan) {
       add('orphan', `registered Run worktree ${worktree} has no Run folder or record`);
+      if (!worktreeInfo) throw new Error('an orphan Run has its worktree');
       if (worktreeInfo.missing) add('worktree-missing', `the registered Run worktree ${worktree} does not exist`);
       else if (!worktreeInfo.safe)
         add('worktree-unknown', `the registered Run worktree ${worktree} is unsafe or symlinked`);
       else {
         try {
-          if (worktreeState({ worktree }).dirty) add('worktree-dirty', 'the Run worktree has uncommitted changes');
+          if (worktreeState({ worktree: worktree ?? worktreeInfo.dir }).dirty)
+            add('worktree-dirty', 'the Run worktree has uncommitted changes');
         } catch (err) {
-          add('worktree-unreadable', err.message);
+          add('worktree-unreadable', messageOf(err));
         }
       }
-    } else if (unreadable) add('unreadable', 'run.json is missing or cannot be parsed');
+    } else if (unreadable || !record) add('unreadable', 'run.json is missing or cannot be parsed');
     else {
       // A finished Run only matters here for uncommitted work that would block removing its worktree.
-      const active = ['running', 'waiting', ...paused].includes(record.status);
+      const active = !!record.status && ['running', 'waiting', ...paused].includes(record.status);
       if (!record.worktree || !fs.existsSync(record.worktree)) {
         if (active) add('worktree-missing', `the Run worktree ${record.worktree ?? '(none recorded)'} does not exist`);
       } else if (!known.has(fs.realpathSync(record.worktree))) {
@@ -263,10 +303,10 @@ export async function inspectRuns(projectDir, runsDir, only) {
             ...Object.values(record.project_results ?? {}).map((r) => r?.head),
           ].filter(Boolean);
           const staleBase = Object.values(record.project_results ?? {}).some((r) => r?.base_sha !== record.base_sha);
-          if (active && ['check', 'finish'].includes(record.stage) && (seen.some((h) => h !== head) || staleBase))
+          if (active && oneOf(['check', 'finish'], record.stage) && (seen.some((h) => h !== head) || staleBase))
             add('stale-evidence', 'Evidence was recorded for an earlier head or base than the current one');
         } catch (err) {
-          add('worktree-unreadable', err.message);
+          add('worktree-unreadable', messageOf(err));
         }
       }
     }

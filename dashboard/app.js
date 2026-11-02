@@ -1,4 +1,6 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
+/** @import { RunView } from './model.js' */
+/** @import { ConfirmRequest, Actions } from './components.js' */
 import { render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from './components.js';
@@ -12,37 +14,43 @@ const notifyPermission = () =>
   typeof window.Notification === 'function' ? window.Notification.permission : 'unsupported';
 
 // The hash alone would leave focus in the header, and the board is not focusable by link in every browser.
+/** @param {Event} event */
 function skipToBoard(event) {
   event.preventDefault();
   document.getElementById('board')?.focus();
 }
 
 function App() {
-  const [entries, setEntries] = useState([]);
+  const [entries, setEntries] = useState(/** @type {RunView[]} */ ([]));
   const [project, setProject] = useState('');
   const [version, setVersion] = useState('');
   const [status, setStatus] = useState({ error: false, text: 'Loading...' });
-  const [selectedId, setSelectedId] = useState(null);
-  const [selectedStage, setSelectedStage] = useState(null);
+  const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
+  const [selectedStage, setSelectedStage] = useState(/** @type {string | null} */ (null));
   const [loaded, setLoaded] = useState(false); // true after the first successful poll
   const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
   const [showOlder, setShowOlder] = useState(false); // Runs older than a week stay folded until asked for
   const [expandedIds, setExpandedIds] = useState(() => new Set()); // Done cards the user opened
-  const [request, setRequest] = useState(null);
+  const [request, setRequest] = useState(/** @type {ConfirmRequest | null} */ (null));
   const [helpOpen, setHelpOpen] = useState(false);
   const [onlyWaiting, setOnlyWaiting] = useState(false); // the Needs you filter; not saved
   const queue = useRef(Promise.resolve());
+  /** @type {{ current: ConfirmRequest | null }} */
   const current = useRef(null);
+  /** @type {{ current: string | null }} */
   const token = useRef(null);
+  /** @type {{ current: Set<string> | null }} */
   const known = useRef(null); // ids of Runs that were waiting at the last poll; null before the first one
   const [, setAsked] = useState(0); // re-render after the permission question; the permission itself is read at render time
+  /** @type {{ current: HTMLElement | null }} */
   const returnFocus = useRef(null);
+  /** @type {{ current: RunView | null }} */
   const shown = useRef(null); // the Run whose detail is open, as of the last render; the Escape handler outlives renders
   current.current = request;
 
   useEffect(() => {
     const query = window.matchMedia(COMPACT_QUERY);
-    const change = (event) => setCompact(event.matches);
+    const change = (/** @type {MediaQueryListEvent} */ event) => setCompact(event.matches);
     query.addEventListener('change', change);
     return () => query.removeEventListener('change', change);
   }, []);
@@ -83,14 +91,15 @@ function App() {
 
   // Closing the Run detail hands focus back to its card.
   const closeDetail = () => {
-    const card = document.querySelector('.card[data-id="' + CSS.escape(selectedId) + '"]');
+    const card = document.querySelector('.card[data-id="' + CSS.escape(String(selectedId)) + '"]');
     if (shown.current) setSelectedStage(shown.current.column); // the Run may have moved while its detail was open
-    if (compact) returnFocus.current = card;
-    else if (card) card.focus();
+    const target = card instanceof HTMLElement ? card : null;
+    if (compact) returnFocus.current = target;
+    else if (target) target.focus();
     setSelectedId(null);
   };
   useLayoutEffect(() => {
-    const onKey = (e) => {
+    const onKey = (/** @type {KeyboardEvent} */ e) => {
       if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDetail();
     };
     document.addEventListener('keydown', onKey);
@@ -98,24 +107,49 @@ function App() {
   }, [selectedId, compact]);
 
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
+  /**
+   * @param {string} title
+   * @param {string} message
+   * @param {string} action
+   * @param {boolean} [danger]
+   * @param {boolean} [notice]
+   * @returns {Promise<boolean>}
+   */
   const ask = (title, message, action, danger, notice) => {
     const result = queue.current.then(
-      () => new Promise((resolve) => setRequest({ title, message, action, danger, notice, resolve })),
+      () =>
+        new Promise((/** @type {(confirmed: boolean) => void} */ resolve) =>
+          setRequest({ title, message, action, danger, notice, resolve }),
+        ),
     );
     queue.current = result.then(() => {});
     return result;
   };
-  const closeDialog = (confirmed) => {
+  const closeDialog = (/** @type {boolean} */ confirmed) => {
     const open = current.current;
     setRequest(null);
     if (open) open.resolve(confirmed);
   };
 
   // Every write carries the session token the server gave this page (ADR 0017).
+  /**
+   * @param {string} method
+   * @param {string} url
+   */
   const write = async (method, url) => {
-    token.current ??= (await (await fetch('/api/info', { cache: 'no-store' })).json()).token;
-    return fetch(url, { method, headers: { 'x-factory-token': token.current } });
+    /** @type {string} */
+    const given = (token.current ??= (await (await fetch('/api/info', { cache: 'no-store' })).json()).token);
+    return fetch(url, { method, headers: { 'x-factory-token': given } });
   };
+  /**
+   * @param {RunView} run
+   * @param {string} name
+   * @param {string} title
+   * @param {string} message
+   * @param {string} action
+   * @param {string} done
+   * @param {string} [query]
+   */
   const runAction = async (run, name, title, message, action, done, query = '') => {
     if (!(await ask(title, message, action, false))) return;
     try {
@@ -155,7 +189,7 @@ function App() {
     }
     poll();
   };
-  const syncRun = (run) =>
+  const syncRun = (/** @type {RunView} */ run) =>
     runAction(
       run,
       'sync',
@@ -166,7 +200,7 @@ function App() {
       'Sync',
       'Synced',
     );
-  const cleanRun = (run) =>
+  const cleanRun = (/** @type {RunView} */ run) =>
     runAction(
       run,
       'clean',
@@ -177,7 +211,7 @@ function App() {
       'Clean up',
       'Cleaned up',
     );
-  const acceptRun = (run) => {
+  const acceptRun = (/** @type {RunView} */ run) => {
     const open = [
       ['Standards', run.standards],
       ['Spec', run.spec],
@@ -201,7 +235,7 @@ function App() {
     );
   };
 
-  const grantRun = (run) =>
+  const grantRun = (/** @type {RunView} */ run) =>
     runAction(
       run,
       'extra-loop',
@@ -211,14 +245,20 @@ function App() {
         '" has used its ' +
         run.loopCap +
         ' Check loops. This allows one more Rework and raises the limit to ' +
-        (run.loopCap + 1) +
+        ((run.loopCap ?? 0) + 1) +
         '. Then tell the agent in its chat to continue. You can grant another loop later; there is no ceiling.',
       'Grant extra loop',
       'Extra loop granted',
       '?updated=' + encodeURIComponent(run.updated),
     );
+  /**
+   * @param {RunView[]} runs
+   * @param {string} message
+   * @param {boolean} [doneOnly]
+   */
   const removeRuns = async (runs, message, doneOnly = false) => {
     if (!(await ask(runs.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true))) return;
+    /** @type {string[]} */
     const failed = [];
     for (const run of runs) {
       try {
@@ -248,7 +288,7 @@ function App() {
     poll();
   };
 
-  const mergeRun = async (run) => {
+  const mergeRun = async (/** @type {RunView} */ run) => {
     let checks = 'GitHub checks: unavailable';
     try {
       const response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge-checks', { cache: 'no-store' });
@@ -332,6 +372,7 @@ function App() {
     document.title = (waiting ? '(' + waiting + ') ' : '') + (name ? name + ' · ' : '') + BRAND;
   }, [waiting, project]);
 
+  /** @type {Actions} */
   const actions = {
     select: (id) => {
       const selected = runs.find((run) => run.id === id);
@@ -385,4 +426,6 @@ function App() {
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;
 }
 
-render(html`<${App} />`, document.getElementById('app'));
+const root = document.getElementById('app');
+if (!root) throw new Error('index.html has no #app element');
+render(html`<${App} />`, root);

@@ -1,6 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
+/** @import { Run } from './run-record.js' */
 import { loopCap } from './run-record.js';
 
 // The event log of a Run (ADR 0021): append-only, one JSON object per line. It describes what happened and never feeds a gate or Evidence.
@@ -97,8 +98,8 @@ export function readEvents(dir) {
 
 // The events a change of the Run record stands for, found by comparing the record before and after, so no operation can forget one.
 /**
- * @param {Record<string, any>} old
- * @param {Record<string, any>} next
+ * @param {Run} old
+ * @param {Run} next
  */
 export function deriveEvents(old, next) {
   /** @type {Record<string, unknown>[]} */

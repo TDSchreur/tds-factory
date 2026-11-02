@@ -2,8 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+/** @import { AgentName } from './run-record.js' */
+/** @typedef {[string, string]} Result A check's status and message. */
+import { messageOf } from './narrow.js';
 import { ROOT, SKILLS_DIR, AGENTS_DIR } from './paths.js';
-import { targets, userDir } from './flow.js';
+import { targets, userDir, agentNames, isAgent } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
 import { verifyCommandProblem, fastCommandProblem, mergedLeftovers } from './run-store.js';
@@ -11,24 +14,33 @@ import { loadProjectConfig } from './project-config.js';
 import { guidesCheck } from './guides.js';
 
 // The project is not trusted: read only regular files (a link to one is fine) of sane size, never a device or a pipe.
+/** @param {string} file */
 const read = (file) => {
   const stat = fs.statSync(file);
   if (!stat.isFile()) throw new Error(`${path.basename(file)} is not a regular file`);
   if (stat.size > 1 << 20) throw new Error(`${path.basename(file)} is larger than 1 MiB`);
   return fs.readFileSync(file, 'utf8');
 };
+/** @param {string} projectDir */
 const conventionsFile = (projectDir) =>
   ['AGENTS.md', 'CLAUDE.md'].find((f) => fs.statSync(path.join(projectDir, f), { throwIfNoEntry: false })?.isFile());
 
+/** @returns {Result} */
 function cliCheck() {
   const { version, engines } = JSON.parse(read(path.join(ROOT, 'package.json')));
-  const need = Number(engines.node.match(/\d+/)[0]);
+  const major = engines?.node?.match?.(/\d+/)?.[0];
+  if (major === undefined) return ['fail', `tds-factory ${version} names no Node version in package.json engines.node`];
+  const need = Number(major);
   const have = Number(process.versions.node.split('.')[0]);
   return have < need
     ? ['fail', `tds-factory ${version} needs Node ${need} or newer, found ${process.versions.node}`]
     : ['pass', `tds-factory ${version} on Node ${process.versions.node}`];
 }
 
+/**
+ * @param {string} projectDir
+ * @returns {Result}
+ */
 function trackerCheck(projectDir) {
   const conventions = conventionsFile(projectDir);
   const missing = ['docs/agents/issue-tracker.md', 'docs/agents/domain.md'].filter(
@@ -42,7 +54,12 @@ function trackerCheck(projectDir) {
     : ['pass', 'issue tracker and domain docs are configured'];
 }
 
+/**
+ * @param {string} projectDir
+ * @returns {Result}
+ */
 function gitCheck(projectDir) {
+  /** @param {...string} args */
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   if (git('rev-parse', '--git-dir').status !== 0) return ['fail', 'not a git repository'];
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) return ['fail', 'the git repository has no commit'];
@@ -54,6 +71,10 @@ function gitCheck(projectDir) {
 }
 
 // The optional fast command under "## Commands": quick feedback while building, never Evidence. Absent is fine.
+/**
+ * @param {string} projectDir
+ * @returns {Result}
+ */
 function verifyFastCheck(projectDir) {
   const file = conventionsFile(projectDir);
   const commands =
@@ -69,6 +90,10 @@ function verifyFastCheck(projectDir) {
   return ['pass', `Verify-fast command: ${command.trim()}`];
 }
 
+/**
+ * @param {string} projectDir
+ * @returns {Result}
+ */
 function verifyCommandCheck(projectDir) {
   const file = conventionsFile(projectDir);
   const commands =
@@ -92,7 +117,18 @@ function verifyCommandCheck(projectDir) {
 // Every Skill the factory Skill invokes, found by the phrasing sync and the skills test rely on.
 const requiredSkills = () => ['factory', ...invokedByFactory(SKILLS_DIR)];
 // Copilot CLI also reads the Claude and Codex Skill folders, and the default install writes only those.
+/**
+ * @param {AgentName} agent
+ * @returns {AgentName[]}
+ */
 const skillTargets = (agent) => (agent === 'copilot' ? ['copilot', 'claude', 'codex'] : [agent]);
+/**
+ * @param {AgentName} agent
+ * @param {string} projectDir
+ * @param {string} homeDir
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {(name: string, file?: string) => boolean}
+ */
 const isInstalled =
   (agent, projectDir, homeDir, env) =>
   (name, file = 'SKILL.md') =>
@@ -100,6 +136,10 @@ const isInstalled =
       .flatMap((a) => [path.join(projectDir, targets[a].project), userDir(a, 'global', homeDir, env)])
       .some((dir) => fs.existsSync(path.join(dir, name, file)));
 
+/**
+ * @param {(name: string, file?: string) => boolean} has
+ * @returns {Result}
+ */
 function skillsCheck(has) {
   const missing = requiredSkills().filter((name) => !has(name));
   if (missing.length) return ['fail', `required Skills not installed: ${missing.join(', ')}`];
@@ -112,13 +152,21 @@ function skillsCheck(has) {
 }
 
 // Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.
+/**
+ * @param {AgentName} agent
+ * @param {string} projectDir
+ * @param {string} homeDir
+ * @param {(name: string, file?: string) => boolean} has
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {Result}
+ */
 function reviewCheck(agent, projectDir, homeDir, has, env) {
   const { reviews } = loadProjectConfig(projectDir, agent, homeDir, env);
   const missing = ['code-review', 'security-scan'].filter((name) => !has(name));
   const file = fs.readdirSync(path.join(AGENTS_DIR, agent)).find((f) => f.startsWith('factory-check.'));
   const agentDirs = [path.join(projectDir, targets[agent].projectAgents), userDir(agent, 'agents', homeDir, env)];
-  if (!agentDirs.some((dir) => fs.existsSync(path.join(dir, file))))
-    missing.push(`the factory-check Stage agent (${file})`);
+  if (!file || !agentDirs.some((dir) => fs.existsSync(path.join(dir, file))))
+    missing.push(`the factory-check Stage agent (${file ?? 'factory-check.*'})`);
   if (reviews.some((review) => review.mode === 'interactive')) {
     const interactive = fs
       .readdirSync(path.join(AGENTS_DIR, agent))
@@ -132,6 +180,13 @@ function reviewCheck(agent, projectDir, homeDir, has, env) {
 }
 
 // A project's .factory/config.json is optional; when present, a bad value is named with its line so it can be fixed before a Run freezes it.
+/**
+ * @param {AgentName} agent
+ * @param {string} projectDir
+ * @param {string} homeDir
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {Result}
+ */
 function configCheck(agent, projectDir, homeDir, env) {
   const config = loadProjectConfig(projectDir, agent, homeDir, env);
   const file = path.join(projectDir, '.factory', 'config.json');
@@ -147,7 +202,11 @@ function configCheck(agent, projectDir, homeDir, env) {
 }
 
 // On Windows a command is found with any of the PATHEXT extensions (npm.cmd, claude.exe).
-function which(name, cwd) {
+/**
+ * @param {string} name
+ * @param {string} [cwd]
+ */
+function which(name, cwd = process.cwd()) {
   if (name.includes('/') || (process.platform === 'win32' && name.includes('\\')))
     return fs.existsSync(path.resolve(cwd, name));
   const extensions =
@@ -162,45 +221,62 @@ function which(name, cwd) {
 const NO_AGENT = 'no agent is usable: install claude, codex or copilot and run tds-factory install';
 
 // The command an Agent target is started with is its name.
+/**
+ * @param {string} agent
+ * @returns {Result}
+ */
 function binaryCheck(agent) {
   return which(agent) ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
 }
 
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
 // Without `agent` every Agent target is reported and one usable target is enough; with `agent` only that target is, and its command need not be on PATH.
+/**
+ * @param {object} options
+ * @param {string} options.projectDir
+ * @param {string} [options.agent]
+ * @param {string} [options.homeDir]
+ * @param {import('./run-clean.js').PrLookup} [options.prState]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ */
 export function doctor({ projectDir, agent, homeDir = os.homedir(), prState, env = process.env }) {
-  if (agent !== undefined && !Object.hasOwn(targets, agent))
-    throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
+  if (agent !== undefined && !isAgent(agent)) throw new Error(`unknown agent "${agent}" (${agentNames.join(', ')})`);
   // Git resolves the current worktree (including linked worktrees), not the shared main checkout.
   const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: projectDir, encoding: 'utf8' });
   const worktreeRoot = root.stdout?.replace(process.platform === 'win32' ? /\r?\n$/ : /\n$/, '');
   if (root.status === 0 && worktreeRoot) projectDir = worktreeRoot;
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
+  /** @param {[string, () => Result]} entry */
   const attempt = ([id, check]) => {
+    /** @type {Result} */
     let result;
     try {
       result = check();
     } catch (err) {
-      result = ['fail', err.message];
+      result = ['fail', messageOf(err)];
     }
     return { id, status: result[0], message: result[1] };
   };
-  const checks = [
+  /** @type {[string, () => Result][]} */
+  const planned = [
     ['cli', cliCheck],
     ['tracker', () => trackerCheck(projectDir)],
     ['git', () => gitCheck(projectDir)],
     ['verify-command', () => verifyCommandCheck(projectDir)],
     ['verify-fast', () => verifyFastCheck(projectDir)],
     ['guides', () => guidesCheck(projectDir)],
-  ].map(attempt);
-  const agents = (agent === undefined ? Object.keys(targets) : [agent]).map((id) => {
+  ];
+  const checks = planned.map(attempt);
+  const agents = (agent === undefined ? agentNames : [agent]).map((id) => {
     const has = isInstalled(id, projectDir, homeDir, env);
-    const list = [
+    /** @type {[string, () => Result][]} */
+    const perAgent = [
       ['binary', () => binaryCheck(id)],
       ['skills', () => skillsCheck(has)],
       ['config', () => configCheck(id, projectDir, homeDir, env)],
       ['review', () => reviewCheck(id, projectDir, homeDir, has, env)],
-    ].map(attempt);
+    ];
+    const list = perAgent.map(attempt);
     return { id, usable: list.every((c) => c.status === 'pass'), checks: list };
   });
   // The optional Verify-fast command is shown when unusable but never fails the report.

@@ -7,8 +7,10 @@ export const name = 'follow-up';
 export const description =
   'A published PR has a failing check and an unresolved review thread at the last available Rework.';
 const PR = 'https://github.com/eval/fixture/pull/7';
+/** @param {unknown[]} nodes */
 const page = (nodes) => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const { id, wt } = runAt(fx, 'check');
   for (let i = 0; i < 3; i++) {
@@ -86,6 +88,7 @@ export function setup(fx) {
   };
 }
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => {
   const r = a.run.record,
     scope = r.follow_up;

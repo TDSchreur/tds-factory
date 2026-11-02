@@ -3,6 +3,11 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readRun } from './run-folder.js';
 
+/**
+ * @typedef {{ file: string, line: number, text: string, changed: boolean, code: boolean }} Hit
+ * @typedef {ReturnType<typeof sweepRun>} SweepReport
+ */
+
 // Read-only: lists where the terms a Run changed still occur in the documents, so a stale statement is found while building.
 const MAX_TERMS = 25;
 const MAX_GONE = 15;
@@ -24,9 +29,14 @@ const DOC_DIRS = ['docs', 'skills', 'agents', 'changelog.d'];
 const CODE_FILES = ['bin/tds-factory.js', 'dashboard/help.js'];
 const REPLACED_NOTE = /^[_>].*\b(?:replaced|changed|superseded) by\b/im;
 // Newlines and tabs go too: a file name with a newline must not be able to add a line of its own.
+/** @param {string} text */
 const clean = (text) =>
   text.replace(/\t/g, ' ').replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?');
 
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const git = (cwd, ...args) => {
   const out = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   if (out.status !== 0) throw new Error(`git ${args[0]} failed: ${(out.stderr || out.error?.message || '').trim()}`);
@@ -37,6 +47,7 @@ const NUMBER =
   /(?<![\w.])\d+(?:[.,]\d+)?(?: ?%| ?(?:KB|MB|GB|bytes?|files?|loops?|lines?|characters?|chars|seconds?|minutes?|ms|times|Tickets?|axes|steps?|passes|Reworks?)\b)/gi;
 const MAX_HEADING_LINE = 200;
 // No regular expression over the whole line: a long run of spaces would make a trailing-space pattern quadratic, so long lines are skipped first.
+/** @param {string} text */
 const headingOf = (text) => {
   if (text.length > MAX_HEADING_LINE) return null;
   const marks = /^#{1,6}[ \t]+/.exec(text);
@@ -48,6 +59,7 @@ const headingOf = (text) => {
     .trim();
   return title.length >= 2 && title.length <= 60 ? title : null;
 };
+/** @param {string} text */
 const slug = (text) =>
   text
     .toLowerCase()
@@ -56,12 +68,15 @@ const slug = (text) =>
     .replace(/ /g, '-');
 
 // Numbers with a unit and headings that only the removed lines hold: a changed cap or a moved section leaves these behind in other documents.
+/** @param {string} diff */
 function goneTerms(diff) {
+  /** @type {Record<string, Map<string, string>>} */
   const side = { '-': new Map(), '+': new Map() };
   for (const line of diff.split('\n')) {
     const mark = line[0];
     if (!side[mark] || line.startsWith('+++') || line.startsWith('---')) continue;
     const text = line.slice(1);
+    /** @param {string} term */
     const put = (term) => {
       const key = term.toLowerCase();
       if (!side[mark].has(key)) side[mark].set(key, term);
@@ -80,11 +95,15 @@ function goneTerms(diff) {
     .slice(0, MAX_GONE);
 }
 
+/** @param {string} text */
 const tokens = (text) => [...text.matchAll(/`([^`\n]{1,40})`/g)].slice(0, MAX_TOKENS).map((m) => m[1]);
 
 // Added and removed lines per file, so a member added to a list and the lines that claim something can be told apart.
+/** @param {string} diff */
 function changedLines(diff) {
+  /** @type {Map<string, { added: string[], removed: string[] }>} */
   const files = new Map();
+  /** @type {string | null} */
   let file = null,
     header = false;
   // Only a line between `diff --git` and the first `@@` is a file header; the same text in a hunk is content.
@@ -104,23 +123,30 @@ function changedLines(diff) {
       continue;
     }
     if (!file) continue;
-    if (line[0] === '+') files.get(file).added.push(line.slice(1));
-    else if (line[0] === '-') files.get(file).removed.push(line.slice(1));
+    const entry = files.get(file);
+    if (!entry) continue;
+    if (line[0] === '+') entry.added.push(line.slice(1));
+    else if (line[0] === '-') entry.removed.push(line.slice(1));
   }
   return files;
 }
 
 // A list is a line with at least three backticked names. A member only the added (or only the removed) lines of a file hold is the change; its siblings are the other names on that line.
+/** @param {Map<string, { added: string[], removed: string[] }>} files */
 function listChanges(files) {
+  /** @type {Map<string, { member: string, kind: string, siblings: Set<string> }>} */
   const found = new Map();
   for (const { added, removed } of files.values()) {
+    /** @param {string[]} lines */
     const had = (lines) => new Set(lines.flatMap(tokens));
     const before = had(removed),
       after = had(added);
-    for (const [lines, other, kind] of [
+    /** @type {[string[], Set<string>, string][]} */
+    const sides = [
       [added, before, 'added'],
       [removed, after, 'removed'],
-    ]) {
+    ];
+    for (const [lines, other, kind] of sides) {
       for (const line of lines) {
         const names = tokens(line);
         if (names.length < 3) continue;
@@ -139,8 +165,11 @@ function listChanges(files) {
 }
 
 // Backticked terms, --flags, quoted phrases, snake_case and camelCase identifiers on the added and removed lines, most frequent first.
+/** @param {string} diff */
 function termsFromDiff(diff) {
+  /** @type {Map<string, { term: string, n: number, order: number }>} */
   const counts = new Map();
+  /** @param {string} raw */
   const add = (raw) => {
     const term = raw.trim();
     if (term.length < 3 || term.endsWith('/')) return;
@@ -165,8 +194,11 @@ function termsFromDiff(diff) {
 }
 
 // The documents the sweep reads: regular Markdown and TOML files of sane size, never links, and the two code files that hold help text.
+/** @param {string} root */
 function documents(root) {
+  /** @type {{ file: string, code: boolean }[]} */
   const found = [];
+  /** @param {string} file @param {boolean} [code] */
   const take = (file, code = false) => {
     // A code file sits in a folder of the Run worktree; a linked folder would lead out of it.
     if (code && !fs.lstatSync(path.dirname(file), { throwIfNoEntry: false })?.isDirectory()) return;
@@ -174,6 +206,7 @@ function documents(root) {
     if (!stat || !stat.isFile() || stat.size >= MAX_FILE || !(code || /\.(md|toml)$/.test(file))) return;
     found.push({ file, code });
   };
+  /** @param {string} dir */
   const walk = (dir) => {
     const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
     if (!stat || !stat.isDirectory()) return;
@@ -190,15 +223,21 @@ function documents(root) {
   return found.sort((a, b) => a.file.localeCompare(b.file));
 }
 
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {string[]} [extra] Terms given with --term.
+ */
 export function sweepRun(projectDir, id, extra = []) {
   const { record } = readRun(projectDir, id);
   const root = record.worktree;
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
-  if (!/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) throw new Error('the Run has no usable base commit');
+  const base = record.base_sha;
+  if (!base || !/^[0-9a-f]{40,64}$/.test(base)) throw new Error('the Run has no usable base commit');
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
-  const diff = git(root, 'diff', ...plain, record.base_sha, '--');
+  const diff = git(root, 'diff', ...plain, base, '--');
   const changed = new Set(
-    git(root, 'diff', ...plain, '-z', '--name-only', record.base_sha, '--')
+    git(root, 'diff', ...plain, '-z', '--name-only', base, '--')
       .split('\0')
       .filter(Boolean),
   );
@@ -218,6 +257,7 @@ export function sweepRun(projectDir, id, extra = []) {
   });
   const results = terms.map((term) => {
     const needle = term.toLowerCase();
+    /** @type {{ current: Hit[], replaced: Hit[] }} */
     const hits = { current: [], replaced: [] };
     for (const f of files)
       f.lines.forEach((text, i) => {
@@ -236,6 +276,7 @@ export function sweepRun(projectDir, id, extra = []) {
   const lists = listChanges(byFile)
     .map(({ member, kind, siblings }) => {
       const names = [...siblings];
+      /** @type {Omit<Hit, 'code'>[]} */
       const hits = [];
       for (const f of files) {
         if (f.replaced || f.code) continue;
@@ -248,6 +289,7 @@ export function sweepRun(projectDir, id, extra = []) {
       return { member, kind, siblings: names, hits };
     })
     .filter((x) => x.hits.length);
+  /** @type {{ file: string, text: string }[]} */
   const claims = [];
   for (const [file, { added }] of byFile) {
     if (/(^|\/)tests?\//.test(file)) continue;
@@ -255,8 +297,11 @@ export function sweepRun(projectDir, id, extra = []) {
       if (text.length < 4000 && CLAIM.test(text) && claims.length < MAX_CLAIMS) claims.push({ file, text });
   }
   // The documents still to read: current documents the Run did not change, with the distinct lines that hold a shown term or a list hit.
+  /** @type {Map<string, Set<number>>} */
   const lines = new Map();
+  /** @type {Set<string>} */
   const code = new Set();
+  /** @param {{ file: string, line: number, changed: boolean, code?: boolean }} hit */
   const note = (hit) => {
     if (hit.changed) return;
     if (hit.code) code.add(hit.file);
@@ -281,6 +326,7 @@ export function sweepRun(projectDir, id, extra = []) {
 }
 
 // The closing list, also printed alone by `run sweep --files`, so a reader who cuts the long output still sees the files.
+/** @param {SweepReport} report */
 function formatToRead(report) {
   const out = ['== documents to read (not changed in this Run)'];
   if (!report.toRead.length) return [...out, '  no other document holds a changed term'];
@@ -290,6 +336,10 @@ function formatToRead(report) {
   return out;
 }
 
+/**
+ * @param {SweepReport} report
+ * @param {{ filesOnly?: boolean }} [options]
+ */
 export function formatSweep(report, { filesOnly = false } = {}) {
   if (filesOnly) return formatToRead(report).join('\n');
   const out = [
@@ -301,6 +351,7 @@ export function formatSweep(report, { filesOnly = false } = {}) {
   }
   let budget = TOTAL,
     cut = 0;
+  /** @param {{ file: string, line: number, text: string, changed: boolean, code?: boolean }[]} hits @param {number} perTerm */
   const show = (hits, perTerm) => {
     const take = hits.slice(0, Math.max(0, Math.min(perTerm, budget)));
     budget -= take.length;

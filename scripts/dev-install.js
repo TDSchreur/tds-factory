@@ -41,6 +41,7 @@ const DEV_SKILLS = [
 ];
 const SKILL_TARGETS = ['.claude/skills', '.agents/skills'];
 // Claude Code reads ~/.claude, or the folder CLAUDE_CONFIG_DIR names when that is non-empty (same rule as src/flow.js).
+/** @param {string} target */
 const userRoot = (target) =>
   target === '.claude/skills' && process.env.CLAUDE_CONFIG_DIR
     ? path.join(path.resolve(process.env.CLAUDE_CONFIG_DIR), 'skills')
@@ -58,16 +59,33 @@ const dryRun = args.includes('--dry-run');
 const skipDevSkills = args.includes('--skip-dev-skills');
 const win = process.platform === 'win32';
 
+/** @param {string} [msg] */
 const say = (msg = '') => console.log(msg);
+/** @param {string} msg */
 const info = (msg) => console.log(`  ${msg}`);
+/** @param {string} msg */
 const warn = (msg) => console.warn(`  warning: ${msg}`);
+// This script runs on its own, copied or not, so it imports nothing from src/.
+/** @param {unknown} err */
+const messageOf = (err) => (err instanceof Error ? err.message : String(err));
+/** @param {unknown} text */
 const first = (text) =>
   String(text ?? '')
     .trim()
     .split('\n')[0];
 // On Windows npm and tds-factory are .cmd shims, which need a shell.
+/**
+ * @param {string} cwd
+ * @param {import('node:child_process').StdioOptions} stdio
+ * @returns {import('node:child_process').SpawnSyncOptionsWithStringEncoding}
+ */
 const spawnOpts = (cwd, stdio) => ({ cwd, stdio, encoding: 'utf8', shell: win });
 
+/**
+ * @param {string} cmd
+ * @param {string[]} cmdArgs
+ * @param {string} [cwd]
+ */
 function capture(cmd, cmdArgs, cwd = root) {
   const r = spawnSync(cmd, cmdArgs, spawnOpts(cwd, ['ignore', 'pipe', 'pipe']));
   if (r.error) throw new Error(`${cmd} is not available: ${r.error.message}`);
@@ -76,6 +94,11 @@ function capture(cmd, cmdArgs, cwd = root) {
   return r.stdout.trim();
 }
 
+/**
+ * @param {string} cmd
+ * @param {string[]} cmdArgs
+ * @param {string} [cwd]
+ */
 function stream(cmd, cmdArgs, cwd = root) {
   info(`$ ${cmd} ${cmdArgs.join(' ')}`);
   if (dryRun) return;
@@ -84,9 +107,15 @@ function stream(cmd, cmdArgs, cwd = root) {
   if (r.status !== 0) throw new Error(`${cmd} ${cmdArgs.join(' ')} failed (${r.signal ?? `exit ${r.status}`})`);
 }
 
+/** @type {{ title: string, status: string, detail?: string }[]} */
 const results = [];
 let n = 0;
 // Runs one step; a throw marks it failed (or warned) and the step returns false so dependants can be skipped.
+/**
+ * @param {string} title
+ * @param {() => unknown} fn
+ * @param {{ warnOnly?: boolean }} [options]
+ */
 function step(title, fn, { warnOnly = false } = {}) {
   say(`\n[${++n}] ${title}`);
   try {
@@ -94,11 +123,15 @@ function step(title, fn, { warnOnly = false } = {}) {
     results.push({ title, status: 'ok' });
     return true;
   } catch (err) {
-    console.error(`  ${warnOnly ? 'warning' : 'error'}: ${first(err.message)}`);
-    results.push({ title, status: warnOnly ? 'warned' : 'failed', detail: first(err.message) });
+    console.error(`  ${warnOnly ? 'warning' : 'error'}: ${first(messageOf(err))}`);
+    results.push({ title, status: warnOnly ? 'warned' : 'failed', detail: first(messageOf(err)) });
     return false;
   }
 }
+/**
+ * @param {string} title
+ * @param {string} why
+ */
 function skip(title, why) {
   say(`\n[${++n}] ${title}`);
   info(`skipped: ${why}`);
@@ -191,6 +224,7 @@ else if (!tools) skip('Register the developer skills', 'the tool check failed');
 else
   step('Register the developer skills', () => {
     if (!submodulesOk) warn('the submodules were not initialised; skills missing from vendor/ will fail');
+    /** @type {string[]} */
     const problems = [];
     for (const skill of DEV_SKILLS) {
       const src = path.join(root, skill);
@@ -217,7 +251,7 @@ else
           }
           info(`${dryRun ? 'would install' : 'installed'} ${target}/${name}${stat ? ' (replaced)' : ''}`);
         } catch (err) {
-          problems.push(`${target}/${name}: ${first(err.message)}`);
+          problems.push(`${target}/${name}: ${first(messageOf(err))}`);
         }
       }
     }

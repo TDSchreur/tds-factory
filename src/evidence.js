@@ -2,9 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+/** @import { Run, Axis, Verify } from './run-record.js' */
+import { messageOf } from './narrow.js';
 import { reviewPlan } from './project-reviews.js';
 import {
   verdicts,
+  isAxis,
   skippable,
   trackOf,
   apply,
@@ -21,9 +24,14 @@ import { appendEvent } from './run-events.js';
 
 // The one list of current Evidence: the fields finishProblems reads. Everything a transition has to forget when the code
 // under review changes lives here, so a new Evidence field is added in one place. Historical metrics are not Evidence (ADR 0013).
+/** @type {(keyof Run)[]} */
 const evidenceKeys = [...verdicts, 'verify', 'reviewed', 'accepted', 'project_results'];
 
 // A copy of the record without its current Evidence. Run sync and both Reworks use it; other fields stay as they are.
+/**
+ * @param {Run} record
+ * @returns {Run}
+ */
 export function clearEvidence(record) {
   const next = { ...record };
   for (const key of evidenceKeys) delete next[key];
@@ -31,6 +39,11 @@ export function clearEvidence(record) {
 }
 
 // Why a Run in Check may not go to Finish: empty when its Check is clean for the current head, or Accepted for it.
+/**
+ * @param {Run} record
+ * @param {{ head: string, dirty: boolean }} [state]
+ * @returns {string[]}
+ */
 export function finishProblems(record, { head, dirty } = worktreeState(record)) {
   if (dirty) return ['the Run worktree has uncommitted changes'];
   if (record.accepted?.head === head) return [];
@@ -74,6 +87,7 @@ export function finishProblems(record, { head, dirty } = worktreeState(record)) 
 }
 
 // The finish event of a Verify run, with how long it took.
+/** @param {Verify} r */
 const verifyEvent = (r) => ({
   type: 'verify',
   fast: r.fast === true,
@@ -85,6 +99,11 @@ const verifyEvent = (r) => ({
 
 // Runs the Run's fast Verify command in its worktree. It is quick feedback while building and never Evidence:
 // nothing is recorded in the Run record (only the Event log), and the Run keeps no Verify result from it.
+/**
+ * @param {string} dir
+ * @param {Run} record
+ * @returns {Verify}
+ */
 function verifyFast(dir, record) {
   if (!record.fast_commands)
     throw new Error('no fast Verify command: the Run has none; run verify --id <id> for the full Verify');
@@ -120,20 +139,28 @@ function verifyFast(dir, record) {
 }
 
 // Runs the Verify command outside the Run lock, since it can take minutes, and records the result under it.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ fast?: boolean }} [options]
+ * @returns {Verify}
+ */
 export function verifyRun(projectDir, id, { fast = false } = {}) {
   const { dir, record } = readRun(projectDir, id);
   if (record.status !== 'running') throw new Error(`a ${record.status} Run cannot be verified, only a running one`);
   if (fast) return verifyFast(dir, record);
-  const commandProblem = verifyCommandProblem(record.commands);
-  if (commandProblem) throw new Error(`the Run has no usable Verify command: ${commandProblem}`);
+  const commands = record.commands;
+  const commandProblem = verifyCommandProblem(commands);
+  if (commandProblem || typeof commands !== 'string')
+    throw new Error(`the Run has no usable Verify command: ${commandProblem ?? 'none is recorded'}`);
   let state;
   try {
     state = worktreeState(record);
   } catch (err) {
     changeRun(projectDir, id, (old) => {
-      if (old.status !== 'running' || old.commands !== record.commands || loops(old) !== loops(record))
+      if (old.status !== 'running' || old.commands !== commands || loops(old) !== loops(record))
         throw new Error('the Run changed while verification was prepared');
-      const next = apply(old, { status: 'verification-unavailable', status_reason: err.message });
+      const next = apply(old, { status: 'verification-unavailable', status_reason: messageOf(err) });
       delete next.verify;
       return next;
     });
@@ -141,21 +168,24 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   }
   const { head, dirty } = state;
   const started = new Date().toISOString();
-  appendEvent(dir, { type: 'verify-start', fast: false, command: record.commands });
+  appendEvent(dir, { type: 'verify-start', fast: false, command: commands });
   // Replace rather than reuse the log, so a planted link is never written through.
   const log = path.join(dir, 'verify.log');
   fs.rmSync(log, { force: true });
   const fd = fs.openSync(log, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
   let ran;
   try {
-    ran = spawnSync(record.commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] });
+    ran = spawnSync(commands, { cwd: record.worktree, shell: true, stdio: ['ignore', fd, fd] });
   } finally {
     fs.closeSync(fd);
   }
   const output = fs.readFileSync(log, 'utf8');
   const unavailable =
     ran.error ||
-    ([126, 127].includes(ran.status) && /(?:not found|not recognized|permission denied|cannot execute)/i.test(output));
+    (ran.status !== null &&
+      [126, 127].includes(ran.status) &&
+      /(?:not found|not recognized|permission denied|cannot execute)/i.test(output));
+  /** @type {{ status: import('./run-record.js').Status, status_reason: string } | null} */
   const pause = ran.signal
     ? { status: 'interrupted', status_reason: `Verify interrupted by ${ran.signal}` }
     : unavailable
@@ -165,7 +195,7 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
         }
       : null;
   const result = {
-    command: record.commands,
+    command: commands,
     cwd: record.worktree,
     head,
     dirty,
@@ -177,7 +207,7 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   };
   appendEvent(dir, verifyEvent(result));
   changeRun(projectDir, id, (old) => {
-    if (old.status !== 'running' || old.commands !== record.commands || loops(old) !== loops(record))
+    if (old.status !== 'running' || old.commands !== commands || loops(old) !== loops(record))
       throw new Error('the Run changed while the Verify command ran, so its result was not recorded');
     return {
       ...old,
@@ -190,22 +220,32 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
 }
 // A Rework keeps a Security or Infrastructure verdict only for a text-only change: see ADR 0019.
 // The allowed files are an allowlist: Markdown documents that carry no instructions for agents or code.
+/** @type {Axis[]} */
 const carriable = ['security', 'infrastructure'];
 // A path is never text-only if an agent could load it as instructions: hidden folders, folders named like agent or Skill folders at any depth, and instruction file names.
+/** @param {string} name */
 const instruction = (name) => {
   const parts = name.split('/');
   return (
     parts.some((part) => part.startsWith('.') || /^(?:agents|skills|commands|prompts|instructions)$/i.test(part)) ||
     /^(?:agents?|claude|gemini|skills?|copilot-instructions)(?:\.[^/]+)?\.md$|\.(?:agent|prompt|instructions|chatmode)\.md$/i.test(
-      parts.at(-1),
+      parts.at(-1) ?? '',
     )
   );
 };
+/** @param {string} name */
 const textOnly = (name) =>
   !instruction(name) &&
   (/^docs\/[^\0\n]+\.md$/.test(name) ||
     /^changelog\.d\/[^/\0\n]+\.md$/.test(name) ||
     /^(?:README|GLOSSARY|CONTRIBUTING|SECURITY)\.md$/.test(name));
+/**
+ * @param {Run} record
+ * @param {Axis} axis
+ * @param {string} value
+ * @param {string} head
+ * @param {string} worktree
+ */
 function carriedFrom(record, axis, value, head, worktree) {
   if (!carriable.includes(axis))
     throw new Error('only security and infrastructure verdicts can be carried over; review the other axes again');
@@ -220,12 +260,14 @@ function carriedFrom(record, axis, value, head, worktree) {
     .reverse()
     .find((event) => event.axis === axis && event.head && event.head !== head);
   if (!earlier) throw new Error(`there is no earlier ${axis} verdict to carry over; review the axis`);
-  if (!/^[0-9a-f]{40,64}$/.test(earlier.head))
+  const earlierHead = earlier.head;
+  if (!earlierHead || !/^[0-9a-f]{40,64}$/.test(earlierHead))
     throw new Error(`the earlier ${axis} verdict has no usable head; review the axis`);
   if (earlier.value !== value)
     throw new Error(`the earlier ${axis} verdict was ${earlier.value}; a carried verdict needs the same value`);
+  /** @param {...string} args */
   const git = (...args) => spawnSync('git', args, { cwd: worktree, encoding: 'utf8' });
-  if (git('merge-base', '--is-ancestor', earlier.head, head).status !== 0)
+  if (git('merge-base', '--is-ancestor', earlierHead, head).status !== 0)
     throw new Error(
       `the earlier ${axis} head is not an ancestor of the current head (the branch was rebased or rewritten); review the axis`,
     );
@@ -237,7 +279,7 @@ function carriedFrom(record, axis, value, head, worktree) {
     '--no-renames',
     '--no-ext-diff',
     '--ignore-submodules=none',
-    earlier.head,
+    earlierHead,
     head,
   );
   if (diff.status !== 0)
@@ -248,6 +290,7 @@ function carriedFrom(record, axis, value, head, worktree) {
     parts.some((part, i) => i % 2 === 0 && !/^:\d{6} \d{6} [0-9a-f]+ [0-9a-f]+ [AMDT]$/.test(part))
   )
     throw new Error(`cannot read the changes since the earlier ${axis} head; review the axis`);
+  /** @type {string[]} */
   const refused = [];
   for (let i = 0; i + 1 < parts.length; i += 2) {
     const [oldMode, newMode] = parts[i].slice(1).split(' ');
@@ -258,11 +301,20 @@ function carriedFrom(record, axis, value, head, worktree) {
     throw new Error(
       `a carried verdict needs a text-only Rework (plain documents only, never code, tests, Skills, agents, instruction files, hidden files or links); these changed since the earlier ${axis} verdict: ${refused.slice(0, 10).join(', ')}${refused.length > 10 ? ', ...' : ''}`,
     );
-  return earlier.head;
+  return earlierHead;
 }
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {string | undefined} axis
+ * @param {string | undefined} value
+ * @param {{ carried?: boolean }} [options]
+ */
 export function verdictRun(projectDir, id, axis, value, { carried = false } = {}) {
-  if (!verdicts.includes(axis)) throw new Error(`unknown Check axis: ${axis}`);
+  if (!isAxis(axis)) throw new Error(`unknown Check axis: ${axis}`);
   validate({ [axis]: value });
+  // validate has refused anything but a verdict; this narrows the type for the code below.
+  if (typeof value !== 'string') throw new Error(`${axis} needs a verdict`);
   changeRunning(projectDir, id, {}, (old) => {
     if (old.stage !== 'check') throw new Error('verdicts are recorded in Check');
     if (value === 'skipped' && !skippable(axis, old))
@@ -283,6 +335,10 @@ export function verdictRun(projectDir, id, axis, value, { carried = false } = {}
 }
 
 // Resolve artifacts only within the Run folder, refusing links and changed evidence.
+/**
+ * @param {Run} record
+ * @param {unknown} item
+ */
 function evidenceHash(record, item) {
   if (
     typeof item !== 'string' ||
@@ -304,12 +360,19 @@ function evidenceHash(record, item) {
 
 // Record a structured project review at the current head and attempt. Browser artifacts live
 // under the Run folder so screenshots do not dirty the implementation worktree.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {string | undefined} axis
+ * @param {any} data The report as the agent gave it: untrusted JSON, checked field by field below.
+ */
 export function projectReviewRun(projectDir, id, axis, data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('review needs a report object');
   if (Object.keys(data).some((k) => !['verdict', 'inspected', 'findings', 'evidence'].includes(k)))
     throw new Error('unknown review report field');
   if (!['pass', 'fail', 'skipped'].includes(data.verdict))
     throw new Error('review verdict must be pass, fail or skipped');
+  /** @param {unknown} value */
   const isText = (value) => typeof value === 'string' && !!value.trim() && !/[\x00-\x1f\x7f]/.test(value);
   if (data.verdict !== 'skipped') {
     if (!Array.isArray(data.inspected) || !data.inspected.length || !data.inspected.every(isText))
@@ -317,7 +380,7 @@ export function projectReviewRun(projectDir, id, axis, data) {
     if (
       !Array.isArray(data.findings) ||
       data.findings.some(
-        (f) =>
+        (/** @type {any} */ f) =>
           !f ||
           typeof f !== 'object' ||
           Array.isArray(f) ||
@@ -328,7 +391,10 @@ export function projectReviewRun(projectDir, id, axis, data) {
       )
     )
       throw new Error('each finding needs severity, description and location');
-    if (data.verdict === 'pass' && data.findings.some((f) => ['CRITICAL', 'HIGH', 'MEDIUM'].includes(f.severity)))
+    if (
+      data.verdict === 'pass' &&
+      data.findings.some((/** @type {any} */ f) => ['CRITICAL', 'HIGH', 'MEDIUM'].includes(f.severity))
+    )
       throw new Error('a review with medium-or-higher findings cannot pass');
     if (data.evidence !== undefined && (!Array.isArray(data.evidence) || !data.evidence.every(isText)))
       throw new Error('evidence must be an array of Run-relative artifact paths');
@@ -341,11 +407,14 @@ export function projectReviewRun(projectDir, id, axis, data) {
     if (data.verdict !== 'fail' && dirty)
       throw new Error('cannot record a passing or skipped review with uncommitted changes');
     const plan = reviewPlan(old).find((r) => r.id === axis);
+    if (!plan) throw new Error(`unknown project review: ${axis}`);
     if (data.verdict === 'skipped' && plan.applicable) throw new Error(`${axis} is applicable and cannot be skipped`);
     if (data.verdict !== 'skipped' && !plan.applicable) throw new Error(`${axis} is not applicable; record skipped`);
     if (review.mode === 'interactive' && data.verdict === 'pass' && !data.evidence?.length)
       throw new Error(`${axis} needs browser evidence to pass`);
-    const evidenceHashes = Object.fromEntries((data.evidence ?? []).map((item) => [item, evidenceHash(old, item)]));
+    const evidenceHashes = Object.fromEntries(
+      (data.evidence ?? []).map((/** @type {string} */ item) => [item, evidenceHash(old, item)]),
+    );
     const result = {
       ...data,
       ...(data.evidence?.length ? { evidence_hashes: evidenceHashes } : {}),
@@ -356,8 +425,8 @@ export function projectReviewRun(projectDir, id, axis, data) {
     };
     return {
       record: recordVerdict(
-        { ...old, project_results: { ...old.project_results, [axis]: result } },
-        { axis, value: data.verdict, head, base_sha: old.base_sha, attempt: attempt(old) },
+        { ...old, project_results: { ...old.project_results, [review.id]: result } },
+        { axis: review.id, value: data.verdict, head, base_sha: old.base_sha, attempt: attempt(old) },
       ),
       activity: `${axis} verdict: ${data.verdict}`,
     };
@@ -365,6 +434,11 @@ export function projectReviewRun(projectDir, id, axis, data) {
 }
 
 // Materialize only captured files into a new private folder; never execute the live Skill.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {string | undefined} axis
+ */
 export function materializeReview(projectDir, id, axis) {
   const { dir, record } = readRun(projectDir, id);
   const review = (record.project_reviews ?? []).find((r) => r.id === axis);

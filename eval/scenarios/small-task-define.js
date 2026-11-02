@@ -9,6 +9,7 @@ export const fixture = {
     "node --input-type=module -e \"import { greet } from './greet.js'; if (greet('Ada') !== 'Hello, Ada!') process.exit(1)\"",
 };
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const id = startRun(fx, 'Add the exclamation mark');
   return {
@@ -17,6 +18,7 @@ export function setup(fx) {
 }
 
 // Seconds since the epoch of the first Run commit that touches the file, or undefined.
+/** @param {import('../lib/artifacts.js').Artifacts} a @param {string} file */
 const firstCommit = (a, file) => {
   const out = execFileSync('git', ['log', '--reverse', '--format=%ct', `${a.run.record.base_sha}..HEAD`, '--', file], {
     cwd: a.worktree,
@@ -25,17 +27,21 @@ const firstCommit = (a, file) => {
   return out ? Number(out) : undefined;
 };
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => {
   const r = a.run.record;
   const build = (r.metrics?.visits ?? []).find((v) => v.stage === 'build');
   const coded = firstCommit(a, 'greet.js');
   return [
-    ['the Spec is a file in docs/specs', a.specs.length > 0 && Boolean(r.spec_link) && !/^https?:/.test(r.spec_link)],
-    ['at least one Ticket was recorded', (r.tickets?.length ?? 0) > 0 && r.tickets_total > 0],
-    ['the Run left Define through the Run store', Boolean(build)],
+    [
+      'the Spec is a file in docs/specs',
+      a.specs.length > 0 && Boolean(r.spec_link) && !/^https?:/.test(r.spec_link ?? ''),
+    ],
+    ['at least one Ticket was recorded', (r.tickets?.length ?? 0) > 0 && (r.tickets_total ?? 0) > 0],
+    ['the Run left Define through the Run store', !!build],
     [
       'the code was committed only after Build started, if at all',
-      coded === undefined || (Boolean(build) && coded >= Math.floor(Date.parse(build.started) / 1000)),
+      coded === undefined || (!!build && coded >= Math.floor(Date.parse(build.started) / 1000)),
     ],
   ];
 };

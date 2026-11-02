@@ -11,6 +11,7 @@ import { syncRules } from '../src/rules.js';
 import { startDashboard } from '../src/dashboard.js';
 import { doctor } from '../src/doctor.js';
 import { update } from '../src/update.js';
+import { messageOf } from '../src/narrow.js';
 
 const USAGE = `Usage:
   tds-factory --version
@@ -105,6 +106,10 @@ try {
     } else if (op === 'stats') {
       if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
       const report = await store.stats(values.id);
+      /**
+       * @param {string} label
+       * @param {import('../src/run-metrics.js').MetricsSummary} summary
+       */
       const print = (label, summary) => {
         const formatted = formatMetrics(summary);
         console.log(
@@ -120,7 +125,7 @@ try {
       for (const run of report.runs) {
         const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
         if (run.unreadable) console.log(`${name}: unreadable (no data)`);
-        else print(name, run.summary);
+        else if (run.summary) print(name, run.summary);
       }
       if (values.all) {
         print('Total observed', report.total);
@@ -195,6 +200,7 @@ try {
   else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
   else if (command === 'doctor') {
     const report = doctor({ projectDir: process.cwd(), agent: values.agent });
+    /** @param {string} text */
     const clean = (text) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?');
     if (values.json) console.log(JSON.stringify(report, null, 2));
     else {
@@ -218,6 +224,6 @@ try {
     process.exitCode = command ? 1 : 0;
   }
 } catch (err) {
-  console.error(`error: ${String(err.message).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
+  console.error(`error: ${messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
   process.exitCode = 1;
 }

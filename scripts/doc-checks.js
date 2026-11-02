@@ -4,7 +4,14 @@ import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, posix } from 'node:path';
 import { MAX_CHECK_LOOPS } from '../src/run-store.js';
+import { execFailure } from '../src/narrow.js';
 
+/**
+ * @param {string} root
+ * @param {string} dir
+ * @param {(path: string) => boolean} [skip]
+ * @returns {string[]}
+ */
 const walk = (root, dir, skip = () => false) => {
   const full = join(root, dir);
   if (!existsSync(full)) return [];
@@ -19,6 +26,7 @@ const walk = (root, dir, skip = () => false) => {
 
 // Documentation that holds links. Archived Specs are history and the vendored upstream Skills have example links
 // that never resolve, so neither is checked.
+/** @param {string} root */
 function linkedDocs(root) {
   const loose = [
     'README.md',
@@ -34,8 +42,10 @@ function linkedDocs(root) {
 }
 
 // Prose without its code: fences and inline code show examples, not links or terms.
+/** @param {string} text */
 const withoutCode = (text) => text.replace(/(```|~~~)[\s\S]*?\1/g, '').replace(/(`+)[^`\n]+\1/g, '');
 
+/** @param {string} target */
 const decode = (target) => {
   try {
     return decodeURIComponent(target);
@@ -45,13 +55,15 @@ const decode = (target) => {
 };
 
 // Relative Markdown links whose target is missing. Code is not read, since it shows links as examples.
+/** @param {string} root */
 export function brokenLinks(root) {
+  /** @type {string[]} */
   const problems = [];
   for (const file of linkedDocs(root)) {
     for (const [, angled, plain] of withoutCode(readFileSync(join(root, file), 'utf8')).matchAll(
       /\]\(\s*(?:<([^>#]+)[^>]*>|([^)#\s<>]+))[^)]*\)/g,
     )) {
-      const target = angled ?? plain;
+      const target = angled ?? plain ?? '';
       if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
       const path = decode(target);
       const at = path.startsWith('/') ? path.slice(1) : posix.join(posix.dirname(file), path);
@@ -62,8 +74,11 @@ export function brokenLinks(root) {
 }
 
 // ADR files must be named NNNN-slug.md, and each number is used once.
+/** @param {string} root */
 export function adrProblems(root) {
+  /** @type {string[]} */
   const problems = [];
+  /** @type {Map<string, string>} */
   const owners = new Map();
   for (const name of readdirSync(join(root, 'docs', 'adr')).sort()) {
     const number = /^(\d{4})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.exec(name)?.[1];
@@ -98,11 +113,14 @@ const ORDINARY_WORDS = new Set([
 ]);
 
 // The terms the glossary says to avoid. A term with a qualifier, or an explanation instead of a term, is left out.
+/** @param {string} glossary */
 export function avoidTerms(glossary) {
+  /** @type {string[]} */
   const terms = [];
   for (const [, line] of glossary.matchAll(/^_Avoid_: (.+)$/gm)) {
     let depth = 0;
     let item = '';
+    /** @type {string[]} */
     const items = [];
     for (const char of line) {
       if (char === '(') depth++;
@@ -119,6 +137,7 @@ export function avoidTerms(glossary) {
 }
 
 // Documentation that uses an Avoid term as the term. The glossary, the changelog, the ADRs (history) and archived Specs are not read.
+/** @param {string} root */
 export function bareAvoidTerms(root) {
   const terms = avoidTerms(readFileSync(join(root, 'GLOSSARY.md'), 'utf8'));
   const docs = [
@@ -128,6 +147,7 @@ export function bareAvoidTerms(root) {
       file.endsWith('.md'),
     ),
   ].filter((file) => existsSync(join(root, file)));
+  /** @type {string[]} */
   const problems = [];
   for (const file of docs) {
     withoutCode(readFileSync(join(root, file), 'utf8'))
@@ -141,10 +161,14 @@ export function bareAvoidTerms(root) {
   return problems;
 }
 
+/** @type {Record<string, number>} */
 const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
 // Constants the code defines and the prose states. Each entry names the files that state it and the patterns that find the
 // statement; the first capture of a pattern is the number or the number word. A new constant is a new entry.
+/** @typedef {{ name: string, value: number, patterns: RegExp[], files: string[] }} Constant */
+
+/** @type {Constant[]} */
 export const CONSTANTS = [
   {
     name: 'Check loop limit',
@@ -162,7 +186,12 @@ export const CONSTANTS = [
 ];
 
 // Files whose statement of a constant differs from the code, or that no longer state it at all.
+/**
+ * @param {string} root
+ * @param {Constant[]} [constants]
+ */
 export function staleConstants(root, constants = CONSTANTS) {
+  /** @type {string[]} */
   const problems = [];
   for (const { name, value, patterns, files } of constants) {
     for (const file of files) {
@@ -181,6 +210,7 @@ export function staleConstants(root, constants = CONSTANTS) {
 
 // Test files that call openPage but are not named *-browser.test.js. openPage skips the test when there is no browser.
 // CI runs the *-browser files in the job that requires a browser; any other file runs in the unit job, where it skips.
+/** @param {string} root */
 export function misnamedBrowserTests(root) {
   return walk(root, 'test')
     .filter((file) => file.endsWith('.test.js') && !file.endsWith('-browser.test.js'))
@@ -190,6 +220,10 @@ export function misnamedBrowserTests(root) {
 }
 
 // English git messages (LC_ALL=C), because resolves reads one of them.
+/**
+ * @param {string} root
+ * @param {...string} args
+ */
 const git = (root, ...args) =>
   execFileSync('git', ['-c', 'core.quotePath=false', ...args], {
     cwd: root,
@@ -202,12 +236,14 @@ const git = (root, ...args) =>
 
 // Exit status 1 of rev-parse --verify --quiet means the ref does not exist. A folder that is no repository exits 128 like every
 // other fatal error, so that case is told apart by its message. Any other failure throws.
+/** @param {string} root @param {string} ref */
 const resolves = (root, ref) => {
   try {
     git(root, 'rev-parse', '--verify', '--quiet', ref);
     return true;
   } catch (err) {
-    if (err.status === 1 || /not a git repository/.test(err.stderr ?? '')) return false;
+    const { status, stderr } = execFailure(err);
+    if (status === 1 || /not a git repository/.test(stderr)) return false;
     throw err;
   }
 };
@@ -216,13 +252,16 @@ const resolves = (root, ref) => {
 // origin/develop, so it sees committed, staged, unstaged and new files. With no git history or no origin/develop (a shallow CI
 // checkout, the installed package) or no common ancestor with it, it reports why it did not check and finds nothing; any other git failure throws.
 // A deleted fragment counts too, so the release change that folds the fragments is not asked for a new one.
+/** @param {string} root */
 export function missingChangelogFragment(root) {
   if (!resolves(root, 'origin/develop')) return { skipped: 'no origin/develop to compare with', problems: [] };
+  /** @type {string} */
   let base;
   try {
     base = git(root, 'merge-base', 'HEAD', 'origin/develop')[0];
   } catch (err) {
-    if (err.status === 1) return { skipped: 'no common ancestor with origin/develop (a shallow fetch)', problems: [] };
+    if (execFailure(err).status === 1)
+      return { skipped: 'no common ancestor with origin/develop (a shallow fetch)', problems: [] };
     throw err;
   }
   const changed = [

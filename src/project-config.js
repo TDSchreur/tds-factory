@@ -1,18 +1,28 @@
+/** @import { ProjectConfig } from './run-record.js' */
+import { messageOf } from './narrow.js';
 import { readProjectJson, loadProjectReviews } from './project-reviews.js';
 import { stages } from './flow.js';
 import { MAX_CHECK_LOOPS } from './run-record.js';
 import os from 'node:os';
 
 // Stage agents the coordinator can dispatch to; the interactive reviewer is not a Stage.
+/** @type {string[]} */
 export const modelKeys = [...stages, 'interactive-check'];
 export const labelKeys = ['ticket'];
 export const defaultLabels = { ticket: 'ready-for-agent' };
 const topKeys = ['models', 'max_check_loops', 'labels', 'usage', 'reviews'];
+/** @param {unknown} x @returns {x is Record<string, unknown>} */
 const plain = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+/** @param {unknown} v */
 const modelName = (v) => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,99}$/.test(v);
+/** @param {unknown} v */
 const labelName = (v) => typeof v === 'string' && !!v.trim() && v.length <= 50 && /^[\w .:/-]+$/.test(v) && !!v.trim();
 
 // The line of the last key in `keys`, searched in order so a repeated name resolves to the right object.
+/**
+ * @param {string} source
+ * @param {string[]} keys
+ */
 function lineOf(source, keys) {
   const lines = source.split('\n');
   let from = 0,
@@ -25,11 +35,18 @@ function lineOf(source, keys) {
   }
   return found;
 }
+/** @param {string} source @param {string[]} keys @param {string} message */
 const problem = (source, keys, message) => ({ line: lineOf(source, keys), message });
 
 // Validates the shape of .factory/config.json. Returns problems, each with the line to fix.
+/**
+ * @param {string} source
+ * @param {unknown} data
+ */
 export function configProblems(source, data) {
+  /** @type {{ line: number, message: string }[]} */
   const out = [];
+  /** @param {string[]} keys @param {string} message */
   const add = (keys, message) => out.push(problem(source, keys, message));
   if (!plain(data)) return [{ line: 1, message: 'config.json must contain a JSON object' }];
   for (const key of Object.keys(data))
@@ -46,7 +63,7 @@ export function configProblems(source, data) {
   }
   if ('max_check_loops' in data) {
     const v = data.max_check_loops;
-    if (!Number.isSafeInteger(v) || v < 0 || v > MAX_CHECK_LOOPS)
+    if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0 || v > MAX_CHECK_LOOPS)
       add(
         ['max_check_loops'],
         `"max_check_loops" must be a whole number from 0 to ${MAX_CHECK_LOOPS}, the Factory maximum`,
@@ -67,8 +84,15 @@ export function configProblems(source, data) {
 }
 
 // Reads the project configuration from `projectDir`. Absent file: defaults. A bad file throws one message per problem with its line.
+/**
+ * @param {string} projectDir
+ * @param {import('./run-record.js').AgentName} agent
+ * @param {string} [homeDir]
+ * @param {NodeJS.ProcessEnv} [env]
+ */
 export function loadProjectConfig(projectDir, agent, homeDir = os.homedir(), env = process.env) {
   const file = readProjectJson(projectDir, 'config.json');
+  /** @type {{ models: Record<string, string>, max_check_loops: number, labels: Record<string, string>, usage: boolean }} */
   const config = { models: {}, max_check_loops: MAX_CHECK_LOOPS, labels: { ...defaultLabels }, usage: true };
   if (file) {
     const problems = configProblems(file.source, file.data);
@@ -79,18 +103,24 @@ export function loadProjectConfig(projectDir, agent, homeDir = os.homedir(), env
     Object.assign(config.labels, file.data.labels);
     if (file.data.usage !== undefined) config.usage = file.data.usage;
   }
+  /** @type {ReturnType<typeof loadProjectReviews>} */
   let reviews;
   try {
     reviews = loadProjectReviews(projectDir, agent, homeDir, env);
   } catch (err) {
-    const id = /^([a-z][a-z0-9-]*): /.exec(err.message)?.[1] ?? /review ID: (\S+)$/.exec(err.message)?.[1];
+    const message = messageOf(err);
+    const id = /^([a-z][a-z0-9-]*): /.exec(message)?.[1] ?? /review ID: (\S+)$/.exec(message)?.[1];
     const line = file && id ? lineOf(file.source, ['reviews', id]) : undefined;
-    throw new Error(line ? `.factory/config.json line ${line}: ${err.message}` : err.message);
+    throw new Error(line ? `.factory/config.json line ${line}: ${message}` : message);
   }
   return { ...config, reviews };
 }
 
 // What a Run freezes: everything but the reviews, which the Run stores with their Skill content.
+/**
+ * @param {ProjectConfig} settings
+ * @returns {ProjectConfig}
+ */
 export const frozenSettings = ({ models, max_check_loops, labels, usage }) => ({
   models,
   max_check_loops,

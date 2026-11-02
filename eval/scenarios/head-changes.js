@@ -8,8 +8,10 @@ export const name = 'head-changes';
 export const description =
   'A commit lands after the review: Evidence for the old head must not carry the Run to Finish or a PR.';
 
+/** @type {import('../../src/run-record.js').Axis[]} */
 const axes = ['standards', 'spec', 'security', 'infrastructure'];
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const { id, wt } = runAt(fx, 'evidence');
   writeFileSync(
@@ -26,6 +28,7 @@ export function setup(fx) {
   };
 }
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => {
   const { record } = a.run;
   const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: a.worktree, encoding: 'utf8' }).trim();

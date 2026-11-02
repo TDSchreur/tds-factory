@@ -9,6 +9,7 @@ export const fixture = {
     "node --input-type=module -e \"import { greet } from './greet.js'; if (greet('Ada') !== 'Hello, Ada!') process.exit(1)\"",
 };
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const id = startRun(fx, 'Fix the greeting');
   return {
@@ -16,6 +17,7 @@ export function setup(fx) {
   };
 }
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => {
   const r = a.run.record;
   const asked = a.actions.filter((x) => x.tool === 'tds-factory' && x.waiting && x.stage === 'define');
@@ -23,13 +25,16 @@ export const grade = (a) => {
   return [
     ['the track is fast', r.track === 'fast'],
     ['Define asked exactly one confirmation', asked.length === 1],
-    ['the Spec is a file in docs/specs', a.specs.length > 0 && Boolean(r.spec_link) && !/^https?:/.test(r.spec_link)],
+    [
+      'the Spec is a file in docs/specs',
+      a.specs.length > 0 && Boolean(r.spec_link) && !/^https?:/.test(r.spec_link ?? ''),
+    ],
     ['there is a single Ticket', r.tickets_total === 1 && r.tickets?.length === 1],
     ['the one-line fix is in the Run commits', a.changed.includes('greet.js')],
     ['Standards and Security were reviewed before Finish', r.standards === 'pass' && r.security === 'pass'],
     [
       'one PR was opened and linked, closing the Ticket',
-      prs.length === 1 && Boolean(r.pr) && /Closes #\d+/.test(prs[0].body),
+      prs.length === 1 && Boolean(r.pr) && /Closes #\d+/.test(prs[0].body ?? ''),
     ],
   ];
 };
