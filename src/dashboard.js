@@ -12,10 +12,19 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { can, providerFor, providerWith, remoteRepo } from './pr-provider.js';
-import { messageOf, codeOf, oneOf, reasonOf } from './narrow.js';
+import { messageOf, codeOf, oneOf } from './narrow.js';
 import { isStage } from './flow.js';
 
 const exec = promisify(execFile);
+// One line on stderr for a failure the Dashboard turns into an error answer, so the cause is not lost.
+/**
+ * @param {string} what
+ * @param {unknown} err
+ */
+const logFailure = (what, err) =>
+  console.error(
+    `dashboard: ${what.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}: ${(err instanceof Error ? (err.stack ?? err.message) : String(err)).replace(/\n/g, '\n    ')}`,
+  );
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
 /** @param {string} worktree */
 const expectedRepo = async (worktree) => {
@@ -224,7 +233,7 @@ export function interpretRun(entry) {
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
-// prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a `reason` when the provider fails.
+// prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a FactoryError whose `code` is the reason when the provider fails.
 // statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
 // prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
 /**
@@ -284,7 +293,7 @@ export async function startDashboard({
       .then(
         (value) => ({ value, ttl: value?.state === 'open' ? PR_STATUS_MS : PR_STATUS_FINAL_MS }),
         (/** @type {unknown} */ err) => ({
-          value: { unavailable: oneOf(STATUS_REASONS, reasonOf(err)) ? reasonOf(err) : 'error' },
+          value: { unavailable: oneOf(STATUS_REASONS, codeOf(err)) ? codeOf(err) : 'error' },
           ttl: PR_STATUS_FAIL_MS,
         }),
       )
@@ -349,6 +358,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(path.slice('/api/runs/'.length));
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const query = new URL(target, 'http://localhost').searchParams;
@@ -391,6 +401,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(merge[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -418,7 +429,8 @@ export async function startDashboard({
         let details;
         try {
           details = await ghPrDetails(v.pr);
-        } catch {
+        } catch (err) {
+          logFailure('GitHub PR state and head', err);
           return send(502, 'text/plain', 'GitHub PR state and head are unavailable');
         }
         if (!details || typeof details !== 'object' || typeof details.state !== 'string')
@@ -430,7 +442,8 @@ export async function startDashboard({
           return send(409, 'text/plain', 'the PR head does not match the Run Evidence');
         try {
           await prMerge(v.pr, eligibility.head);
-        } catch {
+        } catch (err) {
+          logFailure('PR merge', err);
           return send(502, 'text/plain', 'gh could not merge the PR');
         } finally {
           prCache.delete(v.pr);
@@ -443,6 +456,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(action[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -500,6 +514,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(checks[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -509,7 +524,8 @@ export async function startDashboard({
         let status;
         try {
           status = await ghChecks(v.pr);
-        } catch {
+        } catch (err) {
+          logFailure('GitHub checks', err);
           status = 'GitHub checks: unavailable';
         }
         return send(200, 'text/plain', status);
@@ -520,6 +536,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(statusRoute[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -565,7 +582,9 @@ export async function startDashboard({
         return body === null ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', body);
       }
       send(404, 'text/plain', 'not found');
-    } catch {
+    } catch (err) {
+      // The client only learns that it failed; the cause goes to the log, without the query string, which may hold a token.
+      logFailure(`${req.method} ${path}`, err);
       send(500, 'text/plain', 'internal error');
     }
   });

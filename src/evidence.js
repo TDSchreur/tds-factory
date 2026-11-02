@@ -72,6 +72,7 @@ export function finishProblems(record, { head, dirty } = worktreeState(record)) 
         )
           throw new Error('missing or changed');
       } catch {
+        // Evidence that cannot be read or hashed counts the same as evidence that changed: either way it is reported here.
         problems.push(`${review.id} browser evidence is missing or changed`);
       }
     }

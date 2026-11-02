@@ -8,13 +8,13 @@ export const messageOf = (err) =>
       ? err.message
       : String(err);
 
-/** The `reason` of a failed PR lookup, or undefined. @param {unknown} err */
-export const reasonOf = (err) =>
-  typeof err === 'object' && err !== null && 'reason' in err && typeof err.reason === 'string' ? err.reason : undefined;
-
-/** The `code` of a system error such as ENOENT, or undefined. @param {unknown} err */
+/** The `code` of a system error such as ENOENT or of a FactoryError, or undefined. @param {unknown} err */
 export const codeOf = (err) =>
   typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string' ? err.code : undefined;
+
+const MISSING = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'ENAMETOOLONG', 'EISDIR']);
+/** Whether a system error means that the path is not there to read: absent, not a folder, a loop or too long, or not a file. @param {unknown} err */
+export const isMissing = (err) => MISSING.has(codeOf(err) ?? '');
 
 /** The exit status and the standard error of a failed command run with execFileSync, as far as the error has them. @param {unknown} err */
 export const execFailure = (err) => ({

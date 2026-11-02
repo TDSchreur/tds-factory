@@ -3,16 +3,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { messageOf } from './narrow.js';
+import { messageOf, codeOf } from './narrow.js';
+import { FactoryError } from './errors.js';
 
 const REPO = 'TDSchreur/tds-factory';
 const ASSET = 'tds-factory.tgz';
 const ATTEMPTS = 3;
+// How long one request may take, from the first byte sent to the last byte of the body. The tarball is much bigger than the rest.
+const TIMEOUT_MS = 30_000;
+const DOWNLOAD_FACTOR = 4;
 const DOWNLOADS = `/${REPO}/releases/download/`;
 const USER_AGENT = { 'User-Agent': 'tds-factory' };
 
 /** @typedef {{ core: number[], pre: string | undefined }} Version */
-/** @typedef {{ sleep: (ms: number) => Promise<unknown>, warn: (message: string) => void }} Retry */
+/** @typedef {{ sleep: (ms: number) => Promise<unknown>, warn: (message: string) => void, timeoutMs: number }} Retry */
 
 /**
  * @param {string} text
@@ -75,6 +79,7 @@ function isReleaseAsset(text) {
       !url.hash
     );
   } catch {
+    // Text that is not a URL is not a Release asset.
     return false;
   }
 }
@@ -83,38 +88,36 @@ function isReleaseAsset(text) {
 /** @param {number} status */
 const transient = (status) => status === 429 || status >= 500;
 
-class StatusError extends Error {
-  /**
-   * @param {string} what
-   * @param {number} status
-   */
-  constructor(what, status) {
-    super(`${what} answered ${status}`);
-    this.permanent = !transient(status);
-  }
-}
-
 /**
  * @param {string} what
  * @param {number} status
  */
 function statusError(what, status) {
-  return new StatusError(what, status);
+  return new FactoryError(`${what} answered ${status}`, {
+    code: transient(status) ? 'http-transient' : 'http-permanent',
+  });
 }
 
 /**
+ * Runs `action` up to ATTEMPTS times, each with a fresh signal that aborts after `ms`. A request that runs out of time is a
+ * transient `timeout`, retried like a server error.
  * @template T
  * @param {string} what
- * @param {() => Promise<T>} action
+ * @param {(signal: AbortSignal) => Promise<T>} action
  * @param {Retry} retry
+ * @param {number} [ms]
  * @returns {Promise<T>}
  */
-async function withRetry(what, action, { sleep, warn }) {
+async function withRetry(what, action, { sleep, warn, timeoutMs }, ms = timeoutMs) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await action();
-    } catch (err) {
-      if (attempt === ATTEMPTS || (err instanceof StatusError && err.permanent)) throw err;
+      return await action(AbortSignal.timeout(ms));
+    } catch (raw) {
+      const err =
+        raw instanceof Error && raw.name === 'TimeoutError'
+          ? new FactoryError(`${what} timed out after ${ms / 1000}s`, { code: 'timeout', cause: raw })
+          : raw;
+      if (attempt === ATTEMPTS || codeOf(err) === 'http-permanent') throw err;
       warn(`${what} failed (attempt ${attempt}/${ATTEMPTS}): ${messageOf(err)}`);
       await sleep(1000 * 2 ** attempt);
     }
@@ -146,9 +149,14 @@ async function latestRelease({ fetchFn, env, retry }) {
     /** @type {any} The GitHub API answer: data, whose fields are checked below. */
     const release = await withRetry(
       'GitHub API',
-      async () =>
+      async (signal) =>
         (
-          await fetchOk(fetchFn, `https://api.github.com/repos/${REPO}/releases/latest`, { headers }, 'GitHub API')
+          await fetchOk(
+            fetchFn,
+            `https://api.github.com/repos/${REPO}/releases/latest`,
+            { headers, signal },
+            'GitHub API',
+          )
         ).json(),
       retry,
     );
@@ -168,11 +176,12 @@ async function latestRelease({ fetchFn, env, retry }) {
     retry.warn(`API lookup failed (${messageOf(err)}); falling back to the release redirect`);
     const response = await withRetry(
       'redirect lookup',
-      async () => {
+      async (signal) => {
         const answer = await fetchFn(`https://github.com/${REPO}/releases/latest`, {
           method: 'HEAD',
           redirect: 'manual',
           headers: USER_AGENT,
+          signal,
         });
         if (transient(answer.status)) throw statusError('redirect lookup', answer.status);
         return answer;
@@ -200,10 +209,11 @@ async function latestRelease({ fetchFn, env, retry }) {
 async function expectedHash(url, required, { fetchFn, retry }) {
   const response = await withRetry(
     'checksum download',
-    async () => {
-      const answer = await fetchFn(url, { headers: USER_AGENT });
+    async (signal) => {
+      const answer = await fetchFn(url, { headers: USER_AGENT, signal });
       if (!answer.ok && answer.status !== 404) throw statusError('checksum download', answer.status);
-      return answer;
+      // The body is read here, inside the bound, so a server that stalls after the headers also ends.
+      return { status: answer.status, text: answer.status === 404 ? '' : await answer.text() };
     },
     retry,
   );
@@ -212,7 +222,7 @@ async function expectedHash(url, required, { fetchFn, retry }) {
     if (required) throw new Error('the Release lists a checksum file but it could not be downloaded');
     return undefined;
   }
-  const hash = /^([0-9a-f]{64})(?:\s|$)/i.exec((await response.text()).trim())?.[1];
+  const hash = /^([0-9a-f]{64})(?:\s|$)/i.exec(response.text.trim())?.[1];
   if (!hash) throw new Error('the checksum file is not a sha256 hash');
   return hash.toLowerCase();
 }
@@ -236,6 +246,7 @@ const exitText = (what, result) => `'${what}' failed with exit code ${result.sta
  * @param {NodeJS.ProcessEnv} [options.env]
  * @param {(message: string) => void} [options.log]
  * @param {(message: string) => void} [options.warn]
+ * @param {number} [options.timeoutMs] How long one small request may take; the download may take four times as long.
  */
 export async function update({
   installed,
@@ -248,8 +259,9 @@ export async function update({
   env = process.env,
   log = console.log,
   warn = console.warn,
+  timeoutMs = TIMEOUT_MS,
 }) {
-  const retry = { sleep, warn };
+  const retry = { sleep, warn, timeoutMs };
   const latest = await latestRelease({ fetchFn, env, retry });
   const compared = compareVersions(installed, latest.tag);
   log(`installed ${installed}, latest Release ${formatVersion(latest.version)}`);
@@ -267,14 +279,17 @@ export async function update({
       const file = path.join(dir, ASSET);
       await withRetry(
         'download',
-        async () => {
+        async (signal) => {
           fs.writeFileSync(
             file,
-            Buffer.from(await (await fetchOk(fetchFn, latest.url, { headers: USER_AGENT }, 'download')).arrayBuffer()),
+            Buffer.from(
+              await (await fetchOk(fetchFn, latest.url, { headers: USER_AGENT, signal }, 'download')).arrayBuffer(),
+            ),
           );
           if (fs.statSync(file).size < 1024) throw new Error('downloaded file is suspiciously small');
         },
         retry,
+        retry.timeoutMs * DOWNLOAD_FACTOR,
       );
       const expected = await expectedHash(`${latest.url}.sha256`, latest.hasChecksum, { fetchFn, retry });
       if (!expected) warn(`this Release has no checksum file; the download was not verified`);

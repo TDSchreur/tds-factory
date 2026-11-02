@@ -206,7 +206,7 @@ test('statusAsync names why it failed', async () => {
       },
     }).then(
       () => assert.fail('expected failure'),
-      (e) => e.reason,
+      (e) => e.code,
     );
   assert.equal(await fail(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })), 'gh-missing');
   assert.equal(
@@ -221,7 +221,7 @@ test('statusAsync names why it failed', async () => {
   assert.equal(
     await statusAsync(URL_, { run: async () => ({ stdout: 'not json' }) }).then(
       () => 'ok',
-      (e) => e.reason,
+      (e) => e.code,
     ),
     'error',
   );

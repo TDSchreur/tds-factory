@@ -6,7 +6,7 @@ The Run store now keeps `openRunStore` and its interface unchanged, and the work
 
 | Module             | Holds                                                                                                            | A feature that lands here                                   |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `narrow.js`        | `messageOf`, `codeOf`, `reasonOf`, `oneOf`, `execFailure`: readers of an `unknown` value that imports nothing    | a new way to read a caught error or a parsed value          |
+| `narrow.js`        | `messageOf`, `codeOf`, `isMissing`, `oneOf`, `execFailure`: readers of an `unknown` value that imports nothing   | a new way to read a caught error or a parsed value          |
 | `run-record.js`    | Field rules, `validate`, `apply`, atomic `write`, `MAX_CHECK_LOOPS`, the Check attempt, the Run record typedefs  | a new `run.json` field, a project config file's limits      |
 | `run-folder.js`    | Run folder paths, symlink refusal, locks, `readRun`, `changeRun`, `changeRunning`, listing, main-checkout lookup | storage layout                                              |
 | `worktrees.js`     | `worktreeState`, fetching origin's default branch, merge check, Run worktree listing, uncommitted-work checks    | where a Run branches from                                   |

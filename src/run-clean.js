@@ -89,6 +89,7 @@ function ghPrInfo(url) {
     const { state, headRefOid } = provider.view(url);
     return typeof state === 'string' ? { state, head: headRefOid } : undefined;
   } catch {
+    // A PR that cannot be looked up is unknown; the caller then keeps the Run's worktree.
     return undefined;
   }
 }
@@ -180,6 +181,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
     trees = ownWorktrees(projectDir);
     ids = runIds(root);
   } catch {
+    // Doctor's note about leftovers is optional; outside a Factory project there is nothing to list.
     return [];
   }
   /** @param {...string} args */
@@ -190,6 +192,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
       const left = trees.has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
       return left && record.status === 'done' && !!record.pr && prState(record.pr)?.state === 'MERGED';
     } catch {
+      // A Run record that cannot be read is not reported as a leftover; Run inspect reports unreadable records.
       return false;
     }
   });

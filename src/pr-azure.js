@@ -1,6 +1,7 @@
 /** @import { PrStatus, PrView } from './pr-provider.js' */
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
+import { FactoryError } from './errors.js';
 
 // The Azure DevOps adapter of the PR provider seam (ADR 0020): every call of the `az` command lives here, and every call only reads.
 // It needs the `azure-devops` extension of the Azure CLI and a signed-in user (`az login`). There is no merge, no Follow-up and no write operation.
@@ -19,6 +20,7 @@ const decode = (value) => {
   try {
     return decodeURIComponent(value);
   } catch {
+    // A malformed escape means the link is not one of ours; the caller treats undefined as no match.
     return undefined;
   }
 };
@@ -191,29 +193,30 @@ function belongsTo(pr, target) {
     throw new Error('the Azure DevOps PR does not belong to the repository in its link');
 }
 
-// Read from Azure DevOps without blocking the caller. `run` is the injection point for tests. A failure carries a `reason`.
+// Read from Azure DevOps without blocking the caller. `run` is the injection point for tests. A failure is a FactoryError with a `code`.
 /**
  * @param {string} url
  * @param {{ run?: (argv: string[]) => Promise<{ stdout: string }> }} [options]
  * @returns {Promise<PrStatus>}
  */
 export async function statusAsync(url, { run = defaultRun } = {}) {
-  if (!matches(url)) throw Object.assign(new Error('not an Azure DevOps pull request'), { reason: 'error' });
+  if (!matches(url)) throw new FactoryError('not an Azure DevOps pull request', { code: 'error' });
   const target = parts(url);
   /** @type {unknown} */
   let pr, policies;
   try {
     [pr, policies] = await Promise.all([read(run, target, SHOW), read(run, target, POLICIES)]);
   } catch (err) {
-    throw Object.assign(new Error('cannot read Azure DevOps PR status'), {
-      reason: err instanceof SyntaxError ? 'error' : failure(err),
+    throw new FactoryError('cannot read Azure DevOps PR status', {
+      code: err instanceof SyntaxError ? 'error' : failure(err),
+      cause: err,
     });
   }
   try {
     belongsTo(pr, target);
     return parseStatus(pr, policies);
   } catch (err) {
-    throw err instanceof Error ? Object.assign(err, { reason: 'error' }) : err;
+    throw err instanceof Error ? new FactoryError(err.message, { code: 'error', cause: err }) : err;
   }
 }
 

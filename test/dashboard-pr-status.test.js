@@ -130,7 +130,7 @@ test('a provider failure becomes an unavailable status with its reason, never an
   await withDashboard(
     [finish],
     async () => {
-      if (mode) throw Object.assign(new Error('x'), { reason: mode });
+      if (mode) throw Object.assign(new Error('x'), { code: mode });
       return OPEN;
     },
     async ({ views, get }) => {
@@ -220,7 +220,7 @@ test('an Azure DevOps PR gets a status from the same cache and shows its host an
     async (url) => {
       calls.push(url);
       if (url === AZ) return OPEN;
-      throw Object.assign(new Error('x'), { reason: 'az-extension-missing' });
+      throw Object.assign(new Error('x'), { code: 'az-extension-missing' });
     },
     async ({ views }) => {
       await views();
@@ -245,7 +245,7 @@ test('an unknown reason of a provider shows as a plain error', async () => {
   await withDashboard(
     [finish],
     async () => {
-      throw Object.assign(new Error('x'), { reason: 'whatever' });
+      throw Object.assign(new Error('x'), { code: 'whatever' });
     },
     async ({ views }) => {
       await views();

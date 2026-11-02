@@ -2,6 +2,7 @@
 /** @import { FollowUp, Check } from './run-record.js' */
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
+import { FactoryError } from './errors.js';
 
 // The GitHub adapter of the PR provider seam (see ADR 0020): every call of the `gh` command lives here.
 const exec = promisify(execFile);
@@ -40,8 +41,8 @@ function gh(args, cwd) {
     throw new Error(`cannot read GitHub PR: ${(out.stderr || out.error?.message || 'gh failed').trim()}`);
   try {
     return JSON.parse(out.stdout);
-  } catch {
-    throw new Error('malformed GitHub response');
+  } catch (err) {
+    throw new FactoryError('malformed GitHub response', { code: 'error', cause: err });
   }
 }
 const checksQuery = `query FollowUpChecks($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100,after:$cursor) { nodes { __typename ... on CheckRun { name status conclusion detailsUrl } ... on StatusContext { context state targetUrl description } } pageInfo { hasNextPage endCursor } } } } } } } } }`;
@@ -408,7 +409,7 @@ const failure = (err) =>
         ? 'not-signed-in'
         : 'error';
 
-// The same, read from GitHub without blocking the caller. `run` is the injection point for tests. A failure carries a `reason`:
+// The same, read from GitHub without blocking the caller. `run` is the injection point for tests. A failure is a FactoryError whose `code` is one of:
 // gh-missing, not-signed-in, rate-limited or error.
 /**
  * @param {string} url
@@ -419,17 +420,17 @@ export async function statusAsync(
   url,
   { run = (args) => exec('gh', args, { timeout: 10_000, env: { ...process.env, GH_PROMPT_DISABLED: '1' } }) } = {},
 ) {
-  if (!matches(url)) throw Object.assign(new Error('not a GitHub pull request'), { reason: 'error' });
+  if (!matches(url)) throw new FactoryError('not a GitHub pull request', { code: 'error' });
   /** @type {string} */
   let stdout;
   try {
     ({ stdout } = await run(['pr', 'view', url, '--json', 'state,mergeable,reviewDecision,statusCheckRollup,isDraft']));
   } catch (err) {
-    throw Object.assign(new Error('cannot read GitHub PR status'), { reason: failure(err) });
+    throw new FactoryError('cannot read GitHub PR status', { code: failure(err), cause: err });
   }
   try {
     return parseStatus(JSON.parse(stdout));
-  } catch {
-    throw Object.assign(new Error('malformed GitHub PR status'), { reason: 'error' });
+  } catch (err) {
+    throw new FactoryError('malformed GitHub PR status', { code: 'error', cause: err });
   }
 }

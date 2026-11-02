@@ -1,6 +1,7 @@
 /** @import { ProjectConfig } from './run-record.js' */
 import { messageOf } from './narrow.js';
-import { readProjectJson, loadProjectReviews } from './project-reviews.js';
+import { FactoryError } from './errors.js';
+import { readProjectJson, loadProjectReviews, ReviewError } from './project-reviews.js';
 import { stages } from './flow.js';
 import { MAX_CHECK_LOOPS } from './run-record.js';
 import os from 'node:os';
@@ -109,9 +110,12 @@ export function loadProjectConfig(projectDir, agent, homeDir = os.homedir(), env
     reviews = loadProjectReviews(projectDir, agent, homeDir, env);
   } catch (err) {
     const message = messageOf(err);
-    const id = /^([a-z][a-z0-9-]*): /.exec(message)?.[1] ?? /review ID: (\S+)$/.exec(message)?.[1];
+    const id = err instanceof ReviewError ? err.reviewId : undefined;
     const line = file && id ? lineOf(file.source, ['reviews', id]) : undefined;
-    throw new Error(line ? `.factory/config.json line ${line}: ${message}` : message);
+    throw new FactoryError(line ? `.factory/config.json line ${line}: ${message}` : message, {
+      code: 'config-invalid',
+      cause: err,
+    });
   }
   return { ...config, reviews };
 }

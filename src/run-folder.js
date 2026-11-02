@@ -4,7 +4,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 /** @import { Run } from './run-record.js' */
-import { codeOf } from './narrow.js';
+import { codeOf, isMissing } from './narrow.js';
 import { stages, stageIndex } from './flow.js';
 import { validId, validate, write, withStageModel } from './run-record.js';
 import { appendEvent, deriveEvents, readEvents } from './run-events.js';
@@ -60,6 +60,7 @@ export function lockOwner(lock) {
     }
     return { ...owner, state };
   } catch {
+    // A lock file that cannot be read has an unknown owner; callers never clear an unknown lock.
     return { state: 'unknown' };
   }
 }
@@ -183,7 +184,8 @@ async function listMarkdown(dir) {
       .filter((e) => e.isFile() && e.name.endsWith('.md') && SEGMENT.test(e.name))
       .map((e) => e.name)
       .sort(byStage);
-  } catch {
+  } catch (err) {
+    if (!isMissing(err)) throw err;
     return [];
   }
 }
@@ -200,7 +202,8 @@ export async function listRuns(runsDir) {
   let entries;
   try {
     entries = await fs.promises.readdir(runsDir, { withFileTypes: true });
-  } catch {
+  } catch (err) {
+    if (!isMissing(err)) throw err;
     return [];
   }
   /** @type {(ReadableEntry | UnreadableEntry)[]} */
@@ -219,6 +222,7 @@ export async function listRuns(runsDir) {
         events: readEvents(path.join(runsDir, entry.name)),
       });
     } catch {
+      // A record that cannot be read or parsed is listed as unreadable, which is how the Dashboard shows it.
       runs.push({ id: entry.name, unreadable: true, record: null, files });
     }
   }
@@ -235,6 +239,7 @@ export async function readRunFile(runsDir, rawPath) {
   try {
     parts = rawPath.split('/').map(decodeURIComponent);
   } catch {
+    // A malformed escape in the path is no file.
     return null;
   }
   if (parts.length !== 2 || !parts.every((p) => SEGMENT.test(p) && !p.startsWith('..'))) return null;
@@ -244,7 +249,8 @@ export async function readRunFile(runsDir, rawPath) {
     const file = await fs.promises.realpath(path.resolve(root, ...parts));
     if (!file.startsWith(root + path.sep)) return null;
     return await fs.promises.readFile(file, 'utf8');
-  } catch {
+  } catch (err) {
+    if (!isMissing(err)) throw err;
     return null;
   }
 }
