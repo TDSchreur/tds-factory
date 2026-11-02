@@ -8,7 +8,7 @@ To work on the Factory itself, clone with `--recurse-submodules` and run `node s
 
 1. checks Node, git, npm and the checkout;
 2. initialises the `vendor/` submodules;
-3. fetches `origin`, packs its default branch and installs that globally, so you use what is on `main` instead of the last Release (your checkout and working tree are not touched);
+3. fetches `origin`, packs its default branch and installs that globally, so you use what is on `develop` instead of the last Release (your checkout and working tree are not touched);
 4. registers the Factory with `tds-factory install`, which puts the skills and agents in `~/.claude` and `~/.agents`;
 5. checks the result with `tds-factory doctor` (findings are warnings);
 6. registers the developer skills described below.
@@ -27,9 +27,9 @@ Run the tests with `npm test`. They use `node:test`. Every test and eval script 
 
 The `factory` Skill is `skills/factory/SKILL.md`, which holds what every Run needs, plus the files in `skills/factory/references/` that it names where they are needed (progress commands, the `run.json` schema, Stage agents, the Exit checklist, Check details, Follow-up, the Fast track, Define details (build or borrow, size, label lookup), Finish and the Invoked Skills overrides). `install` and `sync` ship the whole folder, `tds-factory doctor` checks that an installed copy has the reference files, and the Skill tests (`test/skill-text.js`) read the main file together with its references. Keep the main file under 18 KB: put detail in a reference file.
 
-`scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/main` and is skipped, with a reason, when that ref does not exist or shares no history with your branch, as in a shallow CI checkout; any other git failure fails the test. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
+`scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/develop` and is skipped, with a reason, when that ref does not exist or shares no history with your branch, as in a shallow CI checkout; any other git failure fails the test. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
 
-PRs and pushes to `main` run the full suite on Linux with Node 24 and the latest LTS, and on macOS with the latest LTS. A Windows job runs `npm run check` and `npm run test:unit` with the latest LTS; the unit tests run in two shards (`npm run test:unit -- --test-shard=1/2`) and the first shard also runs the check. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on PowerShell 7 on Windows.
+PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24 and the latest LTS. CI has no macOS jobs, because GitHub's macOS runners queue unreliably. A Windows job runs `npm run check` and `npm run test:unit` with the latest LTS; the unit tests run in two shards (`npm run test:unit -- --test-shard=1/2`) and the first shard also runs the check. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux and Windows. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on PowerShell 7 on Windows.
 
 ## Working on Windows
 
@@ -39,7 +39,7 @@ Tests that need symbolic links, the executable bit, `mkfifo`, POSIX signals or f
 
 The browser tests are not supported on Windows: every one of them skips there with a reason, also with `REQUIRE_BROWSER=1`. Run them on Linux or macOS (or in WSL) with `chromedriver` and Chromium or Chrome on PATH.
 
-The `ci-ok` job succeeds only when all the other jobs do. The `main` ruleset requires it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.
+The `ci-ok` job succeeds only when all the other jobs do. The `develop` and `main` rulesets require it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
 

@@ -1,6 +1,9 @@
 name: release
 
+# A release PR from develop to main publishes when it merges. workflow_dispatch on main retries a failed run.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # One run at a time, so releases never pick the same version.
@@ -62,17 +65,19 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: lts/*
-      - name: Pick the version
+      - name: Take the version from package.json
         id: version
         run: |
-          mapfile -t tags < <(git tag --list 'v*')
-          version=$(node scripts/next-version.js "$(node -p "require('./package.json').version")" "${tags[@]}")
+          version=$(node -p "require('./package.json').version")
+          if git rev-parse --quiet --verify "refs/tags/v$version" > /dev/null; then
+            echo "::error::v$version is already released. Bump the version in package.json in the release PR."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Pack with that version, without a commit
+      - name: Pack
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
           npm pack
           mv "tds-factory-$VERSION.tgz" tds-factory.tgz
           sha256sum tds-factory.tgz > tds-factory.tgz.sha256

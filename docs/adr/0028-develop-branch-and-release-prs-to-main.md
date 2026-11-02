@@ -1,0 +1,7 @@
+# PRs go to develop, and a release PR to main publishes the Release
+
+Every PR used to go to `main`, and a maintainer started the release workflow by hand, which picked the next patch number and put it in the tarball only. `main` therefore always held unreleased work and its `package.json` version did not match any Release.
+
+Now `develop` is the default branch and the target of every PR, including those the Factory opens, because a Run branches from the default branch of `origin`. `main` holds released code only. A release PR from `develop` raises the version in `package.json` and folds the changelog fragments; it is merged to `main` with a merge commit so both branches keep one history. The merge triggers the release workflow, which takes the version from `package.json` and refuses to publish when that tag already exists.
+
+The trade-off is a manual version choice at each release in exchange for a version in the code that matches the tag, and a `main` that is exactly what was released. A push to `main` without a version bump fails the workflow instead of publishing a duplicate. The `main` ruleset must allow merge commits for the release PR; `develop` keeps squash merges, signed commits and a linear history.
