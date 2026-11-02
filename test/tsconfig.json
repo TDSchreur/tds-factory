@@ -8,7 +8,7 @@
     "moduleResolution": "NodeNext",
     "target": "ES2024",
     "types": ["node"],
-    "lib": ["ES2024", "ESNext.Disposable"]
+    "lib": ["ES2024"]
   },
   "include": ["**/*.js"],
   "exclude": ["../node_modules", "../vendor", "../dashboard/vendor", "../.factory"]

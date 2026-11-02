@@ -210,12 +210,13 @@ function documents(root) {
   const walk = (dir) => {
     const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
     if (!stat || !stat.isDirectory()) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (SKIP.has(entry.name) || entry.isSymbolicLink()) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else take(full);
-    }
+    // `**/*` alone leaves out dotfiles and dot folders; globSync follows no link, and a skipped folder is not entered.
+    const entries = fs.globSync(['**/*', '**/.*', '**/.*/**'], {
+      cwd: dir,
+      withFileTypes: true,
+      exclude: (entry) => SKIP.has(entry.name) || entry.isSymbolicLink(),
+    });
+    for (const entry of entries) if (!entry.isDirectory()) take(path.join(entry.parentPath, entry.name));
   };
   for (const name of ROOT_DOCS) take(path.join(root, name));
   for (const dir of DOC_DIRS) walk(path.join(root, dir));
