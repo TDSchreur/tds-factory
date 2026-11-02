@@ -26,6 +26,7 @@ The Dashboard follows Fluent 2 ([ADR 0025](adr/0025-the-dashboard-adopts-fluent-
 
 - **Themes.** Light, dark and System work as before: the theme selector sets `data-theme`, and System follows `prefers-color-scheme`.
 - **Contrast.** Every text and background pair keeps at least 4.5:1, and borders, focus rings and the progress fill keep 3:1, in both themes. A unit test computes this from the token values and a browser test measures the rendered text. Pass, fail, quiet and waiting states also say so in text and symbols, never by colour alone.
+- **Skip link.** The first Tab stop is a "Skip to the Runs" link, hidden until it has focus; Enter moves focus to the board. It is not shown while the welcome card replaces the board.
 - **Focus.** Every control that can take keyboard focus shows a two-colour ring (an inner and an outer ring), so it shows on every surface in both themes.
 - **Reduced motion.** With `prefers-reduced-motion: reduce` the Dashboard has no transitions or animations.
 - **High contrast.** With forced colours (`forced-colors: active`) the browser uses your system colours. The progress fill, the status dot, the primary and pressed buttons (also when hovered or pressed), the selected card and the focus ring are redrawn in the system highlight colours, and a waiting card also gets a 3 px double border. An abandoned Run has a dashed card in a muted surface, not faded text, so its text keeps the same contrast.
