@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
@@ -348,6 +349,41 @@ test('the extra loop route refuses a request without the session token, with a w
     assert.equal(read(cwd, id).extra_loops, undefined);
     assert.equal((await grant(dash, id, query)).status, 200);
   } finally {
+    await dash.close();
+  }
+});
+
+test('the Dashboard answers another request while a git call of an action is still running', async () => {
+  const { cwd, id } = checked();
+  // Git runs this hook when sync's fetch updates a ref; it holds the call until the test releases it.
+  const started = join(cwd, 'hook-started');
+  const release = join(cwd, 'hook-release');
+  const hooks = join(cwd, 'slow-hooks');
+  mkdirSync(hooks);
+  writeFileSync(
+    join(hooks, 'reference-transaction'),
+    `#!/usr/bin/env node
+const fs = require('node:fs');
+fs.writeFileSync(${JSON.stringify(started)}, '');
+const end = Date.now() + 10000;
+while (!fs.existsSync(${JSON.stringify(release)}) && Date.now() < end) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+`,
+    { mode: 0o755 },
+  );
+  const dash = await startDashboard({ projectDir: cwd, port: 0 });
+  try {
+    git(cwd, 'config', 'core.hooksPath', hooks.replaceAll('\\', '/'));
+    let settled = false;
+    const syncing = post(dash, id, 'sync').finally(() => (settled = true));
+    for (let i = 0; i < 250 && !existsSync(started); i++) await sleep(20);
+    assert.ok(existsSync(started), 'the git call is running');
+    const other = await fetch(`${dash.url}/api/runs`);
+    assert.equal(other.status, 200);
+    assert.equal(settled, false, 'sync is still waiting for git when the other request is answered');
+    writeFileSync(release, '');
+    assert.deepEqual(await syncing, { status: 200, text: 'synced' });
+  } finally {
+    writeFileSync(release, '');
     await dash.close();
   }
 });

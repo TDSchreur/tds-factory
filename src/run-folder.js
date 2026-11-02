@@ -4,10 +4,12 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 /** @import { Run } from './run-record.js' */
+/** @import { Step } from './git.js' */
+import { callStep, immediate, runSync } from './git.js';
 import { codeOf, isMissing } from './narrow.js';
 import { stages, stageIndex } from './flow.js';
 import { validId, validate, write, withStageModel } from './run-record.js';
-import { appendEvent, deriveEvents, readEvents } from './run-events.js';
+import { appendEvent, deriveEvents, readEventsAsync } from './run-events.js';
 import { withUsage } from './run-usage.js';
 
 /**
@@ -71,15 +73,19 @@ export function lockOwner(lock) {
  * @returns {T}
  */
 export function withLock(lock, action) {
-  const fd = fs.openSync(lock, 'wx', 0o600);
-  const identity = fs.fstatSync(fd);
+  const release = acquireLock(lock);
   try {
-    fs.writeFileSync(
-      fd,
-      JSON.stringify({ pid: process.pid, host: os.hostname(), started: new Date().toISOString() }) + '\n',
-    );
     return action();
   } finally {
+    release();
+  }
+}
+// Takes the lock file and returns what releases it, so a flow can hold the lock across its awaited git calls.
+/** @param {string} lock */
+export function acquireLock(lock) {
+  const fd = fs.openSync(lock, 'wx', 0o600);
+  const identity = fs.fstatSync(fd);
+  const release = () => {
     fs.closeSync(fd);
     try {
       const current = fs.lstatSync(lock);
@@ -87,7 +93,17 @@ export function withLock(lock, action) {
     } catch (err) {
       if (codeOf(err) !== 'ENOENT') throw err;
     }
+  };
+  try {
+    fs.writeFileSync(
+      fd,
+      JSON.stringify({ pid: process.pid, host: os.hostname(), started: new Date().toISOString() }) + '\n',
+    );
+  } catch (err) {
+    release();
+    throw err;
   }
+  return release;
 }
 /** @param {string} root @param {string} id */
 export const repairLockFile = (root, id) => lockFile(root, id).replace(`${path.sep}.lock-`, `${path.sep}.repair-`);
@@ -99,6 +115,22 @@ export const repairLockFile = (root, id) => lockFile(root, id).replace(`${path.s
  * @returns {T}
  */
 export const withRunLock = (root, id, action) => withLock(lockFile(root, id), action);
+// The same lock for a flow that runs git calls while it holds the lock.
+/**
+ * @template T
+ * @param {string} root
+ * @param {string} id
+ * @param {() => Generator<Step, T, any>} body
+ * @returns {Generator<Step, T, any>}
+ */
+export function* withRunLockFlow(root, id, body) {
+  const release = yield* callStep(() => acquireLock(lockFile(root, id)));
+  try {
+    return yield* body();
+  } finally {
+    release();
+  }
+}
 
 // A Run's folder and record, refusing links anywhere on the way.
 /**
@@ -117,17 +149,18 @@ export function readRun(projectDir, id) {
   if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Run record must be an object');
   return { root, dir, record };
 }
-// Reads a Run record under its lock, hands it to change, and writes back what change returns.
+// Reads a Run record under its lock, hands it to change, and writes back what change returns. A flow's change may yield git calls.
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
- * @param {(old: Run) => Run} change
+ * @param {(old: Run) => Generator<Step, Run, any>} change
+ * @returns {Generator<Step, void, any>}
  */
-export function changeRun(projectDir, id, change) {
+export function* changeRunFlow(projectDir, id, change) {
   if (!validId(id)) throw new Error('invalid Run id');
-  return withRunLock(runRoot(projectDir, false), id, () => {
+  yield* withRunLockFlow(runRoot(projectDir, false), id, function* () {
     const { dir, record } = readRun(projectDir, id);
-    const changed = change(record);
+    const changed = yield* change(record);
     // Every Stage change passes here, whether it is a transition, a Rework or a Follow-up.
     const next = withUsage(
       {
@@ -141,23 +174,42 @@ export function changeRun(projectDir, id, change) {
     for (const event of deriveEvents(record, next)) appendEvent(dir, event);
   });
 }
+// Reads a Run record under its lock, hands it to change, and writes back what change returns.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {(old: Run) => Run} change
+ */
+export const changeRun = (projectDir, id, change) =>
+  runSync(changeRunFlow(projectDir, id, (old) => immediate(change(old))));
 
+/** @typedef {(old: Run) => { record: Run, activity: string }} Move */
 // Changes a running Run for a named operation, which takes only an optional activity line besides its own arguments.
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
  * @param {{ activity?: string }} data
- * @param {(old: Run) => { record: Run, activity: string }} move
+ * @param {(old: Run) => Generator<Step, { record: Run, activity: string }, any>} move
+ * @returns {Generator<Step, void, any>}
  */
-export function changeRunning(projectDir, id, data, move) {
+export function* changeRunningFlow(projectDir, id, data, move) {
   validate(data);
   if (Object.keys(data).some((key) => key !== 'activity')) throw new Error('this operation accepts only activity');
-  changeRun(projectDir, id, (old) => {
+  yield* changeRunFlow(projectDir, id, function* (old) {
     if (old.status !== 'running') throw new Error(`a ${old.status} Run cannot be changed this way, only a running one`);
-    const { record, activity } = move(old);
+    const { record, activity } = yield* move(old);
     return { ...record, activity: data.activity ?? activity, updated: new Date().toISOString() };
   });
 }
+// Changes a running Run for a named operation, which takes only an optional activity line besides its own arguments.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ activity?: string }} data
+ * @param {Move} move
+ */
+export const changeRunning = (projectDir, id, data, move) =>
+  runSync(changeRunningFlow(projectDir, id, data, (old) => immediate(move(old))));
 
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -191,7 +243,7 @@ async function listMarkdown(dir) {
 }
 
 /**
- * @typedef {{ id: string, unreadable: false, record: Run, files: string[], events: ReturnType<typeof readEvents> }} ReadableEntry
+ * @typedef {{ id: string, unreadable: false, record: Run, files: string[], events: Awaited<ReturnType<typeof readEventsAsync>> }} ReadableEntry
  * @typedef {{ id: string, unreadable: true, record: null, files: string[], events?: undefined }} UnreadableEntry
  */
 /**
@@ -219,7 +271,7 @@ export async function listRuns(runsDir) {
         unreadable: false,
         record,
         files,
-        events: readEvents(path.join(runsDir, entry.name)),
+        events: await readEventsAsync(path.join(runsDir, entry.name)),
       });
     } catch {
       // A record that cannot be read or parsed is listed as unreadable, which is how the Dashboard shows it.

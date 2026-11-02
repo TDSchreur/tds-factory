@@ -88,7 +88,7 @@ const DELETE_STATUSES = {
 };
 
 /** @type {Handler} */
-export function deleteRun(ctx) {
+export async function deleteRun(ctx) {
   const { send, store, res } = ctx;
   const id = decodeId(ctx, ctx.path.slice('/api/runs/'.length));
   if (id === undefined) return;
@@ -103,7 +103,7 @@ export function deleteRun(ctx) {
     return send(400, 'text/plain', 'invalid delete option');
   /** @type {string | undefined} */
   let reason;
-  const outcome = store.remove(
+  const outcome = await store.removeAsync(
     id,
     (text) => {
       reason = text;
@@ -170,7 +170,7 @@ export async function mergeRun(ctx) {
   if (!can(v.pr, 'merge')) return send(409, 'text/plain', `${provider.title} cannot merge from the Dashboard`);
   let eligibility;
   try {
-    eligibility = store.mergeEligibility(id);
+    eligibility = await store.mergeEligibilityAsync(id);
   } catch (err) {
     return send(409, 'text/plain', `cannot check Run Evidence: ${messageOf(err)}`);
   }
@@ -189,14 +189,14 @@ export async function mergeRun(ctx) {
 }
 
 /** @param {DashboardContext} ctx @param {string} id */
-function syncRun({ store, send }, id) {
-  store.sync(id);
+async function syncRun({ store, send }, id) {
+  await store.syncAsync(id);
   send(200, 'text/plain', 'synced');
 }
 
 /** @param {DashboardContext} ctx @param {string} id */
-function cleanRun({ mainStore, prInfo, send }, id) {
-  const { outcome, reason } = mainStore.clean(id, { prState: prInfo });
+async function cleanRun({ mainStore, prInfo, send }, id) {
+  const { outcome, reason } = await mainStore.cleanAsync(id, { prState: prInfo });
   send(outcome === 'kept' ? 409 : 200, 'text/plain', reason ? `${outcome}: ${reason}` : outcome);
 }
 
@@ -215,20 +215,20 @@ function grantExtraLoop(ctx, id, v) {
 }
 
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
-function acceptCheck(ctx, id, v) {
+async function acceptCheck(ctx, id, v) {
   const { send, store } = ctx;
   if (!v.waiting || v.column !== 'check')
     return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
   // The user decided on the Run as the page showed it; a change since then needs a new look.
   if (query(ctx).get('updated') !== v.updated)
     return send(409, 'text/plain', 'the Run changed since you looked at it; reload and look again');
-  const { problems } = store.mergeEligibility(id);
+  const { problems } = await store.mergeEligibilityAsync(id);
   if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
   // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.
   const reason = v.reason || 'accept the Check or send it back to Build';
   store.update(id, { status: 'running', activity: 'The user accepted the Check on the Dashboard' });
   try {
-    store.accept(id, {
+    await store.acceptAsync(id, {
       findings: problems.join('; '),
       decision: 'Continue to Finish with the open findings. Accepted by the user on the Dashboard.',
     });
@@ -247,10 +247,10 @@ export async function runAction(ctx) {
   if (v.unreadable) return ctx.send(409, 'text/plain', 'the Run record cannot be read');
   try {
     const action = ctx.match[2];
-    if (action === 'sync') return syncRun(ctx, id);
-    if (action === 'clean') return cleanRun(ctx, id);
+    if (action === 'sync') return await syncRun(ctx, id);
+    if (action === 'clean') return await cleanRun(ctx, id);
     if (action === 'extra-loop') return grantExtraLoop(ctx, id, v);
-    return acceptCheck(ctx, id, v);
+    return await acceptCheck(ctx, id, v);
   } catch (err) {
     ctx.send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
   }

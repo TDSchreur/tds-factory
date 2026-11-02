@@ -29,3 +29,81 @@ export const gitAsync = (cwd, args, options = {}) =>
     });
     if (input !== undefined) child.stdin?.end(input);
   });
+
+// A flow is written once as a generator that yields its git calls and locks (`yield* gitStep(...)`), and runs
+// blocking for the CLI (runSync) or without blocking the event loop for the Dashboard (runAsync).
+/**
+ * @typedef {{ git: [string, readonly string[], GitOptions] } | { call: () => unknown }} Step
+ * @typedef {Generator<Step, any, any>} Flow
+ */
+/**
+ * @param {string} cwd
+ * @param {readonly string[]} args
+ * @param {GitOptions} [options]
+ * @returns {Generator<Step, ReturnType<typeof git>, any>}
+ */
+export function* gitStep(cwd, args, options = {}) {
+  return yield { git: [cwd, args, options] };
+}
+// Any other blocking call of a flow, such as taking a lock; runAsync also awaits what it returns.
+/**
+ * @template T
+ * @param {() => T} call
+ * @returns {Generator<Step, Awaited<T>, any>}
+ */
+export function* callStep(call) {
+  return yield { call };
+}
+// A flow that makes no calls, for a plain function used where a flow is expected.
+/**
+ * @template T
+ * @param {T} value
+ * @returns {Generator<Step, T, any>}
+ */
+// eslint-disable-next-line require-yield
+export function* immediate(value) {
+  return value;
+}
+/** @param {Step} step */
+const performSync = (step) => ('git' in step ? git(...step.git) : step.call());
+/** @param {Step} step */
+const performAsync = async (step) => ('git' in step ? gitAsync(...step.git) : step.call());
+
+/**
+ * @template T
+ * @param {Generator<Step, T, any>} flow
+ * @returns {T}
+ */
+export function runSync(flow) {
+  let next = flow.next();
+  while (!next.done) {
+    let answer;
+    try {
+      answer = performSync(next.value);
+    } catch (err) {
+      next = flow.throw(err);
+      continue;
+    }
+    next = flow.next(answer);
+  }
+  return next.value;
+}
+/**
+ * @template T
+ * @param {Generator<Step, T, any>} flow
+ * @returns {Promise<T>}
+ */
+export async function runAsync(flow) {
+  let next = flow.next();
+  while (!next.done) {
+    let answer;
+    try {
+      answer = await performAsync(next.value);
+    } catch (err) {
+      next = flow.throw(err);
+      continue;
+    }
+    next = flow.next(answer);
+  }
+  return next.value;
+}
