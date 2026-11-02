@@ -7,7 +7,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2024",
-    "lib": ["ES2024"],
+    "lib": ["ES2024", "ESNext.Disposable"],
     "types": ["node"]
   },
   "include": ["*.js", "bin/**/*.js", "eval/**/*.js", "scripts/**/*.js", "src/**/*.js"],
