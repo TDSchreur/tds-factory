@@ -51,7 +51,7 @@ CI runs the lint, formatting and type checks; `npm test` does not, so run `npm r
 
 ## Errors
 
-An error that a caller has to tell apart from others is a `FactoryError` (`src/errors.js`) with a lowercase, kebab-case `code` and, when it replaces another error, that error as `cause`; the code can never be mistaken for a Node system error code such as `ENOENT`. Check `codeOf(err)`, not the message. A `catch` in `src/` either names the error and reacts to it, narrows to the codes it expects (`isMissing` for an absent path) and rethrows the rest, or has no variable and starts with a comment that says why ignoring the error is intended; `test/bare-catch.test.js` enforces the last rule. Requests that leave the machine carry a timeout, as `tds-factory update` does.
+An error that a caller has to tell apart from others is a `FactoryError` (`src/errors.js`) with a lowercase, kebab-case `code` and, when it replaces another error, that error as `cause`; the code can never be mistaken for a Node system error code such as `ENOENT`. Check `codeOf(err)`, not the message. A `catch` in `src/` either names the error and reacts to it, narrows to the codes it expects (`isMissing` for an absent path) and rethrows the rest, or has no variable and starts with a comment that says why ignoring the error is intended; `test/bare-catch.test.js` enforces the last rule. The HTTP requests of `tds-factory update` carry a timeout.
 
 ## Instruction guides
 

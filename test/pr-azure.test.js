@@ -21,12 +21,12 @@ const link = (key) =>
   `https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/${fixture(key).pr.pullRequestId}`;
 // An error from the adapter with this code, and optionally a message that matches.
 /**
- * @param {string} reason
+ * @param {string} code
  * @param {RegExp} [message]
  * @returns {(err: unknown) => boolean}
  */
-const failsWith = (reason, message) => (err) =>
-  err instanceof Error && 'code' in err && err.code === reason && (message?.test(err.message) ?? true);
+const failsWith = (code, message) => (err) =>
+  err instanceof Error && 'code' in err && err.code === code && (message?.test(err.message) ?? true);
 // A stand-in for the `az` command that answers from the fixtures.
 /**
  * @param {string} key

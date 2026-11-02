@@ -23,7 +23,7 @@ const exec = promisify(execFile);
  */
 const logFailure = (what, err) =>
   console.error(
-    `dashboard: ${what.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+    `dashboard: ${what.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}: ${(err instanceof Error ? (err.stack ?? err.message) : String(err)).replace(/\n/g, '\n    ')}`,
   );
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
 /** @param {string} worktree */
@@ -233,7 +233,7 @@ export function interpretRun(entry) {
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
 // Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
-// prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a `reason` when the provider fails.
+// prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a FactoryError whose `code` is the reason when the provider fails.
 // statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
 // prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
 /**

@@ -192,7 +192,7 @@ test('a transient failure is retried with backoff, then succeeds', async () => {
   }
 });
 
-test('a permanent failure rejects with the error and runs no command', async () => {
+test('a failure that persists rejects with the error and runs no command', async () => {
   const w = world({ routes: { [API]: () => new Error('offline'), [PAGE]: () => new Error('offline') } });
   try {
     await assert.rejects(update({ installed: '0.3.0', ...w.options }), /offline/);
@@ -380,7 +380,8 @@ test('the failing update command exits with 1 and prints the error', () => {
     const stub = join(dir, 'offline.mjs');
     writeFileSync(
       stub,
-      "globalThis.fetch = async () => { throw Object.assign(new Error('offline'), { permanent: true }); };\n",
+      `import { FactoryError } from ${JSON.stringify(pathToFileURL(resolve('src/errors.js')).href)};\n` +
+        "globalThis.fetch = async () => { throw new FactoryError('offline', { code: 'http-permanent' }); };\n",
     );
     const result = spawnSync(
       process.execPath,
