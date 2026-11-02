@@ -5,6 +5,20 @@ import { spawnSync } from 'node:child_process';
 /** @import { ProjectReview, AgentName, Run } from './run-record.js' */
 import { userDir } from './flow.js';
 import { messageOf } from './narrow.js';
+import { FactoryError } from './errors.js';
+
+// A problem in one review of the project configuration, which names the review so the configuration can point at its line.
+export class ReviewError extends FactoryError {
+  /**
+   * @param {string} message
+   * @param {string} reviewId
+   * @param {unknown} [cause]
+   */
+  constructor(message, reviewId, cause) {
+    super(message, { code: 'review-invalid', cause });
+    this.reviewId = reviewId;
+  }
+}
 
 const baseline = new Set(['standards', 'spec', 'security', 'infrastructure', 'constructor', 'prototype']);
 const validId = /^[a-z][a-z0-9-]{0,63}$/;
@@ -138,17 +152,18 @@ function parseReview(review, ids, projectDir, agent, homeDir, env) {
     throw new Error('invalid project review fields');
   const { id, name, mode, skill, patterns, runtime } = review;
   if (!text(id) || !validId.test(id) || baseline.has(id) || ids.has(id))
-    throw new Error(`invalid, duplicate or reserved review ID: ${id}`);
+    throw new ReviewError(`invalid, duplicate or reserved review ID: ${id}`, String(id));
   ids.add(id);
-  if (!text(name)) throw new Error(`${id}: review needs a name`);
-  if (mode !== 'source' && mode !== 'interactive') throw new Error(`${id}: mode must be source or interactive`);
+  if (!text(name)) throw new ReviewError(`${id}: review needs a name`, id);
+  if (mode !== 'source' && mode !== 'interactive')
+    throw new ReviewError(`${id}: mode must be source or interactive`, id);
   if (
     patterns !== undefined &&
     (!Array.isArray(patterns) ||
       !patterns.length ||
       patterns.some((p) => !text(p) || p.startsWith('/') || p.split('/').includes('..') || /[[\]{}!\\]/.test(p)))
   )
-    throw new Error(`${id}: patterns must be nonempty relative globs using *, ** and ?`);
+    throw new ReviewError(`${id}: patterns must be nonempty relative globs using *, ** and ?`, id);
   if (
     mode === 'interactive' &&
     (!plain(runtime) ||
@@ -157,13 +172,14 @@ function parseReview(review, ids, projectDir, agent, homeDir, env) {
       !text(runtime.ready) ||
       !text(runtime.setup))
   )
-    throw new Error(`${id}: interactive review needs runtime start, ready and setup`);
-  if (mode === 'source' && runtime !== undefined) throw new Error(`${id}: runtime is only for interactive reviews`);
+    throw new ReviewError(`${id}: interactive review needs runtime start, ready and setup`, id);
+  if (mode === 'source' && runtime !== undefined)
+    throw new ReviewError(`${id}: runtime is only for interactive reviews`, id);
   let snapshot;
   try {
     snapshot = regularTree(skillDirectory(projectDir, agent, homeDir, skill, env));
   } catch (err) {
-    throw new Error(`${id}: cannot load Skill: ${messageOf(err)}`);
+    throw new ReviewError(`${id}: cannot load Skill: ${messageOf(err)}`, id, err);
   }
   // skillDirectory refused every skill that is not an object with these keys, and the checks above
   // left a runtime only on an interactive review, with its three commands.

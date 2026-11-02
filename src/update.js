@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { messageOf } from './narrow.js';
+import { messageOf, codeOf } from './narrow.js';
+import { FactoryError } from './errors.js';
 
 const REPO = 'TDSchreur/tds-factory';
 const ASSET = 'tds-factory.tgz';
@@ -83,23 +84,14 @@ function isReleaseAsset(text) {
 /** @param {number} status */
 const transient = (status) => status === 429 || status >= 500;
 
-class StatusError extends Error {
-  /**
-   * @param {string} what
-   * @param {number} status
-   */
-  constructor(what, status) {
-    super(`${what} answered ${status}`);
-    this.permanent = !transient(status);
-  }
-}
-
 /**
  * @param {string} what
  * @param {number} status
  */
 function statusError(what, status) {
-  return new StatusError(what, status);
+  return new FactoryError(`${what} answered ${status}`, {
+    code: transient(status) ? 'http-transient' : 'http-permanent',
+  });
 }
 
 /**
@@ -114,7 +106,7 @@ async function withRetry(what, action, { sleep, warn }) {
     try {
       return await action();
     } catch (err) {
-      if (attempt === ATTEMPTS || (err instanceof StatusError && err.permanent)) throw err;
+      if (attempt === ATTEMPTS || codeOf(err) === 'http-permanent') throw err;
       warn(`${what} failed (attempt ${attempt}/${ATTEMPTS}): ${messageOf(err)}`);
       await sleep(1000 * 2 ** attempt);
     }

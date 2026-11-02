@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { can, providerFor, providerWith, remoteRepo } from './pr-provider.js';
-import { messageOf, codeOf, oneOf, reasonOf } from './narrow.js';
+import { messageOf, codeOf, oneOf } from './narrow.js';
 import { isStage } from './flow.js';
 
 const exec = promisify(execFile);
@@ -284,7 +284,7 @@ export async function startDashboard({
       .then(
         (value) => ({ value, ttl: value?.state === 'open' ? PR_STATUS_MS : PR_STATUS_FINAL_MS }),
         (/** @type {unknown} */ err) => ({
-          value: { unavailable: oneOf(STATUS_REASONS, reasonOf(err)) ? reasonOf(err) : 'error' },
+          value: { unavailable: oneOf(STATUS_REASONS, codeOf(err)) ? codeOf(err) : 'error' },
           ttl: PR_STATUS_FAIL_MS,
         }),
       )

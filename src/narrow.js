@@ -8,11 +8,7 @@ export const messageOf = (err) =>
       ? err.message
       : String(err);
 
-/** The `reason` of a failed PR lookup, or undefined. @param {unknown} err */
-export const reasonOf = (err) =>
-  typeof err === 'object' && err !== null && 'reason' in err && typeof err.reason === 'string' ? err.reason : undefined;
-
-/** The `code` of a system error such as ENOENT, or undefined. @param {unknown} err */
+/** The `code` of a system error such as ENOENT or of a FactoryError, or undefined. @param {unknown} err */
 export const codeOf = (err) =>
   typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string' ? err.code : undefined;
 

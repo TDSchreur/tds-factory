@@ -46,10 +46,10 @@ Three things make a failure of the `tds-factory` CLI hard to see or hard to end.
 - **Timeouts.** Each fetch gets `AbortSignal.timeout`. The API lookup, the redirect lookup and the checksum download use a 30 s default; the tarball download uses 120 s. `update()` gains a `timeoutMs` option that sets the first bound (default 30 s); the download bound is four times that. The signal covers reading the body, so a stalled body ends too. The retry count and back-off stay as they are.
 - **Project configuration.** The project review loader throws `FactoryError` with the code `review-invalid` and a `reviewId` property for the errors that name a review. The configuration reads the property and no longer parses the message. The messages are unchanged.
 - **Catch audit.** Each of the 41 bare catches gets one of three treatments:
-  - *Keep:* ignoring is the design (damaged or unreadable log lines, `decodeURIComponent` leading to a 400, URL and path validity checks, optional session logs, best-effort cleanup lookups). A one-line comment says why.
-  - *Narrow:* a catch that means "missing" checks `codeOf(err)` for `ENOENT` or `ENOTDIR` and rethrows anything else. The install record read distinguishes a missing record (start empty) from a corrupt one (fail with a message that names the file).
-  - *Report:* a catch that answers with a replacement text logs the error (the Dashboard 502 and 'unavailable' paths) or keeps the original as `cause` (catches that throw a friendlier error).
-  The result is written per catch in `build.md`.
+  - _Keep:_ ignoring is the design (damaged or unreadable log lines, `decodeURIComponent` leading to a 400, URL and path validity checks, optional session logs, best-effort cleanup lookups). A one-line comment says why.
+  - _Narrow:_ a catch that means "missing" checks `codeOf(err)` for `ENOENT` or `ENOTDIR` and rethrows anything else. The install record read distinguishes a missing record (start empty) from a corrupt one (fail with a message that names the file).
+  - _Report:_ a catch that answers with a replacement text logs the error (the Dashboard 502 and 'unavailable' paths) or keeps the original as `cause` (catches that throw a friendlier error).
+    The result is written per catch in `build.md`.
 - **Dashboard 500.** The handler's last catch logs `dashboard: <METHOD> <path>` and the error's stack to stderr, with the query string left out, and answers `internal error` as before. The other Dashboard catches that report use the same log helper.
 - **Typing.** All of it passes strict `checkJs` with JSDoc types and no casts or opt-outs.
 - **Build or borrow.** Nothing new is borrowed: `AbortSignal.timeout` and the `Error` `cause` option are in Node 24.

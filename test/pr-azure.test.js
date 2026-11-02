@@ -19,14 +19,14 @@ const status = (key) => {
 /** @param {string} key */
 const link = (key) =>
   `https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/${fixture(key).pr.pullRequestId}`;
-// An error from the adapter with this reason, and optionally a message that matches.
+// An error from the adapter with this code, and optionally a message that matches.
 /**
  * @param {string} reason
  * @param {RegExp} [message]
  * @returns {(err: unknown) => boolean}
  */
 const failsWith = (reason, message) => (err) =>
-  err instanceof Error && 'reason' in err && err.reason === reason && (message?.test(err.message) ?? true);
+  err instanceof Error && 'code' in err && err.code === reason && (message?.test(err.message) ?? true);
 // A stand-in for the `az` command that answers from the fixtures.
 /**
  * @param {string} key
@@ -241,7 +241,7 @@ test('a link that points at another repository than the pull request is refused'
   );
 });
 
-test('failures carry a reason that names what to fix', async () => {
+test('failures carry a code that names what to fix', async () => {
   /** @param {unknown} err */
   const fail = (err) => async () => {
     throw err;
@@ -251,7 +251,7 @@ test('failures carry a reason that names what to fix', async () => {
     try {
       await statusAsync(link('passing'), { run: fail(err) });
     } catch (e) {
-      return e instanceof Error && 'reason' in e ? e.reason : undefined;
+      return e instanceof Error && 'code' in e ? e.code : undefined;
     }
   };
   assert.equal(await reason(Object.assign(new Error('x'), { code: 'ENOENT' })), 'az-missing');

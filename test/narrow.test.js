@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { messageOf, codeOf, reasonOf, oneOf, execFailure } from '../src/narrow.js';
+import { messageOf, codeOf, oneOf, execFailure } from '../src/narrow.js';
 
 test('messageOf reads the message of an Error and the text of anything else that was thrown', () => {
   assert.equal(messageOf(new Error('boom')), 'boom');
@@ -17,13 +17,6 @@ test('codeOf reads a string code and ignores everything else', () => {
   assert.equal(codeOf({ code: 2 }), undefined);
   assert.equal(codeOf(null), undefined);
   assert.equal(codeOf('ENOENT'), undefined);
-});
-
-test('reasonOf reads a string reason and ignores everything else', () => {
-  assert.equal(reasonOf(Object.assign(new Error('x'), { reason: 'auth' })), 'auth');
-  assert.equal(reasonOf(new Error('x')), undefined);
-  assert.equal(reasonOf({ reason: 1 }), undefined);
-  assert.equal(reasonOf(null), undefined);
 });
 
 test('oneOf accepts an absent value', () => {
