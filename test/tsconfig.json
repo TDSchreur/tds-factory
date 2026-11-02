@@ -1,14 +1,24 @@
 {
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "strict": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "target": "ES2022",
-    "types": ["node"]
+    "target": "ES2024",
+    "types": ["node"],
+    "lib": ["ES2024"]
   },
-  "include": ["**/*.js"],
+  "include": [
+    "browser.js",
+    "dashboard-files.js",
+    "dashboard-token.js",
+    "dashboard-tokens.js",
+    "eval-root.js",
+    "fake-command.js",
+    "git-repo.js",
+    "usage-fixtures.js"
+  ],
   "exclude": ["../node_modules", "../vendor", "../dashboard/vendor", "../.factory"]
 }
