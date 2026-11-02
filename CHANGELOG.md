@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-02
+
+### Added
+- `dev-install` also registers the developer skills `npm-trusted-publishing`, `github-actions-runtime-upgrade-conventions`, `agent-supply-chain`, `sandbox-npm-install` and `dependabot`.
+- Copilot instructions from awesome-copilot in `.github/instructions/` for shell, PowerShell, Markdown, agent and skill files, workflows and the Dashboard's accessibility.
+- The Dashboard has a "Skip to the Runs" link as its first Tab stop.
+- `scripts/use-official.ps1` and `scripts/use-repo.ps1` switch between the Release and a checkout on Windows, like the `.sh` scripts.
+
+### Changed
+- PRs to the Factory repository now go to `develop`, which is the default branch. A release PR from `develop` to `main` raises the version in `package.json`, and merging it publishes the Release; the release workflow no longer picks the patch number and refuses a version that already has a tag. `scripts/next-version.js` is removed.
+- The browser tests always skip on Windows, also with `REQUIRE_BROWSER=1`. The `TDS_WINDOWS_BROWSER` opt-in and the `msedgedriver`, Edge and Chrome lookup for Windows are removed.
+- The Factory needs Node 24 or newer: `engines`, the installers, CI and the release workflow no longer support Node 20 or 22.
+- The Windows unit tests run in two CI shards, and the carried-verdict tests reuse one Run per test, so the Windows job finishes sooner.
+- CI lints every script under `scripts/` with shellcheck and PSScriptAnalyzer, not only the installers.
+- The Factory checks out and tests on Windows: `.gitattributes` keeps text files on LF, CI runs `npm run check` and `npm run test:unit` on `windows-latest`, and the browser tests skip there.
+
+### Fixed
+- The README flowchart renders on GitHub again: the edge label with parentheses is quoted.
+- `scripts/use-repo.ps1` and `scripts/use-official.ps1` no longer fail on Windows with "Index was outside the bounds of the array" when they call `npm`.
+- On Windows, `tds-factory doctor` finds commands that are `.cmd` shims (such as `npm`) when it checks the Verify command.
+- On Windows, Run worktrees are recognized when git prints their paths with forward slashes, so `run clean` and `run repair` and Doctor work.
+
 ## [0.6.1] - 2026-11-01
 
 ### Added
