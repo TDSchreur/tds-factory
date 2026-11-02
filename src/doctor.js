@@ -146,21 +146,24 @@ function configCheck(agent, projectDir, homeDir) {
   return ['pass', `.factory/config.json is valid${set.length ? ` (${set.join(', ')})` : ''}`];
 }
 
+// On Windows a command is found with any of the PATHEXT extensions (npm.cmd, claude.exe).
 function which(name, cwd) {
-  if (name.includes('/')) return fs.existsSync(path.resolve(cwd, name));
-  return (process.env.PATH ?? '').split(path.delimiter).some((dir) => dir && fs.existsSync(path.join(dir, name)));
-}
-
-const NO_AGENT = 'no agent is usable: install claude, codex or copilot and run tds-factory install';
-
-// The command an Agent target is started with is its name. On Windows a command is found with any of the PATHEXT extensions (claude.exe, claude.cmd).
-function binaryCheck(agent) {
+  if (name.includes('/') || (process.platform === 'win32' && name.includes('\\')))
+    return fs.existsSync(path.resolve(cwd, name));
   const extensions =
     process.platform === 'win32'
       ? ['', ...(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((ext) => /^\.\w+$/.test(ext))]
       : [''];
-  const found = extensions.some((ext) => which(agent + ext));
-  return found ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
+  return (process.env.PATH ?? '')
+    .split(path.delimiter)
+    .some((dir) => dir && extensions.some((ext) => fs.existsSync(path.join(dir, name + ext))));
+}
+
+const NO_AGENT = 'no agent is usable: install claude, codex or copilot and run tds-factory install';
+
+// The command an Agent target is started with is its name.
+function binaryCheck(agent) {
+  return which(agent) ? ['pass', `${agent} found on PATH`] : ['missing', `${agent} not found on PATH`];
 }
 
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.

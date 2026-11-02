@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 import { SKILLS_DIR, AGENTS_DIR } from '../src/paths.js';
@@ -34,15 +34,16 @@ function doctorAt(home, dir, ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, USERPROFILE: home },
   });
   return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stderr: result.stderr };
 }
 // The doctor report without blocking this process, so a server started by the test can answer the doctor's git.
 async function doctorAsync(dir, ...args) {
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   const child = spawn(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
-    env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), 'doctor-home-')) },
+    env: { ...process.env, HOME: home, USERPROFILE: home },
   });
   let stdout = '';
   child.stdout.on('data', (d) => (stdout += d));
@@ -56,19 +57,23 @@ const entry = (report, id) => report.agents.find((a) => a.id === id);
 // A PATH holding only git, a fake npm (the Verify command) and the named agent commands, so the machine's own agents never count.
 function pathWith(...commands) {
   const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-'));
-  for (const name of ['npm', ...commands]) writeFileSync(join(bin, name), '');
-  const gitBin = (process.env.PATH ?? '')
+  const windows = process.platform === 'win32';
+  for (const name of ['npm', ...commands]) writeFileSync(join(bin, windows ? `${name}.cmd` : name), '');
+  const gitName = windows ? 'git.exe' : 'git';
+  const gitBin = (process.env.PATH ?? process.env.Path ?? '')
     .split(delimiter)
-    .map((d) => join(d, 'git'))
+    .map((d) => join(d, gitName))
     .find((f) => existsSync(f));
+  // git.exe needs the DLLs next to it on Windows, and a symlink needs privileges there; use its own folder.
+  if (windows) return `${bin}${delimiter}${dirname(gitBin)}`;
   symlinkSync(gitBin, join(bin, 'git'));
   return bin;
 }
-function doctorOn(path, dir, home, ...args) {
+function doctorOn(path, dir, home = mkdtempSync(join(tmpdir(), 'doctor-home-')), ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home ?? mkdtempSync(join(tmpdir(), 'doctor-home-')), PATH: path },
+    env: { ...process.env, HOME: home, USERPROFILE: home, PATH: path, Path: path },
   });
   return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stdout: result.stdout };
 }
@@ -107,17 +112,21 @@ test('doctor uses the linked worktree rather than the main checkout', () => {
   assert.equal(check(doctorAt(home, nested, '--agent', 'codex').report, 'tracker').status, 'pass');
 });
 
-test('doctor preserves spaces at the end of the worktree path', () => {
-  const main = repo();
-  const linked = join(mkdtempSync(join(tmpdir(), 'doctor-space-')), 'project ');
-  git(main, 'worktree', 'add', '-b', 'doctor-space', linked);
-  mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
-  for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
-  writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
-  const nested = join(linked, 'nested');
-  mkdirSync(nested);
-  assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
-});
+test(
+  'doctor preserves spaces at the end of the worktree path',
+  { skip: process.platform === 'win32' && 'Windows cannot create a folder whose name ends in a space' },
+  () => {
+    const main = repo();
+    const linked = join(mkdtempSync(join(tmpdir(), 'doctor-space-')), 'project ');
+    git(main, 'worktree', 'add', '-b', 'doctor-space', linked);
+    mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
+    for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
+    writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
+    const nested = join(linked, 'nested');
+    mkdirSync(nested);
+    assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
+  },
+);
 
 test(
   'doctor preserves a trailing carriage return in a POSIX worktree path',
@@ -559,7 +568,8 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
     assert.equal(binary('claude'), 'pass');
     assert.equal(binary('codex'), 'missing');
     Object.defineProperty(process, 'platform', saved.platform);
-    assert.equal(binary('claude'), 'missing', 'without Windows the extension is not tried');
+    if (process.platform !== 'win32')
+      assert.equal(binary('claude'), 'missing', 'without Windows the extension is not tried');
   } finally {
     Object.defineProperty(process, 'platform', saved.platform);
     if (saved.path === undefined) delete process.env.PATH;

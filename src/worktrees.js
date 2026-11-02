@@ -66,14 +66,17 @@ export function ownWorktrees(projectDir) {
   if (listed.status !== 0) throw new Error('cannot list git worktrees');
   const entries = new Map();
   for (const part of listed.stdout.split('\n\n')) {
-    const dir = /^worktree (.+)$/m.exec(part)?.[1];
+    // Git prints forward slashes on Windows.
+    const dir = /^worktree (.+)$/m.exec(part)?.[1]?.replace(/\r$/, '');
     const branch = /^branch refs\/heads\/(.+)$/m.exec(part)?.[1];
-    if (!dir || path.dirname(dir) !== base) continue;
-    const id = path.basename(dir);
+    if (!dir) continue;
+    const own = path.normalize(dir);
+    if (path.dirname(own) !== base) continue;
+    const id = path.basename(own);
     if (!validId(id)) continue;
-    const stat = fs.lstatSync(dir, { throwIfNoEntry: false });
-    const safe = !!stat && stat.isDirectory() && !stat.isSymbolicLink() && fs.realpathSync(dir) === dir;
-    entries.set(id, { dir, branch, head: /^HEAD (.+)$/m.exec(part)?.[1], missing: !stat, safe });
+    const stat = fs.lstatSync(own, { throwIfNoEntry: false });
+    const safe = !!stat && stat.isDirectory() && !stat.isSymbolicLink() && fs.realpathSync(own) === own;
+    entries.set(id, { dir: own, branch, head: /^HEAD (.+)$/m.exec(part)?.[1], missing: !stat, safe });
   }
   return entries;
 }

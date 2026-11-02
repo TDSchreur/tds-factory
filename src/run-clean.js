@@ -117,7 +117,8 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
       .split('\n\n')
       .some(
         (part) =>
-          part.split('\n').includes(`branch refs/heads/${id}`) && !(own && part.startsWith(`worktree ${own.dir}\n`)),
+          part.split('\n').includes(`branch refs/heads/${id}`) &&
+          !(own && part.startsWith('worktree ') && path.normalize(part.split('\n')[0].slice(9)) === own.dir),
       );
     if (elsewhere) return kept('the branch is checked out in another worktree');
     if (own) {
