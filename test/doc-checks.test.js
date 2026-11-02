@@ -160,9 +160,10 @@ test('every browser test in this repository is named so the CI browser job runs 
   assert.deepEqual(misnamedBrowserTests(resolve('.')), []);
 });
 
-// A git repository whose origin/main is the initial commit, with a branch checked out on top of it.
+// A git repository whose origin/develop is the initial commit, with a branch checked out on top of it.
 const branch = () => {
   const dir = gitRepo();
+  git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/develop');
   git(dir, 'fetch', '-q', 'origin');
   git(dir, 'checkout', '-q', '-b', 'work');
   return dir;
@@ -189,7 +190,7 @@ test('missingChangelogFragment wants a fragment for a committed change in src, s
 test('missingChangelogFragment counts a deleted fragment, as in the change that folds the fragments at a release', () => {
   const dir = gitRepo();
   commit(dir, { 'changelog.d/x.md': '### Added\n- X.\n' });
-  git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/develop');
   git(dir, 'fetch', '-q', 'origin');
   git(dir, 'checkout', '-q', '-b', 'release');
   git(dir, 'rm', '-q', 'changelog.d/x.md');
@@ -198,14 +199,14 @@ test('missingChangelogFragment counts a deleted fragment, as in the change that 
   assert.deepEqual(missingChangelogFragment(dir).problems, []);
 });
 
-test('missingChangelogFragment skips when the branch shares no history with origin/main, and sees a file moved out of src', () => {
+test('missingChangelogFragment skips when the branch shares no history with origin/develop, and sees a file moved out of src', () => {
   const dir = branch();
   git(dir, 'checkout', '-q', '--orphan', 'unrelated');
   commit(dir, { 'src/a.js': 'x' });
   assert.match(missingChangelogFragment(dir).skipped, /no common ancestor/);
   const moved = branch();
   commit(moved, { 'src/a.js': 'same content\n'.repeat(20) });
-  git(moved, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  git(moved, 'push', '-q', 'origin', 'HEAD:refs/heads/develop');
   git(moved, 'fetch', '-q', 'origin');
   commit(moved, { 'changelog.d/x.md': '### Added\n- X.\n' });
   git(moved, 'mv', 'src/a.js', 'lib.js');
@@ -213,7 +214,7 @@ test('missingChangelogFragment skips when the branch shares no history with orig
   assert.deepEqual(missingChangelogFragment(moved).problems, []);
   const bare = branch();
   commit(bare, { 'src/b.js': 'same content\n'.repeat(20) });
-  git(bare, 'push', '-q', 'origin', 'HEAD:refs/heads/main');
+  git(bare, 'push', '-q', 'origin', 'HEAD:refs/heads/develop');
   git(bare, 'fetch', '-q', 'origin');
   git(bare, 'mv', 'src/b.js', 'lib.js');
   git(bare, 'commit', '-q', '-m', 'move');
@@ -232,14 +233,14 @@ test('missingChangelogFragment sees uncommitted and new files', () => {
   assert.deepEqual(missingChangelogFragment(dir).problems, []);
 });
 
-test('missingChangelogFragment skips, with a reason, when there is no origin/main to compare with', () => {
+test('missingChangelogFragment skips, with a reason, when there is no origin/develop to compare with', () => {
   const dir = gitRepo();
   git(dir, 'remote', 'remove', 'origin');
   commit(dir, { 'src/a.js': 'x' });
   const result = missingChangelogFragment(dir);
-  assert.match(result.skipped, /no origin\/main/);
+  assert.match(result.skipped, /no origin\/develop/);
   assert.deepEqual(result.problems, []);
-  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no origin\/main/);
+  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no origin\/develop/);
 });
 
 test('this repository has a changelog fragment for its changes', (t) => {

@@ -213,16 +213,16 @@ const resolves = (root, ref) => {
 };
 
 // A change to code the package ships needs a changelog fragment. Compares the working tree with the merge base with
-// origin/main, so it sees committed, staged, unstaged and new files. With no git history or no origin/main (a shallow CI
+// origin/develop, so it sees committed, staged, unstaged and new files. With no git history or no origin/develop (a shallow CI
 // checkout, the installed package) or no common ancestor with it, it reports why it did not check and finds nothing; any other git failure throws.
 // A deleted fragment counts too, so the release change that folds the fragments is not asked for a new one.
 export function missingChangelogFragment(root) {
-  if (!resolves(root, 'origin/main')) return { skipped: 'no origin/main to compare with', problems: [] };
+  if (!resolves(root, 'origin/develop')) return { skipped: 'no origin/develop to compare with', problems: [] };
   let base;
   try {
-    base = git(root, 'merge-base', 'HEAD', 'origin/main')[0];
+    base = git(root, 'merge-base', 'HEAD', 'origin/develop')[0];
   } catch (err) {
-    if (err.status === 1) return { skipped: 'no common ancestor with origin/main (a shallow fetch)', problems: [] };
+    if (err.status === 1) return { skipped: 'no common ancestor with origin/develop (a shallow fetch)', problems: [] };
     throw err;
   }
   const changed = [
