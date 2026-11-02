@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -11,19 +11,55 @@ const ASSET = /^\/(?:style\.css|[\w-]+\.js|vendor\/[\w-]+\.js)$/;
 const TYPES = { css: 'text/css', js: 'text/javascript' };
 const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
-export const hasBrowser = () =>
-  spawnSync('sh', ['-c', 'command -v chromedriver && (command -v chromium || command -v google-chrome)']).status === 0;
+const WINDOWS = process.platform === 'win32';
+const onPath = (name) => spawnSync(WINDOWS ? 'where' : 'sh', WINDOWS ? [name] : ['-c', `command -v ${name}`]).status === 0;
 
-// ChromeDriver runs in its own process group, so an interrupted test run (Ctrl-C, a CI cancel) would not reach it.
-// Kill the groups of drivers that are still open when this process exits or is signalled.
+// On Windows Chrome and Edge are not on PATH, so look in their install folders (or CHROME_BIN).
+const windowsBrowser = () =>
+  [
+    process.env.CHROME_BIN,
+    ...['PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA'].flatMap((base) =>
+      process.env[base]
+        ? [
+            join(process.env[base], 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            join(process.env[base], 'Chromium', 'Application', 'chrome.exe'),
+          ]
+        : [],
+    ),
+  ].find((file) => file && existsSync(file));
+
+export const hasBrowser = () =>
+  onPath('chromedriver') && (WINDOWS ? Boolean(windowsBrowser()) : onPath('chromium') || onPath('google-chrome'));
+
+// Whether the process (or, on POSIX, the process group of a detached driver) still runs.
+export const isRunning = (pid) => {
+  try {
+    process.kill(WINDOWS ? pid : -pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Kills the process and its children: the whole process group on POSIX, the process tree through taskkill on Windows.
+export const killTree = (pid) => {
+  if (WINDOWS) {
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 10_000 });
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    /* already gone */
+  }
+};
+
+// ChromeDriver runs in its own process group (a process tree on Windows), so an interrupted test run (Ctrl-C, a CI cancel)
+// would not reach it. Kill the drivers that are still open when this process exits or is signalled.
 const live = new Map();
 const killLive = () => {
   for (const [pid, dir] of live) {
-    try {
-      process.kill(-pid, 'SIGKILL');
-    } catch {
-      /* already gone */
-    }
+    killTree(pid);
     rmSync(dir, { recursive: true, force: true });
   }
 };
@@ -36,16 +72,9 @@ for (const signal of ['SIGINT', 'SIGTERM'])
 
 // Ends ChromeDriver and the Chromium it started, and waits for them to exit, so Chromium removes its temporary profile
 // (/tmp/org.chromium.Chromium.scoped_dir.*). The driver runs in its own process group, so the whole group is waited on and,
-// when it does not leave within graceMs of /shutdown, killed. The driver must have been spawned with detached: true. Every wait is bounded, so a stuck browser cannot hang the suite.
+// when it does not leave within graceMs of /shutdown, killed (the process tree on Windows). The driver must have been spawned with detached: true. Every wait is bounded, so a stuck browser cannot hang the suite.
 export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 } = {}) {
-  const alive = () => {
-    try {
-      process.kill(-driver.pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const alive = () => isRunning(driver.pid);
   const untilGone = async (ms) => {
     for (const end = Date.now() + ms; alive() && Date.now() < end;) await delay(25);
     return !alive();
@@ -53,11 +82,7 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
   if (!alive()) return;
   await fetch(`http://127.0.0.1:${port}/shutdown`, { signal: AbortSignal.timeout(1000) }).catch(() => {});
   if (await untilGone(graceMs)) return;
-  try {
-    process.kill(-driver.pid, 'SIGKILL');
-  } catch {
-    /* the group left meanwhile */
-  }
+  killTree(driver.pid);
   await untilGone(killMs);
 }
 
@@ -122,7 +147,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   const driver = spawn('chromedriver', [`--port=${driverPort}`], {
     stdio: 'ignore',
     detached: true,
-    env: { ...process.env, TMPDIR: tmp },
+    env: { ...process.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
   });
   live.set(driver.pid, tmp);
   const request = async (method, path, body, timeout) => {
@@ -175,6 +200,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
           alwaysMatch: {
             browserName: 'chrome',
             'goog:chromeOptions': {
+              ...(WINDOWS ? { binary: windowsBrowser() } : {}),
               args: [
                 '--headless',
                 '--no-sandbox',
