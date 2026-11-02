@@ -118,7 +118,7 @@ export function parseStatus(pr, policies) {
 /** @param {any} err The error of a failed command: an Error with its stderr and code, as execFile gives it. */
 const failure = (err) => {
   const text = `${err.stderr ?? ''}`;
-  return err.code === 'ENOENT' || /['"]az(?:\.cmd)?['"] is not recognized/i.test(text)
+  return err.code === 'ENOENT' || err.code === CMD_NOT_FOUND || /['"]az(?:\.cmd)?['"] is not recognized/i.test(text)
     ? 'az-missing'
     : /misspelled or not recognized|azure-devops|extension/i.test(text)
       ? 'az-extension-missing'
@@ -146,26 +146,33 @@ const args = (subcommand, { organization, id }) => [
 ];
 const SHOW = ['show'],
   POLICIES = ['policy', 'list'];
-const env = () => ({
-  ...process.env,
-  AZURE_CORE_NO_COLOR: '1',
-  AZURE_CORE_COLLECT_TELEMETRY: 'false',
-  ...(process.platform === 'win32' ? { NoDefaultCurrentDirectoryInExePath: '1' } : {}),
-});
-/** @param {string[]} argv @returns {[string, string[]]} */
-const command = (argv) => {
-  if (process.platform !== 'win32') return ['az', argv];
-  // Only fixed flags and the validated organisation/id reach cmd.exe; decoded project/repository names never do.
-  return [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `az.cmd ${argv.join(' ')}`]];
-};
+// cmd.exe reports a command it cannot find with exit code 9009 in every language.
+const CMD_NOT_FOUND = 9009;
+// What may reach cmd.exe unquoted: the fixed flags, the validated organisation URL and the numeric id.
+const SAFE_ARG = /^[\w.:/-]+$/;
+/**
+ * How to start az: on Windows `az` is the batch file az.cmd, which Node cannot start itself, so it goes through cmd.exe.
+ * @param {string[]} argv
+ * @param {string} [platform]
+ * @returns {[string, string[], { env: NodeJS.ProcessEnv, windowsVerbatimArguments: boolean }]}
+ */
+export function launch(argv, platform = process.platform) {
+  const env = { ...process.env, AZURE_CORE_NO_COLOR: '1', AZURE_CORE_COLLECT_TELEMETRY: 'false' };
+  if (platform !== 'win32') return ['az', argv, { env, windowsVerbatimArguments: false }];
+  // The arguments are joined unquoted, so refuse anything that cmd.exe could read as more than a plain word.
+  if (!argv.every((arg) => SAFE_ARG.test(arg))) throw new Error('refusing to pass an unsafe argument to cmd.exe');
+  return [
+    process.env.ComSpec || 'cmd.exe',
+    ['/d', '/s', '/c', `az.cmd ${argv.join(' ')}`],
+    // Do not let cmd.exe pick up an az.cmd from the current directory (a project worktree).
+    { env: { ...env, NoDefaultCurrentDirectoryInExePath: '1' }, windowsVerbatimArguments: true },
+  ];
+}
 /** @param {string[]} argv */
-const defaultRun = (argv) =>
-  exec(...command(argv), {
-    timeout: 20_000,
-    maxBuffer: 16 * 1024 * 1024,
-    env: env(),
-    windowsVerbatimArguments: process.platform === 'win32',
-  });
+const defaultRun = (argv) => {
+  const [file, launched, options] = launch(argv);
+  return exec(file, launched, { timeout: 20_000, maxBuffer: 16 * 1024 * 1024, ...options });
+};
 /**
  * @param {(argv: string[]) => Promise<{ stdout: string }>} run
  * @param {Target} target
@@ -245,14 +252,10 @@ export function view(url, { cwd, timeout = 20_000, run } = {}) {
   const target = parts(url);
   const call =
     run ??
-    ((argv) =>
-      spawnSync(...command(argv), {
-        cwd,
-        encoding: 'utf8',
-        timeout,
-        env: env(),
-        windowsVerbatimArguments: process.platform === 'win32',
-      }));
+    ((argv) => {
+      const [file, launched, options] = launch(argv);
+      return spawnSync(file, launched, { cwd, encoding: 'utf8', timeout, ...options });
+    });
   const out = call(args(SHOW, target));
   if (out.status !== 0) throw new Error((out.stderr || out.error?.message || 'az failed').trim());
   return viewOf(JSON.parse(out.stdout), target);

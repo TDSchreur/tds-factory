@@ -2,10 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import childProcess from 'node:child_process';
-import { syncBuiltinESMExports } from 'node:module';
-import { promisify } from 'node:util';
-import { matches, name, parseStatus, repoOfRemote, stateAsync, statusAsync, view } from '../src/pr-azure.js';
+import { launch, matches, name, parseStatus, repoOfRemote, stateAsync, statusAsync, view } from '../src/pr-azure.js';
 
 // Recorded `az repos pr show` and `az repos pr policy list` output from the sandbox repository Kahoot (see the README of the fixtures folder).
 const DIR = new URL('./fixtures/pr-status/azure/', import.meta.url);
@@ -261,10 +258,15 @@ test('failures carry a reason that names what to fix', async () => {
   assert.equal(
     await reason(
       Object.assign(new Error('x'), {
-        code: 1,
+        code: 9009,
         stderr: "'az.cmd' is not recognized as an internal or external command,\r\noperable program or batch file.",
       }),
     ),
+    'az-missing',
+  );
+  // A Windows with another language gives no English text, only the exit code of cmd.exe.
+  assert.equal(
+    await reason(Object.assign(new Error('x'), { code: 9009, stderr: 'wordt niet herkend als een interne opdracht' })),
     'az-missing',
   );
   assert.equal(await reason(Object.assign(new Error('x'), { code: 'EINVAL' })), 'error');
@@ -332,72 +334,47 @@ test('only the Azure DevOps adapter runs az, and it runs no write subcommand', (
   assert.equal(source.match(/'(show|list)'/g)?.length, 2);
 });
 
-test('default Azure runners use cmd.exe for Windows shims and direct execution elsewhere', async (t) => {
-  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-  const execFile = childProcess.execFile;
-  const calls = [];
-  const answer = (args) =>
-    JSON.stringify(args.join(' ').includes('policy list') ? fixture('passing').policies : fixture('passing').pr);
-  childProcess.execFile = Object.assign(
-    () => {
-      throw new Error('expected promisified execFile');
-    },
-    {
-      [promisify.custom]: async (file, args, options) => {
-        calls.push({ file, args, options });
-        return { stdout: answer(args), stderr: '' };
-      },
-    },
+test('launch starts az through cmd.exe on Windows and directly elsewhere', () => {
+  const argv = [
+    'repos',
+    'pr',
+    'show',
+    '--id',
+    '525',
+    '--organization',
+    'https://dev.azure.com/example-org',
+    '--output',
+    'json',
+    '--only-show-errors',
+  ];
+  const [file, args, options] = launch(argv, 'win32');
+  assert.equal(file, process.env.ComSpec || 'cmd.exe');
+  assert.deepEqual(args, ['/d', '/s', '/c', `az.cmd ${argv.join(' ')}`]);
+  assert.equal(options.windowsVerbatimArguments, true);
+  assert.equal(options.env.NoDefaultCurrentDirectoryInExePath, '1');
+  assert.equal(options.env.AZURE_CORE_NO_COLOR, '1');
+  assert.equal(options.env.AZURE_CORE_COLLECT_TELEMETRY, 'false');
+
+  const [direct, directArgs, directOptions] = launch(argv, 'linux');
+  assert.equal(direct, 'az');
+  assert.deepEqual(directArgs, argv);
+  assert.equal(directOptions.windowsVerbatimArguments, false);
+  assert.equal(directOptions.env.NoDefaultCurrentDirectoryInExePath, process.env.NoDefaultCurrentDirectoryInExePath);
+});
+
+test('launch refuses an argument cmd.exe could read as more than a word', () => {
+  for (const arg of ['a&whoami', 'a b', 'a"b', '%PATH%', 'a^b', 'a|b', 'a>b', ''])
+    assert.throws(() => launch(['show', arg], 'win32'), /unsafe argument/);
+  assert.doesNotThrow(() => launch(['show', 'a&whoami'], 'linux'));
+});
+
+test('a link with shell characters never reaches the runner', async () => {
+  /** @returns {never} */
+  const fail = () => assert.fail('the runner must not be called');
+  await assert.rejects(
+    statusAsync('https://dev.azure.com/o&whoami/p/_git/r/pullrequest/1', { run: async () => fail() }),
   );
-  t.mock.method(childProcess, 'spawnSync', (file, args, options) => {
-    calls.push({ file, args, options });
-    return { status: 0, stdout: answer(args), stderr: '' };
-  });
-  syncBuiltinESMExports();
-  try {
-    const adapter = await import('../src/pr-azure.js?launcher-test');
-    for (const os of ['win32', 'linux']) {
-      Object.defineProperty(process, 'platform', { value: os });
-      calls.length = 0;
-      assert.equal((await adapter.statusAsync(link('passing'))).state, 'open');
-      assert.equal(await adapter.stateAsync(link('passing')), 'OPEN');
-      assert.equal(adapter.view(link('passing'), { cwd: 'test-cwd', timeout: 1234 }).state, 'OPEN');
-      assert.equal(calls.length, 4);
-      for (const { file, args, options } of calls) {
-        const argv = [
-          'repos',
-          'pr',
-          ...(args.join(' ').includes('policy list') ? ['policy', 'list'] : ['show']),
-          '--id',
-          '525',
-          '--organization',
-          'https://dev.azure.com/example-org',
-          '--output',
-          'json',
-          '--only-show-errors',
-        ];
-        assert.equal(file, os === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'az');
-        assert.deepEqual(args, os === 'win32' ? ['/d', '/s', '/c', `az.cmd ${argv.join(' ')}`] : argv);
-        assert.equal(options.windowsVerbatimArguments, os === 'win32');
-        assert.equal(options.env.AZURE_CORE_NO_COLOR, '1');
-        assert.equal(options.env.AZURE_CORE_COLLECT_TELEMETRY, 'false');
-        if (os === 'win32') assert.equal(options.env.NoDefaultCurrentDirectoryInExePath, '1');
-      }
-      assert.equal(calls[0].options.timeout, 20_000);
-      assert.equal(calls[0].options.maxBuffer, 16 * 1024 * 1024);
-      assert.equal(calls[3].options.cwd, 'test-cwd');
-      assert.equal(calls[3].options.timeout, 1234);
-      calls.length = 0;
-      await assert.rejects(adapter.statusAsync('https://dev.azure.com/o&whoami/p/_git/r/pullrequest/1'));
-      assert.throws(() => adapter.view('https://dev.azure.com/o/p/_git/r/pullrequest/1&whoami'));
-      assert.equal(calls.length, 0);
-    }
-  } finally {
-    Object.defineProperty(process, 'platform', platform);
-    childProcess.execFile = execFile;
-    t.mock.restoreAll();
-    syncBuiltinESMExports();
-  }
+  assert.throws(() => view('https://dev.azure.com/o/p/_git/r/pullrequest/1&whoami', { run: fail }));
 });
 
 test('no source or test file names the production repository', () => {
