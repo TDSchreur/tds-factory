@@ -128,7 +128,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Lint the shell Bootstrap installer with a pinned shellcheck
+      - name: Lint the shell scripts with a pinned shellcheck
         env:
           SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
         run: |
@@ -136,7 +136,7 @@ jobs:
             https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
           echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/shellcheck.tar.xz" | sha256sum --check
           tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP"
-          "$RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" scripts/install.sh
+          "$RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" scripts/*.sh
 
   psscriptanalyzer:
     runs-on: ubuntu-latest
@@ -145,12 +145,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Lint the PowerShell Bootstrap installer with a pinned PSScriptAnalyzer
+      - name: Lint the PowerShell scripts with a pinned PSScriptAnalyzer
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
           # Write-Host is deliberate: a Bootstrap installer talks to the person running it, also under `irm | iex`.
-          $findings = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost
+          $findings = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost
           $findings | Format-List RuleName, Line, Message
           if ($findings) { exit 1 }
 

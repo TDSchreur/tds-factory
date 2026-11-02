@@ -42,18 +42,18 @@ test('the CI browser job requires a browser instead of skipping', () => {
   assert.match(browser, /run: npm run test:browser/);
 });
 
-test('the CI workflow lints both Bootstrap installers with pinned tools and runs install.ps1 on PowerShell 7 on Windows', () => {
+test('the CI workflow lints every shell and PowerShell script with pinned tools and runs install.ps1 on PowerShell 7 on Windows', () => {
   const shellcheck = ci.slice(ci.indexOf('  shellcheck:'), ci.indexOf('  psscriptanalyzer:'));
   assert.match(shellcheck, /SHELLCHECK_SHA256: [0-9a-f]{64}/, 'the shellcheck download is checksum-verified');
   assert.match(shellcheck, /sha256sum --check/);
-  assert.match(shellcheck, /shellcheck-v\d+\.\d+\.\d+\/shellcheck" scripts\/install\.sh/);
+  assert.match(shellcheck, /shellcheck-v\d+\.\d+\.\d+\/shellcheck" scripts\/\*\.sh/);
   const analyzer = ci.slice(ci.indexOf('  psscriptanalyzer:'), ci.indexOf('  install-windows:'));
   assert.match(
     analyzer,
     /Install-Module PSScriptAnalyzer -RequiredVersion \d+\.\d+\.\d+/,
     'the analyzer version is pinned',
   );
-  assert.match(analyzer, /Invoke-ScriptAnalyzer -Path scripts\/install\.ps1/);
+  assert.match(analyzer, /Invoke-ScriptAnalyzer -Path scripts -Recurse/);
   assert.match(analyzer, /if \(\$findings\) \{ exit 1 \}/, 'findings fail the job');
   const windows = ci.slice(ci.indexOf('  install-windows:'));
   assert.match(windows, /runs-on: windows-latest/);
