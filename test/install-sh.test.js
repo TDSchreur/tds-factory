@@ -21,7 +21,7 @@ const skip = hasSh ? false : 'sh is not available';
 
 // The tools install.sh needs, linked into a bin folder that is the whole PATH of the run, so a real node or npm on the
 // machine can never leak in. node, npm and tds-factory are stubs that record what they were asked to do.
-function sandbox({ node = true, npm = true, major = '22', npmFails = '', cli = true } = {}) {
+function sandbox({ node = true, npm = true, major = '24', npmFails = '', cli = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'install-sh-test-'));
   const bin = join(dir, 'bin');
   mkdirSync(bin);
@@ -101,7 +101,7 @@ test('TDS_FACTORY_SKIP_SKILLS=1 skips the skills step', { skip }, () => {
 test('install.sh stops before npm when node is missing, too old, or npm is missing', { skip }, () => {
   for (const [options, message] of [
     [{ node: false }, /node not found.*nodejs\.org/],
-    [{ major: '18' }, /need 20 or newer/],
+    [{ major: '22' }, /need 24 or newer/],
     [{ npm: false }, /npm not found.*nodejs\.org/],
   ]) {
     const s = sandbox(options);

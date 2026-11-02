@@ -7,7 +7,7 @@
 set -eu
 
 URL='https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz'
-MIN_NODE=20
+MIN_NODE=24
 
 say() { printf '==> %s\n' "$1"; }
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }

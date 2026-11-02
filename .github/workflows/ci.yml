@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        node: ['20', '22', '24', 'lts/*']
+        node: ['24', 'lts/*']
         include:
           - os: macos-latest
             node: 'lts/*'

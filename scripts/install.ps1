@@ -23,7 +23,7 @@ function Install-TdsFactory {
     try {
         $env:NoDefaultCurrentDirectoryInExePath = '1'
         $url = 'https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz'
-        $minNode = 20
+        $minNode = 24
 
         foreach ($tool in 'node', 'npm') {
             if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
