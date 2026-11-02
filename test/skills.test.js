@@ -7,6 +7,7 @@ import { install } from '../src/install.js';
 import { SKILLS_DIR, MARKER } from '../src/paths.js';
 
 import { flow, main, references, section } from './skill-text.js';
+import { defined } from './run-view.js';
 
 const check = section('Check');
 const invoked = [...flow.matchAll(/Invoke `([a-z-]+)`/g)].map((m) => m[1]);
@@ -266,12 +267,13 @@ const upstream = Object.fromEntries(
   ['to-spec', 'to-tickets', 'implement-spec'].map((n) => [n, readFileSync(join(SKILLS_DIR, n, 'SKILL.md'), 'utf8')]),
 );
 const contract = section('Invoked Skills');
+/** @param {string} name */
 const overrides = (name) =>
   [
-    ...contract
-      .split(/^- \*\*/m)
-      .find((b) => b.startsWith(`${name}.`))
-      .matchAll(/"([^"]+)"/g),
+    ...defined(
+      contract.split(/^- \*\*/m).find((b) => b.startsWith(`${name}.`)),
+      `the contract has an entry for ${name}`,
+    ).matchAll(/"([^"]+)"/g),
   ].map((m) => m[1]);
 
 test('the invocation contract overrides each conflicting upstream step, and only steps that still exist', () => {

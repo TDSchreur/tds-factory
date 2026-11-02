@@ -7,9 +7,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeCommand, pathWith } from './fake-command.js';
 import { startDashboard } from '../src/dashboard.js';
+import { viewsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const GH = 'https://github.com/o/r/pull/1';
 
+/**
+ * @param {string[]} prs
+ * @param {(url: string) => Promise<string>} prState
+ */
 async function views(prs, prState) {
   const project = mkdtempSync(join(tmpdir(), 'dash-pr-'));
   prs.forEach((pr, i) => {
@@ -19,7 +26,7 @@ async function views(prs, prState) {
   });
   const dash = await startDashboard({ projectDir: project, port: 0, prState });
   try {
-    const get = async () => (await fetch(`${dash.url}/api/views`)).json();
+    const get = () => viewsOf(dash);
     return { first: await get(), second: await get() };
   } finally {
     await dash.close();
@@ -27,6 +34,7 @@ async function views(prs, prState) {
 }
 
 test('Done runs with a GitHub PR link get the PR state, cached between polls', async () => {
+  /** @type {string[]} */
   const calls = [];
   const { first, second } = await views([GH], async (url) => {
     calls.push(url);
@@ -38,6 +46,7 @@ test('Done runs with a GitHub PR link get the PR state, cached between polls', a
 });
 
 test('a PR link that is not a GitHub pull request URL is never looked up', async () => {
+  /** @type {string[]} */
   const calls = [];
   const { first } = await views(['--web', 'https://example.com/pr/1'], async (url) => {
     calls.push(url);
@@ -57,6 +66,13 @@ test('a failed lookup leaves the state empty', async () => {
   assert.equal(first[0].prState, '');
 });
 
+/**
+ * @typedef {object} SetupOptions
+ * @property {string} [originUrl]
+ * @property {Partial<Run>} [record]
+ * @property {Record<string, unknown>} [gh] What the fake gh answers.
+ */
+/** @param {SetupOptions} [options] */
 async function mergeSetup(options = {}) {
   const project = repo();
   const worktree = linked(project);
@@ -67,6 +83,7 @@ async function mergeSetup(options = {}) {
   const reviewed = Object.fromEntries(
     ['standards', 'spec', 'security', 'infrastructure'].map((axis) => [axis, { head, attempt: 1 }]),
   );
+  /** @type {Run} */
   const record = {
     title: 'r',
     status: 'done',
@@ -79,7 +96,7 @@ async function mergeSetup(options = {}) {
     security: 'pass',
     infrastructure: 'skipped',
     reviewed,
-    verify: { head, dirty: false, command: 'npm test', exit_code: 0 },
+    verify: { head, dirty: false, command: 'npm test', exit_code: 0, started: '', ended: '', log: '' },
     ...options.record,
   };
   const recordFile = join(dir, 'run.json');
@@ -88,6 +105,7 @@ async function mergeSetup(options = {}) {
   const config = join(bin, 'config.json'),
     calls = join(bin, 'calls.json');
   writeFileSync(calls, '[]');
+  /** @param {Record<string, unknown> | undefined} [data] */
   const configure = (data) => writeFileSync(config, JSON.stringify({ head, state: 'OPEN', checks: [], ...data }));
   configure(options.gh);
   fakeCommand(
@@ -113,9 +131,14 @@ if (args[1] === 'view') {
   const previousPath = process.env.PATH;
   process.env.PATH = pathWith(bin);
   const dash = await startDashboard({ projectDir: project, port: 0 });
+  /**
+   * @param {string} [id]
+   * @param {string} [origin]
+   */
   const post = async (id = '2026-01-01-r', origin = dash.url) =>
     fetch(`${dash.url}/api/runs/${id}/merge`, { method: 'POST', headers: await writeHeaders(dash, origin) });
   const checks = () => fetch(`${dash.url}/api/runs/2026-01-01-r/merge-checks`);
+  /** @returns {string[][]} */
   const readCalls = () => JSON.parse(readFileSync(calls, 'utf8'));
   const close = async () => {
     await dash.close();
@@ -124,6 +147,8 @@ if (args[1] === 'view') {
   return { dash, post, checks, readCalls, configure, close, record, recordFile, worktree, head };
 }
 
+/** @typedef {Awaited<ReturnType<typeof mergeSetup>>} Setup */
+/** @param {Setup} setup */
 const merges = (setup) => setup.readCalls().filter((args) => args[1] === 'merge');
 
 test('Merge uses the clean Check head to protect the squash merge', async () => {
@@ -149,7 +174,8 @@ test('Merge accepts a current Accepted Check', async () => {
 });
 
 test('Merge refuses missing, failed and stale Evidence and a dirty or missing worktree', async () => {
-  for (const mutate of [
+  /** @type {((s: Setup) => void)[]} */
+  const mutations = [
     (s) => {
       delete s.record.verify;
     },
@@ -157,7 +183,9 @@ test('Merge refuses missing, failed and stale Evidence and a dirty or missing wo
       s.record.security = 'fail';
     },
     (s) => {
-      s.record.reviewed.spec.head = 'a'.repeat(40);
+      const spec = s.record.reviewed?.spec;
+      assert.ok(spec, 'the record has a spec review');
+      spec.head = 'a'.repeat(40);
     },
     (s) => {
       s.record.accepted = { head: 'a'.repeat(40) };
@@ -169,7 +197,8 @@ test('Merge refuses missing, failed and stale Evidence and a dirty or missing wo
     (s) => {
       writeFileSync(join(s.worktree, 'dirty'), 'x');
     },
-  ]) {
+  ];
+  for (const mutate of mutations) {
     const setup = await mergeSetup();
     try {
       mutate(setup);
@@ -202,14 +231,16 @@ test('Merge rejects unrelated repositories, different PR heads and unavailable G
 });
 
 test('Merge refuses other origins, unknown runs, active runs and non-GitHub links', async () => {
-  for (const [options, id, origin, want] of [
+  /** @type {[SetupOptions, string | undefined, string | undefined, number][]} */
+  const cases = [
     [{}, undefined, 'http://evil.example', 403],
     [{}, 'nope', undefined, 404],
     [{ record: { status: 'running' } }, undefined, undefined, 409],
     [{ record: { status: 'abandoned' } }, undefined, undefined, 409],
     [{ record: { pr: 'https://example.com/pr/1' } }, undefined, undefined, 409],
     [{ record: { pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/1' } }, undefined, undefined, 409],
-  ]) {
+  ];
+  for (const [options, id, origin, want] of cases) {
     const setup = await mergeSetup(options);
     try {
       assert.equal((await setup.post(id, origin)).status, want);
@@ -223,7 +254,7 @@ test('Merge refuses other origins, unknown runs, active runs and non-GitHub link
 test('Merge reports a failed head-protected merge and drops the cached PR state', async () => {
   const setup = await mergeSetup({ gh: { mergeHead: 'b'.repeat(40) } });
   try {
-    const states = async () => (await (await fetch(`${setup.dash.url}/api/views`)).json())[0].prState;
+    const states = async () => (await viewsOf(setup.dash))[0].prState;
     assert.equal(await states(), 'open');
     assert.equal((await setup.post()).status, 502);
     setup.configure({ state: 'MERGED' });
@@ -260,7 +291,7 @@ test('confirmation data names failing, pending and unavailable GitHub checks', a
 test('an Azure DevOps PR cannot be merged or checked from the Dashboard, and the view says so', async () => {
   const setup = await mergeSetup({ record: { pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/1' } });
   try {
-    const view = (await (await fetch(`${setup.dash.url}/api/views`)).json())[0];
+    const view = (await viewsOf(setup.dash))[0];
     assert.deepEqual([view.prHost, view.prCanMerge], ['azure-devops', false]);
     const post = await setup.post();
     assert.equal(post.status, 409);
@@ -275,7 +306,7 @@ test('an Azure DevOps PR cannot be merged or checked from the Dashboard, and the
 test('a GitHub PR can be merged and the view says so', async () => {
   const setup = await mergeSetup();
   try {
-    const view = (await (await fetch(`${setup.dash.url}/api/views`)).json())[0];
+    const view = (await viewsOf(setup.dash))[0];
     assert.deepEqual([view.prHost, view.prCanMerge], ['github', true]);
   } finally {
     await setup.close();

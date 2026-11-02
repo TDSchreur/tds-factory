@@ -44,6 +44,7 @@ test('the Review isolation row states the restriction the factory-check agent fi
 test('an unavailable reviewer stops the Run instead of being replaced by a self-review', () => {
   const flow = readFileSync(join(SKILLS_DIR, 'factory', 'SKILL.md'), 'utf8');
   const check = flow.split(/^## /m).find((s) => s.startsWith('Check\n'));
+  assert.ok(check, 'the Skill has a Check section');
   assert.match(check, /cannot be started/);
   assert.match(check, /`verification-unavailable`/);
   assert.match(check, /never review.*yourself|do not review.*yourself/i);

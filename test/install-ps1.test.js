@@ -20,6 +20,7 @@ const source = readFileSync(script, 'utf8');
 const URL = 'https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz';
 const win = process.platform === 'win32';
 // spawnSync looks the program up on the PATH given to the child, so find it on ours first.
+/** @param {string} name */
 const onPath = (name) =>
   (process.env.PATH ?? '')
     .split(delimiter)
@@ -38,7 +39,10 @@ test('CI has the PowerShell it asks for', { skip: !process.env.REQUIRE_POWERSHEL
 
 // node, npm and tds-factory are stubs on a PATH of their own that record what they were asked to do, so a real node or
 // npm on the machine never takes part. On Windows the stubs are .cmd files, elsewhere sh scripts.
+/** @typedef {{ node?: boolean, npm?: boolean, major?: string, npmFails?: boolean, cli?: boolean, shims?: boolean }} Options */
+/** @param {Options} [options] */
 function sandbox({ node = true, npm = true, major = '24', npmFails = false, cli = true, shims = false } = {}) {
+  assert.ok(pwsh, 'PowerShell is available');
   const dir = mkdtempSync(join(tmpdir(), 'install-ps1-test-'));
   const bin = join(dir, 'bin');
   mkdirSync(bin);
@@ -63,6 +67,11 @@ function sandbox({ node = true, npm = true, major = '24', npmFails = false, cli 
   const cwds = join(dir, 'cwds');
   const elsewhere = join(dir, 'untrusted-checkout');
   mkdirSync(elsewhere);
+  /**
+   * @param {string} name
+   * @param {string} sh
+   * @param {string} cmd
+   */
   const stub = (name, sh, cmd) => {
     if (win) writeFileSync(join(bin, `${name}.cmd`), `@echo off\r\n${cmd}\r\n`);
     else {
@@ -102,6 +111,10 @@ chmod +x "$(dirname "$0")/tds-factory.cmd"`,
   return {
     dir,
     // `elsewhere` is the folder the user's terminal is in when they paste the line.
+    /**
+     * @param {NodeJS.ProcessEnv} [env]
+     * @param {{ args?: string[] }} [options]
+     */
     run: (env = {}, { args = ['-File', script] } = {}) => {
       const result = spawnSync(pwsh, ['-NoProfile', '-NonInteractive', ...args], {
         cwd: elsewhere,
@@ -222,11 +235,13 @@ test(
   'install.ps1 stops before npm when node is missing, too old, or npm is missing, and exits non-zero',
   { skip },
   () => {
-    for (const [options, message] of [
+    /** @type {[Options, RegExp][]} */
+    const refused = [
       [{ node: false }, /node not found.*nodejs\.org/],
       [{ major: '22' }, /need 24 or newer/],
       [{ npm: false }, /npm not found.*nodejs\.org/],
-    ]) {
+    ];
+    for (const [options, message] of refused) {
       const s = sandbox(options);
       try {
         const r = s.run();

@@ -5,12 +5,40 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
 import { openRunStore } from '../src/run-store.js';
+import { metricsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {Record<string, unknown>} data
+ */
 const force = (cwd, id, data) => writeFileSync(file(cwd, id), JSON.stringify({ ...read(cwd, id), ...data }));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string} axis
+ * @param {string} value
+ * @param {...string} more
+ */
 const verdict = (cwd, id, axis, value, ...more) =>
   run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value, ...more);
 
@@ -43,6 +71,7 @@ function afterRework(initial = {}) {
   const base = git(worktree, 'rev-parse', 'HEAD');
   // Lets a test try many changes on one Run; each start costs several processes, which is slow on Windows.
   const reset = () => git(worktree, 'reset', '-q', '--hard', base);
+  /** @param {string} name */
   const change = (name, text = 'text\n') => {
     mkdirSync(dirname(join(worktree, name)), { recursive: true });
     writeFileSync(join(worktree, name), text);
@@ -62,9 +91,9 @@ test('a text-only Rework carries Security and Infrastructure, and records where 
   const record = read(cwd, id);
   const head = git(worktree, 'rev-parse', 'HEAD');
   assert.equal(record.security, 'pass');
-  assert.deepEqual(record.reviewed.security, { head, attempt: 2, carried_from: first });
-  assert.equal(record.reviewed.infrastructure.carried_from, first);
-  assert.equal(record.metrics.verdicts.at(-1).carried_from, first);
+  assert.deepEqual(record.reviewed?.security, { head, attempt: 2, carried_from: first });
+  assert.equal(record.reviewed?.infrastructure?.carried_from, first);
+  assert.equal(metricsOf(record).verdicts.at(-1)?.carried_from, first);
   // Evidence sees a verdict for the current head and attempt, like any other.
   const problems = openRunStore(cwd).mergeEligibility(id).problems.join('\n');
   assert.doesNotMatch(problems, /security|infrastructure/);

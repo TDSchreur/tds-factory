@@ -2,13 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { folderName, ticketsOf } from '../dashboard/model.js';
 import { interpretRun } from '../src/dashboard.js';
+import { entryOf, runView } from './run-view.js';
 
 test('the card lists Tickets with done, active and todo states', () => {
-  const run = {
+  const run = runView({
     column: 'build',
     ticketsDone: 1,
     tickets: ['https://github.com/o/r/issues/110', 'https://github.com/o/r/issues/111', 'docs/tickets/3-x.md'],
-  };
+  });
   assert.deepEqual(
     ticketsOf(run).map((t) => [t.label, t.state]),
     [
@@ -24,13 +25,13 @@ test('the card lists Tickets with done, active and todo states', () => {
 });
 
 test('interpretRun passes the Ticket links to the page', () => {
-  const r = interpretRun({ id: 'a', record: { status: 'running', stage: 'build', tickets: ['u1', 7, 'u2'] } });
+  const r = interpretRun(entryOf('a', { status: 'running', stage: 'build', tickets: ['u1', 7, 'u2'] }));
   assert.deepEqual(r.tickets, ['u1', 'u2']);
 });
 
 test('interpretRun exposes pause reasons without treating them as human waiting', () => {
   for (const status of ['interrupted', 'verification-unavailable']) {
-    const view = interpretRun({ id: 'a', record: { status, status_reason: 'blocked', waiting_on_human: false } });
+    const view = interpretRun(entryOf('a', { status, status_reason: 'blocked', waiting_on_human: false }));
     assert.equal(view.reason, 'blocked');
     assert.equal(view.waiting, false);
   }

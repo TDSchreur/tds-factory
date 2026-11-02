@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 import { prStatusOf } from '../dashboard/model.js';
 
+/** @import { Page, RunStub } from './browser.js' */
+/** @import { RunView } from '../dashboard/model.js' */
+
 const AZ = 'https://dev.azure.com/o/p/_git/r/pullrequest/1';
 const open = (over = {}) => ({
   state: 'open',
@@ -12,14 +15,50 @@ const open = (over = {}) => ({
   review: 'approved',
   ...over,
 });
+/** @param {Partial<RunStub>} over */
 const azure = (over) => run({ pr: AZ, prHost: 'azure-devops', prCanMerge: false, ...over });
+/**
+ * @param {Page} page
+ * @param {string} selector
+ */
 const text = (page, selector) =>
   page.execute(
     `const e = document.querySelector(${JSON.stringify(selector)}); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null`,
   );
 
 test('the unavailable texts of Azure DevOps name the fix and the host', () => {
-  const reason = (unavailable, prHost) => prStatusOf({ prHost, prStatus: { unavailable } }).text;
+  /**
+   * @param {string} unavailable
+   * @param {string | undefined} prHost
+   */
+  const reason = (unavailable, prHost) => {
+    /** @type {RunView} */
+    const view = {
+      id: 'r',
+      unreadable: false,
+      title: 'r',
+      activity: '',
+      agent: '',
+      waiting: false,
+      reason: '',
+      column: 'finish',
+      updated: '',
+      files: [],
+      links: [],
+      status: '',
+      pr: AZ,
+      model: { requested: '', effort: '', observed: '' },
+      lastSeen: '',
+      events: [],
+      eventsDamaged: 0,
+      prHost,
+      prStatus: { unavailable },
+    };
+    const status = prStatusOf(view);
+    const why = status && 'text' in status ? status.text : undefined;
+    assert.ok(why !== undefined, 'an unavailable PR status has a text');
+    return why;
+  };
   assert.match(reason('az-missing', 'azure-devops'), /az command is not installed/);
   assert.match(reason('az-extension-missing', 'azure-devops'), /az extension add --name azure-devops/);
   assert.match(reason('az-not-signed-in', 'azure-devops'), /az login/);

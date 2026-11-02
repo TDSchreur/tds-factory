@@ -21,6 +21,8 @@ const skip = hasSh ? false : 'sh is not available';
 
 // The tools install.sh needs, linked into a bin folder that is the whole PATH of the run, so a real node or npm on the
 // machine can never leak in. node, npm and tds-factory are stubs that record what they were asked to do.
+/** @typedef {{ node?: boolean, npm?: boolean, major?: string, npmFails?: string, cli?: boolean }} Options */
+/** @param {Options} [options] */
 function sandbox({ node = true, npm = true, major = '24', npmFails = '', cli = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'install-sh-test-'));
   const bin = join(dir, 'bin');
@@ -30,6 +32,10 @@ function sandbox({ node = true, npm = true, major = '24', npmFails = '', cli = t
     if (found) symlinkSync(found, join(bin, tool));
   }
   const calls = join(dir, 'calls');
+  /**
+   * @param {string} name
+   * @param {string} body
+   */
   const stub = (name, body) => {
     writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
     chmodSync(join(bin, name), 0o755);
@@ -99,11 +105,13 @@ test('TDS_FACTORY_SKIP_SKILLS=1 skips the skills step', { skip }, () => {
 });
 
 test('install.sh stops before npm when node is missing, too old, or npm is missing', { skip }, () => {
-  for (const [options, message] of [
+  /** @type {[Options, RegExp][]} */
+  const refused = [
     [{ node: false }, /node not found.*nodejs\.org/],
     [{ major: '22' }, /need 24 or newer/],
     [{ npm: false }, /npm not found.*nodejs\.org/],
-  ]) {
+  ];
+  for (const [options, message] of refused) {
     const s = sandbox(options);
     try {
       const r = s.run();

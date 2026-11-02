@@ -6,14 +6,28 @@ import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
 import { writeHeaders } from './dashboard-token.js';
 import { startDashboard } from '../src/dashboard.js';
+import { viewsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {string[]} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/** @param {import('node:child_process').SpawnSyncReturns<string>} result */
 const ok = (result) => {
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8'));
+/** @param {unknown} value */
 const data = (value) => JSON.stringify(value);
 const PR = 'https://github.com/o/r/pull/1';
 
@@ -40,6 +54,11 @@ function checked() {
   ok(run(cwd, 'transition', '--id', id, '--to', 'check'));
   return { cwd, id, wt };
 }
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string} [security]
+ */
 const review = (cwd, id, security = 'pass') => {
   ok(run(cwd, 'verify', '--id', id));
   for (const [axis, value] of [
@@ -50,12 +69,23 @@ const review = (cwd, id, security = 'pass') => {
   ])
     ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const waiting = (cwd, id) =>
   ok(run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
+/**
+ * @param {{ url: string }} dash
+ * @param {string} id
+ * @param {string} action
+ * @param {string} [updated]
+ */
 async function post(dash, id, action, updated) {
+  let stamp = updated ?? '';
   if (action === 'accept' && updated === undefined)
-    updated = (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
-  const query = action === 'accept' ? `?updated=${encodeURIComponent(updated)}` : '';
+    stamp = (await viewsOf(dash)).find((r) => r.id === id)?.updated ?? '';
+  const query = action === 'accept' ? `?updated=${encodeURIComponent(stamp)}` : '';
   const response = await fetch(`${dash.url}/api/runs/${id}/${action}${query}`, {
     method: 'POST',
     headers: await writeHeaders(dash),
@@ -72,9 +102,10 @@ test('accepting a not-clean Check records the decision for the current head', as
     const result = await post(dash, id, 'accept');
     assert.deepEqual(result, { status: 200, text: 'accepted' });
     const accepted = read(cwd, id).accepted;
+    assert.ok(accepted, 'the Run records the acceptance');
     assert.equal(accepted.head, git(wt, 'rev-parse', 'HEAD'));
-    assert.match(accepted.findings, /security failed/);
-    assert.match(accepted.decision, /Dashboard/);
+    assert.match(accepted.findings ?? '', /security failed/);
+    assert.match(accepted.decision ?? '', /Dashboard/);
     assert.equal(read(cwd, id).status, 'running');
     assert.equal((await post(dash, id, 'accept')).status, 409);
     waiting(cwd, id);
@@ -223,8 +254,17 @@ function atLimit() {
   );
   return { cwd, id, wt };
 }
-const updatedOf = async (dash, id) =>
-  (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id)?.updated ?? '';
+/**
+ * @param {{ url: string }} dash
+ * @param {string} id
+ */
+const updatedOf = async (dash, id) => (await viewsOf(dash)).find((r) => r.id === id)?.updated ?? '';
+/**
+ * @param {{ url: string }} dash
+ * @param {string} id
+ * @param {string} [query]
+ * @param {Record<string, string>} [headers]
+ */
 const grant = async (dash, id, query, headers) => {
   const response = await fetch(
     `${dash.url}/api/runs/${id}/extra-loop${query ?? `?updated=${encodeURIComponent(await updatedOf(dash, id))}`}`,
@@ -241,7 +281,8 @@ test('the Dashboard grants an extra loop to a Run in Check that waits at its lim
     const record = read(cwd, id);
     assert.equal(record.extra_loops, 1);
     assert.equal(record.status, 'running');
-    const view = (await (await fetch(`${dash.url}/api/views`)).json()).find((r) => r.id === id);
+    const view = (await viewsOf(dash)).find((r) => r.id === id);
+    assert.ok(view, 'the Run has a view');
     assert.deepEqual([view.loops, view.loopCap, view.waiting], [4, 5, false]);
     assert.ok(view.events.some((e) => e.type === 'extra-loop' && e.granted === 1 && e.limit === 5));
     // It is not waiting any more, so a second click needs a new wait.
@@ -252,6 +293,7 @@ test('the Dashboard grants an extra loop to a Run in Check that waits at its lim
 });
 
 test('the extra loop is refused for every Run that is not at its limit in Check and waiting', async () => {
+  /** @param {string} cwd */
   const dash = async (cwd) => startDashboard({ projectDir: cwd, port: 0 });
   const below = checked();
   waiting(below.cwd, below.id);
@@ -292,13 +334,15 @@ test('the extra loop route refuses a request without the session token, with a w
   try {
     const query = `?updated=${encodeURIComponent(await updatedOf(dash, id))}`;
     const good = await writeHeaders(dash);
-    for (const headers of [
+    /** @type {Record<string, string>[]} */
+    const refused = [
       {},
-      { origin: good.origin },
-      { ...good, 'x-factory-token': 'wrong' },
-      { ...good, origin: 'https://evil.example' },
-      { 'x-factory-token': good['x-factory-token'] },
-    ]) {
+      { Origin: good.Origin },
+      { ...good, 'X-Factory-Token': 'wrong' },
+      { ...good, Origin: 'https://evil.example' },
+      { 'X-Factory-Token': good['X-Factory-Token'] },
+    ];
+    for (const headers of refused) {
       assert.equal((await grant(dash, id, query, headers)).status, 403, JSON.stringify(Object.keys(headers)));
     }
     assert.equal(read(cwd, id).extra_loops, undefined);

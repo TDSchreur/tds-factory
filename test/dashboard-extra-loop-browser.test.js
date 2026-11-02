@@ -2,17 +2,33 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { Page } from './browser.js' */
+
+/**
+ * @param {Page} page
+ * @param {string} selector
+ */
 const click = (page, selector) => page.execute(`document.querySelector(${JSON.stringify(selector)}).click()`);
+/** @param {Page} page */
 const dialog = (page) =>
   page.execute(
     "return document.getElementById('dialog').open ? [document.getElementById('dialog-title').textContent, document.getElementById('dialog-message').textContent] : null",
   );
+/**
+ * @param {Page} page
+ * @param {string} selector
+ * @param {string} title
+ */
 const confirmed = async (page, selector, title) => {
   await click(page, selector);
   await page.waitFor(
     `return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === ${JSON.stringify(title)}`,
   );
 };
+/**
+ * @param {Page} page
+ * @param {string} title
+ */
 const answer = async (page, title) => {
   await click(page, '#dialog-confirm');
   await page.waitFor(
@@ -35,6 +51,7 @@ const atLimit = (over = {}) =>
     updated: '2026-11-01T10:00:00.000Z',
     ...over,
   });
+/** @param {Page} page */
 const labels = (page) =>
   page.execute(
     "return [...document.querySelectorAll('[aria-label^=\"Grant an extra Check loop\"]')].map(b => b.getAttribute('aria-label'))",

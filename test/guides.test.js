@@ -13,6 +13,7 @@ const GUIDES = [
   'docs/development.md',
   'docs/capabilities.md',
 ];
+/** @param {string} file */
 const read = (file) => readFileSync(resolve(file), 'utf8');
 
 // Subcommands and flags the CLI knows, taken from its own usage text.

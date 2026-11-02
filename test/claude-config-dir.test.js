@@ -9,6 +9,7 @@ import { doctor } from '../src/doctor.js';
 import { readClaudeUsage } from '../src/usage-claude.js';
 import { loadProjectReviews } from '../src/project-reviews.js';
 
+/** @param {string} name */
 const temp = (name) => mkdtempSync(join(tmpdir(), `${name}-`));
 
 test('claudeHome is CLAUDE_CONFIG_DIR when non-empty, else ~/.claude', () => {
@@ -66,14 +67,18 @@ test('doctor reads the Claude skills from CLAUDE_CONFIG_DIR', () => {
   const project = temp('cfg-project');
   mkdirSync(join(cfg, 'skills', 'factory'), { recursive: true });
   writeFileSync(join(cfg, 'skills', 'factory', 'SKILL.md'), 'x');
-  const skills = (env) =>
-    doctor({
+  /** @param {NodeJS.ProcessEnv} env */
+  const skills = (env) => {
+    const found = doctor({
       projectDir: project,
       agent: 'claude',
       homeDir: home,
       prState: () => undefined,
       env,
     }).agents[0].checks.find((c) => c.id === 'skills');
+    assert.ok(found, 'doctor reports a skills check');
+    return found;
+  };
   // Present only in the configured folder: the factory Skill is found there, and not without the variable.
   assert.doesNotMatch(skills({ CLAUDE_CONFIG_DIR: cfg }).message, /factory(,|$)/);
   assert.match(skills({}).message, /factory/);
@@ -108,6 +113,7 @@ test('an installed project-review Skill resolves under CLAUDE_CONFIG_DIR', () =>
     patterns: ['src/**/*.ts'],
   };
   writeFileSync(join(project, '.factory', 'reviews.json'), JSON.stringify({ reviews: [review] }));
+  /** @param {NodeJS.ProcessEnv} env */
   const load = (env) => () => loadProjectReviews(project, 'claude', home, env);
   assert.throws(load({}));
   assert.doesNotThrow(load({ CLAUDE_CONFIG_DIR: cfg }));

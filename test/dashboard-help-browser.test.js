@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { RunStub } from './browser.js' */
+
 const runs = () => [run({ id: 'a', title: 'Active', column: 'build' })];
 const open = "return document.getElementById('help-panel').open";
 
@@ -104,6 +106,7 @@ test('with no Runs a welcome card replaces the Stage columns, says how to start 
 });
 
 test('the welcome card is gone once a Run exists, and a filter that hides every Run does not bring it back', async (t) => {
+  /** @type {{ runs: RunStub[] }} */
   const state = { runs: [] };
   const page = await openPage(t, state);
   if (!page) return;

@@ -6,9 +6,21 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 import { envWith, fakeCommand } from './fake-command.js';
+import { defined, metricsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {unknown[]} nodes
+ * @param {boolean} [next]
+ * @param {string | null} [cursor]
+ */
 const page = (nodes, next = false, cursor = null) => ({ nodes, pageInfo: { hasNextPage: next, endCursor: cursor } });
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) =>
   spawnSync(process.execPath, [cli, 'run', ...args], {
     cwd,
@@ -32,7 +44,7 @@ function fixture() {
   assert.equal(out.status, 0, out.stderr);
   const id = out.stdout.trim(),
     file = join(cwd, '.factory', 'runs', id, 'run.json');
-  const record = JSON.parse(readFileSync(file));
+  const record = JSON.parse(readFileSync(file, 'utf8'));
   const head = git(record.worktree, 'rev-parse', 'HEAD');
   const pr = 'https://github.com/o/r/pull/7';
   Object.assign(record, {
@@ -51,6 +63,8 @@ function fixture() {
     project_results: { accessibility: { head } },
   });
   writeFileSync(file, JSON.stringify(record));
+  // The fake GitHub answers: free-form JSON, so any, because each test edits it at the path it needs.
+  /** @type {Record<string, any>} */
   const state = {
     pr: { state: 'OPEN', headRefOid: head },
     checks: {
@@ -105,7 +119,8 @@ function fixture() {
     comments: {},
   };
   const save = () => writeFileSync(join(cwd, 'gh.json'), JSON.stringify(state));
-  const read = () => JSON.parse(readFileSync(file));
+  /** @returns {Run} */
+  const read = () => JSON.parse(readFileSync(file, 'utf8'));
   save();
   return { cwd, id, file, pr, head, state, save, read };
 }
@@ -117,14 +132,14 @@ test('follow-up turns failing CI and unresolved review comments into scoped Rewo
   assert.equal(result.status, 0, result.stderr);
   const after = f.read();
   assert.equal(after.title, before.title);
-  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
+  assert.deepEqual(metricsOf(after).verdicts, metricsOf(before).verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.status, 'running');
   assert.equal(after.check_loops, 1);
   assert.equal(after.pr, f.pr);
-  assert.equal(after.follow_up.head, f.head);
-  assert.equal(after.follow_up.failures[0].name, 'unit');
-  assert.equal(after.follow_up.threads[0].comments[0].body, 'Fix this');
+  assert.equal(defined(after.follow_up, 'the Run records its follow-up').head, f.head);
+  assert.equal(defined(after.follow_up, 'the Run records its follow-up').failures[0].name, 'unit');
+  assert.equal(defined(after.follow_up, 'the Run records its follow-up').threads[0].comments[0].body, 'Fix this');
   for (const key of [
     'verify',
     'reviewed',
@@ -209,7 +224,7 @@ test('follow-up reads every page and excludes resolved threads and nonfailing ch
   f.save();
   const result = run(f.cwd, 'follow-up', '--id', f.id);
   assert.equal(result.status, 0, result.stderr);
-  const scope = f.read().follow_up;
+  const scope = defined(f.read().follow_up, 'the Run records its follow-up');
   assert.deepEqual(
     scope.failures.map((c) => c.name),
     ['deploy'],
@@ -233,7 +248,7 @@ test('clean or pending reads remain in Follow-up and can be completed and reopen
   f.save();
   assert.equal(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
   assert.equal(f.read().stage, 'follow-up');
-  assert.equal(f.read().follow_up.pending, true);
+  assert.equal(defined(f.read().follow_up, 'the Run records its follow-up').pending, true);
   assert.equal(f.read().check_loops, 0);
   assert.equal(run(f.cwd, 'complete', '--id', f.id).status, 0);
   assert.equal(f.read().status, 'done');
@@ -250,8 +265,8 @@ test('the shared four-Rework limit retains scope without clearing Evidence or en
   const after = f.read();
   assert.equal(after.stage, 'follow-up');
   assert.equal(after.check_loops, 4);
-  assert.equal(after.follow_up.failures[0].name, 'unit');
-  assert.equal(after.verify.head, f.head);
+  assert.equal(defined(after.follow_up, 'the Run records its follow-up').failures[0].name, 'unit');
+  assert.equal(after.verify?.head, f.head);
 });
 
 test('merged PR ends Follow-up without a worktree; closed PR refuses unchanged', () => {
@@ -315,10 +330,10 @@ test('only eligible Runs enter Follow-up and metrics preserve the visit', () => 
   assert.notEqual(run(f.cwd, 'transition', '--id', f.id, '--to', 'follow-up').status, 0);
   writeFileSync(f.file, JSON.stringify({ ...before, status: 'running' }));
   assert.equal(run(f.cwd, 'transition', '--id', f.id, '--to', 'follow-up').status, 0);
-  assert.equal(f.read().metrics.visits.at(-1).stage, 'follow-up');
+  assert.equal(metricsOf(f.read()).visits.at(-1)?.stage, 'follow-up');
   assert.equal(run(f.cwd, 'follow-up', '--id', f.id).status, 0);
-  assert.equal(f.read().metrics.visits.at(-1).stage, 'build');
-  assert.ok(f.read().metrics.visits.some((v) => v.stage === 'follow-up' && v.ended));
+  assert.equal(metricsOf(f.read()).visits.at(-1)?.stage, 'build');
+  assert.ok(metricsOf(f.read()).visits.some((v) => v.stage === 'follow-up' && v.ended));
 });
 
 test('a loop the user granted raises the shared limit for Follow-up too', () => {

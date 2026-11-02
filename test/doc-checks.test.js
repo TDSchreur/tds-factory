@@ -14,12 +14,17 @@ import {
   staleConstants,
 } from '../scripts/doc-checks.js';
 
+/**
+ * @param {string} dir
+ * @param {Record<string, string>} files
+ */
 const write = (dir, files) => {
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(join(dir, dirname(name)), { recursive: true });
     writeFileSync(join(dir, name), text);
   }
 };
+/** @param {Record<string, string>} files */
 const repo = (files) => {
   const dir = mkdtempSync(join(tmpdir(), 'doc-checks-'));
   write(dir, files);
@@ -168,6 +173,10 @@ const branch = () => {
   git(dir, 'checkout', '-q', '-b', 'work');
   return dir;
 };
+/**
+ * @param {string} dir
+ * @param {Record<string, string>} files
+ */
 const commit = (dir, files) => {
   write(dir, files);
   git(dir, 'add', '-A');
@@ -203,7 +212,7 @@ test('missingChangelogFragment skips when the branch shares no history with orig
   const dir = branch();
   git(dir, 'checkout', '-q', '--orphan', 'unrelated');
   commit(dir, { 'src/a.js': 'x' });
-  assert.match(missingChangelogFragment(dir).skipped, /no common ancestor/);
+  assert.match(missingChangelogFragment(dir).skipped ?? '', /no common ancestor/);
   const moved = branch();
   commit(moved, { 'src/a.js': 'same content\n'.repeat(20) });
   git(moved, 'push', '-q', 'origin', 'HEAD:refs/heads/develop');
@@ -238,9 +247,9 @@ test('missingChangelogFragment skips, with a reason, when there is no origin/dev
   git(dir, 'remote', 'remove', 'origin');
   commit(dir, { 'src/a.js': 'x' });
   const result = missingChangelogFragment(dir);
-  assert.match(result.skipped, /no origin\/develop/);
+  assert.match(result.skipped ?? '', /no origin\/develop/);
   assert.deepEqual(result.problems, []);
-  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped, /no origin\/develop/);
+  assert.match(missingChangelogFragment(mkdtempSync(join(tmpdir(), 'no-git-'))).skipped ?? '', /no origin\/develop/);
 });
 
 test('this repository has a changelog fragment for its changes', (t) => {

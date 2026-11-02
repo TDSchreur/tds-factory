@@ -6,13 +6,28 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const invoke = (cwd, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const runFile = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
-const doctorConfig = (cwd) =>
-  JSON.parse(invoke(cwd, 'doctor', '--json', '--agent', 'codex').stdout).agents[0].checks.find(
-    (c) => c.id === 'config',
-  );
+/** @param {string} cwd */
+const doctorConfig = (cwd) => {
+  /** @type {{ agents: { checks: { id: string, status: string, message: string }[] }[] }} */
+  const report = JSON.parse(invoke(cwd, 'doctor', '--json', '--agent', 'codex').stdout);
+  const found = report.agents[0].checks.find((c) => c.id === 'config');
+  assert.ok(found, 'doctor reports a config check');
+  return found;
+};
+/** @param {unknown} [config] A config object, or the text of one. */
 function project(config) {
   const cwd = repo();
   mkdirSync(join(cwd, '.factory'), { recursive: true });
@@ -25,6 +40,7 @@ function project(config) {
   git(cwd, 'commit', '-qm', 'config', '--allow-empty');
   return cwd;
 }
+/** @param {string} cwd */
 const start = (cwd) => {
   const result = invoke(
     cwd,
@@ -108,8 +124,10 @@ test('reviews in config.json join reviews.json, and an ID in both is a duplicate
   git(cwd, 'add', '-f', '.');
   git(cwd, 'commit', '-qm', 'reviews');
   const id = start(cwd);
+  /** @type {Run} */
+  const record = JSON.parse(readFileSync(runFile(cwd, id), 'utf8'));
   assert.deepEqual(
-    JSON.parse(readFileSync(runFile(cwd, id), 'utf8')).project_reviews.map((r) => r.id),
+    record.project_reviews?.map((r) => r.id),
     ['legacy', 'angular'],
   );
   writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify({ reviews: [review] }));

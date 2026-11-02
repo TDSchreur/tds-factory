@@ -16,7 +16,10 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 import { SKILLS_DIR, AGENTS_DIR } from '../src/paths.js';
-import { targets } from '../src/flow.js';
+import { targets, agentNames } from '../src/flow.js';
+import { defined } from './run-view.js';
+
+/** @typedef {ReturnType<typeof import('../src/doctor.js').doctor>} Report */
 
 const cli = resolve('bin/tds-factory.js');
 const AGENTS = '# Agents\n\n## Agent skills\n\nsee docs\n\n## Commands\n\n- Verify: `npm test`\n';
@@ -29,16 +32,31 @@ function project(agents = AGENTS) {
   writeFileSync(join(dir, 'AGENTS.md'), agents);
   return dir;
 }
+/**
+ * @param {string} dir
+ * @param {...string} args
+ */
 const doctor = (dir, ...args) => doctorAt(mkdtempSync(join(tmpdir(), 'doctor-home-')), dir, ...args);
+/**
+ * @param {string} home
+ * @param {string} dir
+ * @param {...string} args
+ */
 function doctorAt(home, dir, ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
     encoding: 'utf8',
     env: { ...process.env, HOME: home, USERPROFILE: home },
   });
-  return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stderr: result.stderr };
+  /** @type {Report} */
+  const report = result.stdout ? JSON.parse(result.stdout) : null;
+  return { status: result.status, report, stderr: result.stderr };
 }
 // The doctor report without blocking this process, so a server started by the test can answer the doctor's git.
+/**
+ * @param {string} dir
+ * @param {...string} args
+ */
 async function doctorAsync(dir, ...args) {
   const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   const child = spawn(process.execPath, [cli, 'doctor', '--json', ...args], {
@@ -46,15 +64,34 @@ async function doctorAsync(dir, ...args) {
     env: { ...process.env, HOME: home, USERPROFILE: home },
   });
   let stdout = '';
-  child.stdout.on('data', (d) => (stdout += d));
+  child.stdout.on('data', (/** @type {Buffer} */ d) => (stdout += d));
   await new Promise((done) => child.once('close', done));
   return JSON.parse(stdout);
 }
 // A shared check, else a check of an Agent target: the only one in the report, or Claude's in the default report.
-const check = (report, id, agent = report.agents.length === 1 ? report.agents[0].id : 'claude') =>
-  report.checks.find((c) => c.id === id) ?? report.agents.find((a) => a.id === agent)?.checks.find((c) => c.id === id);
-const entry = (report, id) => report.agents.find((a) => a.id === id);
+/**
+ * @param {Report} report
+ * @param {string} id
+ * @param {string} [agent]
+ */
+const check = (report, id, agent = report.agents.length === 1 ? report.agents[0].id : 'claude') => {
+  const found =
+    report.checks.find((c) => c.id === id) ??
+    report.agents.find((a) => a.id === agent)?.checks.find((c) => c.id === id);
+  assert.ok(found, `the report has a ${id} check`);
+  return found;
+};
+/**
+ * @param {Report} report
+ * @param {string} id
+ */
+const entry = (report, id) => {
+  const found = report.agents.find((a) => a.id === id);
+  assert.ok(found, `the report has an entry for ${id}`);
+  return found;
+};
 // A PATH holding only git, a fake npm (the Verify command) and the named agent commands, so the machine's own agents never count.
+/** @param {...string} commands */
 function pathWith(...commands) {
   const bin = mkdtempSync(join(tmpdir(), 'doctor-bin-'));
   const windows = process.platform === 'win32';
@@ -65,17 +102,25 @@ function pathWith(...commands) {
     .map((d) => join(d, gitName))
     .find((f) => existsSync(f));
   // git.exe needs the DLLs next to it on Windows, and a symlink needs privileges there; use its own folder.
+  assert.ok(gitBin, 'git is on PATH');
   if (windows) return `${bin}${delimiter}${dirname(gitBin)}`;
   symlinkSync(gitBin, join(bin, 'git'));
   return bin;
 }
+/**
+ * @param {string} path
+ * @param {string} dir
+ * @param {...string} args
+ */
 function doctorOn(path, dir, home = mkdtempSync(join(tmpdir(), 'doctor-home-')), ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
     encoding: 'utf8',
     env: { ...process.env, HOME: home, USERPROFILE: home, PATH: path, Path: path },
   });
-  return { status: result.status, report: result.stdout ? JSON.parse(result.stdout) : null, stdout: result.stdout };
+  /** @type {Report} */
+  const report = result.stdout ? JSON.parse(result.stdout) : null;
+  return { status: result.status, report, stdout: result.stdout };
 }
 
 test('doctor passes the project checks of a ready project and changes nothing', () => {
@@ -259,6 +304,11 @@ test('doctor rejects an unknown Agent target and lists the valid ones', () => {
 });
 
 // Installs the shipped Skills and Stage agents the way `install` lays them out, minus the ones named in `skip`.
+/**
+ * @param {string} home
+ * @param {import('../src/run-record.js').AgentName} agent
+ * @param {string[]} [skip]
+ */
 function install(home, agent, skip = []) {
   const skills = join(home, targets[agent].global),
     agents = join(home, targets[agent].agents);
@@ -294,7 +344,7 @@ test('doctor lists every required Skill that is not installed', () => {
 });
 
 test('doctor passes skills and review for every Agent target once the Factory is installed, globally or in the project', () => {
-  for (const agent of Object.keys(targets)) {
+  for (const agent of agentNames) {
     const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
     install(home, agent);
     const { report } = doctorAt(home, project(), '--agent', agent);
@@ -307,7 +357,7 @@ test('doctor passes skills and review for every Agent target once the Factory is
 });
 
 test('doctor for Copilot finds Skills in the Claude and Codex folders, where the default install puts them', () => {
-  for (const skillsFrom of ['claude', 'codex']) {
+  for (const skillsFrom of /** @type {const} */ (['claude', 'codex'])) {
     const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
     install(home, skillsFrom);
     install(home, 'copilot'); // Copilot's own folders hold the Stage agents, not the Skills
@@ -319,7 +369,7 @@ test('doctor for Copilot finds Skills in the Claude and Codex folders, where the
 });
 
 test('doctor for Copilot also finds Skills in the project Claude and Codex folders', () => {
-  for (const skillsFrom of ['claude', 'codex']) {
+  for (const skillsFrom of /** @type {const} */ (['claude', 'codex'])) {
     const dir = project(),
       home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
     install(dir, skillsFrom);
@@ -400,6 +450,7 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   store.update(open, { pr: 'https://github.com/o/r/pull/2' });
   const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
   const head = git(join(dir, '.factory', 'worktrees', merged), 'rev-parse', 'HEAD');
+  /** @param {string} url */
   const prState = (url) => ({ state: url.endsWith('/1') ? 'MERGED' : 'OPEN', head });
   const before = run({ projectDir: dir, homeDir: home, prState });
   assert.equal(before.notes.length, 1);
@@ -492,6 +543,7 @@ test('doctor fails when no agent is usable and says what to do', () => {
   assert.equal(report.ok, false);
   assert.equal(status, 1);
   const line = report.checks.find((c) => c.id === 'agents');
+  assert.ok(line, 'the report has an agents line');
   assert.equal(line.status, 'fail');
   assert.equal(line.message, 'no agent is usable: install claude, codex or copilot and run tds-factory install');
   const text = spawnSync(process.execPath, [cli, 'doctor'], {
@@ -555,16 +607,17 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
   const saved = {
     path: process.env.PATH,
     ext: process.env.PATHEXT,
-    platform: Object.getOwnPropertyDescriptor(process, 'platform'),
+    platform: defined(Object.getOwnPropertyDescriptor(process, 'platform'), 'process has a platform'),
   };
   try {
     process.env.PATH = bin;
     process.env.PATHEXT = '.EXE;.cmd';
     Object.defineProperty(process, 'platform', { value: 'win32' });
+    /** @param {string} agent */
     const binary = (agent) =>
       run({ projectDir: dir, agent, homeDir: mkdtempSync(join(tmpdir(), 'doctor-home-')) }).agents[0].checks.find(
         (c) => c.id === 'binary',
-      ).status;
+      )?.status;
     assert.equal(binary('claude'), 'pass');
     assert.equal(binary('codex'), 'missing');
     Object.defineProperty(process, 'platform', saved.platform);
@@ -580,6 +633,7 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
 });
 
 test('doctor reports the optional Verify-fast command like the Verify command', () => {
+  /** @param {string} line */
   const project_ = (line) => project(`## Agent skills\n\nsee docs\n\n## Commands\n\n- Verify: \`npm test\`\n${line}`);
   const none = check(doctor(project_('')).report, 'verify-fast');
   assert.equal(none.status, 'pass');

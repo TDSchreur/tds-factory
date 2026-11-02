@@ -7,6 +7,11 @@ import { join } from 'node:path';
 import { install } from '../src/install.js';
 import { AGENTS_DIR } from '../src/paths.js';
 
+/**
+ * @param {string} project
+ * @param {string} agent
+ * @param {boolean} [force]
+ */
 function installIn(project, agent, force = false) {
   const log = mock.method(console, 'log', () => {});
   const warn = mock.method(console, 'warn', () => {});

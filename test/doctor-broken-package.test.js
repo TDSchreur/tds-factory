@@ -6,7 +6,14 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo } from './git-repo.js';
 
+/** @import { doctor } from '../src/doctor.js' */
+/** @typedef {ReturnType<typeof doctor>} Report */
+
 // A copy of the package that the test can damage, run against a ready project.
+/**
+ * @param {(copy: string) => void} damage
+ * @returns {{ result: import('node:child_process').SpawnSyncReturns<string>, report: Report }}
+ */
 function brokenPackage(damage) {
   const copy = mkdtempSync(join(tmpdir(), 'doctor-package-'));
   for (const name of ['bin', 'src', 'agents', 'skills', 'dashboard', 'package.json'])
@@ -29,9 +36,18 @@ function brokenPackage(damage) {
       env: { ...process.env, HOME: home, USERPROFILE: home },
     },
   );
-  return { result, report: result.stdout ? JSON.parse(result.stdout) : null };
+  assert.ok(result.stdout, `doctor printed its report: ${result.stderr}`);
+  return { result, report: JSON.parse(result.stdout) };
 }
-const find = (report, id) => report.checks.find((c) => c.id === id) ?? report.agents[0].checks.find((c) => c.id === id);
+/**
+ * @param {Report} report
+ * @param {string} id
+ */
+const find = (report, id) => {
+  const check = report.checks.find((c) => c.id === id) ?? report.agents[0].checks.find((c) => c.id === id);
+  assert.ok(check, `the report has a ${id} check`);
+  return check;
+};
 
 test('doctor reports a package that ships no factory-check agent as a missing agent, not a crash', () => {
   const { result, report } = brokenPackage((copy) => {

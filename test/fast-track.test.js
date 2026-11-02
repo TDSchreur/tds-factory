@@ -5,24 +5,64 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const ok = (cwd, ...args) => {
   const r = run(cwd, ...args);
   assert.equal(r.status, 0, r.stderr);
   return r.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
+/** @param {string} cwd */
 const start = (cwd) =>
   ok(cwd, 'start', '--data', JSON.stringify({ title: 'Fast', agent: 'codex', commands: 'true', conventions: [] }));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {Record<string, unknown>} data
+ */
 const update = (cwd, id, data) => ok(cwd, 'update', '--id', id, '--data', JSON.stringify(data));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string} axis
+ * @param {string} value
+ */
 const verdict = (cwd, id, axis, value) => run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value);
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const commit = (cwd, id) => {
   const w = read(cwd, id).worktree;
   git(w, 'commit', '-q', '--allow-empty', '-m', 'work');
 };
 
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string[]} tickets
+ */
 function toCheck(cwd, id, tickets) {
   update(cwd, id, { spec_link: 'spec.md', tickets, tickets_total: tickets.length, tickets_done: tickets.length });
   ok(cwd, 'transition', '--id', id, '--to', 'build');

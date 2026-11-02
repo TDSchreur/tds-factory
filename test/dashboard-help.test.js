@@ -44,7 +44,10 @@ test('the help text uses no Avoid term of the glossary and asks for no external 
 });
 
 test('each action says when its button appears', () => {
-  const actions = HELP_SECTIONS.find((section) => section.id === 'actions').items;
+  const section = HELP_SECTIONS.find((s) => s.id === 'actions');
+  assert.ok(section, 'the help has an actions section');
+  const actions = section.items;
+  /** @type {Record<string, RegExp>} */
   const when = {
     Merge: /open pull request/,
     Sync: /Build or Check/,
@@ -56,6 +59,8 @@ test('each action says when its button appears', () => {
     actions.map((item) => item.term),
     Object.keys(when),
   );
-  for (const item of actions) assert.match(item.text, /Shown /, item.term);
-  for (const item of actions) assert.match(item.text, when[item.term], item.term);
+  for (const item of actions) assert.match(item.text, /Shown /, item.term ?? '');
+  for (const item of actions)
+    assert.ok(item.term !== undefined && item.term in when, 'an action item has a known term');
+  for (const item of actions) assert.match(item.text, when[item.term ?? ''], item.term ?? '');
 });
