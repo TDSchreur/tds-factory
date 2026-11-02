@@ -22,7 +22,9 @@ const withoutBrowser = (env) =>
 
 test('browser tests skip without a browser, and fail when REQUIRE_BROWSER is set', () => {
   assert.match(withoutBrowser({}).stdout, /^skipped/);
-  assert.match(withoutBrowser({ REQUIRE_BROWSER: '1' }).stdout, /^threw: .*REQUIRE_BROWSER/);
+  // Windows never runs the browser tests, so REQUIRE_BROWSER cannot fail there.
+  const required = process.platform === 'win32' ? /^skipped/ : /^threw: .*REQUIRE_BROWSER/;
+  assert.match(withoutBrowser({ REQUIRE_BROWSER: '1' }).stdout, required);
 });
 
 // The workflow cannot run here, so check the points that make it protect pull requests.
