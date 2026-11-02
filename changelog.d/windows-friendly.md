@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The Factory checks out and tests on Windows: `.gitattributes` keeps text files on LF, CI runs `npm run check` and `npm run test:unit` on `windows-latest`, and the browser tests can use `msedgedriver` and Edge there (skipped on Windows unless `TDS_WINDOWS_BROWSER=1`).
+- The Factory checks out and tests on Windows: `.gitattributes` keeps text files on LF, CI runs `npm run check` and `npm run test:unit` on `windows-latest`, and the browser tests skip there.
 
 ### Fixed
 
