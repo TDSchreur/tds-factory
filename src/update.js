@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleepFor } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { messageOf, codeOf } from './narrow.js';
@@ -253,7 +254,7 @@ export async function update({
   force = true,
   fetchFn = fetch,
   run = defaultRun,
-  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep = sleepFor,
   tmpdir = os.tmpdir(),
   home = os.homedir(),
   env = process.env,
@@ -274,41 +275,38 @@ export async function update({
   }
   if (compared === 0) log(`already on the latest version (${installed}); skipping npm install`);
   else {
-    const dir = fs.mkdtempSync(path.join(tmpdir, 'tds-factory-'));
-    try {
-      const file = path.join(dir, ASSET);
-      await withRetry(
-        'download',
-        async (signal) => {
-          fs.writeFileSync(
-            file,
-            Buffer.from(
-              await (await fetchOk(fetchFn, latest.url, { headers: USER_AGENT, signal }, 'download')).arrayBuffer(),
-            ),
-          );
-          if (fs.statSync(file).size < 1024) throw new Error('downloaded file is suspiciously small');
-        },
-        retry,
-        retry.timeoutMs * DOWNLOAD_FACTOR,
-      );
-      const expected = await expectedHash(`${latest.url}.sha256`, latest.hasChecksum, { fetchFn, retry });
-      if (!expected) warn(`this Release has no checksum file; the download was not verified`);
-      else {
-        const actual = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-        if (actual !== expected) throw new Error(`checksum mismatch: expected ${expected}, got ${actual}`);
-        log('checksum ok');
-      }
-      log(`installing ${latest.tag} with npm`);
-      // A relative name inside the download folder: on Windows a shell would split a temp path that contains spaces.
-      const npm = run('npm', ['install', '-g', ASSET], { inherit: true, cwd: dir });
-      if (npm.status !== 0) throw new Error(exitText(`npm install -g ${ASSET}`, npm));
-      const now = (run('tds-factory', ['--version'], { cwd: home }).stdout ?? '').trim();
-      if (compareVersions(now, latest.tag) !== 0)
-        throw new Error(`installed version is '${now}', expected ${formatVersion(latest.version)}`);
-      log(`installed ${now}`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+    using tmp = fs.mkdtempDisposableSync(path.join(tmpdir, 'tds-factory-'));
+    const dir = tmp.path;
+    const file = path.join(dir, ASSET);
+    await withRetry(
+      'download',
+      async (signal) => {
+        fs.writeFileSync(
+          file,
+          Buffer.from(
+            await (await fetchOk(fetchFn, latest.url, { headers: USER_AGENT, signal }, 'download')).arrayBuffer(),
+          ),
+        );
+        if (fs.statSync(file).size < 1024) throw new Error('downloaded file is suspiciously small');
+      },
+      retry,
+      retry.timeoutMs * DOWNLOAD_FACTOR,
+    );
+    const expected = await expectedHash(`${latest.url}.sha256`, latest.hasChecksum, { fetchFn, retry });
+    if (!expected) warn(`this Release has no checksum file; the download was not verified`);
+    else {
+      const actual = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      if (actual !== expected) throw new Error(`checksum mismatch: expected ${expected}, got ${actual}`);
+      log('checksum ok');
     }
+    log(`installing ${latest.tag} with npm`);
+    // A relative name inside the download folder: on Windows a shell would split a temp path that contains spaces.
+    const npm = run('npm', ['install', '-g', ASSET], { inherit: true, cwd: dir });
+    if (npm.status !== 0) throw new Error(exitText(`npm install -g ${ASSET}`, npm));
+    const now = (run('tds-factory', ['--version'], { cwd: home }).stdout ?? '').trim();
+    if (compareVersions(now, latest.tag) !== 0)
+      throw new Error(`installed version is '${now}', expected ${formatVersion(latest.version)}`);
+    log(`installed ${now}`);
   }
 
   if (force)

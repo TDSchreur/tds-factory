@@ -14,9 +14,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.join(import.meta.dirname, '..');
 const MARKER = '.tds-factory-dev';
 const DEV_SKILLS = [
   'vendor/awesome-copilot/skills/docs-sync-audit',
@@ -177,15 +176,12 @@ if (tools) {
     const commit = capture('git', ['rev-parse', '--short', ref]);
     info(`default branch of origin: ${ref} at ${commit}`);
     info(`package version there: ${JSON.parse(capture('git', ['show', `${ref}:package.json`])).version}`);
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tds-factory-'));
-    try {
-      info(`$ git archive ${ref}`);
-      capture('git', ['archive', '--format=tgz', '--prefix=package/', '-o', path.join(tmp, 'tds-factory.tgz'), ref]);
-      // Relative name from inside tmp: a shell on Windows would split a temp path with spaces.
-      stream('npm', ['install', '-g', 'tds-factory.tgz'], tmp);
-    } finally {
-      fs.rmSync(tmp, { recursive: true, force: true });
-    }
+    using disposable = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'tds-factory-'));
+    const tmp = disposable.path;
+    info(`$ git archive ${ref}`);
+    capture('git', ['archive', '--format=tgz', '--prefix=package/', '-o', path.join(tmp, 'tds-factory.tgz'), ref]);
+    // Relative name from inside tmp: a shell on Windows would split a temp path with spaces.
+    stream('npm', ['install', '-g', 'tds-factory.tgz'], tmp);
     info(`${dryRun ? 'would install' : 'installed'} ${ref} at ${commit}`);
   });
 } else skip('Install the latest tds-factory from origin', 'the tool check failed');

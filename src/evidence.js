@@ -251,15 +251,15 @@ function carriedFrom(record, axis, value, head, worktree) {
   if (!carriable.includes(axis))
     throw new Error('only security and infrastructure verdicts can be carried over; review the other axes again');
   if (value === 'fail') throw new Error('a fail is never carried over');
-  const latest = [...(record.metrics?.verdicts ?? [])].reverse().find((event) => event.axis === axis);
+  const latest = (record.metrics?.verdicts ?? []).findLast((event) => event.axis === axis);
   if (
     (latest?.head === head && latest.value === 'fail') ||
     (record[axis] === 'fail' && record.reviewed?.[axis]?.head === head)
   )
     throw new Error(`${axis} already failed at this head; review the axis`);
-  const earlier = [...(record.metrics?.verdicts ?? [])]
-    .reverse()
-    .find((event) => event.axis === axis && event.head && event.head !== head);
+  const earlier = (record.metrics?.verdicts ?? []).findLast(
+    (event) => event.axis === axis && event.head && event.head !== head,
+  );
   if (!earlier) throw new Error(`there is no earlier ${axis} verdict to carry over; review the axis`);
   const earlierHead = earlier.head;
   if (!earlierHead || !/^[0-9a-f]{40,64}$/.test(earlierHead))

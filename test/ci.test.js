@@ -79,6 +79,6 @@ test('CI and release test only the active LTS lines, matching engines', () => {
   const release = readFileSync('.github/workflows/release.yml', 'utf8');
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
   const engines = JSON.parse(readFileSync('package.json', 'utf8')).engines.node;
-  assert.equal(engines, '>=24');
-  for (const file of [workflow, release]) assert.match(file, /node: \['24', 'lts\/\*'\]/);
+  assert.equal(engines, '>=24.4');
+  for (const file of [workflow, release]) assert.match(file, /node: \['24\.4', 'lts\/\*'\]/);
 });

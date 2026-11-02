@@ -1,10 +1,9 @@
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-export const EVAL_BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin');
+export const EVAL_BIN = join(import.meta.dirname, '..', 'bin');
 const CLI = join(EVAL_BIN, 'tds-factory');
 
 /**

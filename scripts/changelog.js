@@ -2,7 +2,6 @@
 // Usage: node scripts/changelog.js release <version> [yyyy-mm-dd]
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { messageOf } from '../src/narrow.js';
 
 export const CATEGORIES = ['Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security'];
@@ -80,7 +79,7 @@ export function release({ root = '.', version, date }) {
   return files;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+if (import.meta.main) {
   try {
     const [command, version, date = new Date().toISOString().slice(0, 10)] = process.argv.slice(2);
     if (command !== 'release') throw new Error('usage: node scripts/changelog.js release <version> [yyyy-mm-dd]');

@@ -4,12 +4,12 @@
 /** @import { ReadableEntry, UnreadableEntry } from './run-folder.js' */
 /** @import { ProjectResult } from './run-record.js' */
 import http from 'node:http';
+import { once } from 'node:events';
 import { openRunStore, summarizeMetrics, formatMetrics, trackOf, loopCap } from './run-store.js';
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve, sep } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { can, providerFor, providerWith, remoteRepo } from './pr-provider.js';
 import { messageOf, codeOf, oneOf } from './narrow.js';
@@ -71,7 +71,7 @@ const addressPort = (server) => {
 // Each repo gets its own stable port in 4300-4999, derived from its main checkout path.
 /** @param {string} dir */
 const repoPort = (dir) => 4300 + (createHash('sha1').update(dir).digest().readUInt32BE(0) % 700);
-const DASHBOARD_DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
+const DASHBOARD_DIR = join(import.meta.dirname, '..', 'dashboard') + sep;
 // The only files served besides the page; a request never picks a path, only one of these names.
 const JS = 'text/javascript';
 /** @type {Record<string, string>} */
@@ -593,11 +593,11 @@ export async function startDashboard({
    * @param {number} p
    * @returns {Promise<void>}
    */
-  const listen = (p) =>
-    new Promise((ok, fail) => {
-      server.once('error', fail);
-      server.listen(p, HOST, ok);
-    });
+  const listen = async (p) => {
+    const listening = once(server, 'listening');
+    server.listen(p, HOST);
+    await listening;
+  };
   if (port !== undefined) await listen(port);
   else
     await listen(repoPort(store.projectDir)).catch((err) => {
@@ -609,10 +609,11 @@ export async function startDashboard({
     server,
     port: actual,
     url: `http://${HOST}:${actual}`,
-    close: () =>
-      new Promise((ok) => {
-        server.close(ok);
-        server.closeAllConnections();
-      }),
+    close: async () => {
+      const closed = once(server, 'close');
+      server.close();
+      server.closeAllConnections();
+      await closed;
+    },
   };
 }
