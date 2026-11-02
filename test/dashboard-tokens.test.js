@@ -3,6 +3,24 @@ import assert from 'node:assert/strict';
 import { css } from './dashboard-files.js';
 import { contrast, dark, light, systemDark } from './dashboard-tokens.js';
 
+/**
+ * @param {Map<string, string>} map
+ * @param {string} name
+ */
+const token = (map, name) => {
+  const value = map.get(name);
+  assert.ok(value !== undefined, `${name} is defined`);
+  return value;
+};
+
+/**
+ * @param {Map<string, string>} map
+ * @param {string} a
+ * @param {string} b
+ * @returns {[string, string, number]}
+ */
+const ratioOf = (map, a, b) => [a, b, contrast(token(map, a), token(map, b))];
+
 test('the token layer names its source and keeps the Fluent token names', () => {
   assert.match(css, /@fluentui\/tokens 1\.0\.0-alpha\.24/);
   assert.match(css, /webLightTheme/);
@@ -41,7 +59,7 @@ test('the Fluent values the Dashboard relies on are the ones the web themes publ
   assert.equal(l.get('colorBrandBackground'), '#0f6cbd');
   assert.equal(l.get('fontSizeBase300'), '14px');
   assert.equal(l.get('borderRadiusMedium'), '4px');
-  assert.match(l.get('fontFamilyBase'), /^'Segoe UI', .*sans-serif$/);
+  assert.match(token(l, 'fontFamilyBase'), /^'Segoe UI', .*sans-serif$/);
   assert.doesNotMatch(css, /@font-face/, 'no font is shipped');
 });
 
@@ -137,15 +155,15 @@ const NON_TEXT_PAIRS = [
   ['colorPaletteGreenBorder2', 'colorPaletteGreenBackground1'],
 ];
 
-for (const [theme, tokens] of [
+/** @type {[string, () => Map<string, string>][]} */
+const themes = [
   ['light', light],
   ['dark', dark],
-]) {
+];
+for (const [theme, tokens] of themes) {
   test(`text and background pairs reach 4.5:1 in the ${theme} theme`, () => {
     const t = tokens();
-    const low = TEXT_PAIRS.map(([fg, bg]) => [fg, bg, contrast(t.get(fg), t.get(bg))]).filter(
-      ([, , ratio]) => ratio < 4.5,
-    );
+    const low = TEXT_PAIRS.map(([fg, bg]) => ratioOf(t, fg, bg)).filter(([, , ratio]) => ratio < 4.5);
     assert.deepEqual(
       low.map(([fg, bg, ratio]) => `${fg} on ${bg}: ${ratio.toFixed(2)}`),
       [],
@@ -153,7 +171,7 @@ for (const [theme, tokens] of [
   });
   test(`borders, focus rings and the progress fill reach 3:1 in the ${theme} theme`, () => {
     const t = tokens();
-    const low = NON_TEXT_PAIRS.map(([a, b]) => [a, b, contrast(t.get(a), t.get(b))]).filter(([, , ratio]) => ratio < 3);
+    const low = NON_TEXT_PAIRS.map(([a, b]) => ratioOf(t, a, b)).filter(([, , ratio]) => ratio < 3);
     assert.deepEqual(
       low.map(([a, b, ratio]) => `${a} on ${b}: ${ratio.toFixed(2)}`),
       [],

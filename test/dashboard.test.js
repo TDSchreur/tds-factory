@@ -6,9 +6,24 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
+import { viewsOf } from './run-view.js';
 
-let tmp, project, empty, dash, emptyDash;
+/** @typedef {Awaited<ReturnType<typeof startDashboard>>} Dash */
+/** @type {string} */
+let tmp;
+/** @type {string} */
+let project;
+/** @type {string} */
+let empty;
+/** @type {Dash} */
+let dash;
+/** @type {Dash} */
+let emptyDash;
 
+/**
+ * @param {string} id
+ * @param {Record<string, string>} files
+ */
 function run(id, files) {
   const dir = join(project, '.factory', 'runs', id);
   mkdirSync(dir, { recursive: true });
@@ -16,13 +31,18 @@ function run(id, files) {
 }
 
 // Raw request so paths are sent exactly as written (fetch normalizes ..).
+/**
+ * @param {Dash} d
+ * @param {string} path
+ * @returns {Promise<{ status: number, body: string, headers: import('node:http').IncomingHttpHeaders }>}
+ */
 function get(d, path) {
   return new Promise((resolve, reject) => {
     http
       .get({ host: '127.0.0.1', port: d.port, path }, (res) => {
         let body = '';
         res.on('data', (c) => (body += c));
-        res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body, headers: res.headers }));
       })
       .on('error', reject);
   });
@@ -53,18 +73,36 @@ after(async () => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
+/** @typedef {{ id: string, unreadable: boolean, record: Record<string, unknown> | null, files: string[] }} Listed */
+/**
+ * @param {Dash} [d]
+ * @returns {Promise<Listed[]>}
+ */
 const list = async (d = dash) => JSON.parse((await get(d, '/api/runs')).body);
+/**
+ * @template {{ id: string }} T
+ * @param {T[]} items
+ * @param {string} id
+ * @returns {T}
+ */
+const byId = (items, id) => {
+  const found = items.find((item) => item.id === id);
+  assert.ok(found, `${id} is listed`);
+  return found;
+};
 
 test('list returns valid Run records with their id', async () => {
-  const good = (await list()).find((r) => r.id === '2026-01-01-good');
+  const good = byId(await list(), '2026-01-01-good');
+  assert.ok(good.record, 'the Run has a record');
   assert.equal(good.record.title, 'Good run');
   assert.equal(good.record.stage, 'build');
   assert.equal(good.unreadable, false);
 });
 
 test('record with missing or unknown fields is returned as is', async () => {
-  const sparse = (await list()).find((r) => r.id === '2026-01-03-sparse');
+  const sparse = byId(await list(), '2026-01-03-sparse');
   assert.equal(sparse.unreadable, false);
+  assert.ok(sparse.record, 'the Run has a record');
   assert.equal(sparse.record.surprise, 1);
 });
 
@@ -82,9 +120,9 @@ test('file route returns a Markdown file of a Run', async () => {
 
 test('list names the Markdown files of each Run, sorted, without run.json', async () => {
   const runs = await list();
-  assert.deepEqual(runs.find((r) => r.id === '2026-01-01-good').files, ['define.md']);
-  assert.deepEqual(runs.find((r) => r.id === '2026-01-03-sparse').files, []);
-  assert.deepEqual(runs.find((r) => r.id === '2026-01-02-broken').files, []);
+  assert.deepEqual(byId(runs, '2026-01-01-good').files, ['define.md']);
+  assert.deepEqual(byId(runs, '2026-01-03-sparse').files, []);
+  assert.deepEqual(byId(runs, '2026-01-02-broken').files, []);
 });
 
 test('file route rejects traversal and anything outside a Run', async () => {
@@ -112,7 +150,7 @@ test('file route rejects traversal and anything outside a Run', async () => {
 test('page route serves HTML', async () => {
   const res = await get(dash, '/');
   assert.equal(res.status, 200);
-  assert.match(res.headers['content-type'], /text\/html/);
+  assert.match(res.headers['content-type'] ?? '', /text\/html/);
 });
 
 test('page route serves the real board page', async () => {
@@ -139,6 +177,11 @@ test('info route names the project directory the Dashboard serves', async () => 
   );
 });
 
+/**
+ * @param {Dash} d
+ * @param {string} path
+ * @param {string} host
+ */
 const getAs = (d, path, host) =>
   new Promise((resolve, reject) => {
     http
@@ -175,7 +218,9 @@ test('a foreign Host header gets 403 on every route; loopback names still work',
 });
 
 test('server listens on loopback only', () => {
-  assert.equal(dash.server.address().address, '127.0.0.1');
+  const address = dash.server.address();
+  assert.ok(address && typeof address === 'object', 'the server listens on a port');
+  assert.equal(address.address, '127.0.0.1');
   assert.match(dash.url, /^http:\/\/127\.0\.0\.1:\d+$/);
 });
 
@@ -200,13 +245,15 @@ test('every write needs the same Origin and the session token', async () => {
   ];
   const good = await writeHeaders(dash);
   for (const [method, path] of paths) {
-    for (const [name, headers] of [
+    /** @type {[string, Record<string, string>][]} */
+    const attempts = [
       ['no headers', {}],
       ['no token', { Origin: dash.url }],
       ['no origin', { 'X-Factory-Token': good['X-Factory-Token'] }],
       ['wrong token', { ...good, 'X-Factory-Token': 'x'.repeat(64) }],
       ['foreign origin', { ...good, Origin: 'http://evil.example' }],
-    ]) {
+    ];
+    for (const [name, headers] of attempts) {
       assert.equal(
         (await fetch(`${dash.url}${path}`, { method, headers })).status,
         403,
@@ -273,6 +320,7 @@ test('the session token differs between servers and stays the same within one', 
 test('deletion removes completed and active Runs', async () => {
   run('2026-02-01-finished', { 'run.json': JSON.stringify({ status: 'done' }), 'finish.md': 'history' });
   run('active-to-delete', { 'run.json': JSON.stringify({ status: 'running' }) });
+  /** @param {string} id */
   const request = async (id) =>
     fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
   assert.equal((await request('2026-02-01-finished')).status, 200);
@@ -283,6 +331,10 @@ test('deletion removes completed and active Runs', async () => {
 
 test('deletion rejects foreign origins and traversal', async () => {
   run('2026-02-02-abandoned', { 'run.json': JSON.stringify({ status: 'abandoned' }) });
+  /**
+   * @param {string} path
+   * @param {string} [origin]
+   */
   const request = async (path, origin = dash.url) =>
     fetch(`${dash.url}${path}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
   assert.equal((await request('/api/runs/2026-02-02-abandoned', 'http://evil.example')).status, 403);
@@ -302,8 +354,8 @@ test('terminal Runs with older directory names can be deleted', async () => {
 test('deleting a Run with a whitespace-padded ID preserves the similarly named Run', async () => {
   run(' padded ', { 'run.json': JSON.stringify({ status: 'done', title: 'Padded' }) });
   run('padded', { 'run.json': JSON.stringify({ status: 'done', title: 'Unpadded' }) });
-  const views = JSON.parse((await get(dash, '/api/views')).body);
-  const padded = views.find((r) => r.title === 'Padded');
+  const padded = (await viewsOf(dash)).find((r) => r.title === 'Padded');
+  assert.ok(padded, 'the padded Run has a view');
   assert.equal(padded.id, ' padded ');
   const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, {
     method: 'DELETE',
@@ -329,19 +381,20 @@ test('Dashboard interprets incomplete and unreadable Run records', async () => {
   );
   const dashboard = await startDashboard({ projectDir: cwd, port: 0 });
   try {
-    const records = await (await fetch(dashboard.url + '/api/views')).json();
-    const old = records.find((r) => r.id === 'old');
+    const records = await viewsOf(dashboard);
+    const old = byId(records, 'old');
     assert.equal(old.column, 'define');
     assert.equal(old.waiting, true);
-    assert.equal(records.find((r) => r.id === 'legacy').column, 'define');
-    assert.equal(records.find((r) => r.id === 'broken').unreadable, true);
+    assert.equal(byId(records, 'legacy').column, 'define');
+    assert.equal(byId(records, 'broken').unreadable, true);
   } finally {
     await dashboard.close();
   }
 });
 
 test('the style, scripts and vendored libraries are served at fixed names', async () => {
-  for (const [path, type, marker] of [
+  /** @type {[string, RegExp, RegExp][]} */
+  const files = [
     ['/style.css', /text\/css/, /--colorNeutralBackground1:/],
     ['/favicon.svg', /image\/svg\+xml/, /<svg/],
     ['/app.js', /text\/javascript/, /function App/],
@@ -352,10 +405,11 @@ test('the style, scripts and vendored libraries are served at fixed names', asyn
     ['/vendor/preact.js', /text\/javascript/, /export\{/],
     ['/vendor/hooks.js', /text\/javascript/, /useState/],
     ['/vendor/htm.js', /text\/javascript/, /export default/],
-  ]) {
+  ];
+  for (const [path, type, marker] of files) {
     const res = await get(dash, path);
     assert.equal(res.status, 200, path);
-    assert.match(res.headers['content-type'], type, path);
+    assert.match(res.headers['content-type'] ?? '', type, path);
     assert.match(res.body, marker, path);
   }
 });
@@ -422,17 +476,17 @@ test('project review outcomes, findings and skip reasons are visible in the Dash
       },
     }),
   });
-  const views = JSON.parse((await get(dash, '/api/views')).body);
-  const view = views.find((v) => v.id === '2026-01-05-project-reviews');
+  const view = byId(await viewsOf(dash), '2026-01-05-project-reviews');
+  const reviews = view.projectReviews ?? [];
   assert.deepEqual(
-    view.projectReviews.map((r) => [r.name, r.verdict]),
+    reviews.map((r) => [r.name, r.verdict]),
     [
       ['Angular', 'fail'],
       ['UX', 'skipped'],
     ],
   );
-  assert.equal(view.projectReviews[0].findings[0].description, 'Bad label');
-  assert.match(view.projectReviews[1].reason, /No changed file/);
+  assert.equal(reviews[0].findings[0].description, 'Bad label');
+  assert.match(reviews[1].reason, /No changed file/);
 });
 
 test('numbered Follow-up summaries follow Finish and are sorted by observation', async () => {
@@ -442,7 +496,7 @@ test('numbered Follow-up summaries follow Finish and are sorted by observation',
     'follow-up-2.md': '2',
     'finish.md': 'finish',
   });
-  assert.deepEqual((await list()).find((r) => r.id === '2026-01-05-follow-up').files, [
+  assert.deepEqual(byId(await list(), '2026-01-05-follow-up').files, [
     'finish.md',
     'follow-up-2.md',
     'follow-up-10.md',
@@ -461,12 +515,12 @@ test('/api/views returns the model, last seen and the event log of a Run, and sk
     }),
     'events.jsonl': `${JSON.stringify({ at: '2026-01-09T09:00:00.000Z', type: 'stage', from: 'define', to: 'build', secret: { nested: 1 } })}\nnot json\n`,
   });
-  const view = JSON.parse((await get(dash, '/api/views')).body).find((v) => v.id === '2026-01-09-events');
+  const view = byId(await viewsOf(dash), '2026-01-09-events');
   assert.deepEqual(view.model, { requested: 'claude-sonnet-5.5', effort: 'high', observed: '' });
   assert.equal(view.lastSeen, '2026-01-09T10:00:00.000Z');
   assert.deepEqual(view.events, [{ at: '2026-01-09T09:00:00.000Z', type: 'stage', from: 'define', to: 'build' }]);
   assert.equal(view.eventsDamaged, 1);
-  const old = JSON.parse((await get(dash, '/api/views')).body).find((v) => v.id === '2026-01-01-good');
+  const old = byId(await viewsOf(dash), '2026-01-01-good');
   assert.deepEqual(old.events, []);
   assert.equal(old.lastSeen, '');
 });

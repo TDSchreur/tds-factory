@@ -9,10 +9,13 @@ import { startDashboard } from '../src/dashboard.js';
 // The files the page loads, worked out the way a browser does (#368: a module missing from the server's allowlist stopped the whole page),
 // asked from the real server, not from a stub.
 const DIR = fileURLToPath(new URL('../dashboard/', import.meta.url));
+/** @type {Record<string, RegExp>} */
 const TYPE = { '.js': /^text\/javascript/, '.css': /^text\/css/, '.svg': /^image\/svg\+xml/ };
+/** @param {string} path */
 const read = (path) => readFileSync(join(DIR, path), 'utf8');
 
 // Absolute paths a document names: script src, link href and the URLs of an import map.
+/** @param {string} html */
 function pagePaths(html) {
   const paths = [...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)="(\/[^"]*)"/g)].map((m) => m[1]);
   for (const map of html.matchAll(/<script type="importmap">([\s\S]*?)<\/script>/g))
@@ -20,6 +23,7 @@ function pagePaths(html) {
   return paths;
 }
 // Paths of the relative imports and re-exports of a module, resolved against the module's own path.
+/** @param {string} path */
 function importsOf(path) {
   const found = [...read(path).matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"](\.{1,2}\/[^'"]+)['"]/g)].map((m) => m[1]);
   return found.map((rel) => posix.normalize(posix.join(posix.dirname('/' + path), rel)));
@@ -29,12 +33,16 @@ function loadedFiles() {
     seen = new Set();
   while (queue.length) {
     const path = queue.shift();
-    if (seen.has(path)) continue;
+    if (path === undefined || seen.has(path)) continue;
     seen.add(path);
     if (path.endsWith('.js')) queue.push(...importsOf(path.slice(1)));
   }
   return [...seen].sort();
 }
+/**
+ * @param {string} [dir]
+ * @returns {string[]}
+ */
 const ownFiles = (dir = '') =>
   readdirSync(join(DIR, dir), { withFileTypes: true }).flatMap((e) =>
     e.isDirectory()
@@ -72,7 +80,9 @@ test('the real server serves every file the page loads, with the right content t
     for (const path of loadedFiles()) {
       const res = await fetch(dash.url + path);
       assert.equal(res.status, 200, `${path} is not served (add it to ASSETS in src/dashboard.js)`);
-      assert.match(res.headers.get('content-type'), TYPE[path.slice(path.lastIndexOf('.'))], path);
+      const type = TYPE[path.slice(path.lastIndexOf('.'))];
+      assert.ok(type, `${path} has a known type`);
+      assert.match(res.headers.get('content-type') ?? '', type, path);
       await res.arrayBuffer();
     }
   } finally {

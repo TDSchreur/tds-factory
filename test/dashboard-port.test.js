@@ -5,7 +5,9 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
 import { repo, linked } from './git-repo.js';
+import { portOf } from './browser.js';
 
+/** @param {{ url: string }} d */
 const answers = async (d) => (await fetch(`${d.url}/api/info`)).status === 200;
 
 test('the same repo gets the same port each time', async () => {
@@ -64,8 +66,8 @@ test('a busy default port falls back to a free port and still answers', async ()
 
 test('an explicit busy port is an error and port 0 gives a free port', async () => {
   const blocker = net.createServer();
-  await new Promise((ok) => blocker.listen(0, '127.0.0.1', ok));
-  const { port } = blocker.address();
+  await new Promise((ok) => blocker.listen(0, '127.0.0.1', () => ok(undefined)));
+  const port = portOf(blocker);
   try {
     await assert.rejects(startDashboard({ projectDir: repo(), port }), { code: 'EADDRINUSE' });
     const d = await startDashboard({ projectDir: repo(), port: 0 });
@@ -75,6 +77,6 @@ test('an explicit busy port is an error and port 0 gives a free port', async () 
       await d.close();
     }
   } finally {
-    await new Promise((ok) => blocker.close(ok));
+    await new Promise((ok) => blocker.close(() => ok(undefined)));
   }
 });
