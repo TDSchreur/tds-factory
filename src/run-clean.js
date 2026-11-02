@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 /** @typedef {(url: string) => { state: string, head?: string } | undefined} PrLookup */
 import { codeOf, messageOf, oneOf } from './narrow.js';
-import { statuses } from './run-record.js';
+import { statuses, validId } from './run-record.js';
 import { providerFor } from './pr-provider.js';
 import { runRoot, withRunLock, readRun, runIds, mainCheckout } from './run-folder.js';
 import { ownWorktrees, worktreeChanges, submoduleLocalWork } from './worktrees.js';
@@ -97,11 +97,13 @@ function ghPrInfo(url) {
 /**
  * @param {string} projectDir
  * @param {string} callerDir
- * @param {string} id
+ * @param {string | undefined} rawId
  * @param {PrLookup} [prState]
  * @returns {{ id: string, outcome: string, reason?: string }}
  */
-export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
+export function cleanRun(projectDir, callerDir, rawId, prState = ghPrInfo) {
+  if (!validId(rawId)) throw new Error('invalid Run id');
+  const id = rawId;
   /** @param {string} reason */
   const kept = (reason) => ({ id, outcome: 'kept', reason });
   const { root, record } = readRun(projectDir, id);

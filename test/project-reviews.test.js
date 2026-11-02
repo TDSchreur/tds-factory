@@ -431,3 +431,8 @@ test('sync invalidates skipped reviews when the recorded base changes without mo
   assert.equal(inspection.status, 0, inspection.stderr);
   assert.ok(JSON.parse(inspection.stdout)[0].problems.some((p) => p.code === 'stale-evidence'));
 });
+
+test('reviewPlan says so when the Run records no base commit', async () => {
+  const { reviewPlan } = await import('../src/project-reviews.js');
+  assert.throws(() => reviewPlan({ worktree: tmpdir(), project_reviews: [] }), /the Run records no base commit/);
+});

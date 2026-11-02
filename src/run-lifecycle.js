@@ -81,6 +81,7 @@ export function startRun(projectDir, data) {
     write(path.join(root, id), {
       ...apply(
         {
+          // The type of a Run needs these two here; the second argument sets them again, after `data`, so `data` cannot override them.
           worktree,
           base_sha: commit,
           stage: 'define',
@@ -94,7 +95,7 @@ export function startRun(projectDir, data) {
           created: now,
           last_seen: now,
         },
-        data,
+        { ...data, worktree, base_sha: commit },
       ),
       project_reviews: projectReviews,
       project_config: frozenSettings(settings),
@@ -125,7 +126,7 @@ export function startRun(projectDir, data) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {Partial<Run>} data
  */
 export function updateRun(projectDir, id, data) {
@@ -148,8 +149,8 @@ export function updateRun(projectDir, id, data) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
- * @param {string} to
+ * @param {string | undefined} id
+ * @param {string | undefined} to
  * @param {{ activity?: string }} [data]
  */
 export function transitionRun(projectDir, id, to, data = {}) {
@@ -190,8 +191,8 @@ export function transitionRun(projectDir, id, to, data = {}) {
 // The user's choice of Track, recorded only in Define; a record without one is a Full track Run.
 /**
  * @param {string} projectDir
- * @param {string} id
- * @param {string} value
+ * @param {string | undefined} id
+ * @param {string | undefined} value
  */
 export function trackRun(projectDir, id, value) {
   if (!isTrack(value)) throw new Error(`track must be ${tracks.join(' or ')}`);
@@ -203,7 +204,7 @@ export function trackRun(projectDir, id, value) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {unknown} data
  */
 export function acceptRun(projectDir, id, data) {
@@ -229,7 +230,7 @@ export function acceptRun(projectDir, id, data) {
 // Rebases onto origin's default branch. A changed head or recorded base makes Evidence stale, so it goes.
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {{ activity?: string }} [data]
  */
 export function syncRun(projectDir, id, data = {}) {
@@ -267,7 +268,7 @@ export function syncRun(projectDir, id, data = {}) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {{ activity?: string }} [data]
  * @param {string[]} [causes]
  */
@@ -289,7 +290,7 @@ export function reworkRun(projectDir, id, data = {}, causes = []) {
 // `updated` is the record time the user saw; a Run that changed since is refused.
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {{ updated?: string }} [options]
  */
 export function grantLoopRun(projectDir, id, { updated } = {}) {
@@ -312,7 +313,7 @@ export function grantLoopRun(projectDir, id, { updated } = {}) {
 }
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {{ activity?: string }} [data]
  */
 export function completeRun(projectDir, id, data = {}) {

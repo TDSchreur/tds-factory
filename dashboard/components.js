@@ -455,7 +455,8 @@ function ThemeSelect() {
     return saved !== undefined && THEMES.includes(saved) ? saved : 'system';
   });
   const change = (/** @type {Event} */ e) => {
-    const choice = /** @type {HTMLSelectElement} */ (e.target).value;
+    if (!(e.target instanceof HTMLSelectElement)) return;
+    const choice = e.target.value;
     setTheme(choice);
     document.documentElement.dataset.theme = choice;
     try {

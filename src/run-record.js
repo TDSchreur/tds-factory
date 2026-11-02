@@ -264,7 +264,7 @@ export function withStageModel(record) {
   if (typeof configured === 'string' && configured) next.requested_model = configured;
   return next;
 }
-/** @param {unknown} id */
+/** @param {unknown} id @returns {id is string} */
 export const validId = (id) => typeof id === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(id);
 
 // Why a Verify command cannot be run at all; undefined when it is usable. Doctor reports the same rule.

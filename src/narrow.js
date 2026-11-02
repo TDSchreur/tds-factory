@@ -1,7 +1,16 @@
 // Helpers that read an unknown value without assuming its type.
 
-/** The message of a value caught in a `catch`, which is not necessarily an Error. @param {unknown} err */
-export const messageOf = (err) => (err instanceof Error ? err.message : String(err));
+/** The message of a value caught in a `catch`, which is not necessarily an Error: an Error's own, a string `message` of any object, else the value as text. @param {unknown} err */
+export const messageOf = (err) =>
+  err instanceof Error
+    ? err.message
+    : typeof err === 'object' && err !== null && 'message' in err && typeof err.message === 'string'
+      ? err.message
+      : String(err);
+
+/** The `reason` of a failed PR lookup, or undefined. @param {unknown} err */
+export const reasonOf = (err) =>
+  typeof err === 'object' && err !== null && 'reason' in err && typeof err.reason === 'string' ? err.reason : undefined;
 
 /** The `code` of a system error such as ENOENT, or undefined. @param {unknown} err */
 export const codeOf = (err) =>

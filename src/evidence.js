@@ -141,7 +141,7 @@ function verifyFast(dir, record) {
 // Runs the Verify command outside the Run lock, since it can take minutes, and records the result under it.
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {{ fast?: boolean }} [options]
  * @returns {Verify}
  */
@@ -152,7 +152,7 @@ export function verifyRun(projectDir, id, { fast = false } = {}) {
   const commands = record.commands;
   const commandProblem = verifyCommandProblem(commands);
   if (commandProblem || typeof commands !== 'string')
-    throw new Error(`the Run has no usable Verify command: ${commandProblem}`);
+    throw new Error(`the Run has no usable Verify command: ${commandProblem ?? 'none is recorded'}`);
   let state;
   try {
     state = worktreeState(record);
@@ -305,14 +305,16 @@ function carriedFrom(record, axis, value, head, worktree) {
 }
 /**
  * @param {string} projectDir
- * @param {string} id
- * @param {string} axis
- * @param {string} value
+ * @param {string | undefined} id
+ * @param {string | undefined} axis
+ * @param {string | undefined} value
  * @param {{ carried?: boolean }} [options]
  */
 export function verdictRun(projectDir, id, axis, value, { carried = false } = {}) {
   if (!isAxis(axis)) throw new Error(`unknown Check axis: ${axis}`);
   validate({ [axis]: value });
+  // validate has refused anything but a verdict; this narrows the type for the code below.
+  if (typeof value !== 'string') throw new Error(`${axis} needs a verdict`);
   changeRunning(projectDir, id, {}, (old) => {
     if (old.stage !== 'check') throw new Error('verdicts are recorded in Check');
     if (value === 'skipped' && !skippable(axis, old))
@@ -360,8 +362,8 @@ function evidenceHash(record, item) {
 // under the Run folder so screenshots do not dirty the implementation worktree.
 /**
  * @param {string} projectDir
- * @param {string} id
- * @param {string} axis
+ * @param {string | undefined} id
+ * @param {string | undefined} axis
  * @param {any} data The report as the agent gave it: untrusted JSON, checked field by field below.
  */
 export function projectReviewRun(projectDir, id, axis, data) {
@@ -423,8 +425,8 @@ export function projectReviewRun(projectDir, id, axis, data) {
     };
     return {
       record: recordVerdict(
-        { ...old, project_results: { ...old.project_results, [axis]: result } },
-        { axis, value: data.verdict, head, base_sha: old.base_sha, attempt: attempt(old) },
+        { ...old, project_results: { ...old.project_results, [review.id]: result } },
+        { axis: review.id, value: data.verdict, head, base_sha: old.base_sha, attempt: attempt(old) },
       ),
       activity: `${axis} verdict: ${data.verdict}`,
     };
@@ -434,8 +436,8 @@ export function projectReviewRun(projectDir, id, axis, data) {
 // Materialize only captured files into a new private folder; never execute the live Skill.
 /**
  * @param {string} projectDir
- * @param {string} id
- * @param {string} axis
+ * @param {string | undefined} id
+ * @param {string | undefined} axis
  */
 export function materializeReview(projectDir, id, axis) {
   const { dir, record } = readRun(projectDir, id);

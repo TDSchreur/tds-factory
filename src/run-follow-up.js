@@ -2,7 +2,7 @@
 import { oneOf } from './narrow.js';
 import { changeRun } from './run-folder.js';
 import { ownWorktrees, worktreeState } from './worktrees.js';
-import { loops, loopCap } from './run-record.js';
+import { loops, loopCap, validId } from './run-record.js';
 import { clearEvidence } from './evidence.js';
 import { moveVisit } from './run-metrics.js';
 import { can, providerFor, providerWith } from './pr-provider.js';
@@ -18,9 +18,11 @@ function providerOrThrow(url) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  */
 export function followUpRun(projectDir, id) {
+  if (!validId(id)) throw new Error('invalid Run id');
+  const runId = id;
   /** @type {string | undefined} */
   let result;
   changeRun(projectDir, id, (old) => {
@@ -42,7 +44,7 @@ export function followUpRun(projectDir, id) {
         updated: new Date().toISOString(),
       };
     }
-    const own = ownWorktrees(projectDir).get(id);
+    const own = ownWorktrees(projectDir).get(runId);
     if (!own?.safe || own.branch !== id || old.worktree !== own.dir)
       throw new Error('the registered Run worktree is missing or invalid');
     const before = worktreeState(old);
@@ -51,7 +53,7 @@ export function followUpRun(projectDir, id) {
     const snapshot = provider.observe(pr, before.head, projectDir);
     const after = worktreeState(old),
       latest = provider.strictView(pr, projectDir);
-    const registered = ownWorktrees(projectDir).get(id);
+    const registered = ownWorktrees(projectDir).get(runId);
     if (
       !registered?.safe ||
       registered.branch !== id ||

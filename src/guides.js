@@ -241,7 +241,7 @@ export function guidesForFiles(guides, files) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  */
 export function guidesRun(projectDir, id) {
   const { record } = readRun(projectDir, id);

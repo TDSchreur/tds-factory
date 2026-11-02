@@ -1,6 +1,8 @@
 /** @import { PrStatus } from './pr-provider.js' */
 /** @import { RunView } from '../dashboard/model.js' */
 /** @import { PrLookup } from './run-clean.js' */
+/** @import { ReadableEntry, UnreadableEntry } from './run-folder.js' */
+/** @import { ProjectResult } from './run-record.js' */
 import http from 'node:http';
 import { openRunStore, summarizeMetrics, formatMetrics, trackOf, loopCap } from './run-store.js';
 import { readFile } from 'node:fs/promises';
@@ -10,7 +12,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { can, providerFor, providerWith, remoteRepo } from './pr-provider.js';
-import { messageOf, codeOf, oneOf } from './narrow.js';
+import { messageOf, codeOf, oneOf, reasonOf } from './narrow.js';
 import { isStage } from './flow.js';
 
 const exec = promisify(execFile);
@@ -87,7 +89,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 /** @param {unknown} v @returns {string[]} */
 const strList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 /**
- * @param {any} entry An entry of the Run store. Its record is read from disk and may have any shape, so every field is checked as it is read.
+ * @param {ReadableEntry | UnreadableEntry} entry An entry of the Run store. Its record is read from disk and may have any shape, so every field is checked as it is read.
  * @returns {Omit<RunView, 'prState' | 'prStatus' | 'prHost' | 'prCanMerge'>}
  */
 export function interpretRun(entry) {
@@ -130,6 +132,7 @@ export function interpretRun(entry) {
   const projectReviews = (Array.isArray(r.project_reviews) ? r.project_reviews : [])
     .filter((/** @type {any} */ x) => x && typeof x === 'object' && str(x.id) && str(x.name))
     .map((/** @type {any} */ x) => {
+      /** @type {Partial<ProjectResult>} */
       const result = r.project_results?.[x.id] ?? {};
       const findings = (Array.isArray(result.findings) ? result.findings : [])
         .filter((/** @type {any} */ f) => f && typeof f === 'object')
@@ -280,8 +283,8 @@ export async function startDashboard({
       .then(() => prStatus(url))
       .then(
         (value) => ({ value, ttl: value?.state === 'open' ? PR_STATUS_MS : PR_STATUS_FINAL_MS }),
-        (/** @type {any} */ err) => ({
-          value: { unavailable: STATUS_REASONS.includes(err?.reason) ? err.reason : 'error' },
+        (/** @type {unknown} */ err) => ({
+          value: { unavailable: oneOf(STATUS_REASONS, reasonOf(err)) ? reasonOf(err) : 'error' },
           ttl: PR_STATUS_FAIL_MS,
         }),
       )

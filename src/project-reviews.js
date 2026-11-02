@@ -199,7 +199,8 @@ function globRegex(pattern) {
 }
 /** @param {Run} record */
 export function reviewPlan(record) {
-  const result = spawnSync('git', ['diff', '--name-only', '--no-renames', '-z', record.base_sha ?? '', 'HEAD', '--'], {
+  if (!record.base_sha) throw new Error('cannot determine Run changes: the Run records no base commit');
+  const result = spawnSync('git', ['diff', '--name-only', '--no-renames', '-z', record.base_sha, 'HEAD', '--'], {
     cwd: record.worktree,
     encoding: 'utf8',
   });

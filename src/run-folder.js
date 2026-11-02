@@ -102,7 +102,7 @@ export const withRunLock = (root, id, action) => withLock(lockFile(root, id), ac
 // A Run's folder and record, refusing links anywhere on the way.
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @returns {{ root: string, dir: string, record: Run }}
  */
 export function readRun(projectDir, id) {
@@ -119,7 +119,7 @@ export function readRun(projectDir, id) {
 // Reads a Run record under its lock, hands it to change, and writes back what change returns.
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {(old: Run) => Run} change
  */
 export function changeRun(projectDir, id, change) {
@@ -144,7 +144,7 @@ export function changeRun(projectDir, id, change) {
 // Changes a running Run for a named operation, which takes only an optional activity line besides its own arguments.
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {{ activity?: string }} data
  * @param {(old: Run) => { record: Run, activity: string }} move
  */

@@ -22,7 +22,7 @@ import { remoteRepo } from './pr-provider.js';
 /**
  * @param {string} projectDir
  * @param {string} runsDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {boolean} [ignoreLock]
  */
 export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
@@ -131,10 +131,11 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
 /**
  * @param {string} projectDir
  * @param {string} runsDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {unknown} expected The plan the user was shown.
  */
 export function repairApply(projectDir, runsDir, id, expected) {
+  if (!validId(id)) throw new Error('invalid Run id');
   const plan = repairPlan(projectDir, runsDir, id);
   if (JSON.stringify(plan) !== JSON.stringify(expected)) throw new Error('repair facts changed; inspect a new plan');
   if (plan.blockers.length) throw new Error(plan.blockers.join('; '));

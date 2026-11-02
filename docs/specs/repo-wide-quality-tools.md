@@ -27,7 +27,7 @@ Bring the whole repository (`bin/`, `src/`, `scripts/`, `eval/`, `test/`, `dashb
 - **Ticket 3.** Add `eqeqeq`, `prefer-const`, `no-var`, `no-shadow` one by one, each fixed in its own commit. Re-evaluate the relaxed rules in `eslint.config.js`; remove those no longer needed and keep a comment for each that stays.
 - **Ticket 4.** _Superseded for the production code by [the strict checkJs spec](typecheck-production-code-strict-checkjs.md): `checkJs` is now `true` for `bin/`, `src/`, `scripts/`, `eval/` and `dashboard/`, and only `test/` still opts in per file._ `checkJs` stays `false`; files are added to the `include` list and carry `// @ts-check`, starting with small pure modules (paths, rules, flow, evidence). Cover as much of `src/` as is reasonable without casts or blanket `@ts-ignore`; `test/` and `eval/` last and skipped if too costly. Report excluded files and why.
 - **Ticket 5.** `npm run check`; update `AGENTS.md` (Commands) and `CONTRIBUTING.md`; add `.editorconfig`; husky + lint-staged only if it does not disturb Factory commits and worktrees, otherwise skip and say why; a test that the docs name the scripts and that a new top-level JS directory is covered by the globs. A changelog fragment in `changelog.d/`; `CHANGELOG.md` is not edited.
-- `files` in `package.json` stays unchanged; `npm run test:package` must pass if packaging is touched.
+- `files` in `package.json` stays unchanged; `npm run test:package` must pass if packaging is touched. _Superseded for the production code by [the strict checkjs spec](typecheck-production-code-strict-checkjs.md): `files` now leaves out `dashboard/tsconfig.json` and `dashboard/*.d.ts`._
 
 ## Testing Decisions
 

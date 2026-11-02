@@ -28,7 +28,9 @@ const conventionsFile = (projectDir) =>
 /** @returns {Result} */
 function cliCheck() {
   const { version, engines } = JSON.parse(read(path.join(ROOT, 'package.json')));
-  const need = Number(engines.node.match(/\d+/)?.[0]);
+  const major = engines?.node?.match?.(/\d+/)?.[0];
+  if (major === undefined) return ['fail', `tds-factory ${version} names no Node version in package.json engines.node`];
+  const need = Number(major);
   const have = Number(process.versions.node.split('.')[0]);
   return have < need
     ? ['fail', `tds-factory ${version} needs Node ${need} or newer, found ${process.versions.node}`]

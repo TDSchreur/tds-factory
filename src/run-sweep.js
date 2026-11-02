@@ -225,7 +225,7 @@ function documents(root) {
 
 /**
  * @param {string} projectDir
- * @param {string} id
+ * @param {string | undefined} id
  * @param {string[]} [extra] Terms given with --term.
  */
 export function sweepRun(projectDir, id, extra = []) {

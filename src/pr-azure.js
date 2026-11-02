@@ -176,7 +176,7 @@ function belongsTo(pr, target) {
 export async function statusAsync(url, { run = defaultRun } = {}) {
   if (!matches(url)) throw Object.assign(new Error('not an Azure DevOps pull request'), { reason: 'error' });
   const target = parts(url);
-  /** @type {any} */
+  /** @type {unknown} */
   let pr, policies;
   try {
     [pr, policies] = await Promise.all([read(run, target, SHOW), read(run, target, POLICIES)]);
