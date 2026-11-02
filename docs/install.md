@@ -20,7 +20,7 @@ One line installs the CLI and the skills. On macOS and Linux:
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 ```
 
-On Windows (PowerShell 7, `pwsh`; install it from https://aka.ms/powershell if you do not have it):
+On Windows (PowerShell 7, `pwsh`; install it from the [PowerShell download page](https://aka.ms/powershell) if you do not have it):
 
 ```powershell
 pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"

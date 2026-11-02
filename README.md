@@ -14,7 +14,7 @@ macOS and Linux:
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
 ```
 
-Windows (PowerShell 7, `pwsh`; install it from https://aka.ms/powershell first if you do not have it):
+Windows (PowerShell 7, `pwsh`; install it from the [PowerShell download page](https://aka.ms/powershell) first if you do not have it):
 
 ```powershell
 pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
