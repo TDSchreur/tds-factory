@@ -15,22 +15,33 @@ const WINDOWS = process.platform === 'win32';
 const onPath = (name) =>
   spawnSync(WINDOWS ? 'where' : 'sh', WINDOWS ? [name] : ['-c', `command -v ${name}`]).status === 0;
 
-// On Windows Chrome and Edge are not on PATH, so look in their install folders (or CHROME_BIN).
-const windowsBrowser = () =>
-  [
-    process.env.CHROME_BIN,
-    ...['PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA'].flatMap((base) =>
-      process.env[base]
-        ? [
-            join(process.env[base], 'Google', 'Chrome', 'Application', 'chrome.exe'),
-            join(process.env[base], 'Chromium', 'Application', 'chrome.exe'),
-          ]
-        : [],
-    ),
-  ].find((file) => file && existsSync(file));
+// On Windows Edge is preferred (it ships with Windows, only msedgedriver has to be installed); Chrome is the fallback.
+// Neither browser is on PATH there, so look in the install folders (CHROME_BIN overrides the Chrome lookup).
+const windowsFile = (...parts) =>
+  ['PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA']
+    .map((base) => process.env[base] && join(process.env[base], ...parts))
+    .find((file) => file && existsSync(file));
 
-export const hasBrowser = () =>
-  onPath('chromedriver') && (WINDOWS ? Boolean(windowsBrowser()) : onPath('chromium') || onPath('google-chrome'));
+// The driver, browser and WebDriver vocabulary to use, or null when this machine has none.
+const target = () => {
+  if (WINDOWS) {
+    const edge = windowsFile('Microsoft', 'Edge', 'Application', 'msedge.exe');
+    if (onPath('msedgedriver') && edge)
+      return { driver: 'msedgedriver', binary: edge, name: 'MicrosoftEdge', options: 'ms:edgeOptions', cdp: 'ms' };
+    const chrome =
+      (process.env.CHROME_BIN && existsSync(process.env.CHROME_BIN) && process.env.CHROME_BIN) ||
+      windowsFile('Google', 'Chrome', 'Application', 'chrome.exe') ||
+      windowsFile('Chromium', 'Application', 'chrome.exe');
+    if (onPath('chromedriver') && chrome)
+      return { driver: 'chromedriver', binary: chrome, name: 'chrome', options: 'goog:chromeOptions', cdp: 'goog' };
+    return null;
+  }
+  return onPath('chromedriver') && (onPath('chromium') || onPath('google-chrome'))
+    ? { driver: 'chromedriver', name: 'chrome', options: 'goog:chromeOptions', cdp: 'goog' }
+    : null;
+};
+
+export const hasBrowser = () => target() !== null;
 
 // Whether the process (or, on POSIX, the process group of a detached driver) still runs.
 export const isRunning = (pid) => {
@@ -90,10 +101,11 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
 export async function openPage(t, state, { args = [], width = 1200, height = 700 } = {}) {
-  if (!hasBrowser()) {
+  const browser = target();
+  if (!browser) {
     // CI sets REQUIRE_BROWSER so that a runner without a browser fails instead of silently skipping these tests.
-    if (process.env.REQUIRE_BROWSER) throw new Error('Chromium and ChromeDriver are required (REQUIRE_BROWSER is set)');
-    t.skip('Chromium and ChromeDriver are required');
+    if (process.env.REQUIRE_BROWSER) throw new Error('A browser and its driver are required (REQUIRE_BROWSER is set)');
+    t.skip('A browser and its driver (ChromeDriver, or msedgedriver on Windows) are required');
     return null;
   }
   const calls = [];
@@ -145,7 +157,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   // A private temp directory keeps this session's Chromium files apart. ChromeDriver and Chromium leave some small empty
   // directories in it even after a clean exit, so close() removes the whole directory after the processes are gone.
   const tmp = mkdtempSync(join(tmpdir(), 'tds-factory-browser-'));
-  const driver = spawn('chromedriver', [`--port=${driverPort}`], {
+  const driver = spawn(browser.driver, [`--port=${driverPort}`], {
     stdio: 'ignore',
     detached: true,
     env: { ...process.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
@@ -199,9 +211,9 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       await request('POST', '/session', {
         capabilities: {
           alwaysMatch: {
-            browserName: 'chrome',
-            'goog:chromeOptions': {
-              ...(WINDOWS ? { binary: windowsBrowser() } : {}),
+            browserName: browser.name,
+            [browser.options]: {
+              ...(browser.binary ? { binary: browser.binary } : {}),
               args: [
                 '--headless',
                 '--no-sandbox',
@@ -217,7 +229,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     const base = '/session/' + session;
     // Window sizing is clamped by Chromium (a 375px window can have a 500px viewport).
     // Set CSS viewport dimensions through browser emulation before responsive assertions.
-    await request('POST', base + '/goog/cdp/execute', {
+    await request('POST', `${base}/${browser.cdp}/cdp/execute`, {
       cmd: 'Emulation.setDeviceMetricsOverride',
       params: { width, height, deviceScaleFactor: 1, mobile: false },
     });
@@ -239,7 +251,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${server.address().port}/` }),
       async resize(w, h) {
-        await request('POST', base + '/goog/cdp/execute', {
+        await request('POST', `${base}/${browser.cdp}/cdp/execute`, {
           cmd: 'Emulation.setDeviceMetricsOverride',
           params: { width: w, height: h, deviceScaleFactor: 1, mobile: false },
         });
@@ -249,7 +261,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         });
       },
       // A DevTools protocol command, for example to emulate prefers-reduced-motion or forced-colors.
-      cdp: (cmd, params) => request('POST', base + '/goog/cdp/execute', { cmd, params }),
+      cdp: (cmd, params) => request('POST', `${base}/${browser.cdp}/cdp/execute`, { cmd, params }),
       key: (value) =>
         request('POST', base + '/actions', {
           actions: [
