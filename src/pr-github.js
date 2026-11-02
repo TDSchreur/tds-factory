@@ -1,11 +1,8 @@
 /** @import { PrStatus, PrView } from './pr-provider.js' */
 /** @import { FollowUp, Check } from './run-record.js' */
-import { execFile, spawnSync } from 'node:child_process';
-import { promisify } from 'node:util';
-import { FactoryError } from './errors.js';
+import { exec, failureText, MAX_BUFFER, reasonError, remoteText, spawnText } from './pr-exec.js';
 
 // The GitHub adapter of the PR provider seam (see ADR 0020): every call of the `gh` command lives here.
-const exec = promisify(execFile);
 const PR = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
 
 export const name = 'github';
@@ -18,7 +15,7 @@ export const matches = (url) => typeof url === 'string' && PR.test(url);
 export function repoOfRemote(remote) {
   const match =
     /^(?:https?:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?$/i.exec(
-      String(remote).trim(),
+      remoteText(remote),
     );
   return match ? { owner: match[1], name: match[2] } : undefined;
 }
@@ -30,19 +27,17 @@ export function repoOfRemote(remote) {
  * @returns {any} The parsed JSON of gh; its shape is checked by each caller.
  */
 function gh(args, cwd) {
-  const out = spawnSync('gh', args, {
+  const out = spawnText('gh', args, {
     cwd,
-    encoding: 'utf8',
     timeout: 20000,
-    maxBuffer: 16 * 1024 * 1024,
+    maxBuffer: MAX_BUFFER,
     env: { ...process.env, GH_PROMPT_DISABLED: '1' },
   });
-  if (out.status !== 0)
-    throw new Error(`cannot read GitHub PR: ${(out.stderr || out.error?.message || 'gh failed').trim()}`);
+  if (out.status !== 0) throw new Error(`cannot read GitHub PR: ${failureText(out, 'gh failed')}`);
   try {
     return JSON.parse(out.stdout);
   } catch (err) {
-    throw new FactoryError('malformed GitHub response', { code: 'error', cause: err });
+    throw reasonError('malformed GitHub response', 'error', err);
   }
 }
 const checksQuery = `query FollowUpChecks($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100,after:$cursor) { nodes { __typename ... on CheckRun { name status conclusion detailsUrl } ... on StatusContext { context state targetUrl description } } pageInfo { hasNextPage endCursor } } } } } } } } }`;
@@ -238,8 +233,8 @@ export function observe(url, head, cwd) {
  * @returns {PrView}
  */
 export function view(url, { cwd, timeout = 10000 } = {}) {
-  const out = spawnSync('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { cwd, encoding: 'utf8', timeout });
-  if (out.status !== 0) throw new Error((out.stderr || out.error?.message || 'gh failed').trim());
+  const out = spawnText('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { cwd, timeout });
+  if (out.status !== 0) throw new Error(failureText(out, 'gh failed'));
   return JSON.parse(out.stdout);
 }
 // The same, for a server that must not block: resolves to the parsed { state, headRefOid }.
@@ -294,7 +289,7 @@ export async function checksSummary(url) {
  * @returns {{ url: string, headRefName: string, headRepository: { name: string }, headRepositoryOwner: { login: string } }[]}
  */
 export function listByHead(repo, branch, cwd) {
-  const out = spawnSync(
+  const out = spawnText(
     'gh',
     [
       'pr',
@@ -308,7 +303,7 @@ export function listByHead(repo, branch, cwd) {
       '--json',
       'url,headRefName,headRepository,headRepositoryOwner',
     ],
-    { cwd, encoding: 'utf8', timeout: 10000 },
+    { cwd, timeout: 10000 },
   );
   if (out.status !== 0) throw new Error(out.error?.message || out.stderr.trim() || 'GitHub lookup failed');
   const all = JSON.parse(out.stdout);
@@ -420,17 +415,17 @@ export async function statusAsync(
   url,
   { run = (args) => exec('gh', args, { timeout: 10_000, env: { ...process.env, GH_PROMPT_DISABLED: '1' } }) } = {},
 ) {
-  if (!matches(url)) throw new FactoryError('not a GitHub pull request', { code: 'error' });
+  if (!matches(url)) throw reasonError('not a GitHub pull request', 'error');
   /** @type {string} */
   let stdout;
   try {
     ({ stdout } = await run(['pr', 'view', url, '--json', 'state,mergeable,reviewDecision,statusCheckRollup,isDraft']));
   } catch (err) {
-    throw new FactoryError('cannot read GitHub PR status', { code: failure(err), cause: err });
+    throw reasonError('cannot read GitHub PR status', failure(err), err);
   }
   try {
     return parseStatus(JSON.parse(stdout));
   } catch (err) {
-    throw new FactoryError('malformed GitHub PR status', { code: 'error', cause: err });
+    throw reasonError('malformed GitHub PR status', 'error', err);
   }
 }
