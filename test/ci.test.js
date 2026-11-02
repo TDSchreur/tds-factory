@@ -73,3 +73,11 @@ test('the Windows unit tests run in two shards and only the first shard runs the
   assert.match(job, /if: matrix\.shard == 1\n\s+run: npm run check/);
   assert.match(job, /npm run test:unit -- --test-shard=\$\{\{ matrix\.shard \}\}\/2/);
 });
+
+test('CI and release test only the active LTS lines, matching engines', () => {
+  const release = readFileSync('.github/workflows/release.yml', 'utf8');
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const engines = JSON.parse(readFileSync('package.json', 'utf8')).engines.node;
+  assert.equal(engines, '>=24');
+  for (const file of [workflow, release]) assert.match(file, /node: \['24', 'lts\/\*'\]/);
+});
