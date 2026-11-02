@@ -12,7 +12,11 @@
   },
   "include": [
     "browser.js",
+    "dashboard-a11y-browser.test.js",
+    "dashboard-detail-responsive-browser.test.js",
     "dashboard-files.js",
+    "dashboard-page-browser.test.js",
+    "dashboard-responsive-browser.test.js",
     "dashboard-token.js",
     "dashboard-tokens.js",
     "eval-root.js",

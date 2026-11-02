@@ -2,10 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { Page, RunStub } from './browser.js' */
+
 const ESCAPE = '\uE00C';
 const POLL_WAIT = 2400;
 
 // The dialog closes before its request reaches the server, so wait for the call instead of racing it.
+/**
+ * @param {Page} page
+ * @param {number} count
+ */
 async function waitForCalls(page, count) {
   for (let i = 0; i < 50 && page.calls.length < count; i++) await new Promise((r) => setTimeout(r, 100));
 }
@@ -88,6 +94,7 @@ test('older Runs are folded, except those waiting on the user', async (t) => {
 });
 
 test('Done cards start collapsed, expand in place and stay expanded after a refresh', async (t) => {
+  /** @param {Partial<RunStub>} over */
   const done = (over) => run({ column: 'done', status: 'done', agent: 'claude', standards: 'pass', ...over });
   const page = await openPage(t, {
     runs: [
@@ -99,6 +106,7 @@ test('Done cards start collapsed, expand in place and stay expanded after a refr
   });
   if (!page) return;
   try {
+    /** @param {string} title */
     const hidden = (title) =>
       page.execute(
         `return [...document.querySelectorAll('.card')].find(c => c.querySelector('.title').textContent === '${title}').querySelector('.details').hidden`,
@@ -135,6 +143,10 @@ test('Done cards start collapsed, expand in place and stay expanded after a refr
 });
 
 test('a Done card shows the PR state, and only an open PR can be merged after confirming', async (t) => {
+  /**
+   * @param {string} id
+   * @param {string} prState
+   */
   const done = (id, prState) =>
     run({ id, title: id, column: 'done', status: 'done', pr: 'https://github.com/a/b/pull/1', prState });
   const page = await openPage(t, { runs: [done('open', 'open'), done('merged', 'merged')] });
@@ -245,7 +257,7 @@ test('active Runs offer deletion and dirty changes need separate confirmation', 
   const page = await openPage(t, {
     runs: ['define', 'build', 'check', 'finish'].map((column) => run({ id: column, title: column, column })),
     respond: (req) =>
-      req.url.includes('discardChanges=true')
+      req.url?.includes('discardChanges=true')
         ? { status: 200, body: 'deleted' }
         : { status: 409, body: 'dirty', headers: { 'x-factory-error': 'dirty-worktree' } },
   });
@@ -288,7 +300,7 @@ test('Delete all asks separately before discarding each dirty Run', async (t) =>
   const page = await openPage(t, {
     runs: ['a', 'b'].map((id) => run({ id, title: id, column: 'done', status: 'done' })),
     respond: (req) =>
-      req.url.includes('discardChanges=true')
+      req.url?.includes('discardChanges=true')
         ? { status: 200, body: 'deleted' }
         : { status: 409, body: 'dirty', headers: { 'x-factory-error': 'dirty-worktree' } },
   });
@@ -318,11 +330,15 @@ test('Delete all asks separately before discarding each dirty Run', async (t) =>
 });
 
 test('Delete all names the hidden older Runs and reports the Runs that fail', async (t) => {
+  /**
+   * @param {string} id
+   * @param {Partial<RunStub>} [over]
+   */
   const done = (id, over) => run({ id, title: id, column: 'done', status: 'done', ...over });
   const page = await openPage(t, {
     runs: [done('new'), done('old', { updated: '2020-01-01T00:00:00Z' }), run({ id: 'active', title: 'active' })],
     respond: (req) =>
-      req.url.startsWith('/api/runs/old') ? { status: 409, body: 'refused' } : { status: 200, body: 'deleted' },
+      req.url?.startsWith('/api/runs/old') ? { status: 409, body: 'refused' } : { status: 200, body: 'deleted' },
   });
   if (!page) return;
   try {
@@ -632,6 +648,10 @@ test('card buttons are visibly distinct: filled Merge, warning Delete, link-styl
   try {
     await page.execute("document.querySelector('[aria-expanded]').click()");
     await page.waitFor("return !document.querySelector('.details').hidden");
+    /**
+     * @param {string} sel
+     * @param {string} prop
+     */
     const css = (sel, prop) => page.execute(`return getComputedStyle(document.querySelector('${sel}')).${prop}`);
     const [merge, del, card] = [
       await css('.actions .primary', 'backgroundColor'),
@@ -671,6 +691,7 @@ test('a collapsed Done card with an open pull request shows an Open PR badge', a
   });
   if (!page) return;
   try {
+    /** @param {string} title */
     const badge = (title) =>
       page.execute(
         `const c = [...document.querySelectorAll('.card')].find(c => c.querySelector('.title').textContent === '${title}'); const b = c.querySelector('.open-pr'); return b ? [b.textContent, c.querySelector('.details').hidden] : null`,

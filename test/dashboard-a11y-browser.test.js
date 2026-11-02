@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
+
+/** @import { Page } from './browser.js' */
+/** @typedef {[string, number[], number[], string]} Sample A sampled text node: its class, its colour, the colour behind it and its text. */
 import { contrast } from './dashboard-tokens.js';
 
 const runs = () => [
@@ -83,6 +86,10 @@ const runs = () => [
 
 // Switches the transitions off for a test that reads colours or shadows, and waits until that has taken effect:
 // a transition that has just started still reads its old value, and the emulation reaches the page a moment after the command.
+/**
+ * @param {Page} page
+ * @param {object[]} [extra]
+ */
 const calm = async (page, extra = []) => {
   await page.cdp('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }, ...extra],
@@ -93,6 +100,11 @@ const calm = async (page, extra = []) => {
 };
 
 // Forces :hover, :active or :focus-visible on the first element that matches the selector, as a pointer or the keyboard would.
+/**
+ * @param {Page} page
+ * @param {string} selector
+ * @param {string[]} states
+ */
 const force = async (page, selector, states) => {
   await page.cdp('DOM.enable', {});
   await page.cdp('CSS.enable', {});
@@ -120,7 +132,14 @@ const SAMPLE = `
     out.push([el.className || el.tagName.toLowerCase(), [fg.r, fg.g, fg.b], [bg.r, bg.g, bg.b], n.textContent.trim().slice(0, 30)]);
   }
   return out;`;
+/** @param {number[]} rgb */
 const hex = ([r, g, b]) => '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+/**
+ * @param {Sample} sample
+ * @returns {[string, string, number]} The class, the text and the contrast ratio.
+ */
+const lowOf = ([cls, fg, bg, text]) => [cls, text, contrast(hex(fg), hex(bg))];
 
 for (const theme of ['light', 'dark']) {
   test(`the rendered text keeps 4.5:1 against its background in the ${theme} theme`, async (t) => {
@@ -136,11 +155,10 @@ for (const theme of ['light', 'dark']) {
       );
       await page.execute("document.querySelector('[data-id=w]').click()");
       await page.waitFor("return !!document.querySelector('#detail .reason')");
+      /** @type {Sample[]} */
       const samples = await page.execute(SAMPLE);
       assert.ok(samples.length > 40, `many text nodes were sampled (${samples.length})`);
-      const low = samples
-        .map(([cls, fg, bg, text]) => [cls, text, contrast(hex(fg), hex(bg))])
-        .filter(([, , ratio]) => ratio < 4.5);
+      const low = samples.map(lowOf).filter(([, , ratio]) => ratio < 4.5);
       assert.ok(
         samples.some(([, , , text]) => text === 'Abandoned'),
         'the abandoned card title was sampled',
@@ -164,6 +182,7 @@ for (const theme of ['light', 'dark']) {
       await calm(page);
       await page.waitFor("return !!document.querySelector('.welcome')");
       await page.execute(`document.documentElement.dataset.theme = '${theme}'`);
+      /** @type {Sample[]} */
       const welcome = await page.execute(SAMPLE);
       assert.ok(
         welcome.some(([, , , text]) => text === 'No Runs yet'),
@@ -171,14 +190,13 @@ for (const theme of ['light', 'dark']) {
       );
       await page.execute("document.getElementById('help').click()");
       await page.waitFor("return document.getElementById('help-panel').open");
+      /** @type {Sample[]} */
       const panel = await page.execute(SAMPLE);
       assert.ok(
         panel.some(([, , , text]) => text === 'Help'),
         'the help panel was sampled',
       );
-      const low = [...welcome, ...panel]
-        .map(([cls, fg, bg, text]) => [cls, text, contrast(hex(fg), hex(bg))])
-        .filter(([, , ratio]) => ratio < 4.5);
+      const low = [...welcome, ...panel].map(lowOf).filter(([, , ratio]) => ratio < 4.5);
       assert.deepEqual(
         low.map(([cls, text, ratio]) => `${cls} "${text}": ${ratio.toFixed(2)}`),
         [],
@@ -281,11 +299,13 @@ test('forced colours keep the button colours of the primary and pressed buttons 
   try {
     await page.waitFor("return !!document.querySelector('[data-id=m] .primary')");
     await calm(page, [{ name: 'forced-colors', value: 'active' }]);
+    /** @param {string} selector */
     const read = (selector) =>
       page.execute(`
       const probe = (value) => { const p = document.createElement('i'); p.style.color = value; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
       const s = getComputedStyle(document.querySelector(${JSON.stringify(selector)}));
       return { background: s.backgroundColor, colour: s.color, highlight: probe('Highlight'), highlightText: probe('HighlightText') };`);
+    /** @param {string} selector */
     const check = async (selector) => {
       for (const states of [[], ['hover'], ['hover', 'active']]) {
         await force(page, selector, states);
