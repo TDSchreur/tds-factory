@@ -59,14 +59,19 @@ Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter b
 
 ## Switching between the Release and your checkout
 
-Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
+Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
 
 ```sh
 sh scripts/use-official.sh   # the latest Release from GitHub
 sh scripts/use-repo.sh       # this checkout, including uncommitted changes
 ```
 
-`use-repo.sh` differs from `dev-install.js`, which installs the default branch of `origin`. Both scripts replace skills you edited by hand, like `install --force` does.
+```powershell
+./scripts/use-official.ps1   # the same, on Windows
+./scripts/use-repo.ps1
+```
+
+`use-repo` differs from `dev-install.js`, which installs the default branch of `origin`. Both scripts replace skills you edited by hand, like `install --force` does.
 
 To see which one you use, run `tds-factory --version` and `which -a tds-factory`. The first entry wins. A checkout and a Release can share a version number, so bump `package.json` if you need to tell them apart.
 
