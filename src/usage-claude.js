@@ -63,8 +63,8 @@ export function readClaudeUsage({ home, env = process.env, runId, sessions, from
     let files;
     try {
       files = fs.readdirSync(path.join(root, slug.name), { withFileTypes: true });
-    } catch (err) {
-      if (!isMissing(err)) throw err;
+    } catch {
+      // A project folder that cannot be read is skipped; the others still count.
       continue;
     }
     for (const file of files) {

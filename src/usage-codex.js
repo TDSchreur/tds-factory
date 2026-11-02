@@ -1,7 +1,6 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
-import { isMissing } from './narrow.js';
 import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Codex rollout files under ~/.codex/sessions/YYYY/MM/DD. Only the model, the token counts
@@ -14,8 +13,8 @@ const DAY = 24 * 60 * 60 * 1000;
 const listDir = (dir) => {
   try {
     return fs.readdirSync(dir, { withFileTypes: true });
-  } catch (err) {
-    if (!isMissing(err)) throw err;
+  } catch {
+    // A day folder that is missing or cannot be read holds no rollouts here; the other days still count.
     return [];
   }
 };

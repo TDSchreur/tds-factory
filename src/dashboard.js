@@ -22,7 +22,9 @@ const exec = promisify(execFile);
  * @param {unknown} err
  */
 const logFailure = (what, err) =>
-  console.error(`dashboard: ${what}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+  console.error(
+    `dashboard: ${what.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
+  );
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
 /** @param {string} worktree */
 const expectedRepo = async (worktree) => {
