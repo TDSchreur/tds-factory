@@ -372,7 +372,7 @@ test('start rolls back the new worktree and branch if the record cannot be persi
   const main = repo();
   const rename = fs.renameSync;
   fs.renameSync = (...args) => {
-    if (args[1].endsWith('/run.json')) throw new Error('simulated record write failure');
+    if (/[\\/]run\.json$/.test(args[1])) throw new Error('simulated record write failure');
     return rename(...args);
   };
   try {
@@ -389,8 +389,8 @@ test('failed start keeps a dirty worktree and names the original and rollback fa
   const main = repo();
   const rename = fs.renameSync;
   fs.renameSync = (...args) => {
-    if (args[1].endsWith('/run.json')) {
-      const id = args[1].split('/').at(-2);
+    if (/[\\/]run\.json$/.test(args[1])) {
+      const id = args[1].split(/[\\/]/).at(-2);
       writeFileSync(join(main, '.factory', 'worktrees', id, 'unfinished'), 'keep me');
       throw new Error('simulated record write failure');
     }
@@ -414,7 +414,7 @@ test('failed start preserves a branch advanced while rollback is deleting it', (
     spawn = childProcess.spawnSync;
   let advanced, branch;
   fs.renameSync = (...args) => {
-    if (args[1].endsWith('/run.json')) throw new Error('record write failed');
+    if (/[\\/]run\.json$/.test(args[1])) throw new Error('record write failed');
     return rename(...args);
   };
   childProcess.spawnSync = (command, args, options) => {

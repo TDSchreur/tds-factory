@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-  chmodSync,
   existsSync,
   lstatSync as fsLstat,
   mkdtempSync,
@@ -15,6 +14,7 @@ import { hostname, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
+import { envWith, fakeCommand } from './fake-command.js';
 import { openRunStore } from '../src/run-store.js';
 
 const cli = resolve('bin/tds-factory.js');
@@ -101,21 +101,23 @@ test('repair reconciles the exact GitHub repository and existing PR before adopt
     file = recordPath(cwd, id);
   git(cwd, 'remote', 'set-url', 'origin', 'https://github.com/example/project.git');
   const tools = mkdtempSync(join(tmpdir(), 'repair-gh-'));
-  const gh = join(tools, 'gh'),
-    calls = join(tools, 'calls');
+  const calls = join(tools, 'calls');
   const pr = {
     url: 'https://github.com/example/project/pull/123',
     headRefName: id,
     headRepositoryOwner: { login: 'example' },
     headRepository: { name: 'project' },
   };
-  writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nprintf '%s\\n' '${JSON.stringify([pr])}'\n`);
-  chmodSync(gh, 0o755);
+  fakeCommand(
+    tools,
+    'gh',
+    `require('fs').appendFileSync(${JSON.stringify(calls)}, process.argv.slice(2).join(' ') + '\\n');\nconsole.log(${JSON.stringify(JSON.stringify([pr]))});\n`,
+  );
   const invoke = (...args) =>
     spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id, ...args], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, PATH: `${tools}:${process.env.PATH}` },
+      env: envWith(tools),
     });
   const plan = invoke();
   assert.equal(plan.status, 0, plan.stderr);
@@ -133,8 +135,7 @@ test('ambiguous, unavailable, and conflicting GitHub results do not rewrite a PR
     id = start(cwd),
     file = recordPath(cwd, id);
   git(cwd, 'remote', 'set-url', 'origin', 'https://github.com/example/project.git');
-  const tools = mkdtempSync(join(tmpdir(), 'repair-gh-')),
-    gh = join(tools, 'gh');
+  const tools = mkdtempSync(join(tmpdir(), 'repair-gh-'));
   const pr = (n) => ({
     url: `https://github.com/example/project/pull/${n}`,
     headRefName: id,
@@ -142,20 +143,18 @@ test('ambiguous, unavailable, and conflicting GitHub results do not rewrite a PR
     headRepository: { name: 'project' },
   });
   const fixture = (data) => {
-    writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' '${JSON.stringify(data)}'\n`);
-    chmodSync(gh, 0o755);
+    fakeCommand(tools, 'gh', `console.log(${JSON.stringify(JSON.stringify(data))});\n`);
   };
   const invoke = (...args) =>
     spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id, ...args], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, PATH: `${tools}:${process.env.PATH}` },
+      env: envWith(tools),
     });
   fixture([pr(1), pr(2)]);
   assert.match(invoke('--apply').stdout, /ambiguous/);
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).pr, undefined);
-  writeFileSync(gh, '#!/bin/sh\nexit 1\n');
-  chmodSync(gh, 0o755);
+  fakeCommand(tools, 'gh', 'process.exit(1);\n');
   assert.match(invoke('--apply').stdout, /unavailable/);
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).pr, undefined);
   const record = JSON.parse(readFileSync(file, 'utf8'));
@@ -178,14 +177,12 @@ test('dangling lock symlinks and incomplete GitHub responses remain unresolved',
   assert.ok(fsLstat(lock).isSymbolicLink());
   rmSync(lock);
   git(cwd, 'remote', 'set-url', 'origin', 'https://github.com/example/project.git');
-  const tools = mkdtempSync(join(tmpdir(), 'repair-gh-')),
-    gh = join(tools, 'gh');
-  writeFileSync(gh, '#!/bin/sh\nprintf "[{\\"url\\":\\"https://github.com/example/project/pull/1\\"}]\\n"\n');
-  chmodSync(gh, 0o755);
+  const tools = mkdtempSync(join(tmpdir(), 'repair-gh-'));
+  fakeCommand(tools, 'gh', 'console.log(\'[{"url":"https://github.com/example/project/pull/1"}]\');\n');
   const result = spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${tools}:${process.env.PATH}` },
+    env: envWith(tools),
   });
   assert.match(result.stdout, /unavailable|incomplete/);
   assert.doesNotMatch(result.stdout, /no matching GitHub PR/);
@@ -194,7 +191,7 @@ test('dangling lock symlinks and incomplete GitHub responses remain unresolved',
 test('a leftover repair coordination lock is diagnosed and preserved for investigation', () => {
   const cwd = repo(),
     id = start(cwd);
-  const guard = lockPath(cwd, id).replace('/.lock-', '/.repair-');
+  const guard = lockPath(cwd, id).replace('.lock-', '.repair-');
   const owner = JSON.stringify({ pid: 2147483647, host: hostname(), started: '2000-01-01T00:00:00.000Z' });
   writeFileSync(guard, owner);
   const inspect = run(cwd, 'inspect', '--id', id, '--json');
@@ -226,7 +223,7 @@ test('inspect and repair diagnose a missing registered worktree with no Run fold
   const head = git(cwd, 'rev-parse', id);
   rmSync(join(cwd, '.factory', 'runs', id), { recursive: true });
   rmSync(worktree, { recursive: true });
-  assert.match(git(cwd, 'worktree', 'list', '--porcelain'), new RegExp(`worktree ${worktree}`));
+  assert.ok(git(cwd, 'worktree', 'list', '--porcelain').includes(`worktree ${worktree.replaceAll('\\', '/')}`));
   const inspect = run(cwd, 'inspect', '--id', id, '--json');
   assert.equal(inspect.status, 0, inspect.stderr);
   assert.ok(JSON.parse(inspect.stdout)[0].problems.some((p) => p.code === 'worktree-missing'));
@@ -268,13 +265,16 @@ test('repair leaves an Azure DevOps origin to the user: it names no PR lookup an
   const tools = mkdtempSync(join(tmpdir(), 'repair-az-'));
   const calls = join(tools, 'calls');
   for (const tool of ['gh', 'az']) {
-    writeFileSync(join(tools, tool), `#!/bin/sh\nprintf '%s\\n' "${tool} $*" >> '${calls}'\nexit 1\n`);
-    chmodSync(join(tools, tool), 0o755);
+    fakeCommand(
+      tools,
+      tool,
+      `require('fs').appendFileSync(${JSON.stringify(calls)}, ${JSON.stringify(tool)} + ' ' + process.argv.slice(2).join(' ') + '\\n');\nprocess.exit(1);\n`,
+    );
   }
   const plan = spawnSync(process.execPath, [cli, 'run', 'repair', '--id', id], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${tools}:${process.env.PATH}` },
+    env: envWith(tools),
   });
   assert.equal(plan.status, 0, plan.stderr);
   assert.match(plan.stdout, /not GitHub; reconcile any PR manually/);

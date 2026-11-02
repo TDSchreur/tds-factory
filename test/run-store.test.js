@@ -158,19 +158,23 @@ test('start rejects check_loops and missing fields', () => {
   assert.throws(() => store.start({ title: 'x' }), /required/);
 });
 
-test('start and update refuse linked storage outside the project', () => {
-  const cwd = repo();
-  const outside = project();
-  mkdirSync(join(cwd, '.factory'));
-  symlinkSync(join(outside, '.factory', 'runs'), join(cwd, '.factory', 'runs'));
-  mkdirSync(join(outside, '.factory', 'runs', 'old'), { recursive: true });
-  const file = join(outside, '.factory', 'runs', 'old', 'run.json');
-  writeFileSync(file, '{"status":"running"}');
-  const store = openRunStore(cwd);
-  assert.throws(() => store.update('old', { activity: 'changed' }), /symlink/);
-  assert.throws(() => store.start(start), /symlink/);
-  assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
-});
+test(
+  'start and update refuse linked storage outside the project',
+  { skip: process.platform === 'win32' && 'needs symbolic links, which need extra privileges on Windows' },
+  () => {
+    const cwd = repo();
+    const outside = project();
+    mkdirSync(join(cwd, '.factory'));
+    symlinkSync(join(outside, '.factory', 'runs'), join(cwd, '.factory', 'runs'));
+    mkdirSync(join(outside, '.factory', 'runs', 'old'), { recursive: true });
+    const file = join(outside, '.factory', 'runs', 'old', 'run.json');
+    writeFileSync(file, '{"status":"running"}');
+    const store = openRunStore(cwd);
+    assert.throws(() => store.update('old', { activity: 'changed' }), /symlink/);
+    assert.throws(() => store.start(start), /symlink/);
+    assert.equal(readFileSync(file, 'utf8'), '{"status":"running"}');
+  },
+);
 
 test('a failed replacement leaves the existing record intact', () => {
   const cwd = project();

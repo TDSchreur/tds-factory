@@ -251,26 +251,30 @@ test('a store operation works on an old record without last_seen or a log, and t
   assert.equal(events(cwd, id).events[0].type, 'stage');
 });
 
-test('a FIFO or a hard link as the log is neither read nor written through', async () => {
-  const { execFileSync } = await import('node:child_process');
-  const { linkSync } = await import('node:fs');
-  const cwd = repo(),
-    store = openRunStore(cwd),
-    id = begin(cwd);
-  const log = join(dirOf(cwd, id), 'events.jsonl');
-  rmSync(log, { force: true });
-  execFileSync('mkfifo', [log]);
-  toBuild(store, id);
-  assert.equal(record(cwd, id).stage, 'build');
-  assert.equal(events(cwd, id).unreadable, true);
-  rmSync(log);
-  const target = join(cwd, 'other.txt');
-  writeFileSync(target, 'keep\n');
-  linkSync(target, log);
-  store.update(id, { tickets_done: 1 });
-  assert.equal(readFileSync(target, 'utf8'), 'keep\n');
-  assert.equal(events(cwd, id).unreadable, true);
-});
+test(
+  'a FIFO or a hard link as the log is neither read nor written through',
+  { skip: process.platform === 'win32' && 'needs mkfifo, which Windows does not have' },
+  async () => {
+    const { execFileSync } = await import('node:child_process');
+    const { linkSync } = await import('node:fs');
+    const cwd = repo(),
+      store = openRunStore(cwd),
+      id = begin(cwd);
+    const log = join(dirOf(cwd, id), 'events.jsonl');
+    rmSync(log, { force: true });
+    execFileSync('mkfifo', [log]);
+    toBuild(store, id);
+    assert.equal(record(cwd, id).stage, 'build');
+    assert.equal(events(cwd, id).unreadable, true);
+    rmSync(log);
+    const target = join(cwd, 'other.txt');
+    writeFileSync(target, 'keep\n');
+    linkSync(target, log);
+    store.update(id, { tickets_done: 1 });
+    assert.equal(readFileSync(target, 'utf8'), 'keep\n');
+    assert.equal(events(cwd, id).unreadable, true);
+  },
+);
 
 test('the view keeps only the last 50 events', () => {
   const all = Array.from({ length: 80 }, (_, i) => ({

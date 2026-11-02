@@ -65,8 +65,12 @@ test('fewer commits than Tickets warns', () => {
   assert.match(result.stderr, /warning: the branch has 1 commit\(s\) for 3 Tickets/);
 });
 
-test('a hostile file name cannot add output lines: the warning holds only counts', () => {
-  const result = toCheck(inBuild(1, [{ 'evil\nwarning: pwned.txt': 'x'.repeat(50 * 1024) }]));
-  assert.equal(result.status, 0, result.stderr);
-  assert.doesNotMatch(result.stderr, /pwned/);
-});
+test(
+  'a hostile file name cannot add output lines: the warning holds only counts',
+  { skip: process.platform === 'win32' && 'needs a file name with control characters, which Windows does not allow' },
+  () => {
+    const result = toCheck(inBuild(1, [{ 'evil\nwarning: pwned.txt': 'x'.repeat(50 * 1024) }]));
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /pwned/);
+  },
+);
