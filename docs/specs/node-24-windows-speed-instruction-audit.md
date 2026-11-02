@@ -21,7 +21,7 @@ Node 20 is out of support, yet `engines`, the Bootstrap installers and CI still 
 
 ## Decisions on design
 
-- Node 24 minimum: `engines` is `>=24`; the CI matrix is Node 24 and `lts/*`; the release matrix is the same; the `parentPath ?? path` fallbacks for Node before 20.12 go away. ADR 0022 and `docs/specs/scoped-conventions.md` keep their own matcher (an untrusted glob needs a bounded matcher whatever `path.matchesGlob` does); their Node 20 remark is history and stays.
+- Node 24 minimum: `engines` is `>=24`; the CI matrix is Node 24 and `lts/*`; the release matrix is the same; the `parentPath ?? path` fallbacks for Node before 20.12 go away. ADR 0022 and `docs/specs/scoped-conventions.md` keep their own matcher (an untrusted glob needs a bounded matcher whatever `path.matchesGlob` does); `scoped-conventions.md` now says in the past tense that `path.matchesGlob` was unstable on Node 20, and ADR 0022 keeps its remark as history.
 - Windows: the carried-verdict tests start one Run per test and reset its branch between cases; the `windows` CI job becomes a matrix of two shards (`--test-shard=1/2`, `2/2`) through `scripts/test-unit.js`; shard 1 also runs `npm run check`, and `ci-ok` still needs the `windows` job.
 - The Dashboard skip link is the first focusable element and links to the board; it is hidden until focused.
 
