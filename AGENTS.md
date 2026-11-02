@@ -12,6 +12,19 @@ Issues live in the repo's GitHub Issues. See `docs/agents/issue-tracker.md`.
 
 Single-context layout: `GLOSSARY.md` at repo root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
 
+## Instruction guides
+
+Each guide declares the files it covers with `applyTo`. Claude Code loads the copies in `.claude/rules/`; see `docs/development.md`.
+
+- [a11y](.github/instructions/a11y.instructions.md): Web accessibility standards (WCAG 2.2 AA) for the Dashboard.
+- [agent-skills](.github/instructions/agent-skills.instructions.md): How to write Agent Skills (`SKILL.md`).
+- [agents](.github/instructions/agents.instructions.md): How to write custom agent files (`*.agent.md`).
+- [github-actions-ci-cd-best-practices](.github/instructions/github-actions-ci-cd-best-practices.instructions.md): Structure, security and caching of GitHub Actions workflows.
+- [markdown-accessibility](.github/instructions/markdown-accessibility.instructions.md): Accessibility rules for Markdown files.
+- [markdown](.github/instructions/markdown.instructions.md): CommonMark formatting rules for Markdown files.
+- [powershell](.github/instructions/powershell.instructions.md): PowerShell cmdlet and scripting practices.
+- [shell](.github/instructions/shell.instructions.md): Shell scripting practices for `*.sh` files.
+
 ## Changelog
 
 Do not edit `CHANGELOG.md` for a change. Add a fragment `changelog.d/<name>.md`; see `changelog.d/README.md`. A maintainer folds the fragments into `CHANGELOG.md` at release time.
