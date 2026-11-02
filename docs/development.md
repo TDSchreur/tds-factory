@@ -29,7 +29,15 @@ The `factory` Skill is `skills/factory/SKILL.md`, which holds what every Run nee
 
 `scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/main` and is skipped, with a reason, when that ref does not exist or shares no history with your branch, as in a shallow CI checkout; any other git failure fails the test. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
 
-PRs and pushes to `main` run the full suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows; the full suite currently uses Unix shell fixtures, so it is not run on Windows. CI also validates the workflows with `actionlint`, lints the Bootstrap installers with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on PowerShell 7 on Windows.
+PRs and pushes to `main` run the full suite on Linux with Node 20, 22, 24 and the latest LTS, and on macOS with the latest LTS. A Windows job runs `npm run check` and `npm run test:unit` with the latest LTS. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux, macOS and Windows. CI also validates the workflows with `actionlint`, lints the Bootstrap installers with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on PowerShell 7 on Windows.
+
+## Working on Windows
+
+The tests run on Windows with PowerShell 7 and Git for Windows. `.gitattributes` keeps every text file on LF, because the tests and the Skill checks split files on `\n`. After you pull the commit that adds it, check the working tree out again: `git rm --cached -r .` then `git reset --hard` (commit or stash your changes first). Run the tests through `npm test` or `npm run test:unit`, not `node --test` directly: the runner also puts `true` and `false` commands on PATH, which cmd.exe does not have.
+
+Tests that need symbolic links, the executable bit, `mkfifo`, POSIX signals or file names Windows does not allow are skipped on Windows with a reason. Fake `gh` commands in tests come from `test/fake-command.js`, which on Windows makes a copy of `node.exe` that runs the fake's script.
+
+The browser tests are skipped on Windows for now because they are slow there. Set `TDS_WINDOWS_BROWSER=1` (or `REQUIRE_BROWSER=1`) to run them with `msedgedriver` and Edge, falling back to `chromedriver` with Chrome (`CHROME_BIN` overrides the browser path). Put the driver, whose version must match the browser, on PATH. `REQUIRE_BROWSER=1` fails instead of skipping when no browser is found.
 
 The `ci-ok` job succeeds only when all the other jobs do. The `main` ruleset requires it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.
 
@@ -51,14 +59,19 @@ Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter b
 
 ## Switching between the Release and your checkout
 
-Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
+Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
 
 ```sh
 sh scripts/use-official.sh   # the latest Release from GitHub
 sh scripts/use-repo.sh       # this checkout, including uncommitted changes
 ```
 
-`use-repo.sh` differs from `dev-install.js`, which installs the default branch of `origin`. Both scripts replace skills you edited by hand, like `install --force` does.
+```powershell
+./scripts/use-official.ps1   # the same, on Windows
+./scripts/use-repo.ps1
+```
+
+`use-repo` differs from `dev-install.js`, which installs the default branch of `origin`. Both scripts replace skills you edited by hand, like `install --force` does.
 
 To see which one you use, run `tds-factory --version` and `which -a tds-factory`. The first entry wins. A checkout and a Release can share a version number, so bump `package.json` if you need to tell them apart.
 

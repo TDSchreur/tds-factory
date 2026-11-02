@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { repo, linked, git } from './git-repo.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fakeCommand, pathWith } from './fake-command.js';
 import { startDashboard } from '../src/dashboard.js';
 
 const GH = 'https://github.com/o/r/pull/1';
@@ -89,10 +90,10 @@ async function mergeSetup(options = {}) {
   writeFileSync(calls, '[]');
   const configure = (data) => writeFileSync(config, JSON.stringify({ head, state: 'OPEN', checks: [], ...data }));
   configure(options.gh);
-  writeFileSync(
-    join(bin, 'gh'),
-    `#!/usr/bin/env node
-const fs = require('node:fs');
+  fakeCommand(
+    bin,
+    'gh',
+    `const fs = require('node:fs');
 const config = JSON.parse(fs.readFileSync(${JSON.stringify(config)}));
 const args = process.argv.slice(2);
 const calls = JSON.parse(fs.readFileSync(${JSON.stringify(calls)}));
@@ -108,10 +109,9 @@ if (args[1] === 'view') {
   if (config.mergeError || (config.mergeHead && args[args.indexOf('--match-head-commit') + 1] !== config.mergeHead)) process.exit(1);
 } else process.exit(1);
 `,
-    { mode: 0o755 },
   );
   const previousPath = process.env.PATH;
-  process.env.PATH = bin + ':' + previousPath;
+  process.env.PATH = pathWith(bin);
   const dash = await startDashboard({ projectDir: project, port: 0 });
   const post = async (id = '2026-01-01-r', origin = dash.url) =>
     fetch(`${dash.url}/api/runs/${id}/merge`, { method: 'POST', headers: await writeHeaders(dash, origin) });

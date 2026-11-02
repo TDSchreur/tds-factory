@@ -1,10 +1,11 @@
 import { finishProblems } from '../src/evidence.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, readFileSync, chmodSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
+import { envWith, fakeCommand } from './fake-command.js';
 
 const cli = resolve('bin/tds-factory.js');
 const page = (nodes, next = false, cursor = null) => ({ nodes, pageInfo: { hasNextPage: next, endCursor: cursor } });
@@ -12,17 +13,16 @@ const run = (cwd, ...args) =>
   spawnSync(process.execPath, [cli, 'run', ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${join(cwd, 'fake-bin')}:${process.env.PATH}`, FAKE_GH: join(cwd, 'gh.json') },
+    env: envWith(join(cwd, 'fake-bin'), { FAKE_GH: join(cwd, 'gh.json') }),
   });
 function fixture() {
   const cwd = repo();
   mkdirSync(join(cwd, 'fake-bin'));
-  const gh = join(cwd, 'fake-bin', 'gh');
-  writeFileSync(
-    gh,
-    `#!/usr/bin/env node\nconst fs = require('fs');\nconst s = JSON.parse(fs.readFileSync(process.env.FAKE_GH));\nconst args = process.argv.slice(2);\nfs.appendFileSync(process.env.FAKE_GH + '.log', JSON.stringify(args) + '\\n');\nif (s.error) { process.exit(1); }\nif (args[0] === 'pr') console.log(JSON.stringify(s.pr));\nelse { const q = args.find(x => x.startsWith('query=')) || ''; const key = q.includes('FollowUpChecks') ? 'checks' : q.includes('FollowUpThreads') ? 'threads' : 'comments'; const cursor = (args.find(x => x.startsWith('cursor=')) || 'cursor=').slice(7); const id = (args.find(x => x.startsWith('thread=')) || 'thread=').slice(7); console.log(JSON.stringify((s[key][id ? id + ':' + cursor : cursor]))); }\n`,
+  fakeCommand(
+    join(cwd, 'fake-bin'),
+    'gh',
+    `const fs = require('fs');\nconst s = JSON.parse(fs.readFileSync(process.env.FAKE_GH));\nconst args = process.argv.slice(2);\nfs.appendFileSync(process.env.FAKE_GH + '.log', JSON.stringify(args) + '\\n');\nif (s.error) { process.exit(1); }\nif (args[0] === 'pr') console.log(JSON.stringify(s.pr));\nelse { const q = args.find(x => x.startsWith('query=')) || ''; const key = q.includes('FollowUpChecks') ? 'checks' : q.includes('FollowUpThreads') ? 'threads' : 'comments'; const cursor = (args.find(x => x.startsWith('cursor=')) || 'cursor=').slice(7); const id = (args.find(x => x.startsWith('thread=')) || 'thread=').slice(7); console.log(JSON.stringify((s[key][id ? id + ':' + cursor : cursor]))); }\n`,
   );
-  chmodSync(gh, 0o755);
   const out = run(
     cwd,
     'start',

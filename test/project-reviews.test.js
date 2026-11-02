@@ -125,7 +125,7 @@ test('installed Skill contents are frozen per Run including bundled binary asset
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, USERPROFILE: home },
   });
   assert.equal(result.status, 0, result.stderr);
   writeFileSync(join(home, '.agents/skills/review/SKILL.md'), 'changed');

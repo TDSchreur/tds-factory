@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const runner = resolve('scripts/with-temp-dir.js');
@@ -52,7 +53,7 @@ test('the shared git test helper removes its folders when its test process exits
   const file = join(tmpdir(), `repo-cleanup-${process.pid}.mjs`);
   writeFileSync(
     file,
-    `import { repo, linked } from ${JSON.stringify(resolve('test/git-repo.js'))}; const main = repo(); const wt = linked(main); console.log(JSON.stringify([main, wt]));`,
+    `import { repo, linked } from ${JSON.stringify(pathToFileURL(resolve('test/git-repo.js')).href)}; const main = repo(); const wt = linked(main); console.log(JSON.stringify([main, wt]));`,
   );
   try {
     const result = spawnSync(process.execPath, [file], { encoding: 'utf8' });

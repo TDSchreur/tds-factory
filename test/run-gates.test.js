@@ -2,10 +2,20 @@ import { finishProblems } from '../src/evidence.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
@@ -230,16 +240,19 @@ test('complete ends a Run only at Finish with a PR link and sane Ticket counts',
 });
 
 const head = (cwd, id) => git(read(cwd, id).worktree, 'rev-parse', 'HEAD');
+// Prints the working directory in sh and in cmd.exe.
+const ABANDON = JSON.stringify({ status: 'abandoned' });
+const WHERE = process.platform === 'win32' ? 'cd' : 'pwd';
 const verify = (cwd, id) => run(cwd, 'verify', '--id', id);
 const verdict = (cwd, id, axis, value) => run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value);
 
 test('verify runs the Verify command in the Run worktree and records what happened', () => {
   const cwd = repo();
-  const id = startRun(cwd, 'echo from-verify && pwd');
+  const id = startRun(cwd, `echo from-verify && ${WHERE}`);
   const result = verify(cwd, id);
   assert.equal(result.status, 0, result.stderr);
   const { verify: recorded, worktree } = read(cwd, id);
-  assert.equal(recorded.command, 'echo from-verify && pwd');
+  assert.equal(recorded.command, `echo from-verify && ${WHERE}`);
   assert.equal(recorded.cwd, worktree);
   assert.equal(recorded.head, head(cwd, id));
   assert.equal(recorded.dirty, false);
@@ -252,7 +265,7 @@ test('verify runs the Verify command in the Run worktree and records what happen
 
 test('a failing Verify command is recorded with its exit code and fails the CLI', () => {
   const cwd = repo();
-  const id = startRun(cwd, 'echo oops >&2; exit 3');
+  const id = startRun(cwd, 'echo oops 1>&2 && exit 3');
   const result = verify(cwd, id);
   assert.notEqual(result.status, 0);
   const { verify: recorded } = read(cwd, id);
@@ -556,7 +569,12 @@ test('inspect leaves finished Runs without a worktree alone and changes nothing 
   rmSync(read(cwd, finished).worktree, { recursive: true });
   force(cwd, finished, { status: 'done' });
   const snapshot = () =>
-    execFileSync('find', ['.factory/runs', '-type', 'f', '-exec', 'sha1sum', '{}', '+'], { cwd, encoding: 'utf8' });
+    readdirSync(join(cwd, '.factory', 'runs'), { recursive: true })
+      .map((name) => join(cwd, '.factory', 'runs', name))
+      .filter((name) => statSync(name).isFile())
+      .sort()
+      .map((name) => ` ${createHash('sha1').update(readFileSync(name)).digest('hex')}`)
+      .join('\n');
   const before = snapshot();
   assert.deepEqual(problems(cwd, finished), []);
   assert.equal(snapshot(), before);
@@ -600,7 +618,7 @@ test('a Verify result is not recorded for a Run that was stopped while the comma
   const cwd = repo();
   const id = startRun(cwd, '');
   update(cwd, id, {
-    commands: `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} run update --id ${id} --data '{"status":"abandoned"}'`,
+    commands: `${JSON.stringify(process.execPath)} ${JSON.stringify(cli)} run update --id ${id} --data ${process.platform === 'win32' ? JSON.stringify(ABANDON) : `'${ABANDON}'`}`,
   });
   assert.notEqual(verify(cwd, id).status, 0);
   assert.equal('verify' in read(cwd, id), false);
@@ -633,19 +651,23 @@ test('paused Runs require a reason and resume without implying human waiting', (
   assert.notEqual(update(cwd, id, { status_reason: 'orphan reason' }).status, 0);
 });
 
-test('unavailable Verify and interrupted Verify have separate pause states', () => {
-  const cwd = repo();
-  const missing = startRun(cwd, 'tds_missing_verify_command_123');
-  assert.notEqual(verify(cwd, missing).status, 0);
-  assert.equal(read(cwd, missing).status, 'verification-unavailable');
-  assert.match(read(cwd, missing).status_reason, /not found|unavailable/i);
-  assert.notEqual(read(cwd, missing).verify?.exit_code, 0);
-  const killed = startRun(cwd, 'kill -TERM $$');
-  assert.notEqual(verify(cwd, killed).status, 0);
-  assert.equal(read(cwd, killed).status, 'interrupted');
-  assert.match(read(cwd, killed).status_reason, /SIGTERM/);
-  assert.notEqual(read(cwd, killed).verify?.exit_code, 0);
-});
+test(
+  'unavailable Verify and interrupted Verify have separate pause states',
+  { skip: process.platform === 'win32' && 'needs POSIX signals: kill -TERM' },
+  () => {
+    const cwd = repo();
+    const missing = startRun(cwd, 'tds_missing_verify_command_123');
+    assert.notEqual(verify(cwd, missing).status, 0);
+    assert.equal(read(cwd, missing).status, 'verification-unavailable');
+    assert.match(read(cwd, missing).status_reason, /not found|unavailable/i);
+    assert.notEqual(read(cwd, missing).verify?.exit_code, 0);
+    const killed = startRun(cwd, 'kill -TERM $$');
+    assert.notEqual(verify(cwd, killed).status, 0);
+    assert.equal(read(cwd, killed).status, 'interrupted');
+    assert.match(read(cwd, killed).status_reason, /SIGTERM/);
+    assert.notEqual(read(cwd, killed).verify?.exit_code, 0);
+  },
+);
 
 test('Verify with a missing worktree records that verification is unavailable', () => {
   const cwd = repo();

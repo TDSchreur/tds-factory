@@ -66,6 +66,21 @@ jobs:
         run: echo "$CHROMEWEBDRIVER" >> "$GITHUB_PATH"
       - run: npm run test:browser
 
+  windows:
+    name: Check and unit tests on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: lts/*
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run test:unit
+
   package:
     name: Package install (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -153,7 +168,7 @@ jobs:
   # One stable name for the branch ruleset to require, so changing a matrix never needs a ruleset edit.
   ci-ok:
     if: always()
-    needs: [test, quality, browser, package, workflows, shellcheck, psscriptanalyzer, install-windows]
+    needs: [test, quality, browser, windows, package, workflows, shellcheck, psscriptanalyzer, install-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:

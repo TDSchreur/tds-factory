@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -11,19 +11,69 @@ const ASSET = /^\/(?:style\.css|[\w-]+\.js|vendor\/[\w-]+\.js)$/;
 const TYPES = { css: 'text/css', js: 'text/javascript' };
 const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
-export const hasBrowser = () =>
-  spawnSync('sh', ['-c', 'command -v chromedriver && (command -v chromium || command -v google-chrome)']).status === 0;
+const WINDOWS = process.platform === 'win32';
+const onPath = (name) =>
+  spawnSync(WINDOWS ? 'where' : 'sh', WINDOWS ? [name] : ['-c', `command -v ${name}`]).status === 0;
 
-// ChromeDriver runs in its own process group, so an interrupted test run (Ctrl-C, a CI cancel) would not reach it.
-// Kill the groups of drivers that are still open when this process exits or is signalled.
+// On Windows Edge is preferred (it ships with Windows, only msedgedriver has to be installed); Chrome is the fallback.
+// Neither browser is on PATH there, so look in the install folders (CHROME_BIN overrides the Chrome lookup).
+const windowsFile = (...parts) =>
+  ['PROGRAMFILES', 'PROGRAMFILES(X86)', 'LOCALAPPDATA']
+    .map((base) => process.env[base] && join(process.env[base], ...parts))
+    .find((file) => file && existsSync(file));
+
+// The driver, browser and WebDriver vocabulary to use, or null when this machine has none.
+const target = () => {
+  if (WINDOWS) {
+    // The browser tests are slow under Windows for now; they run there only when asked for.
+    if (!process.env.TDS_WINDOWS_BROWSER && !process.env.REQUIRE_BROWSER) return null;
+    const edge = windowsFile('Microsoft', 'Edge', 'Application', 'msedge.exe');
+    if (onPath('msedgedriver') && edge)
+      return { driver: 'msedgedriver', binary: edge, name: 'MicrosoftEdge', options: 'ms:edgeOptions', cdp: 'ms' };
+    const chrome =
+      (process.env.CHROME_BIN && existsSync(process.env.CHROME_BIN) && process.env.CHROME_BIN) ||
+      windowsFile('Google', 'Chrome', 'Application', 'chrome.exe') ||
+      windowsFile('Chromium', 'Application', 'chrome.exe');
+    if (onPath('chromedriver') && chrome)
+      return { driver: 'chromedriver', binary: chrome, name: 'chrome', options: 'goog:chromeOptions', cdp: 'goog' };
+    return null;
+  }
+  return onPath('chromedriver') && (onPath('chromium') || onPath('google-chrome'))
+    ? { driver: 'chromedriver', name: 'chrome', options: 'goog:chromeOptions', cdp: 'goog' }
+    : null;
+};
+
+export const hasBrowser = () => target() !== null;
+
+// Whether the process (or, on POSIX, the process group of a detached driver) still runs.
+export const isRunning = (pid) => {
+  try {
+    process.kill(WINDOWS ? pid : -pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Kills the process and its children: the whole process group on POSIX, the process tree through taskkill on Windows.
+export const killTree = (pid) => {
+  if (WINDOWS) {
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 10_000 });
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    /* already gone */
+  }
+};
+
+// ChromeDriver runs in its own process group (a process tree on Windows), so an interrupted test run (Ctrl-C, a CI cancel)
+// would not reach it. Kill the drivers that are still open when this process exits or is signalled.
 const live = new Map();
 const killLive = () => {
   for (const [pid, dir] of live) {
-    try {
-      process.kill(-pid, 'SIGKILL');
-    } catch {
-      /* already gone */
-    }
+    killTree(pid);
     rmSync(dir, { recursive: true, force: true });
   }
 };
@@ -36,16 +86,9 @@ for (const signal of ['SIGINT', 'SIGTERM'])
 
 // Ends ChromeDriver and the Chromium it started, and waits for them to exit, so Chromium removes its temporary profile
 // (/tmp/org.chromium.Chromium.scoped_dir.*). The driver runs in its own process group, so the whole group is waited on and,
-// when it does not leave within graceMs of /shutdown, killed. The driver must have been spawned with detached: true. Every wait is bounded, so a stuck browser cannot hang the suite.
+// when it does not leave within graceMs of /shutdown, killed (the process tree on Windows). The driver must have been spawned with detached: true. Every wait is bounded, so a stuck browser cannot hang the suite.
 export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 } = {}) {
-  const alive = () => {
-    try {
-      process.kill(-driver.pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const alive = () => isRunning(driver.pid);
   const untilGone = async (ms) => {
     for (const end = Date.now() + ms; alive() && Date.now() < end;) await delay(25);
     return !alive();
@@ -53,21 +96,18 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
   if (!alive()) return;
   await fetch(`http://127.0.0.1:${port}/shutdown`, { signal: AbortSignal.timeout(1000) }).catch(() => {});
   if (await untilGone(graceMs)) return;
-  try {
-    process.kill(-driver.pid, 'SIGKILL');
-  } catch {
-    /* the group left meanwhile */
-  }
+  killTree(driver.pid);
   await untilGone(killMs);
 }
 
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
 export async function openPage(t, state, { args = [], width = 1200, height = 700 } = {}) {
-  if (!hasBrowser()) {
+  const browser = target();
+  if (!browser) {
     // CI sets REQUIRE_BROWSER so that a runner without a browser fails instead of silently skipping these tests.
-    if (process.env.REQUIRE_BROWSER) throw new Error('Chromium and ChromeDriver are required (REQUIRE_BROWSER is set)');
-    t.skip('Chromium and ChromeDriver are required');
+    if (process.env.REQUIRE_BROWSER) throw new Error('A browser and its driver are required (REQUIRE_BROWSER is set)');
+    t.skip('A browser and its driver (ChromeDriver, or msedgedriver on Windows) are required');
     return null;
   }
   const calls = [];
@@ -119,10 +159,10 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   // A private temp directory keeps this session's Chromium files apart. ChromeDriver and Chromium leave some small empty
   // directories in it even after a clean exit, so close() removes the whole directory after the processes are gone.
   const tmp = mkdtempSync(join(tmpdir(), 'tds-factory-browser-'));
-  const driver = spawn('chromedriver', [`--port=${driverPort}`], {
+  const driver = spawn(browser.driver, [`--port=${driverPort}`], {
     stdio: 'ignore',
     detached: true,
-    env: { ...process.env, TMPDIR: tmp },
+    env: { ...process.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
   });
   live.set(driver.pid, tmp);
   const request = async (method, path, body, timeout) => {
@@ -173,8 +213,9 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       await request('POST', '/session', {
         capabilities: {
           alwaysMatch: {
-            browserName: 'chrome',
-            'goog:chromeOptions': {
+            browserName: browser.name,
+            [browser.options]: {
+              ...(browser.binary ? { binary: browser.binary } : {}),
               args: [
                 '--headless',
                 '--no-sandbox',
@@ -190,7 +231,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     const base = '/session/' + session;
     // Window sizing is clamped by Chromium (a 375px window can have a 500px viewport).
     // Set CSS viewport dimensions through browser emulation before responsive assertions.
-    await request('POST', base + '/goog/cdp/execute', {
+    await request('POST', `${base}/${browser.cdp}/cdp/execute`, {
       cmd: 'Emulation.setDeviceMetricsOverride',
       params: { width, height, deviceScaleFactor: 1, mobile: false },
     });
@@ -212,7 +253,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${server.address().port}/` }),
       async resize(w, h) {
-        await request('POST', base + '/goog/cdp/execute', {
+        await request('POST', `${base}/${browser.cdp}/cdp/execute`, {
           cmd: 'Emulation.setDeviceMetricsOverride',
           params: { width: w, height: h, deviceScaleFactor: 1, mobile: false },
         });
@@ -222,7 +263,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         });
       },
       // A DevTools protocol command, for example to emulate prefers-reduced-motion or forced-colors.
-      cdp: (cmd, params) => request('POST', base + '/goog/cdp/execute', { cmd, params }),
+      cdp: (cmd, params) => request('POST', `${base}/${browser.cdp}/cdp/execute`, { cmd, params }),
       key: (value) =>
         request('POST', base + '/actions', {
           actions: [

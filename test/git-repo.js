@@ -9,7 +9,7 @@ process.on('exit', () => {
   for (const dir of made) rmSync(dir, { recursive: true, force: true });
 });
 function tempDir(prefix) {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), prefix)));
   made.push(dir);
   return dir;
 }

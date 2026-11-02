@@ -185,7 +185,10 @@ test('renaming code to a Markdown path is refused because both paths are listed'
   assert.match(result.stderr, /src\/guard\.js/);
 });
 
-test('a symlink, an executable or a deleted code file at or behind a Markdown path is refused', () => {
+// Windows has no executable bit and symlinks need privileges, so those cases are skipped there.
+const POSIX_ONLY = process.platform === 'win32' ? 'symlinks and the executable bit need a POSIX file system' : false;
+
+test('a symlink at a Markdown path is refused', { skip: POSIX_ONLY }, () => {
   const link = afterRework();
   mkdirSync(join(link.worktree, 'docs'), { recursive: true });
   symlinkSync('/etc/hosts', join(link.worktree, 'docs', 'link.md'));
@@ -194,7 +197,9 @@ test('a symlink, an executable or a deleted code file at or behind a Markdown pa
   const linked = verdict(link.cwd, link.id, 'security', 'pass', '--carried');
   assert.notEqual(linked.status, 0);
   assert.match(linked.stderr, /docs\/link\.md/);
+});
 
+test('an executable at a Markdown path is refused', { skip: POSIX_ONLY }, () => {
   const exec = afterRework();
   mkdirSync(join(exec.worktree, 'docs'), { recursive: true });
   writeFileSync(join(exec.worktree, 'docs', 'run.md'), '#!/bin/sh\n');
@@ -204,7 +209,9 @@ test('a symlink, an executable or a deleted code file at or behind a Markdown pa
   const executable = verdict(exec.cwd, exec.id, 'security', 'pass', '--carried');
   assert.notEqual(executable.status, 0);
   assert.match(executable.stderr, /docs\/run\.md/);
+});
 
+test('a deleted code file behind a Markdown path is refused', () => {
   const gone = afterRework({ 'src/old.js': 'x\n' });
   git(gone.worktree, 'rm', '-q', 'src/old.js');
   git(gone.worktree, 'commit', '-q', '-m', 'delete code');

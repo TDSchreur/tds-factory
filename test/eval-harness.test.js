@@ -1,10 +1,14 @@
-import { test } from 'node:test';
+import { test as run } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './eval-root.js';
+
+// The eval harness drives agents through POSIX shell commands and a shell script for gh.
+const test = (name, fn) =>
+  run(name, { skip: process.platform === 'win32' && 'the eval harness needs a POSIX shell' }, fn);
 
 const RUN = 'id=$(ls .factory/runs) && tds-factory run';
 const gh = join(ROOT, 'eval', 'bin', 'gh');

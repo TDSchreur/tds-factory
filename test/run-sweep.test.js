@@ -123,24 +123,32 @@ test('a term that occurs everywhere is not listed and says so', () => {
   assert.doesNotMatch(out, /docs\/g1\.md:1/);
 });
 
-test('the sweep never follows links, strips control characters from file names, and reads a blockquote replaced-by note', () => {
-  const p = project(
-    {
-      'docs/real.md': 'unique_marker_xyz is here\n',
-      'docs/we\u001bird.md': 'unique_marker_xyz again\n',
-      'docs/old.md': '# Old\n\n> Historical: superseded by [new](new.md).\n\nunique_marker_xyz\n',
-    },
-    { 'docs/z.md': 'adds `unique_marker_xyz`\n' },
-  );
-  symlinkSync(join(p.worktree, 'docs', 'real.md'), join(p.worktree, 'docs', 'link.md'));
-  git(p.worktree, 'add', '.');
-  git(p.worktree, 'commit', '-q', '-m', 'link');
-  const out = sweep(p).stdout;
-  assert.doesNotMatch(out, /\u001b/);
-  assert.doesNotMatch(out, /docs\/link\.md/);
-  assert.match(out, /docs\/we\?ird\.md:1/);
-  assert.match(out.split(/marked as replaced/i)[1], /docs\/old\.md:5/);
-});
+test(
+  'the sweep never follows links, strips control characters from file names, and reads a blockquote replaced-by note',
+  {
+    skip:
+      process.platform === 'win32' &&
+      'needs file names with control characters and symbolic links, which Windows does not allow',
+  },
+  () => {
+    const p = project(
+      {
+        'docs/real.md': 'unique_marker_xyz is here\n',
+        'docs/we\u001bird.md': 'unique_marker_xyz again\n',
+        'docs/old.md': '# Old\n\n> Historical: superseded by [new](new.md).\n\nunique_marker_xyz\n',
+      },
+      { 'docs/z.md': 'adds `unique_marker_xyz`\n' },
+    );
+    symlinkSync(join(p.worktree, 'docs', 'real.md'), join(p.worktree, 'docs', 'link.md'));
+    git(p.worktree, 'add', '.');
+    git(p.worktree, 'commit', '-q', '-m', 'link');
+    const out = sweep(p).stdout;
+    assert.doesNotMatch(out, /\u001b/);
+    assert.doesNotMatch(out, /docs\/link\.md/);
+    assert.match(out, /docs\/we\?ird\.md:1/);
+    assert.match(out.split(/marked as replaced/i)[1], /docs\/old\.md:5/);
+  },
+);
 
 test('the total of listed hits is bounded and the rest is counted', () => {
   const files = {};
@@ -162,16 +170,20 @@ test('a Run without a usable base commit is refused', () => {
   assert.match(result.stderr, /no usable base commit/);
 });
 
-test('a file name with a newline cannot add lines, and a non-ASCII name still gets the changed tag', () => {
-  const p = project(
-    { 'docs/x\n== fake header.md': 'shared_name_term in a odd file\n' },
-    { 'docs/\u00e9.md': 'adds `shared_name_term`\n' },
-  );
-  const out = sweep(p).stdout;
-  assert.doesNotMatch(out, /\n== fake header/);
-  assert.match(out, /docs\/x\?== fake header\.md:1/);
-  assert.match(out, /docs\/\u00e9\.md:1:.*\[changed\]/);
-});
+test(
+  'a file name with a newline cannot add lines, and a non-ASCII name still gets the changed tag',
+  { skip: process.platform === 'win32' && 'needs a file name with a newline, which Windows does not allow' },
+  () => {
+    const p = project(
+      { 'docs/x\n== fake header.md': 'shared_name_term in a odd file\n' },
+      { 'docs/\u00e9.md': 'adds `shared_name_term`\n' },
+    );
+    const out = sweep(p).stdout;
+    assert.doesNotMatch(out, /\n== fake header/);
+    assert.match(out, /docs\/x\?== fake header\.md:1/);
+    assert.match(out, /docs\/\u00e9\.md:1:.*\[changed\]/);
+  },
+);
 
 test('the sweep lists documents that still hold a number with a unit the diff removed', () => {
   const p = project(
