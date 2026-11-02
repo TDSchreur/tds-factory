@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "noEmit": true,
     "strict": true,
     "module": "NodeNext",
@@ -10,6 +10,6 @@
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["*.js"],
+  "include": ["*.js", "*.d.ts"],
   "exclude": ["vendor"]
 }

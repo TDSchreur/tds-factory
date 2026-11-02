@@ -1,10 +1,34 @@
 // Turns Markdown text into a plain tree of blocks and inline spans. No DOM access, so a test can run it alone.
+
+/** @typedef {{ t: 'text', v: string } | { t: 'code', v: string } | { t: 'strong', c: Span[] } | { t: 'em', c: Span[] } | { t: 'link', href: string, c: Span[] }} Span */
+/** @typedef {{ inline: Span[], sub?: { ordered: boolean, items: ListItem[] } }} ListItem */
+/** @typedef {{ type: 'list', ordered: boolean, items: ListItem[] }} ListBlock */
+/**
+ * @typedef {{ type: 'code', text: string }
+ *   | { type: 'heading', level: number, inline: Span[] }
+ *   | { type: 'rule' }
+ *   | { type: 'table', head: Span[][], rows: Span[][][] }
+ *   | { type: 'quote', inline: Span[] }
+ *   | ListBlock
+ *   | { type: 'paragraph', inline: Span[] }} Block
+ */
+
+/**
+ * @param {string} text
+ * @returns {Block[]}
+ */
 export function parseMarkdown(text) {
+  /**
+   * @param {string} src
+   * @returns {Span[]}
+   */
   function inline(src) {
+    /** @type {Span[]} */
     const out = [];
     const re = /`([^`]+)`|\*\*(.+?)\*\*|\*([^\s*](?:.*?[^\s*])?)\*|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
     let last = 0;
     let m;
+    /** @param {string} v */
     function plain(v) {
       if (v) out.push({ t: 'text', v: v });
     }
@@ -20,6 +44,7 @@ export function parseMarkdown(text) {
     plain(src.slice(last));
     return out;
   }
+  /** @param {string} line */
   function cells(line) {
     return line
       .trim()
@@ -29,9 +54,11 @@ export function parseMarkdown(text) {
         return inline(c.trim());
       });
   }
+  /** @type {Block[]} */
   const blocks = [];
   const lines = String(text).split(/\r?\n/);
   let i = 0;
+  /** @type {RegExpExecArray | null} */
   let m;
   while (i < lines.length) {
     const line = lines[i];
@@ -40,6 +67,7 @@ export function parseMarkdown(text) {
       continue;
     }
     if (/^\s*```/.test(line)) {
+      /** @type {string[]} */
       const code = [];
       for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
       i++;
@@ -52,17 +80,20 @@ export function parseMarkdown(text) {
       i++;
     } else if (line.indexOf('|') >= 0 && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1] || '')) {
       const head = cells(line),
+        /** @type {Span[][][]} */
         rows = [];
       for (i += 2; i < lines.length && lines[i].indexOf('|') >= 0; i++) rows.push(cells(lines[i]));
       blocks.push({ type: 'table', head: head, rows: rows });
     } else if (/^\s*>/.test(line)) {
+      /** @type {string[]} */
       const quote = [];
       for (; i < lines.length && /^\s*>/.test(lines[i]); i++) quote.push(lines[i].replace(/^\s*>\s?/, ''));
       blocks.push({ type: 'quote', inline: inline(quote.join(' ')) });
     } else if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+      /** @type {ListItem[]} */
       const items = [],
         ordered = /^\s*\d+\./.test(line),
-        base = /^\s*/.exec(line)[0].length;
+        base = (/^\s*/.exec(line) ?? [''])[0].length;
       for (; i < lines.length && (m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i])); i++) {
         const item = { inline: inline(m[3].trim()) };
         if (m[1].length > base && items.length) {
@@ -73,6 +104,7 @@ export function parseMarkdown(text) {
       }
       blocks.push({ type: 'list', ordered: ordered, items: items });
     } else {
+      /** @type {string[]} */
       const para = [];
       for (
         ;

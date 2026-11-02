@@ -12,6 +12,8 @@
     "skills",
     "agents",
     "dashboard",
+    "!dashboard/tsconfig.json",
+    "!dashboard/*.d.ts",
     "THIRD-PARTY-NOTICES.md"
   ],
   "scripts": {

@@ -1,5 +1,6 @@
 // The text of the help panel. Plain data, so a unit test can read it. The words are the Factory's glossary terms (GLOSSARY.md).
 // An item has a `text` and, optionally, a `term` shown in bold in front of it.
+/** @type {{ id: string, title: string, items: { term?: string, text: string }[] }[]} */
 export const HELP_SECTIONS = [
   {
     id: 'stages',

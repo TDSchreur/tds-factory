@@ -1,4 +1,5 @@
 /** @import { PrStatus } from './pr-provider.js' */
+/** @import { RunView } from '../dashboard/model.js' */
 /** @import { PrLookup } from './run-clean.js' */
 import http from 'node:http';
 import { openRunStore, summarizeMetrics, formatMetrics, trackOf, loopCap } from './run-store.js';
@@ -87,6 +88,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 const strList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 /**
  * @param {any} entry An entry of the Run store. Its record is read from disk and may have any shape, so every field is checked as it is read.
+ * @returns {Omit<RunView, 'prState' | 'prStatus' | 'prHost' | 'prCanMerge'>}
  */
 export function interpretRun(entry) {
   const id = typeof entry?.id === 'string' ? entry.id : '',
@@ -460,7 +462,7 @@ export async function startDashboard({
               return send(409, 'text/plain', 'the request must name the Run record time you looked at');
             if (!v.waiting || v.column !== 'check')
               return send(409, 'text/plain', 'only a Run in Check that waits on you can be granted an extra loop');
-            if (typeof v.loops === 'number' && v.loops < v.loopCap)
+            if (typeof v.loops === 'number' && v.loopCap !== undefined && v.loops < v.loopCap)
               return send(409, 'text/plain', `the Check loop limit of ${v.loopCap} is not reached`);
             store.grantLoop(id, { updated });
             return send(200, 'text/plain', 'granted');

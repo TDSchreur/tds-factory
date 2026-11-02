@@ -48,8 +48,26 @@ test('the typecheck runs three projects, and only test/ still checks just the fi
   );
   const options = (config) => JSON.parse(read(config)).compilerOptions;
   assert.equal(options('tsconfig.json').checkJs, true);
+  assert.equal(options('dashboard/tsconfig.json').checkJs, true);
   assert.equal(options('test/tsconfig.json').checkJs, false);
+  assert.deepEqual(options('tsconfig.json').types, ['node']);
+  assert.deepEqual(options('dashboard/tsconfig.json').types, [], 'the Dashboard runs in a browser: no Node types');
+  assert.ok(options('dashboard/tsconfig.json').lib.includes('DOM'));
   for (const config of ['tsconfig.json', 'dashboard/tsconfig.json', 'test/tsconfig.json'])
     assert.equal(options(config).strict, true, `${config} is not strict`);
   assert.equal(options('tsconfig.json').target, 'ES2024');
+});
+
+test('the production code has no per-file opt-out from the typecheck', () => {
+  const tracked = execFileSync('git', ['ls-files', 'bin', 'src', 'scripts', 'eval', 'dashboard/*.js'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((file) => file.endsWith('.js') && !file.startsWith('dashboard/vendor/'));
+  assert.ok(tracked.length > 20);
+  const optOut = /@ts-(?:nocheck|ignore|expect-error)/;
+  assert.deepEqual(
+    tracked.filter((file) => optOut.test(read(file))),
+    [],
+  );
 });
