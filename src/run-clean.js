@@ -1,12 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+/** @typedef {(url: string) => { state: string, head?: string } | undefined} PrLookup */
+import { codeOf, messageOf, oneOf } from './narrow.js';
 import { statuses } from './run-record.js';
 import { providerFor } from './pr-provider.js';
 import { runRoot, withRunLock, readRun, runIds, mainCheckout } from './run-folder.js';
 import { ownWorktrees, worktreeChanges, submoduleLocalWork } from './worktrees.js';
 
 // Deletes a readable Run in the project's own, unlinked storage.
+/**
+ * @param {string} projectDir
+ * @param {string} id
+ * @param {(reason: string) => void} [why]
+ * @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options]
+ */
 export function removeRun(projectDir, id, why = () => {}, { discardChanges = false, doneOnly = false } = {}) {
   if (!id || id === '.' || id === '..' || /[/\\\0]/.test(id)) return 'invalid';
   const project = fs.realpathSync(projectDir);
@@ -21,19 +29,20 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
       const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
       if (
         !record ||
-        !statuses.includes(record.status) ||
-        (doneOnly === true && !['done', 'abandoned'].includes(record.status))
+        !oneOf(statuses, record.status) ||
+        (doneOnly === true && !oneOf(['done', 'abandoned'], record.status))
       )
         return 'not-allowed';
       // Only a worktree this store created is removed; an adopted one belongs to the user.
       const own = path.join(factory, 'worktrees', id);
       if (record.worktree === own) {
         const treeRoot = path.dirname(own);
+        /** @param {string} p */
         const lstat = (p) => {
           try {
             return fs.lstatSync(p);
           } catch (err) {
-            if (err.code === 'ENOENT') return null;
+            if (codeOf(err) === 'ENOENT') return null;
             throw err;
           }
         };
@@ -50,6 +59,7 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
             why('the Run worktree has uncommitted changes');
             return 'dirty-worktree';
           }
+          /** @type {{ status: number | null, stderr: string, error?: Error }} */
           const removal =
             changes !== undefined
               ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' })
@@ -64,13 +74,14 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
       return 'deleted';
     });
   } catch (err) {
-    if (err.code === 'ENOENT') return 'not-found';
-    if (err.code === 'EEXIST' || err instanceof SyntaxError) return 'not-allowed';
+    if (codeOf(err) === 'ENOENT') return 'not-found';
+    if (codeOf(err) === 'EEXIST' || err instanceof SyntaxError) return 'not-allowed';
     throw err;
   }
 }
 
 // State and head commit of a PR as its host reports them; undefined when the host cannot say or no provider handles the link.
+/** @type {PrLookup} */
 function ghPrInfo(url) {
   const provider = providerFor(url);
   if (!provider) return undefined;
@@ -83,16 +94,26 @@ function ghPrInfo(url) {
 }
 
 // Removes the worktree and branch of a Run whose PR is merged, and keeps its record. Anything unclear leaves everything in place.
+/**
+ * @param {string} projectDir
+ * @param {string} callerDir
+ * @param {string} id
+ * @param {PrLookup} [prState]
+ * @returns {{ id: string, outcome: string, reason?: string }}
+ */
 export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
+  /** @param {string} reason */
   const kept = (reason) => ({ id, outcome: 'kept', reason });
   const { root, record } = readRun(projectDir, id);
   const own = ownWorktrees(projectDir).get(id);
+  /** @param {...string} args */
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   const tip = git('rev-parse', '--verify', '-q', `refs/heads/${id}`);
   const head = tip.status === 0 ? tip.stdout.trim() : undefined;
   if (!own && !head) return { id, outcome: 'already clean' };
   if (!record.pr) return kept('no PR recorded');
   if (record.status !== 'done') return kept('the Run is not done: finish it with run complete first');
+  /** @param {string} dir */
   const inside = (dir) => {
     const rel = path.relative(dir, fs.realpathSync(callerDir));
     return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
@@ -142,8 +163,15 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
 }
 
 // Ids of Runs whose PR is merged but whose worktree or branch is still there. Doctor reports them; nothing is changed.
+/**
+ * @param {string} callerDir
+ * @param {PrLookup} [prState]
+ */
 export function mergedLeftovers(callerDir, prState = ghPrInfo) {
-  let projectDir, root, trees, ids;
+  /** @type {string} */
+  let projectDir, root, ids;
+  /** @type {ReturnType<typeof ownWorktrees>} */
+  let trees;
   try {
     projectDir = mainCheckout(callerDir).dir;
     root = runRoot(projectDir, false);
@@ -152,6 +180,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
   } catch {
     return [];
   }
+  /** @param {...string} args */
   const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
   return ids.filter((id) => {
     try {
@@ -165,6 +194,11 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
 }
 
 // Cleans every Run that records a PR; a Run folder that cannot be read is reported and skipped.
+/**
+ * @param {string} projectDir
+ * @param {string} callerDir
+ * @param {PrLookup} [prState]
+ */
 export function cleanAll(projectDir, callerDir, prState) {
   if (!fs.existsSync(path.join(projectDir, '.factory', 'runs'))) return [];
   const root = runRoot(projectDir, false);
@@ -172,7 +206,7 @@ export function cleanAll(projectDir, callerDir, prState) {
     try {
       return readRun(projectDir, name).record.pr ? [cleanRun(projectDir, callerDir, name, prState)] : [];
     } catch (err) {
-      return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }];
+      return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${messageOf(err)}` }];
     }
   });
 }

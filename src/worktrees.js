@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { originDefaultBranch } from './origin.js';
+/** @import { Run } from './run-record.js' */
 import { validId } from './run-record.js';
 
 // Fetches origin's default branch and returns the commit it points at, without touching any local ref.
@@ -25,7 +26,7 @@ export function fetchOriginDefault(dir) {
 // Why the Run branch would not merge cleanly into origin's default branch: empty when it would.
 /**
  * @param {string} projectDir
- * @param {Record<string, any>} record
+ * @param {Run} record
  */
 export function mergeProblem(projectDir, record) {
   const base = fetchOriginDefault(projectDir);
@@ -44,7 +45,7 @@ export function mergeProblem(projectDir, record) {
 }
 
 // The code revision a Run's Evidence is about: the worktree's head, and whether it has uncommitted changes.
-/** @param {Record<string, any>} record */
+/** @param {Pick<Run, 'worktree'>} record */
 export function worktreeState(record) {
   if (!record.worktree || !fs.existsSync(record.worktree)) throw new Error('the Run worktree is missing');
   /** @param {...string} args */
@@ -64,6 +65,7 @@ export function ownWorktrees(projectDir) {
     throw new Error('Run worktree storage must not be symlinked');
   const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: projectDir, encoding: 'utf8' });
   if (listed.status !== 0) throw new Error('cannot list git worktrees');
+  /** @type {Map<string, { dir: string, branch: string | undefined, head: string | undefined, missing: boolean, safe: boolean }>} */
   const entries = new Map();
   for (const part of listed.stdout.split('\n\n')) {
     // Git prints forward slashes on Windows.

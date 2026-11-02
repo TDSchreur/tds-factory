@@ -1,22 +1,32 @@
 import { stages } from './flow.js';
 import { trackOf } from './run-record.js';
+/** @import { Run, Metrics, Stage } from './run-record.js' */
 import { summarizeUsage, formatUsage } from './run-usage.js';
 
 // Metrics record observations independently of current Evidence. Missing or damaged
 // metrics on an older record are never backfilled from its current state.
 // Why Check sent a Run back to Build: a fixed list, so the causes can be counted. A Rework without one is unknown.
 export const REWORK_CAUSES = ['stale-doc', 'test-gap', 'spec-gap', 'security', 'bug', 'size', 'other'];
+/** @param {unknown} causes @returns {string[]} */
 const ownCauses = (causes) => REWORK_CAUSES.filter((cause) => Array.isArray(causes) && causes.includes(cause));
 
+/** @param {string} at @returns {Metrics} */
 export const newMetrics = (at) => ({
   version: 1,
   visits: [{ stage: 'define', started: at }],
   verdicts: [],
   usage: { tokens: 'not tracked', cost: 'not tracked' },
 });
+/** @param {Metrics | undefined | null} metrics @returns {metrics is Metrics} */
 const usable = (metrics) =>
-  metrics && metrics.version === 1 && Array.isArray(metrics.visits) && Array.isArray(metrics.verdicts);
+  !!metrics && metrics.version === 1 && Array.isArray(metrics.visits) && Array.isArray(metrics.verdicts);
 
+/**
+ * @param {Run} record
+ * @param {Stage | null} stage
+ * @param {string} [at]
+ * @returns {Run}
+ */
 export function moveVisit(record, stage, at = new Date().toISOString()) {
   if (!usable(record.metrics)) return record;
   const visits = record.metrics.visits.map((v, i, all) =>
@@ -27,12 +37,23 @@ export function moveVisit(record, stage, at = new Date().toISOString()) {
   return { ...record, metrics: { ...record.metrics, visits } };
 }
 // Stores the causes given for one Rework, next to the Rework itself; none given stores nothing and counts as unknown.
+/**
+ * @param {Run} record
+ * @param {string[]} causes
+ * @param {number} attempt
+ * @returns {Run}
+ */
 export function recordCauses(record, causes, attempt) {
   if (!usable(record.metrics) || !causes.length) return record;
   const old = Array.isArray(record.metrics.rework_causes) ? record.metrics.rework_causes : [];
   const entry = { attempt, causes: ownCauses(causes), at: new Date().toISOString() };
   return { ...record, metrics: { ...record.metrics, rework_causes: [...old, entry] } };
 }
+/**
+ * @param {Run} record
+ * @param {Omit<import('./run-record.js').VerdictEvent, 'at'>} event
+ * @returns {Run}
+ */
 export function recordVerdict(record, event) {
   if (!usable(record.metrics)) return record;
   return {
@@ -40,12 +61,19 @@ export function recordVerdict(record, event) {
     metrics: { ...record.metrics, verdicts: [...record.metrics.verdicts, { ...event, at: new Date().toISOString() }] },
   };
 }
+/**
+ * @param {Run} record
+ * @param {boolean} clean
+ * @returns {Run}
+ */
 export function firstCheck(record, clean) {
   if (!usable(record.metrics) || record.metrics.first_check !== undefined || record.check_loops !== 0) return record;
   return { ...record, metrics: { ...record.metrics, first_check: clean ? 'clean' : 'unclean' } };
 }
 
+/** @param {unknown} value */
 const date = (value) => (typeof value === 'string' ? Date.parse(value) : NaN);
+/** @param {number | null} ms @param {boolean} [ongoing] */
 const duration = (ms, ongoing = false) => {
   if (ms === null) return 'no data';
   const seconds = Math.floor(ms / 1000),
@@ -54,11 +82,28 @@ const duration = (ms, ongoing = false) => {
     s = seconds % 60;
   return `${h ? `${h}h ` : ''}${m ? `${m}m ` : ''}${s}s${ongoing ? ' (ongoing)' : ''}`;
 };
+/** @param {number} clean @param {number} observed */
 const rate = (clean, observed) =>
   observed ? `${Math.round((clean / observed) * 1000) / 10}% (${clean}/${observed})` : 'no data';
 
 // Invalid optional observations are ignored, never used to hide the rest of a Run.
+/**
+ * @typedef {object} MetricsSummary
+ * @property {import('./run-record.js').Track} [track]
+ * @property {Record<string, { ms: number | null, ongoing: boolean }>} stages
+ * @property {number | null} reworks
+ * @property {{ counts: Record<string, number>, unknown: number }} causes
+ * @property {number} clean
+ * @property {number} observed
+ * @property {ReturnType<typeof summarizeUsage>} [usage]
+ */
+/**
+ * @param {Run | undefined | null} record
+ * @param {number} [now]
+ * @returns {MetricsSummary}
+ */
 export function summarizeMetrics(record, now = Date.now()) {
+  /** @type {MetricsSummary['stages']} */
   const values = Object.fromEntries(stages.map((stage) => [stage, { ms: null, ongoing: false }]));
   const metrics = record?.metrics;
   if (usable(metrics))
@@ -72,8 +117,13 @@ export function summarizeMetrics(record, now = Date.now()) {
       value.ms = (value.ms ?? 0) + end - start;
       value.ongoing ||= open;
     }
-  const reworks = Number.isSafeInteger(record?.check_loops) && record.check_loops >= 0 ? record.check_loops : null;
-  const outcome = usable(metrics) && ['clean', 'unclean'].includes(metrics.first_check) ? metrics.first_check : null;
+  const checkLoops = record?.check_loops;
+  const reworks = checkLoops !== undefined && Number.isSafeInteger(checkLoops) && checkLoops >= 0 ? checkLoops : null;
+  const outcome =
+    usable(metrics) && metrics.first_check && ['clean', 'unclean'].includes(metrics.first_check)
+      ? metrics.first_check
+      : null;
+  /** @type {Record<string, number>} */
   const counts = {};
   let withCause = 0;
   if (usable(metrics) && Array.isArray(metrics.rework_causes))
@@ -93,6 +143,7 @@ export function summarizeMetrics(record, now = Date.now()) {
     usage: summarizeUsage(usable(metrics) ? metrics.usage : undefined, record),
   };
 }
+/** @param {MetricsSummary} summary */
 const causeText = (summary) => {
   if (summary.reworks === null) return 'no data';
   if (summary.reworks === 0) return 'none';
@@ -101,6 +152,7 @@ const causeText = (summary) => {
   if (unknown) parts.push(`unknown ${unknown}`);
   return parts.join(', ') || 'none';
 };
+/** @param {MetricsSummary} summary */
 export function formatMetrics(summary) {
   return {
     stages: Object.fromEntries(
@@ -117,7 +169,12 @@ export function formatMetrics(summary) {
     cost: 'not tracked',
   };
 }
+/**
+ * @param {MetricsSummary[]} summaries
+ * @returns {MetricsSummary}
+ */
 export function totalMetrics(summaries) {
+  /** @type {MetricsSummary} */
   const total = {
     stages: Object.fromEntries(stages.map((stage) => [stage, { ms: null, ongoing: false }])),
     reworks: null,
