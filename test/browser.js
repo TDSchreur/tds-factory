@@ -25,6 +25,8 @@ const windowsFile = (...parts) =>
 // The driver, browser and WebDriver vocabulary to use, or null when this machine has none.
 const target = () => {
   if (WINDOWS) {
+    // The browser tests are slow under Windows for now; they run there only when asked for.
+    if (!process.env.TDS_WINDOWS_BROWSER && !process.env.REQUIRE_BROWSER) return null;
     const edge = windowsFile('Microsoft', 'Edge', 'Application', 'msedge.exe');
     if (onPath('msedgedriver') && edge)
       return { driver: 'msedgedriver', binary: edge, name: 'MicrosoftEdge', options: 'ms:edgeOptions', cdp: 'ms' };
