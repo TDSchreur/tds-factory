@@ -118,7 +118,7 @@ export function parseStatus(pr, policies) {
 /** @param {any} err The error of a failed command: an Error with its stderr and code, as execFile gives it. */
 const failure = (err) => {
   const text = `${err.stderr ?? ''}`;
-  return err.code === 'ENOENT'
+  return err.code === 'ENOENT' || /['"]az(?:\.cmd)?['"] is not recognized/i.test(text)
     ? 'az-missing'
     : /misspelled or not recognized|azure-devops|extension/i.test(text)
       ? 'az-extension-missing'
@@ -146,9 +146,26 @@ const args = (subcommand, { organization, id }) => [
 ];
 const SHOW = ['show'],
   POLICIES = ['policy', 'list'];
-const env = () => ({ ...process.env, AZURE_CORE_NO_COLOR: '1', AZURE_CORE_COLLECT_TELEMETRY: 'false' });
+const env = () => ({
+  ...process.env,
+  AZURE_CORE_NO_COLOR: '1',
+  AZURE_CORE_COLLECT_TELEMETRY: 'false',
+  ...(process.platform === 'win32' ? { NoDefaultCurrentDirectoryInExePath: '1' } : {}),
+});
+/** @param {string[]} argv @returns {[string, string[]]} */
+const command = (argv) => {
+  if (process.platform !== 'win32') return ['az', argv];
+  // Only fixed flags and the validated organisation/id reach cmd.exe; decoded project/repository names never do.
+  return [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `az.cmd ${argv.join(' ')}`]];
+};
 /** @param {string[]} argv */
-const defaultRun = (argv) => exec('az', argv, { timeout: 20_000, maxBuffer: 16 * 1024 * 1024, env: env() });
+const defaultRun = (argv) =>
+  exec(...command(argv), {
+    timeout: 20_000,
+    maxBuffer: 16 * 1024 * 1024,
+    env: env(),
+    windowsVerbatimArguments: process.platform === 'win32',
+  });
 /**
  * @param {(argv: string[]) => Promise<{ stdout: string }>} run
  * @param {Target} target
@@ -226,7 +243,16 @@ export async function stateAsync(url, { run = defaultRun } = {}) {
 export function view(url, { cwd, timeout = 20_000, run } = {}) {
   if (!matches(url)) throw new Error('not an Azure DevOps pull request');
   const target = parts(url);
-  const call = run ?? ((argv) => spawnSync('az', argv, { cwd, encoding: 'utf8', timeout, env: env() }));
+  const call =
+    run ??
+    ((argv) =>
+      spawnSync(...command(argv), {
+        cwd,
+        encoding: 'utf8',
+        timeout,
+        env: env(),
+        windowsVerbatimArguments: process.platform === 'win32',
+      }));
   const out = call(args(SHOW, target));
   if (out.status !== 0) throw new Error((out.stderr || out.error?.message || 'az failed').trim());
   return viewOf(JSON.parse(out.stdout), target);
