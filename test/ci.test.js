@@ -65,3 +65,11 @@ test('the CI workflow lints both Bootstrap installers with pinned tools and runs
 test('every third-party action in the CI workflow is pinned to a commit SHA', () => {
   for (const [, ref] of ci.matchAll(/uses: \S+@(\S+)/g)) assert.match(ref, /^[0-9a-f]{40}$/);
 });
+
+test('the Windows unit tests run in two shards and only the first shard runs the static checks', () => {
+  const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const job = ci.slice(ci.indexOf('  windows:'), ci.indexOf('  package:'));
+  assert.match(job, /shard: \[1, 2\]/);
+  assert.match(job, /if: matrix\.shard == 1\n\s+run: npm run check/);
+  assert.match(job, /npm run test:unit -- --test-shard=\$\{\{ matrix\.shard \}\}\/2/);
+});

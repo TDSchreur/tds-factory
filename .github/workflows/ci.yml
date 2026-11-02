@@ -67,9 +67,13 @@ jobs:
       - run: npm run test:browser
 
   windows:
-    name: Check and unit tests on Windows
+    name: Check and unit tests on Windows (shard ${{ matrix.shard }}/2)
     runs-on: windows-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -78,8 +82,10 @@ jobs:
         with:
           node-version: lts/*
       - run: npm ci --ignore-scripts
-      - run: npm run check
-      - run: npm run test:unit
+      # The static checks do not depend on the shard, so one shard runs them.
+      - if: matrix.shard == 1
+        run: npm run check
+      - run: npm run test:unit -- --test-shard=${{ matrix.shard }}/2
 
   package:
     name: Package install (${{ matrix.os }})
