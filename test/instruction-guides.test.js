@@ -10,8 +10,13 @@ import { invokedByFactory } from '../src/sync.js';
 import { SKILLS_DIR } from '../src/paths.js';
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 
+/** @param {Record<string, string>} files */
 function project(files) {
   const cwd = repo();
   for (const [name, text] of Object.entries(files)) {
@@ -22,6 +27,7 @@ function project(files) {
 }
 const AGENTS =
   '# Agents\n\nRead [dashboard rules](docs/dashboard.md) and [factory rules](docs/factory.md) and `docs/plain.md`.\n';
+/** @param {Record<string, string>} [extra] */
 const guides = (extra = {}) =>
   project({
     'AGENTS.md': AGENTS,
@@ -43,13 +49,15 @@ test('a guide without frontmatter or without applyTo is unscoped', () => {
 });
 
 test('a malformed applyTo is a problem with its line', () => {
-  for (const [text, line] of [
+  /** @type {[string, number][]} */
+  const malformed = [
     ['---\ntitle: x\napplyTo: "a/**\n---\n', 3],
     ['---\napplyTo:\n---\n', 2],
     ['---\napplyTo: a,,b\n---\n', 2],
     ['---\napplyTo: /etc/**\n---\n', 2],
     ['---\napplyTo: ../x/**\n---\n', 2],
-  ]) {
+  ];
+  for (const [text, line] of malformed) {
     const r = parseGuide(text);
     assert.equal(r.problem?.line, line, text);
   }
@@ -69,6 +77,7 @@ test('globs: ** crosses folders, * stays in one, a glob without a slash matches 
 test('guides come from the links in AGENTS.md; unscoped guides always apply', () => {
   const all = loadGuides(guides());
   assert.deepEqual(all.map((g) => g.path).sort(), ['docs/dashboard.md', 'docs/factory.md', 'docs/plain.md']);
+  /** @param {string[]} files */
   const apply = (files) =>
     guidesForFiles(all, files)
       .map((g) => g.path)

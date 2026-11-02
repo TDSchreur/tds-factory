@@ -12,7 +12,9 @@ const NAME = 'setup-matt-pocock-skills';
 test('the manifest lists the project setup skill and the synced copy is committed', () => {
   const manifest = JSON.parse(readFileSync(join(SKILLS_DIR, '..', 'skills.manifest.json'), 'utf8'));
   assert.ok(
-    manifest.skills.some((s) => (typeof s === 'string' ? s : s.path).endsWith('/' + NAME)),
+    manifest.skills.some((/** @type {string | { path: string }} */ s) =>
+      (typeof s === 'string' ? s : s.path).endsWith('/' + NAME),
+    ),
     'manifest entry',
   );
   assert.ok(existsSync(join(SKILLS_DIR, NAME, 'SKILL.md')), 'skills/ copy');

@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseFragment, release } from '../scripts/changelog.js';
 
+/**
+ * @param {string} changelog
+ * @param {Record<string, string>} [fragments]
+ */
 const root = (changelog, fragments = {}) => {
   const dir = mkdtempSync(join(tmpdir(), 'changelog-'));
   mkdirSync(join(dir, 'changelog.d'));

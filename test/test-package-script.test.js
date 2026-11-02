@@ -13,6 +13,7 @@ test('scripts/test-package.js says so when npm pack makes no tarball', () => {
     writeFileSync(join(bin, 'npm'), '#!/bin/sh\nexit 0\n');
     chmodSync(join(bin, 'npm'), 0o755);
   }
+  /** @type {NodeJS.ProcessEnv} */
   const env = { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH ?? ''}` };
   delete env.npm_execpath; // set when this test runs under `npm test`: the real npm would pack
   const result = spawnSync(process.execPath, [resolve('scripts/test-package.js')], { encoding: 'utf8', env });
