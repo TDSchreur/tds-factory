@@ -23,10 +23,10 @@ Replace each pattern with the Node 24 API that does the same thing, and raise th
 
 - **Minimum.** `engines.node` becomes `>=24.4` (`fs.mkdtempDisposableSync` arrived in 24.4, `import.meta.main` in 24.2). The CI and release matrices change `'24'` to `'24.4'`. The documents that name the minimum say Node 24.4. `scripts/install.sh`, `install.ps1` and `doctor` keep reading the major only.
 - **`import.meta.dirname`.** Replaces `dirname(fileURLToPath(import.meta.url))` and `fileURLToPath(new URL('..', import.meta.url))` in `src/paths.js`, `src/dashboard.js`, `scripts/dev-install.js`, `eval/run.js`, `eval/lib/fixture.js`, `test/eval-root.js` and `test/dashboard-served-assets.test.js`. `import.meta.url` stays where a URL is wanted (`new URL(..., import.meta.url)` for reading files).
-- **Walks.** The recursive document walk in `src/run-sweep.js`, the regular-file tree in `src/project-reviews.js` and the test file list in `scripts/test-unit.js` use `fs.readdirSync(..., { recursive: true })` or `fs.globSync`. The symlink refusal in `project-reviews.js` and the sorted order stay. `scripts/doc-checks.js` is out of scope unless it is the same pattern with the same checks.
-- **Temporary directories.** `src/update.js`, `src/evidence.js`, `scripts/test-package.js`, `scripts/dev-install.js` and `eval/lib/fixture.js` use `using tmp = fs.mkdtempDisposableSync(...)` and `tmp.path`. Where the directory must outlive its scope or is removed with different options, it stays as it is.
+- **Walks.** The recursive document walk in `src/run-sweep.js` and the test file list in `scripts/test-unit.js` use `fs.globSync`; the order stays sorted. `fs.readdirSync(..., { recursive: true })` follows linked folders and cannot skip a folder, so it is not used. `globSync` follows no link and prunes with `exclude`, but `**/*` alone leaves out dotfiles, so the sweep also passes `**/.*` and `**/.*/**`. The regular-file tree in `src/project-reviews.js` keeps its hand-written walk: it refuses links in untrusted project input and the `globSync` dotfile and link behaviour is not worth the risk there. `scripts/doc-checks.js` is out of scope.
+- **Temporary directories.** `src/update.js`, `scripts/test-package.js` and `scripts/dev-install.js` use `using tmp = fs.mkdtempDisposableSync(...)` and `tmp.path`. `src/evidence.js` and `eval/lib/fixture.js` create a directory that outlives the function (it is returned), so they stay as they are.
 - **Smaller replacements.** `import.meta.main` in `scripts/changelog.js`; `events.once(server, 'listening')` and `events.once(server, 'close')` for the Dashboard wrappers; `timers/promises` `setTimeout` for the default `sleep` in `src/update.js`; `findLast` where `src/evidence.js` takes the last match.
-- **Tooling.** `tsconfig.json` (and the other tsconfigs) get a `lib` that has `esnext.disposable`, or a later target, so that `tsc` knows `Disposable`. ESLint must parse `using`. If a tool cannot, the decision is recorded and `using` is not used.
+- **Tooling.** `tsc`, ESLint and Prettier accept `using` with the existing `ES2024` target and `lib` (`@types/node` brings the disposable types), so no config changes.
 - **Line numbers.** The line numbers in the request were stale; each pattern is found by what it does.
 
 ## Testing Decisions
@@ -39,4 +39,4 @@ Changing `install.sh`, `install.ps1` or `doctor` to compare the minor version. O
 
 ## Documents
 
-`package.json`, `test/ci.test.js`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `README.md`, `docs/install.md`, `docs/development.md`, `docs/releasing.md`, `tsconfig.json`, `changelog.d/use-node-24-apis.md`.
+`package.json`, `test/ci.test.js`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `README.md`, `docs/install.md`, `docs/development.md`, `docs/releasing.md`, `changelog.d/use-node-24-apis.md`.
