@@ -31,12 +31,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 // A value that comes back from WebDriver (the result of a script run in the page) has no type the test can know in advance.
 /** @typedef {any} PageValue */
 
+/** @typedef {PageState & { runs: RunStub[], files: Record<string, string> }} ServedState The state once openPage has filled in what the stub server serves. */
+
 /**
  * @typedef {object} Page The handle openPage returns.
  * @property {number | undefined} driverPid
  * @property {string} tmp The private temp directory of this session.
  * @property {string[] | null} leftovers What ChromeDriver and Chromium left in tmp; null until close() has run.
- * @property {PageState} state
+ * @property {ServedState} state
  * @property {string[]} calls The non-GET requests the stub server received, as "METHOD url".
  * @property {(string | string[] | undefined)[]} tokens The X-Factory-Token header of each write.
  * @property {(script: string, scriptArgs?: unknown[]) => Promise<PageValue>} execute Runs a script body in the page; `return` hands back a value.
@@ -57,7 +59,7 @@ const TYPES = { css: 'text/css', js: 'text/javascript' };
 const DASHBOARD = new URL('../dashboard/', import.meta.url);
 
 /** @param {{ address(): AddressInfo | string | null }} server */
-const portOf = (server) => {
+export const portOf = (server) => {
   const address = server.address();
   assert.ok(address && typeof address === 'object', 'the server listens on a port');
   return address.port;
@@ -166,8 +168,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   const calls = [];
   /** @type {(string | string[] | undefined)[]} */
   const tokens = []; // the X-Factory-Token header of each write
-  state.runs ??= [];
-  state.files ??= {};
+  const served = Object.assign(state, { runs: state.runs ?? [], files: state.files ?? {} });
   const server = createServer((req, res) => {
     const path = (req.url ?? '').split('?')[0];
     /**
@@ -204,9 +205,9 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         JSON.stringify({ project: state.project ?? 'test', version: state.version, token: 'test-token' }),
       );
     if (path === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
-    if (path === '/api/views') return send(200, 'application/json', JSON.stringify(state.runs ?? []));
+    if (path === '/api/views') return send(200, 'application/json', JSON.stringify(served.runs));
     if (path.startsWith('/files/')) {
-      const text = (state.files ?? {})[decodeURIComponent(path.slice('/files/'.length))];
+      const text = served.files[decodeURIComponent(path.slice('/files/'.length))];
       return text === undefined ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', text);
     }
     send(404, 'text/plain', 'not found');
@@ -316,7 +317,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       get leftovers() {
         return leftovers;
       },
-      state,
+      state: served,
       calls,
       tokens,
       execute,

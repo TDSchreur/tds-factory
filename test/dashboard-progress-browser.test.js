@@ -2,7 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { Page } from './browser.js' */
+
+/** @param {number} m */
 const minutesAgo = (m) => new Date(Date.now() - m * 60000).toISOString();
+/**
+ * @param {Page} page
+ * @param {string} id
+ */
 const text = (page, id) => page.execute(`return document.querySelector('[data-id=${id}]').textContent`);
 
 test('cards show progress, activity, model and last seen', async (t) => {

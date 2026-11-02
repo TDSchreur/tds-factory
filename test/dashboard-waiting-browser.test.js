@@ -2,7 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { Page } from './browser.js' */
+
+/** @param {number} m */
 const minutesAgo = (m) => new Date(Date.now() - m * 60000).toISOString();
+/**
+ * @param {Page} page
+ * @param {string} id
+ */
 const reason = (page, id) => page.execute(`return document.querySelector('[data-id=${id}] .reason').textContent`);
 
 test('a waiting card carries a Needs you banner with symbol, age and reason', async (t) => {
@@ -59,6 +66,11 @@ test('a waiting card carries a Needs you banner with symbol, age and reason', as
 });
 
 test('the Needs you filter and the waiting-first sort', async (t) => {
+  /**
+   * @param {string} id
+   * @param {string} column
+   * @param {number} minutes
+   */
   const w = (id, column, minutes) =>
     run({
       id,

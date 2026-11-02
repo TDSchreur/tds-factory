@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
 test('a refresh of the open Run keeps the scroll position of its detail', async (t) => {
+  /** @param {number} n */
   const record = (n) =>
     run({ id: 'r1', title: 'Long run', files: ['define.md'], updated: new Date(Date.now() + n * 1000).toISOString() });
   const page = await openPage(t, {
