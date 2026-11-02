@@ -41,8 +41,8 @@ function gh(args, cwd) {
     throw new Error(`cannot read GitHub PR: ${(out.stderr || out.error?.message || 'gh failed').trim()}`);
   try {
     return JSON.parse(out.stdout);
-  } catch {
-    throw new Error('malformed GitHub response');
+  } catch (err) {
+    throw new FactoryError('malformed GitHub response', { code: 'error', cause: err });
   }
 }
 const checksQuery = `query FollowUpChecks($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100,after:$cursor) { nodes { __typename ... on CheckRun { name status conclusion detailsUrl } ... on StatusContext { context state targetUrl description } } pageInfo { hasNextPage endCursor } } } } } } } } }`;

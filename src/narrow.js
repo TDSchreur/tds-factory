@@ -12,6 +12,10 @@ export const messageOf = (err) =>
 export const codeOf = (err) =>
   typeof err === 'object' && err !== null && 'code' in err && typeof err.code === 'string' ? err.code : undefined;
 
+const MISSING = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'ENAMETOOLONG', 'EISDIR']);
+/** Whether a system error means that the path is not there to read: absent, not a folder, a loop or too long, or not a file. @param {unknown} err */
+export const isMissing = (err) => MISSING.has(codeOf(err) ?? '');
+
 /** The exit status and the standard error of a failed command run with execFileSync, as far as the error has them. @param {unknown} err */
 export const execFailure = (err) => ({
   status: typeof err === 'object' && err !== null && 'status' in err ? err.status : undefined,

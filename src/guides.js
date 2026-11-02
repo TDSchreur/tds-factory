@@ -26,6 +26,7 @@ export function insideProject(projectDir, file) {
     const rel = path.relative(root, fs.realpathSync(file));
     return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
   } catch {
+    // A path that cannot be resolved cannot be shown to lie inside the project, so it does not count as inside.
     return false;
   }
 }

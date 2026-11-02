@@ -16,6 +16,13 @@ import { messageOf, codeOf, oneOf } from './narrow.js';
 import { isStage } from './flow.js';
 
 const exec = promisify(execFile);
+// One line on stderr for a failure the Dashboard turns into an error answer, so the cause is not lost.
+/**
+ * @param {string} what
+ * @param {unknown} err
+ */
+const logFailure = (what, err) =>
+  console.error(`dashboard: ${what}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
 /** @param {string} worktree */
 const expectedRepo = async (worktree) => {
@@ -349,6 +356,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(path.slice('/api/runs/'.length));
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const query = new URL(target, 'http://localhost').searchParams;
@@ -391,6 +399,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(merge[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -418,7 +427,8 @@ export async function startDashboard({
         let details;
         try {
           details = await ghPrDetails(v.pr);
-        } catch {
+        } catch (err) {
+          logFailure('GitHub PR state and head', err);
           return send(502, 'text/plain', 'GitHub PR state and head are unavailable');
         }
         if (!details || typeof details !== 'object' || typeof details.state !== 'string')
@@ -430,7 +440,8 @@ export async function startDashboard({
           return send(409, 'text/plain', 'the PR head does not match the Run Evidence');
         try {
           await prMerge(v.pr, eligibility.head);
-        } catch {
+        } catch (err) {
+          logFailure('PR merge', err);
           return send(502, 'text/plain', 'gh could not merge the PR');
         } finally {
           prCache.delete(v.pr);
@@ -443,6 +454,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(action[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -500,6 +512,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(checks[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -509,7 +522,8 @@ export async function startDashboard({
         let status;
         try {
           status = await ghChecks(v.pr);
-        } catch {
+        } catch (err) {
+          logFailure('GitHub checks', err);
           status = 'GitHub checks: unavailable';
         }
         return send(200, 'text/plain', status);
@@ -520,6 +534,7 @@ export async function startDashboard({
         try {
           id = decodeURIComponent(statusRoute[1]);
         } catch {
+          // A malformed percent escape: a bad request, not a failure of ours.
           return send(400, 'text/plain', 'invalid id');
         }
         const entry = (await store.list()).find((e) => e.id === id);
@@ -565,7 +580,9 @@ export async function startDashboard({
         return body === null ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', body);
       }
       send(404, 'text/plain', 'not found');
-    } catch {
+    } catch (err) {
+      // The client only learns that it failed; the cause goes to the log, without the query string, which may hold a token.
+      logFailure(`${req.method} ${path}`, err);
       send(500, 'text/plain', 'internal error');
     }
   });

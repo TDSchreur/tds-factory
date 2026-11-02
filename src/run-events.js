@@ -13,6 +13,7 @@ const isLink = (file) => {
   try {
     return fs.lstatSync(file).isSymbolicLink();
   } catch {
+    // No file yet, or one that cannot be inspected: not a link we know of. The open in appendEvent refuses links on its own.
     return false;
   }
 };
@@ -46,6 +47,7 @@ export function appendEvent(dir, event) {
       fs.closeSync(fd);
     }
   } catch {
+    // Best-effort, as the comment above says: the Run record is the source of truth, not its history.
     return false;
   }
 }
@@ -90,6 +92,7 @@ export function readEvents(dir) {
         events.push(value);
       else damaged++;
     } catch {
+      // A line that is not JSON is counted as damaged and reported with the history.
       damaged++;
     }
   }

@@ -1,6 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
+import { isMissing } from './narrow.js';
 import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Copilot session event files under ~/.copilot/session-state/<session>/events.jsonl. Only
@@ -19,6 +20,7 @@ function parse(text, seen, session) {
     try {
       data = JSON.parse(line);
     } catch {
+      // A damaged line is skipped; the others still count.
       continue;
     }
     const usage = data?.type === 'session.usage_record' ? data.data?.usage : null;
@@ -51,7 +53,8 @@ export function readCopilotUsage({ home, runId, sessions, from, deadline }) {
   let dirs;
   try {
     dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
-  } catch {
+  } catch (err) {
+    if (!isMissing(err)) throw err;
     return { problem: 'no Copilot session logs found' };
   }
   /** @type {Map<string, any>} */

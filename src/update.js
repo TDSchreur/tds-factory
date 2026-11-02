@@ -79,6 +79,7 @@ function isReleaseAsset(text) {
       !url.hash
     );
   } catch {
+    // Text that is not a URL is not a Release asset.
     return false;
   }
 }

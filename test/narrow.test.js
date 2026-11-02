@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { messageOf, codeOf, oneOf, execFailure } from '../src/narrow.js';
+import { messageOf, codeOf, isMissing, oneOf, execFailure } from '../src/narrow.js';
 
 test('messageOf reads the message of an Error and the text of anything else that was thrown', () => {
   assert.equal(messageOf(new Error('boom')), 'boom');
@@ -35,4 +35,13 @@ test('execFailure reads the status and the standard error of a failed command', 
   assert.deepEqual(execFailure(caught), { status: 3, stderr: 'bad' });
   assert.deepEqual(execFailure(undefined), { status: undefined, stderr: '' });
   assert.deepEqual(execFailure(new Error('x')), { status: undefined, stderr: '' });
+});
+
+test('isMissing tells a path that is not there from a failure to read it', () => {
+  for (const code of ['ENOENT', 'ENOTDIR', 'ELOOP', 'ENAMETOOLONG', 'EISDIR'])
+    assert.equal(isMissing(Object.assign(new Error('x'), { code })), true, code);
+  for (const code of ['EACCES', 'EMFILE', 'EIO'])
+    assert.equal(isMissing(Object.assign(new Error('x'), { code })), false, code);
+  assert.equal(isMissing(new SyntaxError('x')), false);
+  assert.equal(isMissing(undefined), false);
 });

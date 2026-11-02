@@ -1,6 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
+import { isMissing } from './narrow.js';
 import { claudeHome } from './flow.js';
 import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
@@ -20,6 +21,7 @@ function parse(text, subagent, seen) {
     try {
       data = JSON.parse(line);
     } catch {
+      // A damaged line is skipped; the others still count.
       continue;
     }
     const message = data?.message;
@@ -50,7 +52,8 @@ export function readClaudeUsage({ home, env = process.env, runId, sessions, from
   let slugs;
   try {
     slugs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
-  } catch {
+  } catch (err) {
+    if (!isMissing(err)) throw err;
     return { problem: 'no Claude session logs found' };
   }
   /** @type {Map<string, any>} */
@@ -60,7 +63,8 @@ export function readClaudeUsage({ home, env = process.env, runId, sessions, from
     let files;
     try {
       files = fs.readdirSync(path.join(root, slug.name), { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      if (!isMissing(err)) throw err;
       continue;
     }
     for (const file of files) {

@@ -165,6 +165,7 @@ export function readUsage(
       rows,
     };
   } catch {
+    // Usage is best-effort and never throws (see above); an unexpected reader failure keeps the earlier Usage.
     return untracked('the session logs could not be read');
   }
 }

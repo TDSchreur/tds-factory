@@ -20,6 +20,7 @@ const decode = (value) => {
   try {
     return decodeURIComponent(value);
   } catch {
+    // A malformed escape means the link is not one of ours; the caller treats undefined as no match.
     return undefined;
   }
 };

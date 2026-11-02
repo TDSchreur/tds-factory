@@ -162,3 +162,14 @@ test('the Skill and every Stage agent of every target state the follow-through r
       );
   }
 });
+
+test('install stops on an install record it cannot parse, and names the file', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
+  mkdirSync(join(project, '.claude/agents'), { recursive: true });
+  const record = join(project, '.claude/agents/.tds-factory-agents.json');
+  writeFileSync(record, '{"half');
+  assert.throws(
+    () => installIn(project, 'claude'),
+    (err) => err instanceof Error && err.message.includes(record),
+  );
+});

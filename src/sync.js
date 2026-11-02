@@ -51,6 +51,7 @@ function upstreamCommit(root, rel) {
   try {
     return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   } catch {
+    // A submodule git cannot read counts as not checked out, as the comment above says.
     return null;
   }
 }

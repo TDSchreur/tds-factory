@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { FactoryError } from './errors.js';
+import { isMissing, messageOf } from './narrow.js';
 import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
 import { targets, userDir, agentNames, isAgent } from './flow.js';
 import { replaceDir } from './replace-dir.js';
@@ -87,8 +89,14 @@ function installAgents(name, targetDir, force, dryRun) {
   let record = {};
   try {
     record = JSON.parse(fs.readFileSync(recordFile, 'utf8'));
-  } catch {
-    /* no record yet */
+  } catch (err) {
+    if (!isMissing(err)) {
+      throw new FactoryError(
+        `cannot read the install record ${recordFile}: ${messageOf(err)} (remove the file to install again)`,
+        { code: 'install-record-unreadable', cause: err },
+      );
+    }
+    // No record yet: nothing was installed here before.
   }
   for (const file of fs.readdirSync(sourceDir)) {
     const dest = path.join(targetDir, file);
