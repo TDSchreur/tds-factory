@@ -18,9 +18,11 @@ export function* originDefaultBranchFlow(cwd) {
   const remoteHead = yield* git('ls-remote', '--symref', 'origin', 'HEAD');
   const branch = remoteHead.status === 0 && remoteHead.stdout.match(/^ref: refs\/heads\/([^\s]+)\s+HEAD$/m)?.[1];
   if (remoteHead.error) {
-    const failure = /** @type {NodeJS.ErrnoException & { killed?: boolean }} */ (remoteHead.error);
-    // spawnSync reports a timeout as ETIMEDOUT, execFile as a killed child.
-    const timedOut = failure.code === 'ETIMEDOUT' || failure.killed === true;
+    const failure = /** @type {NodeJS.ErrnoException & { killed?: boolean, signal?: string | null }} */ (
+      remoteHead.error
+    );
+    // spawnSync reports a timeout as ETIMEDOUT, execFile as a child killed by SIGTERM (a maxBuffer overflow has its own code).
+    const timedOut = failure.code === 'ETIMEDOUT' || (failure.killed === true && failure.signal === 'SIGTERM');
     return {
       error: timedOut
         ? `origin did not answer within ${TIMEOUT_MS / 1000}s; check the network, or a credential helper waiting for a login`

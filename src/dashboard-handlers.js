@@ -3,15 +3,16 @@
 /** @import { createPrViews } from './dashboard-pr-views.js' */
 /** @import { openRunStore } from './run-store.js' */
 import { readFile } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { resolve } from 'node:path';
 import { can, providerFor, remoteRepo } from './pr-provider.js';
+import { gitAsync } from './git.js';
 import { messageOf } from './narrow.js';
 import { interpretRun, str } from './dashboard-view.js';
 import { ghChecks, ghPrDetails } from './dashboard-pr-views.js';
 
-const exec = promisify(execFile);
+// Runs whose accept is under way: a second concurrent accept must not pass the checks and then reset the Run to waiting when it fails.
+/** @type {Set<string>} */
+const accepting = new Set();
 
 /**
  * What every handler gets: the services of one Dashboard and the request being answered.
@@ -45,7 +46,12 @@ export const logFailure = (what, err) =>
 // The repository of the Run's origin, lowercased, for the check that a PR belongs to the Run.
 /** @param {string} worktree */
 const expectedRepo = async (worktree) => {
-  const origin = (await exec('git', ['remote', 'get-url', 'origin'], { cwd: worktree, timeout: 10_000 })).stdout.trim();
+  const args = ['remote', 'get-url', 'origin'];
+  const out = await gitAsync(worktree, args, { timeout: 10_000 });
+  // The message execFile gave when it rejected: its own for a failure to start, else the command line and stderr.
+  if (out.error) throw out.error;
+  if (out.status !== 0) throw new Error(`Command failed: git ${args.join(' ')}\n${out.stderr}`);
+  const origin = out.stdout.trim();
   const repo = remoteRepo(origin);
   if (!repo) throw new Error('cannot resolve the Run repository from origin');
   return `${repo.owner}/${repo.name}`.toLowerCase();
@@ -217,26 +223,32 @@ function grantExtraLoop(ctx, id, v) {
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
 async function acceptCheck(ctx, id, v) {
   const { send, store } = ctx;
+  if (accepting.has(id)) return send(409, 'text/plain', 'another action on this Run is already running');
   if (!v.waiting || v.column !== 'check')
     return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
   // The user decided on the Run as the page showed it; a change since then needs a new look.
   if (query(ctx).get('updated') !== v.updated)
     return send(409, 'text/plain', 'the Run changed since you looked at it; reload and look again');
-  const { problems } = await store.mergeEligibilityAsync(id);
-  if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
-  // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.
-  const reason = v.reason || 'accept the Check or send it back to Build';
-  store.update(id, { status: 'running', activity: 'The user accepted the Check on the Dashboard' });
+  accepting.add(id);
   try {
-    await store.acceptAsync(id, {
-      findings: problems.join('; '),
-      decision: 'Continue to Finish with the open findings. Accepted by the user on the Dashboard.',
-    });
-  } catch (err) {
-    store.update(id, { status: 'waiting', waiting_reason: reason });
-    throw err;
+    const { problems } = await store.mergeEligibilityAsync(id);
+    if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
+    // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.
+    const reason = v.reason || 'accept the Check or send it back to Build';
+    store.update(id, { status: 'running', activity: 'The user accepted the Check on the Dashboard' });
+    try {
+      await store.acceptAsync(id, {
+        findings: problems.join('; '),
+        decision: 'Continue to Finish with the open findings. Accepted by the user on the Dashboard.',
+      });
+    } catch (err) {
+      store.update(id, { status: 'waiting', waiting_reason: reason });
+      throw err;
+    }
+    send(200, 'text/plain', 'accepted');
+  } finally {
+    accepting.delete(id);
   }
-  send(200, 'text/plain', 'accepted');
 }
 
 /** @type {Handler} */

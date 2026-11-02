@@ -27,20 +27,22 @@ export const gitAsync = (cwd, args, options = {}) =>
       if (typeof code === 'number') return resolve({ status: code, stdout, stderr });
       resolve({ status: null, stdout, stderr, error });
     });
+    // spawnSync gives the child no input and closes its stdin; execFile leaves it open, so a command that reads stdin would hang.
     if (input !== undefined) child.stdin?.end(input);
+    else child.stdin?.end();
   });
 
 // A flow is written once as a generator that yields its git calls and locks (`yield* gitStep(...)`), and runs
 // blocking for the CLI (runSync) or without blocking the event loop for the Dashboard (runAsync).
 /**
  * @typedef {{ git: [string, readonly string[], GitOptions] } | { call: () => unknown }} Step
- * @typedef {Generator<Step, any, any>} Flow
+ * @typedef {Generator<Step, any, any>} Flow The answers of a step differ per step, so a flow cannot type them.
  */
 /**
  * @param {string} cwd
  * @param {readonly string[]} args
  * @param {GitOptions} [options]
- * @returns {Generator<Step, ReturnType<typeof git>, any>}
+ * @returns {Generator<Step, ReturnType<typeof git>, any>} `any` is what a flow sends back in; the answer is a git result
  */
 export function* gitStep(cwd, args, options = {}) {
   return yield { git: [cwd, args, options] };
@@ -60,7 +62,7 @@ export function* callStep(call) {
  * @param {T} value
  * @returns {Generator<Step, T, any>}
  */
-// eslint-disable-next-line require-yield
+// eslint-disable-next-line require-yield -- a flow with no steps still has to be a generator
 export function* immediate(value) {
   return value;
 }

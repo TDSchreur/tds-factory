@@ -61,3 +61,21 @@ test('gitAsync resolves instead of rejecting when git fails', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('gitAsync closes stdin when no input is given, passes env and kills on timeout', async () => {
+  const dir = tempRepo();
+  try {
+    const hashed = await gitAsync(dir, ['hash-object', '--stdin'], { timeout: 10_000 });
+    assert.equal(hashed.status, 0);
+    assert.match(hashed.stdout, /^[0-9a-f]{40,64}\n$/);
+    const ident = await gitAsync(dir, ['var', 'GIT_AUTHOR_IDENT'], {
+      env: { ...process.env, GIT_AUTHOR_NAME: 'Zed Async' },
+    });
+    assert.match(ident.stdout, /^Zed Async /);
+    const slow = await gitAsync(dir, ['-c', 'alias.slow=!sleep 5', 'slow'], { timeout: 100 });
+    assert.equal(slow.status, null);
+    assert.ok(slow.error);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

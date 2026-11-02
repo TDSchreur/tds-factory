@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 /** @import { Run } from './run-record.js' */
 /** @import { Step } from './git.js' */
-import { callStep, immediate, runSync } from './git.js';
+import { callStep, git, immediate, runSync } from './git.js';
 import { codeOf, isMissing } from './narrow.js';
 import { stages, stageIndex } from './flow.js';
 import { validId, validate, write, withStageModel } from './run-record.js';
@@ -318,11 +317,7 @@ export const runIds = (root) =>
 // Run records live in the main checkout, including when called from a linked worktree.
 /** @param {string} dir */
 export function mainCheckout(dir) {
-  const out = spawnSync(
-    'git',
-    ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel'],
-    { cwd: dir, encoding: 'utf8' },
-  );
+  const out = git(dir, ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel']);
   const [gitDir, common] = out.status === 0 ? out.stdout.trim().split('\n') : [];
   if (!gitDir || path.basename(common) !== '.git') return { dir };
   return { dir: path.dirname(common) };

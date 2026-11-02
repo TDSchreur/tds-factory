@@ -94,7 +94,7 @@ export function createPrViews({ prState, prStatus }) {
     v.status !== 'abandoned' &&
     ['finish', 'follow-up', 'done'].includes(v.column) &&
     !!providerFor(v.pr);
-  /** @param {any} entry */
+  /** @param {any} entry The store entry, which interpretRun types and reads itself. */
   const view = async (entry) => {
     const v = interpretRun(entry);
     return {

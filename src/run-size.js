@@ -1,5 +1,5 @@
 // @ts-check
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 import { readRun } from './run-folder.js';
 
 export const MAX_DIFF_BYTES = 40 * 1024;
@@ -15,8 +15,7 @@ export function sizeWarnings(projectDir, id) {
   const base = record.base_sha;
   if (!record.worktree || !base || !/^[0-9a-f]{40,64}$/.test(base)) return [];
   /** @param {...string} args */
-  const git = (...args) =>
-    spawnSync('git', args, { cwd: record.worktree, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  const git = (...args) => runGit(record.worktree, args, { maxBuffer: 256 * 1024 * 1024 });
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
   const diff = git('diff', ...plain, base, 'HEAD', '--');
   const names = git('diff', ...plain, '-z', '--name-only', base, 'HEAD', '--');
