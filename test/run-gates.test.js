@@ -17,17 +17,40 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
+import { defined as present, metricsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/** @param {unknown} value */
 const json = (value) => JSON.stringify(value);
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
+/** @param {string} cwd */
 const startRun = (cwd, commands = 'npm test') => {
   const result = run(cwd, 'start', '--data', json({ title: 'Example', agent: 'codex', commands, conventions: [] }));
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {Record<string, unknown>} data
+ */
 const update = (cwd, id, data) => run(cwd, 'update', '--id', id, '--data', json(data));
 
 test('run update rejects fields that only a transition may change, and leaves the record unchanged', () => {
@@ -103,8 +126,19 @@ test('an old-shaped record without the new fields still takes allowed updates', 
 });
 
 // Fixture: put a Run in a state that only later tickets' operations can reach.
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {Record<string, unknown>} fields
+ */
 const force = (cwd, id, fields) => writeFileSync(file(cwd, id), json({ ...read(cwd, id), ...fields }));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string} to
+ */
 const transition = (cwd, id, to) => run(cwd, 'transition', '--id', id, '--to', to);
+/** @param {string} cwd */
 const defined = (cwd) => {
   const id = startRun(cwd);
   update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1', '2'], tickets_total: 2 });
@@ -196,7 +230,7 @@ test('rework is the way back from Check: it counts the loop, clears Evidence and
   assert.equal(run(cwd, 'rework', '--id', id).status, 0);
   const after = read(cwd, id);
   assert.equal(after.title, before.title);
-  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
+  assert.deepEqual(metricsOf(after).verdicts, metricsOf(before).verdicts, 'observed Check history stays');
   assert.equal(after.stage, 'build');
   assert.equal(after.check_loops, 1);
   for (const key of [
@@ -239,11 +273,25 @@ test('complete ends a Run only at Finish with a PR link and sane Ticket counts',
   assert.notEqual(run(cwd, 'complete', '--id', id).status, 0, 'already done');
 });
 
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const head = (cwd, id) => git(read(cwd, id).worktree, 'rev-parse', 'HEAD');
 // Prints the working directory in sh and in cmd.exe.
 const ABANDON = JSON.stringify({ status: 'abandoned' });
 const WHERE = process.platform === 'win32' ? 'cd' : 'pwd';
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const verify = (cwd, id) => run(cwd, 'verify', '--id', id);
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string} axis
+ * @param {string} value
+ */
 const verdict = (cwd, id, axis, value) => run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value);
 
 test('verify runs the Verify command in the Run worktree and records what happened', () => {
@@ -251,7 +299,8 @@ test('verify runs the Verify command in the Run worktree and records what happen
   const id = startRun(cwd, `echo from-verify && ${WHERE}`);
   const result = verify(cwd, id);
   assert.equal(result.status, 0, result.stderr);
-  const { verify: recorded, worktree } = read(cwd, id);
+  const { verify: verified, worktree } = read(cwd, id);
+  const recorded = present(verified, 'Verify is recorded');
   assert.equal(recorded.command, `echo from-verify && ${WHERE}`);
   assert.equal(recorded.cwd, worktree);
   assert.equal(recorded.head, head(cwd, id));
@@ -268,7 +317,7 @@ test('a failing Verify command is recorded with its exit code and fails the CLI'
   const id = startRun(cwd, 'echo oops 1>&2 && exit 3');
   const result = verify(cwd, id);
   assert.notEqual(result.status, 0);
-  const { verify: recorded } = read(cwd, id);
+  const recorded = present(read(cwd, id).verify, 'Verify is recorded');
   assert.equal(recorded.exit_code, 3);
   assert.match(readFileSync(join(cwd, '.factory', 'runs', id, recorded.log), 'utf8'), /oops/);
 });
@@ -278,7 +327,7 @@ test('a Verify result from an uncommitted tree is marked dirty', () => {
   const id = startRun(cwd, 'true');
   writeFileSync(join(read(cwd, id).worktree, 'scratch.txt'), 'x');
   assert.equal(verify(cwd, id).status, 0);
-  assert.equal(read(cwd, id).verify.dirty, true);
+  assert.equal(read(cwd, id).verify?.dirty, true);
 });
 
 test('verify refuses a Run with no Verify command, and verify results cannot be written by update', () => {
@@ -336,10 +385,10 @@ test('a verdict is stamped with the head and the Check attempt', () => {
   force(cwd, id, { stage: 'check' });
   assert.equal(verdict(cwd, id, 'standards', 'pass').status, 0);
   assert.equal(read(cwd, id).standards, 'pass');
-  assert.deepEqual(read(cwd, id).reviewed.standards, { head: head(cwd, id), attempt: 1 });
+  assert.deepEqual(read(cwd, id).reviewed?.standards, { head: head(cwd, id), attempt: 1 });
   force(cwd, id, { check_loops: 1 });
   assert.equal(verdict(cwd, id, 'infrastructure', 'skipped').status, 0);
-  assert.equal(read(cwd, id).reviewed.infrastructure.attempt, 2);
+  assert.equal(read(cwd, id).reviewed?.infrastructure?.attempt, 2);
 });
 
 test('verdicts are refused outside Check, for unknown axes and impossible values', () => {
@@ -364,9 +413,19 @@ test('a passing verdict on an uncommitted tree is refused, a failing one is reco
   assert.equal(read(cwd, id).security, 'fail');
 });
 
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {Record<string, unknown>} data
+ */
 const accept = (cwd, id, data) => run(cwd, 'accept', '--id', id, '--data', json(data));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const commit = (cwd, id) => git(read(cwd, id).worktree, 'commit', '-q', '--allow-empty', '-m', 'more work');
 // A Run in Check whose Verify result and verdicts are all current and passing.
+/** @param {string} cwd */
 const cleanCheck = (cwd, commands = 'true') => {
   const id = startRun(cwd, commands);
   force(cwd, id, { stage: 'check', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
@@ -380,6 +439,11 @@ const cleanCheck = (cwd, commands = 'true') => {
     assert.equal(verdict(cwd, id, axis, value).status, 0);
   return id;
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {string} why
+ */
 const refusesFinish = (cwd, id, why) => {
   const before = read(cwd, id);
   assert.notEqual(transition(cwd, id, 'finish').status, 0, why);
@@ -450,11 +514,11 @@ test('an Accepted Check allows Finish at its head and stops counting once the he
   verdict(cwd, id, 'security', 'fail');
   refusesFinish(cwd, id, 'not yet accepted');
   assert.equal(accept(cwd, id, { findings: 'MEDIUM: x', decision: 'ship it, tracked in #9' }).status, 0);
-  const { accepted } = read(cwd, id);
+  const accepted = present(read(cwd, id).accepted, 'the acceptance is recorded');
   assert.equal(accepted.head, head(cwd, id));
   assert.equal(accepted.decision, 'ship it, tracked in #9');
   assert.equal(accepted.findings, 'MEDIUM: x');
-  assert.ok(Date.parse(accepted.at) > 0);
+  assert.ok(Date.parse(accepted.at ?? '') > 0);
   commit(cwd, id);
   refusesFinish(cwd, id, 'accepted for another head');
   assert.equal(accept(cwd, id, { findings: 'MEDIUM: x', decision: 'still fine' }).status, 0);
@@ -475,13 +539,24 @@ test('accept needs findings and a decision, Check, and a clean worktree', () => 
   assert.notEqual(update(cwd, id, { accepted: { head: 'forged' } }).status, 0, 'not through update');
 });
 
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const inspect = (cwd, ...args) => run(cwd, 'inspect', '--json', ...args);
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const problems = (cwd, id) => {
   const result = inspect(cwd);
   assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout)
-    .find((r) => r.id === id)
-    .problems.map((p) => p.code);
+  /** @type {{ id: string, problems: { code: string }[] }[]} */
+  const reports = JSON.parse(result.stdout);
+  return present(
+    reports.find((r) => r.id === id),
+    `${id} is inspected`,
+  ).problems.map((p) => p.code);
 };
 
 test('inspect reports nothing for a healthy Run', () => {
@@ -569,7 +644,7 @@ test('inspect leaves finished Runs without a worktree alone and changes nothing 
   rmSync(read(cwd, finished).worktree, { recursive: true });
   force(cwd, finished, { status: 'done' });
   const snapshot = () =>
-    readdirSync(join(cwd, '.factory', 'runs'), { recursive: true })
+    readdirSync(join(cwd, '.factory', 'runs'), { recursive: true, encoding: 'utf8' })
       .map((name) => join(cwd, '.factory', 'runs', name))
       .filter((name) => statSync(name).isFile())
       .sort()
@@ -659,12 +734,12 @@ test(
     const missing = startRun(cwd, 'tds_missing_verify_command_123');
     assert.notEqual(verify(cwd, missing).status, 0);
     assert.equal(read(cwd, missing).status, 'verification-unavailable');
-    assert.match(read(cwd, missing).status_reason, /not found|unavailable/i);
+    assert.match(read(cwd, missing).status_reason ?? '', /not found|unavailable/i);
     assert.notEqual(read(cwd, missing).verify?.exit_code, 0);
     const killed = startRun(cwd, 'kill -TERM $$');
     assert.notEqual(verify(cwd, killed).status, 0);
     assert.equal(read(cwd, killed).status, 'interrupted');
-    assert.match(read(cwd, killed).status_reason, /SIGTERM/);
+    assert.match(read(cwd, killed).status_reason ?? '', /SIGTERM/);
     assert.notEqual(read(cwd, killed).verify?.exit_code, 0);
   },
 );
@@ -675,5 +750,5 @@ test('Verify with a missing worktree records that verification is unavailable', 
   git(cwd, 'worktree', 'remove', read(cwd, id).worktree);
   assert.notEqual(verify(cwd, id).status, 0);
   assert.equal(read(cwd, id).status, 'verification-unavailable');
-  assert.match(read(cwd, id).status_reason, /worktree.*missing/);
+  assert.match(read(cwd, id).status_reason ?? '', /worktree.*missing/);
 });

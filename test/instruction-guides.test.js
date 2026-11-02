@@ -1,16 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 import { parseGuide, matchesGlob, loadGuides, guidesCheck, guidesForFiles, MAX_GLOB_LENGTH } from '../src/guides.js';
+import { ruleFor } from '../src/rules.js';
 import { invokedByFactory } from '../src/sync.js';
 import { SKILLS_DIR } from '../src/paths.js';
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 
+/** @param {Record<string, string>} files */
 function project(files) {
   const cwd = repo();
   for (const [name, text] of Object.entries(files)) {
@@ -21,6 +27,7 @@ function project(files) {
 }
 const AGENTS =
   '# Agents\n\nRead [dashboard rules](docs/dashboard.md) and [factory rules](docs/factory.md) and `docs/plain.md`.\n';
+/** @param {Record<string, string>} [extra] */
 const guides = (extra = {}) =>
   project({
     'AGENTS.md': AGENTS,
@@ -42,13 +49,15 @@ test('a guide without frontmatter or without applyTo is unscoped', () => {
 });
 
 test('a malformed applyTo is a problem with its line', () => {
-  for (const [text, line] of [
+  /** @type {[string, number][]} */
+  const malformed = [
     ['---\ntitle: x\napplyTo: "a/**\n---\n', 3],
     ['---\napplyTo:\n---\n', 2],
     ['---\napplyTo: a,,b\n---\n', 2],
     ['---\napplyTo: /etc/**\n---\n', 2],
     ['---\napplyTo: ../x/**\n---\n', 2],
-  ]) {
+  ];
+  for (const [text, line] of malformed) {
     const r = parseGuide(text);
     assert.equal(r.problem?.line, line, text);
   }
@@ -68,6 +77,7 @@ test('globs: ** crosses folders, * stays in one, a glob without a slash matches 
 test('guides come from the links in AGENTS.md; unscoped guides always apply', () => {
   const all = loadGuides(guides());
   assert.deepEqual(all.map((g) => g.path).sort(), ['docs/dashboard.md', 'docs/factory.md', 'docs/plain.md']);
+  /** @param {string[]} files */
   const apply = (files) =>
     guidesForFiles(all, files)
       .map((g) => g.path)
@@ -193,4 +203,24 @@ test('many ** segments against a very deep path still match quickly', () => {
   assert.ok(!matchesGlob(deep, ['**/'.repeat(60) + 'y.js']));
   assert.ok(matchesGlob(deep, ['**/'.repeat(60) + 'x.js']));
   assert.ok(Date.now() - started < 2000, 'finished quickly');
+});
+
+test("the repository's own instruction guides are linked from AGENTS.md and have a current .claude/rules copy", () => {
+  const root = resolve('.');
+  const sources = readdirSync(join(root, '.github', 'instructions')).filter((n) => n.endsWith('.instructions.md'));
+  assert.ok(sources.length > 0);
+  const linked = loadGuides(root).map((g) => g.path);
+  for (const name of sources) {
+    assert.ok(linked.includes(`.github/instructions/${name}`), `${name} is not linked from AGENTS.md`);
+    const copy = join(root, '.claude', 'rules', name.replace(/\.instructions\.md$/, '.md'));
+    assert.ok(existsSync(copy), `${copy} is missing; run tds-factory rules`);
+    const expected = ruleFor(
+      readFileSync(join(root, '.github', 'instructions', name), 'utf8'),
+      `.github/instructions/${name}`,
+    );
+    assert.equal(readFileSync(copy, 'utf8'), expected, `${name}: the copy is out of date; run tds-factory rules`);
+  }
+  const expectedCopies = new Set(sources.map((n) => n.replace(/\.instructions\.md$/, '.md')));
+  for (const copy of readdirSync(join(root, '.claude', 'rules')))
+    assert.ok(expectedCopies.has(copy), `.claude/rules/${copy} has no source in .github/instructions`);
 });

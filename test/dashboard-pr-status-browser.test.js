@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @import { Page, PageState, RunStub } from './browser.js' */
+
 const PR = 'https://github.com/o/r/pull/1';
 const open = (over = {}) => ({
   state: 'open',
@@ -11,6 +13,10 @@ const open = (over = {}) => ({
   review: 'approved',
   ...over,
 });
+/**
+ * @param {Page} page
+ * @param {string} id
+ */
 const status = (page, id) =>
   page.execute(
     `const e = document.querySelector('[data-id=${id}] .pr-status'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null`,
@@ -82,6 +88,7 @@ test('an unavailable PR status says why and Check again asks for it again', asyn
     run({ id: 'a', title: 'A', column: 'finish', pr: PR, prStatus: { unavailable: 'not-signed-in' } }),
     run({ id: 'b', title: 'B', column: 'finish', pr: PR, prStatus: { unavailable: 'weird' } }),
   ];
+  /** @type {PageState & { runs: RunStub[] }} */
   const state = { runs };
   const page = await openPage(t, state);
   if (!page) return;
@@ -134,10 +141,12 @@ test('a mergeable pull request with passing checks shows no red line, and a conf
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=good]')");
+    /** @param {string} id */
     const lines = (id) =>
       page.execute(
         `return [...document.querySelectorAll('[data-id=${id}] .pr-fact')].map((e) => [e.textContent, e.classList.contains('bad'), getComputedStyle(e).color])`,
       );
+    /** @type {[string, boolean, string][]} */
     const good = await lines('good');
     assert.deepEqual(
       good.map(([text, bad]) => [text, bad]),
@@ -148,6 +157,7 @@ test('a mergeable pull request with passing checks shows no red line, and a conf
       ],
     );
     assert.equal(good[1][2], good[2][2], 'the "no conflicts" line has the colour of the neutral lines');
+    /** @type {[string, boolean, string][]} */
     const conflict = await lines('conflict');
     assert.deepEqual(
       conflict.map(([text, bad]) => [text, bad]),

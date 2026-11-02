@@ -2,7 +2,7 @@
 //   1. check the tools (node, git, npm) and the checkout
 //   2. initialise the vendor/ submodules
 //   3. install the CLI as it is on the default branch of origin (your checkout and working tree are not touched)
-//   4. register the Factory: `tds-factory install` puts its skills and agents in ~/.claude and ~/.agents
+//   4. register the Factory: `tds-factory install` puts its skills and agents in ~/.claude (or $CLAUDE_CONFIG_DIR) and ~/.agents
 //   5. check the result with `tds-factory doctor`
 //   6. register the developer skills (not shipped to users) from vendor/ in ~/.claude/skills and ~/.agents/skills
 // Every step is safe to re-run. A failing step skips the steps that depend on it; the others still run.
@@ -14,9 +14,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const root = path.join(import.meta.dirname, '..');
 const MARKER = '.tds-factory-dev';
 const DEV_SKILLS = [
   'vendor/awesome-copilot/skills/docs-sync-audit',
@@ -40,6 +39,12 @@ const DEV_SKILLS = [
   'vendor/pstack/skills/principle-test-behavior-not-implementation',
 ];
 const SKILL_TARGETS = ['.claude/skills', '.agents/skills'];
+// Claude Code reads ~/.claude, or the folder CLAUDE_CONFIG_DIR names when that is non-empty (same rule as src/flow.js).
+/** @param {string} target */
+const userRoot = (target) =>
+  target === '.claude/skills' && process.env.CLAUDE_CONFIG_DIR
+    ? path.join(path.resolve(process.env.CLAUDE_CONFIG_DIR), 'skills')
+    : path.join(os.homedir(), target);
 const USAGE = 'Usage: node scripts/dev-install.js [--force] [--dry-run] [--skip-dev-skills]';
 
 const args = process.argv.slice(2);
@@ -53,16 +58,33 @@ const dryRun = args.includes('--dry-run');
 const skipDevSkills = args.includes('--skip-dev-skills');
 const win = process.platform === 'win32';
 
+/** @param {string} [msg] */
 const say = (msg = '') => console.log(msg);
+/** @param {string} msg */
 const info = (msg) => console.log(`  ${msg}`);
+/** @param {string} msg */
 const warn = (msg) => console.warn(`  warning: ${msg}`);
+// This script runs on its own, copied or not, so it imports nothing from src/.
+/** @param {unknown} err */
+const messageOf = (err) => (err instanceof Error ? err.message : String(err));
+/** @param {unknown} text */
 const first = (text) =>
   String(text ?? '')
     .trim()
     .split('\n')[0];
 // On Windows npm and tds-factory are .cmd shims, which need a shell.
+/**
+ * @param {string} cwd
+ * @param {import('node:child_process').StdioOptions} stdio
+ * @returns {import('node:child_process').SpawnSyncOptionsWithStringEncoding}
+ */
 const spawnOpts = (cwd, stdio) => ({ cwd, stdio, encoding: 'utf8', shell: win });
 
+/**
+ * @param {string} cmd
+ * @param {string[]} cmdArgs
+ * @param {string} [cwd]
+ */
 function capture(cmd, cmdArgs, cwd = root) {
   const r = spawnSync(cmd, cmdArgs, spawnOpts(cwd, ['ignore', 'pipe', 'pipe']));
   if (r.error) throw new Error(`${cmd} is not available: ${r.error.message}`);
@@ -71,6 +93,11 @@ function capture(cmd, cmdArgs, cwd = root) {
   return r.stdout.trim();
 }
 
+/**
+ * @param {string} cmd
+ * @param {string[]} cmdArgs
+ * @param {string} [cwd]
+ */
 function stream(cmd, cmdArgs, cwd = root) {
   info(`$ ${cmd} ${cmdArgs.join(' ')}`);
   if (dryRun) return;
@@ -79,9 +106,15 @@ function stream(cmd, cmdArgs, cwd = root) {
   if (r.status !== 0) throw new Error(`${cmd} ${cmdArgs.join(' ')} failed (${r.signal ?? `exit ${r.status}`})`);
 }
 
+/** @type {{ title: string, status: string, detail?: string }[]} */
 const results = [];
 let n = 0;
 // Runs one step; a throw marks it failed (or warned) and the step returns false so dependants can be skipped.
+/**
+ * @param {string} title
+ * @param {() => unknown} fn
+ * @param {{ warnOnly?: boolean }} [options]
+ */
 function step(title, fn, { warnOnly = false } = {}) {
   say(`\n[${++n}] ${title}`);
   try {
@@ -89,11 +122,15 @@ function step(title, fn, { warnOnly = false } = {}) {
     results.push({ title, status: 'ok' });
     return true;
   } catch (err) {
-    console.error(`  ${warnOnly ? 'warning' : 'error'}: ${first(err.message)}`);
-    results.push({ title, status: warnOnly ? 'warned' : 'failed', detail: first(err.message) });
+    console.error(`  ${warnOnly ? 'warning' : 'error'}: ${first(messageOf(err))}`);
+    results.push({ title, status: warnOnly ? 'warned' : 'failed', detail: first(messageOf(err)) });
     return false;
   }
 }
+/**
+ * @param {string} title
+ * @param {string} why
+ */
 function skip(title, why) {
   say(`\n[${++n}] ${title}`);
   info(`skipped: ${why}`);
@@ -139,15 +176,12 @@ if (tools) {
     const commit = capture('git', ['rev-parse', '--short', ref]);
     info(`default branch of origin: ${ref} at ${commit}`);
     info(`package version there: ${JSON.parse(capture('git', ['show', `${ref}:package.json`])).version}`);
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tds-factory-'));
-    try {
-      info(`$ git archive ${ref}`);
-      capture('git', ['archive', '--format=tgz', '--prefix=package/', '-o', path.join(tmp, 'tds-factory.tgz'), ref]);
-      // Relative name from inside tmp: a shell on Windows would split a temp path with spaces.
-      stream('npm', ['install', '-g', 'tds-factory.tgz'], tmp);
-    } finally {
-      fs.rmSync(tmp, { recursive: true, force: true });
-    }
+    using disposable = fs.mkdtempDisposableSync(path.join(os.tmpdir(), 'tds-factory-'));
+    const tmp = disposable.path;
+    info(`$ git archive ${ref}`);
+    capture('git', ['archive', '--format=tgz', '--prefix=package/', '-o', path.join(tmp, 'tds-factory.tgz'), ref]);
+    // Relative name from inside tmp: a shell on Windows would split a temp path with spaces.
+    stream('npm', ['install', '-g', 'tds-factory.tgz'], tmp);
     info(`${dryRun ? 'would install' : 'installed'} ${ref} at ${commit}`);
   });
 } else skip('Install the latest tds-factory from origin', 'the tool check failed');
@@ -186,6 +220,7 @@ else if (!tools) skip('Register the developer skills', 'the tool check failed');
 else
   step('Register the developer skills', () => {
     if (!submodulesOk) warn('the submodules were not initialised; skills missing from vendor/ will fail');
+    /** @type {string[]} */
     const problems = [];
     for (const skill of DEV_SKILLS) {
       const src = path.join(root, skill);
@@ -196,7 +231,7 @@ else
       }
       for (const target of SKILL_TARGETS) {
         try {
-          const dest = path.join(os.homedir(), target, name);
+          const dest = path.join(userRoot(target), name);
           const stat = fs.lstatSync(dest, { throwIfNoEntry: false });
           // A symlink is another installer's link to the same skill; replace it, not its target.
           const replaceable = force || stat?.isSymbolicLink() || (stat && fs.existsSync(path.join(dest, MARKER)));
@@ -212,7 +247,7 @@ else
           }
           info(`${dryRun ? 'would install' : 'installed'} ${target}/${name}${stat ? ' (replaced)' : ''}`);
         } catch (err) {
-          problems.push(`${target}/${name}: ${first(err.message)}`);
+          problems.push(`${target}/${name}: ${first(messageOf(err))}`);
         }
       }
     }

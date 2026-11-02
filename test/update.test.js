@@ -6,11 +6,15 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
+import http from 'node:http';
 import { update, compareVersions } from '../src/update.js';
+import { defined } from './run-view.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';
+/** @param {string} tag */
 const tgzUrl = (tag) => `https://github.com/TDSchreur/tds-factory/releases/download/${tag}/tds-factory.tgz`;
+/** @param {string} tag */
 const releaseJson = (tag, { checksum = true } = {}) =>
   Response.json({
     tag_name: tag,
@@ -24,16 +28,32 @@ const HASH = createHash('sha256').update(TGZ).digest('hex');
 
 // A fake world: the GitHub endpoints, npm and the tds-factory binary. `routes` maps a URL to a response or a function
 // returning one; `world.calls` records every command that ran, in order.
+/** @typedef {Response | Error | ((options: RequestInit) => Response | Error)} Route */
+/**
+ * @param {object} [config]
+ * @param {string} [config.latest]
+ * @param {Record<string, Route>} [config.routes]
+ * @param {string} [config.installedAfter]
+ * @param {number} [config.npmStatus]
+ * @param {number} [config.installStatus]
+ */
 function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, installStatus = 0 } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'update-test-'));
+  /** @type {{ calls: string[], cwds: (string | undefined)[], logs: string[], warns: string[], fetched: string[], sleeps: number[], version: string | undefined }} */
   const state = { calls: [], cwds: [], logs: [], warns: [], fetched: [], sleeps: [], version: undefined };
+  /** @type {Record<string, Route>} */
   const defaults = {
     [API]: () => releaseJson(latest),
     [tgzUrl(latest)]: () => new Response(TGZ),
     [tgzUrl(latest) + '.sha256']: () => new Response(`${HASH}  tds-factory.tgz\n`),
   };
   const table = { ...defaults, ...routes };
-  const fetchFn = async (url, options = {}) => {
+  /**
+   * @param {string | URL | Request} input
+   * @param {RequestInit} [options]
+   */
+  const fetchFn = async (input, options = {}) => {
+    const url = String(input);
     state.fetched.push(url);
     const route = table[url];
     if (!route) return new Response('not found', { status: 404 });
@@ -41,6 +61,11 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
     if (response instanceof Error) throw response;
     return response;
   };
+  /**
+   * @param {string} cmd
+   * @param {string[]} args
+   * @param {{ inherit?: boolean, cwd?: string }} [options]
+   */
   const run = (cmd, args, options = {}) => {
     state.calls.push([cmd, ...args].join(' '));
     state.cwds.push(options.cwd);
@@ -58,13 +83,16 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
       fetchFn,
       run,
       home: '/home-for-test',
+      /** @param {number} ms */
       sleep: async (ms) => {
         state.sleeps.push(ms);
       },
       tmpdir: tmp,
       env: {},
-      log: (m) => state.logs.push(m),
-      warn: (m) => state.warns.push(m),
+      /** @param {string} m */
+      log: (m) => void state.logs.push(m),
+      /** @param {string} m */
+      warn: (m) => void state.warns.push(m),
     },
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
   };
@@ -80,8 +108,9 @@ test('an older installed version installs the latest Release, then refreshes the
       'npm install -g tds-factory.tgz',
       'a relative name, so a path with spaces never reaches a shell',
     );
-    assert.match(w.state.cwds[0], /tds-factory-/);
-    assert.ok(w.state.cwds[0].startsWith(w.tmp), 'npm runs inside the temp download folder');
+    const npmCwd = defined(w.state.cwds[0], 'npm ran in a folder');
+    assert.match(npmCwd, /tds-factory-/);
+    assert.ok(npmCwd.startsWith(w.tmp), 'npm runs inside the temp download folder');
     assert.equal(w.state.calls[1], 'tds-factory --version');
     assert.equal(w.state.calls[2], 'tds-factory install --force');
     assert.deepEqual(readdirSync(w.tmp), [], 'the temp download is removed');
@@ -163,7 +192,7 @@ test('a transient failure is retried with backoff, then succeeds', async () => {
   }
 });
 
-test('a permanent failure rejects with the error and runs no command', async () => {
+test('a failure that persists rejects with the error and runs no command', async () => {
   const w = world({ routes: { [API]: () => new Error('offline'), [PAGE]: () => new Error('offline') } });
   try {
     await assert.rejects(update({ installed: '0.3.0', ...w.options }), /offline/);
@@ -351,7 +380,8 @@ test('the failing update command exits with 1 and prints the error', () => {
     const stub = join(dir, 'offline.mjs');
     writeFileSync(
       stub,
-      "globalThis.fetch = async () => { throw Object.assign(new Error('offline'), { permanent: true }); };\n",
+      `import { FactoryError } from ${JSON.stringify(pathToFileURL(resolve('src/errors.js')).href)};\n` +
+        "globalThis.fetch = async () => { throw new FactoryError('offline', { code: 'http-permanent' }); };\n",
     );
     const result = spawnSync(
       process.execPath,
@@ -366,11 +396,12 @@ test('the failing update command exits with 1 and prints the error', () => {
 });
 
 test('the GITHUB_TOKEN is sent to the API when set', async () => {
+  /** @type {unknown} */
   let auth;
   const w = world({
     routes: {
       [API]: (o) => {
-        auth = o.headers?.Authorization;
+        auth = new Headers(o.headers).get('Authorization');
         return releaseJson('v0.4.0');
       },
     },
@@ -498,4 +529,108 @@ test('the usage text lists update and the CLI dispatches it', () => {
   const result = spawnSync(process.execPath, [resolve('bin/tds-factory.js')], { encoding: 'utf8' });
   assert.match(result.stdout, /tds-factory update \[--no-force\]/);
   assert.match(readFileSync(resolve('bin/tds-factory.js'), 'utf8'), /command === 'update'/);
+});
+
+// A server that takes the connection and then says nothing, or stops halfway through the body. fetchFn points every URL at it.
+/**
+ * @param {(res: http.ServerResponse) => void} behave
+ * @returns {Promise<{ fetchFn: typeof fetch, hits: () => number, close: () => Promise<void> }>}
+ */
+async function stalledServer(behave) {
+  let hits = 0;
+  const server = http.createServer((_req, res) => {
+    hits++;
+    behave(res);
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', () => done(undefined)));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  return {
+    fetchFn: (_url, options) => fetch(`http://127.0.0.1:${port}/`, options),
+    hits: () => hits,
+    close: () => {
+      server.closeAllConnections();
+      return new Promise((done) => server.close(() => done()));
+    },
+  };
+}
+
+test('a server that never answers fails the update within the timeout, after the retries', async () => {
+  const server = await stalledServer(() => {});
+  const w = world();
+  try {
+    const started = Date.now();
+    await assert.rejects(
+      update({ installed: '0.3.0', ...w.options, fetchFn: server.fetchFn, timeoutMs: 50 }),
+      (err) =>
+        err instanceof Error && 'code' in err && err.code === 'timeout' && /timed out after 0\.05s/.test(err.message),
+    );
+    assert.ok(Date.now() - started < 5000, 'ends in a bounded time');
+    assert.equal(server.hits(), 6, 'three attempts for the API, three for the redirect lookup');
+    assert.deepEqual(w.state.calls, [], 'no command ran');
+    assert.match(w.state.warns.join('\n'), /GitHub API failed \(attempt 1\/3\): GitHub API timed out after 0\.05s/);
+  } finally {
+    w.cleanup();
+    await server.close();
+  }
+});
+
+test('a server that stalls halfway through the body also ends the request', async () => {
+  const server = await stalledServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.write('{"tag_name":');
+  });
+  const w = world();
+  try {
+    await assert.rejects(
+      update({ installed: '0.3.0', ...w.options, fetchFn: server.fetchFn, timeoutMs: 50 }),
+      /timed out after 0\.05s/,
+    );
+  } finally {
+    w.cleanup();
+    await server.close();
+  }
+});
+
+test('a request that times out once is retried and the update goes on', async () => {
+  const w = world();
+  const inner = w.options.fetchFn;
+  let first = true;
+  /** @type {typeof fetch} */
+  const fetchFn = (input, options) => {
+    if (!first) return inner(input, options);
+    first = false;
+    return new Promise((_resolve, reject) =>
+      options?.signal?.addEventListener('abort', () => reject(options.signal?.reason)),
+    );
+  };
+  try {
+    await update({ installed: '0.3.0', ...w.options, fetchFn, timeoutMs: 50 });
+    assert.deepEqual(w.state.sleeps, [2000]);
+    assert.match(w.state.calls[0], /^npm install -g /);
+  } finally {
+    w.cleanup();
+  }
+});
+
+test('the download may take four times as long as the other requests', async () => {
+  const w = world();
+  const inner = w.options.fetchFn;
+  /** @type {Record<string, number>} */
+  const budgets = {};
+  /** @type {typeof fetch} */
+  const fetchFn = async (input, options) => {
+    // The signal is a fresh AbortSignal.timeout; its budget shows in how long it takes to fire.
+    const started = Date.now();
+    options?.signal?.addEventListener('abort', () => (budgets[String(input)] = Date.now() - started));
+    return inner(input, options);
+  };
+  try {
+    await update({ installed: '0.3.0', ...w.options, fetchFn, timeoutMs: 40 });
+    await new Promise((done) => setTimeout(done, 250));
+    assert.ok((budgets[API] ?? 0) < 100, `API budget ${budgets[API]}`);
+    assert.ok((budgets[tgzUrl('v0.4.0')] ?? 0) >= 120, `download budget ${budgets[tgzUrl('v0.4.0')]}`);
+  } finally {
+    w.cleanup();
+  }
 });

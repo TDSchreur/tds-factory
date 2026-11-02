@@ -1,43 +1,55 @@
-import { execFile, spawnSync } from 'node:child_process';
-import { promisify } from 'node:util';
+/** @import { PrStatus, PrView } from './pr-provider.js' */
+/** @import { FollowUp, Check } from './run-record.js' */
+import { exec, failureText, MAX_BUFFER, reasonError, remoteText, spawnText } from './pr-exec.js';
 
 // The GitHub adapter of the PR provider seam (see ADR 0020): every call of the `gh` command lives here.
-const exec = promisify(execFile);
 const PR = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/;
 
 export const name = 'github';
 export const title = 'GitHub';
 // Whether a PR link is a GitHub one; only such a link is ever passed to gh.
+/** @param {unknown} url */
 export const matches = (url) => typeof url === 'string' && PR.test(url);
 // The repository (owner and name) a git remote URL points at, or undefined when it is not GitHub.
+/** @param {unknown} remote */
 export function repoOfRemote(remote) {
   const match =
     /^(?:https?:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?$/i.exec(
-      String(remote).trim(),
+      remoteText(remote),
     );
   return match ? { owner: match[1], name: match[2] } : undefined;
 }
 
 // GitHub content is data: pass only validated identifiers as arguments, never shell text.
+/**
+ * @param {string[]} args
+ * @param {string} [cwd]
+ * @returns {any} The parsed JSON of gh; its shape is checked by each caller.
+ */
 function gh(args, cwd) {
-  const out = spawnSync('gh', args, {
+  const out = spawnText('gh', args, {
     cwd,
-    encoding: 'utf8',
     timeout: 20000,
-    maxBuffer: 16 * 1024 * 1024,
+    maxBuffer: MAX_BUFFER,
     env: { ...process.env, GH_PROMPT_DISABLED: '1' },
   });
-  if (out.status !== 0)
-    throw new Error(`cannot read GitHub PR: ${(out.stderr || out.error?.message || 'gh failed').trim()}`);
+  if (out.status !== 0) throw new Error(`cannot read GitHub PR: ${failureText(out, 'gh failed')}`);
   try {
     return JSON.parse(out.stdout);
-  } catch {
-    throw new Error('malformed GitHub response');
+  } catch (err) {
+    throw reasonError('malformed GitHub response', 'error', err);
   }
 }
 const checksQuery = `query FollowUpChecks($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100,after:$cursor) { nodes { __typename ... on CheckRun { name status conclusion detailsUrl } ... on StatusContext { context state targetUrl description } } pageInfo { hasNextPage endCursor } } } } } } } } }`;
 const threadsQuery = `query FollowUpThreads($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid reviewThreads(first:100,after:$cursor) { nodes { id isResolved path comments(first:100) { nodes { body url } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } } } }`;
 const commentsQuery = `query FollowUpComments($thread:ID!, $cursor:String) { node(id:$thread) { ... on PullRequestReviewThread { id comments(first:100,after:$cursor) { nodes { body url } pageInfo { hasNextPage endCursor } } } } }`;
+/**
+ * @param {string} query
+ * @param {Record<string, string>} fields
+ * @param {string | undefined} cwd
+ * @param {string} [cursor]
+ * @returns {any} The data of the GraphQL response; its shape is checked by each caller.
+ */
 function graph(query, fields, cwd, cursor) {
   const args = ['api', 'graphql', '-f', `query=${query}`];
   for (const [key, value] of Object.entries(fields)) args.push(key === 'number' ? '-F' : '-f', `${key}=${value}`);
@@ -47,9 +59,17 @@ function graph(query, fields, cwd, cursor) {
     throw new Error('incomplete GitHub response');
   return response.data;
 }
+/**
+ * The nodes of every page of a GraphQL connection. Its data is parsed JSON, checked field by field by the callers.
+ * @param {(cursor?: string) => any} fetch
+ * @param {(data: any) => any} select
+ * @returns {any[]}
+ */
 function pages(fetch, select) {
+  /** @type {any[]} Parsed JSON, checked by the callers. */
   const all = [],
     seen = new Set();
+  /** @type {string | undefined} */
   let cursor;
   while (true) {
     const connection = select(fetch(cursor));
@@ -69,11 +89,16 @@ function pages(fetch, select) {
     cursor = next;
   }
 }
+/** @param {any} comment Parsed JSON from gh, checked field by field. */
 function validComment(comment) {
   if (!comment || typeof comment.body !== 'string' || typeof comment.url !== 'string' || !comment.url)
     throw new Error('incomplete GitHub review comment');
   return { body: comment.body, url: comment.url };
 }
+/**
+ * @param {any} check parsed JSON from the CLI, checked field by field
+ * @returns {Check}
+ */
 function checkState(check) {
   if (!check || !['CheckRun', 'StatusContext'].includes(check.__typename)) throw new Error('unknown GitHub check');
   if (check.__typename === 'StatusContext') {
@@ -111,6 +136,11 @@ function checkState(check) {
   };
 }
 // State and head of a PR for Follow-up: strict, and throws when GitHub cannot say.
+/**
+ * @param {string} url
+ * @param {string} [cwd]
+ * @returns {PrView & { headRefOid: string }}
+ */
 export function strictView(url, cwd) {
   const value = gh(['pr', 'view', url, '--json', 'state,headRefOid'], cwd);
   if (
@@ -123,11 +153,18 @@ export function strictView(url, cwd) {
   return value;
 }
 // What Follow-up observes at the PR head: current checks and unresolved review threads.
+/**
+ * @param {string} url
+ * @param {string} head
+ * @param {string} [cwd]
+ * @returns {FollowUp}
+ */
 export function observe(url, head, cwd) {
   const match = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/.exec(url);
   if (!match || !Number.isSafeInteger(Number(match[3])) || Number(match[3]) < 1)
     throw new Error('Follow-up needs a GitHub PR URL');
   const fields = { owner: match[1], repo: match[2], number: match[3] };
+  /** @param {any} data Parsed JSON from gh, checked field by field. */
   const pr = (data) => {
     const value = data.repository?.pullRequest;
     if (!value || value.headRefOid !== head) throw new Error('GitHub PR head changed during Follow-up');
@@ -152,6 +189,7 @@ export function observe(url, head, cwd) {
     (cursor) => graph(threadsQuery, fields, cwd, cursor),
     (data) => pr(data).reviewThreads,
   );
+  /** @type {FollowUp['threads']} */
   const threads = [];
   for (const thread of rawThreads) {
     if (
@@ -189,28 +227,42 @@ export function observe(url, head, cwd) {
 }
 
 // State and head of a PR, read without blocking the caller more than `timeout`; throws when gh cannot say.
+/**
+ * @param {string} url
+ * @param {{ cwd?: string, timeout?: number }} [options]
+ * @returns {PrView}
+ */
 export function view(url, { cwd, timeout = 10000 } = {}) {
-  const out = spawnSync('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { cwd, encoding: 'utf8', timeout });
-  if (out.status !== 0) throw new Error((out.stderr || out.error?.message || 'gh failed').trim());
+  const out = spawnText('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { cwd, timeout });
+  if (out.status !== 0) throw new Error(failureText(out, 'gh failed'));
   return JSON.parse(out.stdout);
 }
 // The same, for a server that must not block: resolves to the parsed { state, headRefOid }.
+/**
+ * @param {string} url
+ * @returns {Promise<PrView>}
+ */
 export const viewAsync = async (url) =>
   JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { timeout: 10_000 })).stdout);
 // Only the state: OPEN, MERGED or CLOSED.
+/** @param {string} url @returns {Promise<string>} */
 export const stateAsync = async (url) =>
   JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
 // Squash-merges the PR at exactly this head commit.
+/** @param {string} url @param {string} head */
 export const merge = (url, head) =>
   exec('gh', ['pr', 'merge', url, '--squash', '--match-head-commit', head], { timeout: 30_000 });
 // A one-line summary of the PR's checks.
+/** @param {string} url */
 export async function checksSummary(url) {
+  /** @type {string} */
   let stdout;
   try {
     ({ stdout } = await exec('gh', ['pr', 'checks', url, '--json', 'name,bucket,state'], { timeout: 10_000 }));
   } catch (err) {
-    if (!err.stdout) throw err;
-    stdout = err.stdout;
+    const out = err instanceof Error && 'stdout' in err ? err.stdout : undefined;
+    if (typeof out !== 'string' || !out) throw err;
+    stdout = out;
   }
   const checks = JSON.parse(stdout);
   if (
@@ -230,8 +282,14 @@ export async function checksSummary(url) {
       : 'GitHub checks: none reported';
 }
 // The PRs whose head branch is `branch` in `repo` (owner/name), validated; throws when gh cannot say.
+/**
+ * @param {string} repo
+ * @param {string} branch
+ * @param {string} [cwd]
+ * @returns {{ url: string, headRefName: string, headRepository: { name: string }, headRepositoryOwner: { login: string } }[]}
+ */
 export function listByHead(repo, branch, cwd) {
-  const out = spawnSync(
+  const out = spawnText(
     'gh',
     [
       'pr',
@@ -245,7 +303,7 @@ export function listByHead(repo, branch, cwd) {
       '--json',
       'url,headRefName,headRepository,headRepositoryOwner',
     ],
-    { cwd, encoding: 'utf8', timeout: 10000 },
+    { cwd, timeout: 10000 },
   );
   if (out.status !== 0) throw new Error(out.error?.message || out.stderr.trim() || 'GitHub lookup failed');
   const all = JSON.parse(out.stdout);
@@ -267,9 +325,11 @@ export function listByHead(repo, branch, cwd) {
 // The status of a PR for the Dashboard: checks, merge conflicts, review state and draft, from one `gh pr view` call.
 const FAILED = ['ACTION_REQUIRED', 'CANCELLED', 'FAILURE', 'TIMED_OUT', 'STARTUP_FAILURE', 'STALE'];
 const bad = () => new Error('incomplete GitHub PR status');
+/** @param {unknown} v */
 const label = (v) => String(v).slice(0, 80);
 
 // One entry of statusCheckRollup: { name, failing, pending }.
+/** @param {any} c Parsed JSON from gh, checked field by field. */
 function rollupEntry(c) {
   if (!c || typeof c !== 'object') throw bad();
   if (c.__typename === 'StatusContext') {
@@ -297,13 +357,20 @@ function rollupEntry(c) {
 }
 
 // Parses the JSON of `gh pr view --json state,mergeable,reviewDecision,statusCheckRollup,isDraft`; throws when it has the wrong shape.
+/**
+ * @param {any} value parsed JSON from the CLI, checked field by field
+ * @returns {PrStatus}
+ */
 export function parseStatus(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad();
-  const state = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' }[value.state];
+  const state = /** @type {Record<string, PrStatus['state']>} */ ({ OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' })[
+    value.state
+  ];
   const rollup = value.statusCheckRollup ?? [];
   if (!state || !Array.isArray(rollup)) throw bad();
   const entries = rollup.map(rollupEntry);
   const failing = entries.filter((e) => e.failing).map((e) => e.name);
+  /** @type {PrStatus['checks']['result']} */
   const result = failing.length
     ? 'failing'
     : entries.some((e) => e.pending)
@@ -315,14 +382,19 @@ export function parseStatus(value) {
     state,
     draft: value.isDraft === true,
     checks: { result, failing: failing.slice(0, 5) },
-    merge: { MERGEABLE: 'mergeable', CONFLICTING: 'conflicting' }[value.mergeable] ?? 'unknown',
+    merge:
+      /** @type {Record<string, string>} */ ({ MERGEABLE: 'mergeable', CONFLICTING: 'conflicting' })[value.mergeable] ??
+      'unknown',
     review:
-      { APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', REVIEW_REQUIRED: 'required' }[
-        value.reviewDecision
-      ] ?? 'none',
+      /** @type {Record<string, string>} */ ({
+        APPROVED: 'approved',
+        CHANGES_REQUESTED: 'changes-requested',
+        REVIEW_REQUIRED: 'required',
+      })[value.reviewDecision] ?? 'none',
   };
 }
 
+/** @param {any} err The error of a failed command: an Error with its stderr and code, as execFile gives it. */
 const failure = (err) =>
   /rate limit/i.test(`${err.stderr ?? ''}`)
     ? 'rate-limited'
@@ -332,22 +404,28 @@ const failure = (err) =>
         ? 'not-signed-in'
         : 'error';
 
-// The same, read from GitHub without blocking the caller. `run` is the injection point for tests. A failure carries a `reason`:
+// The same, read from GitHub without blocking the caller. `run` is the injection point for tests. A failure is a FactoryError whose `code` is one of:
 // gh-missing, not-signed-in, rate-limited or error.
+/**
+ * @param {string} url
+ * @param {{ run?: (args: string[]) => Promise<{ stdout: string }> }} [options]
+ * @returns {Promise<PrStatus>}
+ */
 export async function statusAsync(
   url,
   { run = (args) => exec('gh', args, { timeout: 10_000, env: { ...process.env, GH_PROMPT_DISABLED: '1' } }) } = {},
 ) {
-  if (!matches(url)) throw Object.assign(new Error('not a GitHub pull request'), { reason: 'error' });
+  if (!matches(url)) throw reasonError('not a GitHub pull request', 'error');
+  /** @type {string} */
   let stdout;
   try {
     ({ stdout } = await run(['pr', 'view', url, '--json', 'state,mergeable,reviewDecision,statusCheckRollup,isDraft']));
   } catch (err) {
-    throw Object.assign(new Error('cannot read GitHub PR status'), { reason: failure(err) });
+    throw reasonError('cannot read GitHub PR status', failure(err), err);
   }
   try {
     return parseStatus(JSON.parse(stdout));
-  } catch {
-    throw Object.assign(new Error('malformed GitHub PR status'), { reason: 'error' });
+  } catch (err) {
+    throw reasonError('malformed GitHub PR status', 'error', err);
   }
 }

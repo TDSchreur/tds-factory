@@ -6,6 +6,10 @@ import { spawnSync } from 'node:child_process';
 import { repo } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const rules = (cwd, ...args) => spawnSync(process.execPath, [cli, 'rules', ...args], { cwd, encoding: 'utf8' });
 
 function project() {
@@ -18,6 +22,10 @@ function project() {
   writeFileSync(join(cwd, '.github', 'instructions', 'general.instructions.md'), '# General rules\n');
   return cwd;
 }
+/**
+ * @param {string} cwd
+ * @param {string} name
+ */
 const read = (cwd, name) => readFileSync(join(cwd, '.claude', 'rules', name), 'utf8');
 
 test('rules turns applyTo into paths and keeps the body', () => {

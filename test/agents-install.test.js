@@ -7,6 +7,11 @@ import { join } from 'node:path';
 import { install } from '../src/install.js';
 import { AGENTS_DIR } from '../src/paths.js';
 
+/**
+ * @param {string} project
+ * @param {string} agent
+ * @param {boolean} [force]
+ */
 function installIn(project, agent, force = false) {
   const log = mock.method(console, 'log', () => {});
   const warn = mock.method(console, 'warn', () => {});
@@ -156,4 +161,15 @@ test('the Skill and every Stage agent of every target state the follow-through r
         `${dir}/${file}`,
       );
   }
+});
+
+test('install stops on an install record it cannot parse, and names the file', () => {
+  const project = mkdtempSync(join(tmpdir(), 'tds-agents-'));
+  mkdirSync(join(project, '.claude/agents'), { recursive: true });
+  const record = join(project, '.claude/agents/.tds-factory-agents.json');
+  writeFileSync(record, '{"half');
+  assert.throws(
+    () => installIn(project, 'claude'),
+    (err) => err instanceof Error && err.message.includes(record),
+  );
 });

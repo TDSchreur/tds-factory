@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
 
+/** @param {number} n */
 const issue = (n) => `https://github.com/o/r/issues/${n}`;
 const checking = run({
   id: 'c',
@@ -16,6 +17,7 @@ const checking = run({
   infrastructure: 'skipped',
   loops: 2,
 });
+/** @param {number} i */
 const finished = (i) =>
   run({
     id: 'd' + i,
@@ -25,6 +27,7 @@ const finished = (i) =>
     pr: 'https://github.com/o/r/pull/' + i,
     prState: 'open',
   });
+/** @param {string} selector */
 const heights = (selector) =>
   `return [...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => Math.round(e.getBoundingClientRect().height))`;
 
@@ -32,6 +35,7 @@ test('on a phone the ticket links, Show details and Delete are at least 44 px hi
   const page = await openPage(t, { runs: [checking, finished(1)] }, { width: 375 });
   if (!page) return;
   try {
+    /** @type {number[]} */
     let sizes = await page.execute(heights('[data-stage=check] .tickets a, [data-stage=check] .actions button'));
     assert.ok(sizes.length && sizes.every((h) => h >= 44), `Check touch heights: ${sizes}`);
     await page.execute(
@@ -53,6 +57,7 @@ test('on a desktop the ticket links and Show details keep their compact size', a
   if (!page) return;
   try {
     for (const selector of ['.tickets a', '.toggle']) {
+      /** @type {number[]} */
       const sizes = await page.execute(heights(selector));
       assert.ok(sizes.length && sizes.every((h) => h < 44), `${selector}: ${sizes}`);
     }
@@ -65,6 +70,7 @@ test('every Chip stays on one line, even in a narrow column', async (t) => {
   const page = await openPage(t, { runs: [checking] });
   if (!page) return;
   try {
+    /** @type {number[]} */
     const sizes = await page.execute(heights('.chip'));
     assert.equal(sizes.length, 6);
     assert.ok(

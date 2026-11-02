@@ -1,6 +1,8 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
+import { isMissing } from './narrow.js';
+import { claudeHome } from './flow.js';
 import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Claude Code session transcripts under ~/.claude/projects. Only the model, the token
@@ -19,6 +21,7 @@ function parse(text, subagent, seen) {
     try {
       data = JSON.parse(line);
     } catch {
+      // A damaged line is skipped; the others still count.
       continue;
     }
     const message = data?.message;
@@ -42,14 +45,15 @@ function parse(text, subagent, seen) {
 }
 
 /**
- * @param {{ home: string, runId: string, sessions: string[], from: number, deadline: number }} input
+ * @param {{ home: string, env?: NodeJS.ProcessEnv, runId: string, sessions: string[], from: number, deadline: number }} input
  */
-export function readClaudeUsage({ home, runId, sessions, from, deadline }) {
-  const root = path.join(home, '.claude', 'projects');
+export function readClaudeUsage({ home, env = process.env, runId, sessions, from, deadline }) {
+  const root = path.join(claudeHome(home, env), 'projects');
   let slugs;
   try {
     slugs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
-  } catch {
+  } catch (err) {
+    if (!isMissing(err)) throw err;
     return { problem: 'no Claude session logs found' };
   }
   /** @type {Map<string, any>} */
@@ -60,6 +64,7 @@ export function readClaudeUsage({ home, runId, sessions, from, deadline }) {
     try {
       files = fs.readdirSync(path.join(root, slug.name), { withFileTypes: true });
     } catch {
+      // A project folder that cannot be read is skipped; the others still count.
       continue;
     }
     for (const file of files) {

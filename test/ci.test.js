@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 // With no PATH there is no browser. Reports what openPage does about it.
+/** @param {NodeJS.ProcessEnv} env */
 const withoutBrowser = (env) =>
   spawnSync(
     process.execPath,
@@ -78,6 +79,6 @@ test('CI and release test only the active LTS lines, matching engines', () => {
   const release = readFileSync('.github/workflows/release.yml', 'utf8');
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
   const engines = JSON.parse(readFileSync('package.json', 'utf8')).engines.node;
-  assert.equal(engines, '>=24');
-  for (const file of [workflow, release]) assert.match(file, /node: \['24', 'lts\/\*'\]/);
+  assert.equal(engines, '>=24.4');
+  for (const file of [workflow, release]) assert.match(file, /node: \['24\.4', 'lts\/\*'\]/);
 });

@@ -21,8 +21,15 @@ import { openRunStore } from '../src/run-store.js';
 import { startDashboard } from '../src/dashboard.js';
 import { git, repo, linked } from './git-repo.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
+/** @type {Partial<Run>} */
 const start = { title: 'Example', agent: 'claude', commands: 'npm test', conventions: [] };
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const runCli = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 
 test('start and update from a linked worktree use the main checkout Run store', () => {
@@ -32,7 +39,10 @@ test('start and update from a linked worktree use the main checkout Run store', 
   assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
   assert.ok(!existsSync(join(wt, '.factory')));
   openRunStore(wt).update(id, { activity: 'from the worktree' });
-  assert.equal(JSON.parse(readFileSync(join(main, '.factory', 'runs', id, 'run.json'))).activity, 'from the worktree');
+  assert.equal(
+    JSON.parse(readFileSync(join(main, '.factory', 'runs', id, 'run.json'), 'utf8')).activity,
+    'from the worktree',
+  );
 });
 
 test('the CLI from a linked worktree writes to the main checkout Run store', () => {
@@ -48,7 +58,7 @@ test('a Dashboard in the main checkout lists a Run created from a worktree', asy
   const id = openRunStore(linked(main)).start(start);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const runs = await (await fetch(`${dashboard.url}/api/runs`)).json();
+    const runs = await listed(dashboard);
     assert.deepEqual(
       runs.map((r) => r.id),
       [id],
@@ -64,7 +74,13 @@ test('a plain checkout keeps its own Run store', () => {
   assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
 });
 
-const record = (main, id) => JSON.parse(readFileSync(join(main, '.factory', 'runs', id, 'run.json')));
+/**
+ * @param {string} main
+ * @param {string} id
+ * @returns {Run}
+ */
+const record = (main, id) => JSON.parse(readFileSync(join(main, '.factory', 'runs', id, 'run.json'), 'utf8'));
+/** @param {string} main */
 const branches = (main) => git(main, 'branch', '--format=%(refname:short)').split('\n');
 
 test('start creates a Run worktree and a branch named after the Run id', () => {
@@ -147,7 +163,22 @@ test('the CLI start in a non-git directory exits non-zero with the message', () 
   assert.match(result.stderr, /git repository/);
 });
 
+/**
+ * The Run entries a Dashboard lists.
+ * @param {{ url: string }} dashboard
+ * @returns {Promise<{ id: string }[]>}
+ */
+async function listed(dashboard) {
+  const body = await (await fetch(`${dashboard.url}/api/runs`)).json();
+  assert.ok(Array.isArray(body), '/api/runs answers with a list');
+  return body;
+}
+
 // Fixture: only run complete ends a Run, and it needs a PR, so write the finished record directly.
+/**
+ * @param {ReturnType<typeof openRunStore>} store
+ * @param {string} id
+ */
 const finish = (store, id) => {
   const file = join(store.projectDir, '.factory', 'runs', id, 'run.json');
   writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), status: 'done' }));
@@ -218,12 +249,14 @@ test('remove does not let ignored files block the deletion', () => {
   assert.equal(store.remove(id), 'deleted');
 });
 
-for (const [name, dirty, file] of [
+/** @type {[string, (worktree: string) => void, string][]} */
+const dirtyings = [
   ['an uncommitted tracked change', (w) => appendFileSync(join(w, '.gitmodules'), '\n'), '.gitmodules'],
   ['an untracked file', (w) => writeFileSync(join(w, 'new.txt'), 'x'), 'new.txt'],
   ['a dirty submodule', (w) => writeFileSync(join(w, 'vendor', 'new.txt'), 'x'), 'vendor/new.txt'],
-  ['a submodule at another commit', (w) => git(join(w, 'vendor'), 'checkout', '-q', 'HEAD~1'), 'vendor'],
-]) {
+  ['a submodule at another commit', (w) => void git(join(w, 'vendor'), 'checkout', '-q', 'HEAD~1'), 'vendor'],
+];
+for (const [name, dirty, file] of dirtyings) {
   test(`remove refuses a worktree with a submodule and ${name}`, () => {
     const { main, store, id, worktree } = withSubmodule();
     git(main, 'config', 'status.showUntrackedFiles', 'no');
@@ -269,6 +302,7 @@ test('Dashboard requires an explicit discard option before deleting dirty work',
   const { worktree } = record(main, id);
   writeFileSync(join(worktree, 'unsaved.txt'), 'work');
   const dash = await startDashboard({ projectDir: main, port: 0 });
+  /** @param {string} query */
   const request = async (query, origin = dash.url) =>
     fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
   try {
@@ -302,7 +336,7 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
     assert.equal(res.status, 409);
     assert.match(await res.text(), /uncommitted changes/);
     assert.deepEqual(
-      (await (await fetch(`${dashboard.url}/api/runs`)).json()).map((r) => r.id),
+      (await listed(dashboard)).map((r) => r.id),
       [id],
     );
   } finally {
@@ -372,7 +406,7 @@ test('start rolls back the new worktree and branch if the record cannot be persi
   const main = repo();
   const rename = fs.renameSync;
   fs.renameSync = (...args) => {
-    if (/[\\/]run\.json$/.test(args[1])) throw new Error('simulated record write failure');
+    if (/[\\/]run\.json$/.test(String(args[1]))) throw new Error('simulated record write failure');
     return rename(...args);
   };
   try {
@@ -381,7 +415,7 @@ test('start rolls back the new worktree and branch if the record cannot be persi
     fs.renameSync = rename;
   }
   assert.deepEqual(branches(main), ['main']);
-  assert.equal(git(main, 'worktree', 'list', '--porcelain').match(/^worktree /gm).length, 1);
+  assert.equal(git(main, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length, 1);
   assert.deepEqual(readdirSync(join(main, '.factory', 'runs')), []);
 });
 
@@ -389,8 +423,8 @@ test('failed start keeps a dirty worktree and names the original and rollback fa
   const main = repo();
   const rename = fs.renameSync;
   fs.renameSync = (...args) => {
-    if (/[\\/]run\.json$/.test(args[1])) {
-      const id = args[1].split(/[\\/]/).at(-2);
+    if (/[\\/]run\.json$/.test(String(args[1]))) {
+      const id = String(args[1]).split(/[\\/]/).at(-2) ?? '';
       writeFileSync(join(main, '.factory', 'worktrees', id, 'unfinished'), 'keep me');
       throw new Error('simulated record write failure');
     }
@@ -405,7 +439,7 @@ test('failed start keeps a dirty worktree and names the original and rollback fa
     fs.renameSync = rename;
   }
   const branch = branches(main).find((b) => b !== 'main');
-  assert.equal(readFileSync(join(main, '.factory', 'worktrees', branch, 'unfinished'), 'utf8'), 'keep me');
+  assert.equal(readFileSync(join(main, '.factory', 'worktrees', branch ?? '', 'unfinished'), 'utf8'), 'keep me');
 });
 
 test('failed start preserves a branch advanced while rollback is deleting it', () => {
@@ -414,10 +448,17 @@ test('failed start preserves a branch advanced while rollback is deleting it', (
     spawn = childProcess.spawnSync;
   let advanced, branch;
   fs.renameSync = (...args) => {
-    if (/[\\/]run\.json$/.test(args[1])) throw new Error('record write failed');
+    if (/[\\/]run\.json$/.test(String(args[1]))) throw new Error('record write failed');
     return rename(...args);
   };
-  childProcess.spawnSync = (command, args, options) => {
+  // A test double for the overloaded spawnSync: any, because one function cannot satisfy every overload.
+  /**
+   * @param {string} command
+   * @param {string[]} args
+   * @param {import('node:child_process').SpawnSyncOptions} options
+   * @type {any}
+   */
+  const patched = (command, args, options) => {
     if (
       command === 'git' &&
       ((args[0] === 'branch' && args[1] === '-D') ||
@@ -430,6 +471,7 @@ test('failed start preserves a branch advanced while rollback is deleting it', (
     }
     return spawn(command, args, options);
   };
+  childProcess.spawnSync = patched;
   syncBuiltinESMExports();
   try {
     assert.throws(() => openRunStore(main).start(start), /record write failed.*branch .*remains/);

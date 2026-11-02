@@ -7,7 +7,13 @@ import { providerFor } from '../src/pr-provider.js';
 const URL_ = 'https://github.com/o/r/pull/1';
 // merged-real.json is real `gh pr view --json state,mergeable,reviewDecision,statusCheckRollup,isDraft` output, recorded from merged PR #344 (check URLs shortened).
 // Every other state below is an edited copy of it: no real conflicting, failing or draft PR was recorded.
+/**
+ * A `gh pr view` answer: any, because each test edits it at the path it needs.
+ * @typedef {any} GhPr
+ */
+/** @returns {GhPr} */
 const real = () => JSON.parse(readFileSync(new URL('./fixtures/pr-status/merged-real.json', import.meta.url), 'utf8'));
+/** @param {(v: GhPr) => void} [edit] */
 const open = (edit = () => {}) => {
   const v = real();
   v.state = 'OPEN';
@@ -179,6 +185,7 @@ test('a response of the wrong shape is refused', () => {
 });
 
 test('statusAsync asks gh for exactly the status fields and parses the answer', async () => {
+  /** @type {string[][]} */
   const calls = [];
   const status = await statusAsync(URL_, {
     run: async (args) => {
@@ -191,6 +198,7 @@ test('statusAsync asks gh for exactly the status fields and parses the answer', 
 });
 
 test('statusAsync names why it failed', async () => {
+  /** @param {unknown} err */
   const fail = (err) =>
     statusAsync(URL_, {
       run: async () => {
@@ -198,7 +206,7 @@ test('statusAsync names why it failed', async () => {
       },
     }).then(
       () => assert.fail('expected failure'),
-      (e) => e.reason,
+      (e) => e.code,
     );
   assert.equal(await fail(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })), 'gh-missing');
   assert.equal(
@@ -213,7 +221,7 @@ test('statusAsync names why it failed', async () => {
   assert.equal(
     await statusAsync(URL_, { run: async () => ({ stdout: 'not json' }) }).then(
       () => 'ok',
-      (e) => e.reason,
+      (e) => e.code,
     ),
     'error',
   );
@@ -224,5 +232,5 @@ test('statusAsync refuses a link that is not a GitHub pull request, and the seam
     statusAsync('https://example.com/pr/1', { run: async () => assert.fail('no call') }),
     /not a GitHub pull request/,
   );
-  assert.equal(typeof providerFor(URL_).statusAsync, 'function');
+  assert.equal(typeof providerFor(URL_)?.statusAsync, 'function');
 });

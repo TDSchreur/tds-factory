@@ -1,13 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { statuses } from './run-record.js';
+import { git as runGit, gitStep, callStep, runSync } from './git.js';
+/** @import { Step } from './git.js' */
+/** @typedef {(url: string) => { state: string, head?: string } | undefined} PrLookup */
+import { codeOf, messageOf, oneOf } from './narrow.js';
+import { statuses, validId } from './run-record.js';
 import { providerFor } from './pr-provider.js';
-import { runRoot, withRunLock, readRun, runIds, mainCheckout } from './run-folder.js';
-import { ownWorktrees, worktreeChanges, submoduleLocalWork } from './worktrees.js';
+import { runRoot, withRunLockFlow, readRun, runIds, mainCheckout } from './run-folder.js';
+import { ownWorktrees, ownWorktreesFlow, worktreeChangesFlow, submoduleLocalWorkFlow } from './worktrees.js';
 
 // Deletes a readable Run in the project's own, unlinked storage.
-export function removeRun(projectDir, id, why = () => {}, { discardChanges = false, doneOnly = false } = {}) {
+/**
+ * @param {string} projectDir
+ * @param {string} id
+ * @param {(reason: string) => void} [why]
+ * @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options]
+ * @returns {Generator<Step, string, any>}
+ */
+export function* removeRunFlow(projectDir, id, why = () => {}, { discardChanges = false, doneOnly = false } = {}) {
   if (!id || id === '.' || id === '..' || /[/\\\0]/.test(id)) return 'invalid';
   const project = fs.realpathSync(projectDir);
   const factory = path.join(project, '.factory');
@@ -15,25 +25,26 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
   const dir = path.join(root, id);
   try {
     if (fs.realpathSync(factory) !== factory || fs.realpathSync(root) !== root) return 'not-allowed';
-    return withRunLock(root, id, () => {
+    return yield* withRunLockFlow(root, id, function* () {
       if (fs.realpathSync(dir) !== dir || fs.lstatSync(path.join(dir, 'run.json')).isSymbolicLink())
         return 'not-allowed';
       const record = JSON.parse(fs.readFileSync(path.join(dir, 'run.json'), 'utf8'));
       if (
         !record ||
-        !statuses.includes(record.status) ||
-        (doneOnly === true && !['done', 'abandoned'].includes(record.status))
+        !oneOf(statuses, record.status) ||
+        (doneOnly === true && !oneOf(['done', 'abandoned'], record.status))
       )
         return 'not-allowed';
       // Only a worktree this store created is removed; an adopted one belongs to the user.
       const own = path.join(factory, 'worktrees', id);
       if (record.worktree === own) {
         const treeRoot = path.dirname(own);
+        /** @param {string} p */
         const lstat = (p) => {
           try {
             return fs.lstatSync(p);
           } catch (err) {
-            if (err.code === 'ENOENT') return null;
+            if (codeOf(err) === 'ENOENT') return null;
             throw err;
           }
         };
@@ -45,14 +56,15 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
         }
         if (ownStat) {
           // Pin untracked file visibility and inspect submodules before Git's required force removal.
-          const changes = worktreeChanges(own);
+          const changes = yield* worktreeChangesFlow(own);
           if (changes && discardChanges !== true) {
             why('the Run worktree has uncommitted changes');
             return 'dirty-worktree';
           }
+          /** @type {{ status: number | null, stderr: string, error?: Error }} */
           const removal =
             changes !== undefined
-              ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' })
+              ? yield* gitStep(project, ['worktree', 'remove', '--force', own])
               : { status: 1, stderr: 'cannot read the Run worktree status' };
           if (removal.status !== 0) {
             why('git could not remove the Run worktree: ' + (removal.stderr || removal.error?.message || '').trim());
@@ -64,13 +76,21 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
       return 'deleted';
     });
   } catch (err) {
-    if (err.code === 'ENOENT') return 'not-found';
-    if (err.code === 'EEXIST' || err instanceof SyntaxError) return 'not-allowed';
+    if (codeOf(err) === 'ENOENT') return 'not-found';
+    if (codeOf(err) === 'EEXIST' || err instanceof SyntaxError) return 'not-allowed';
     throw err;
   }
 }
+/**
+ * @param {string} projectDir
+ * @param {string} id
+ * @param {(reason: string) => void} [why]
+ * @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options]
+ */
+export const removeRun = (projectDir, id, why, options) => runSync(removeRunFlow(projectDir, id, why, options));
 
 // State and head commit of a PR as its host reports them; undefined when the host cannot say or no provider handles the link.
+/** @type {PrLookup} */
 function ghPrInfo(url) {
   const provider = providerFor(url);
   if (!provider) return undefined;
@@ -78,28 +98,41 @@ function ghPrInfo(url) {
     const { state, headRefOid } = provider.view(url);
     return typeof state === 'string' ? { state, head: headRefOid } : undefined;
   } catch {
+    // A PR that cannot be looked up is unknown; the caller then keeps the Run's worktree.
     return undefined;
   }
 }
 
 // Removes the worktree and branch of a Run whose PR is merged, and keeps its record. Anything unclear leaves everything in place.
-export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
+/**
+ * @param {string} projectDir
+ * @param {string} callerDir
+ * @param {string | undefined} rawId
+ * @param {PrLookup} [prState]
+ * @returns {Generator<Step, { id: string, outcome: string, reason?: string }, any>}
+ */
+export function* cleanRunFlow(projectDir, callerDir, rawId, prState = ghPrInfo) {
+  if (!validId(rawId)) throw new Error('invalid Run id');
+  const id = rawId;
+  /** @param {string} reason */
   const kept = (reason) => ({ id, outcome: 'kept', reason });
   const { root, record } = readRun(projectDir, id);
-  const own = ownWorktrees(projectDir).get(id);
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
-  const tip = git('rev-parse', '--verify', '-q', `refs/heads/${id}`);
+  const own = (yield* ownWorktreesFlow(projectDir)).get(id);
+  /** @param {...string} args */
+  const git = (...args) => gitStep(projectDir, args);
+  const tip = yield* git('rev-parse', '--verify', '-q', `refs/heads/${id}`);
   const head = tip.status === 0 ? tip.stdout.trim() : undefined;
   if (!own && !head) return { id, outcome: 'already clean' };
   if (!record.pr) return kept('no PR recorded');
   if (record.status !== 'done') return kept('the Run is not done: finish it with run complete first');
+  /** @param {string} dir */
   const inside = (dir) => {
     const rel = path.relative(dir, fs.realpathSync(callerDir));
     return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
   };
   if (own && !own.missing && inside(own.dir))
     return kept('run clean from the main checkout, not from inside the Run worktree');
-  const pr = prState(record.pr);
+  const pr = yield* callStep(() => prState(/** @type {string} */ (record.pr)));
   if (!pr) return kept('cannot read the PR state from its host');
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
   if (head && head !== pr.head) return kept('the branch has commits that are not in the merged PR');
@@ -107,11 +140,11 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
   if (record.worktree !== path.join(projectDir, '.factory', 'worktrees', id))
     return kept('the Run record does not name the worktree this store created');
   if (own?.missing) return kept('the Run worktree is missing: inspect it with run repair');
-  return withRunLock(root, id, () => {
+  return yield* withRunLockFlow(root, id, function* () {
     // The lookup above can take seconds; a commit made meanwhile must keep the branch.
-    const now = git('rev-parse', '--verify', '-q', `refs/heads/${id}`).stdout.trim();
+    const now = (yield* git('rev-parse', '--verify', '-q', `refs/heads/${id}`)).stdout.trim();
     if (head && now !== head) return kept('the branch has commits that are not in the merged PR');
-    const listed = git('worktree', 'list', '--porcelain');
+    const listed = yield* git('worktree', 'list', '--porcelain');
     if (listed.status !== 0) return kept('cannot list the git worktrees');
     const elsewhere = listed.stdout
       .split('\n\n')
@@ -122,49 +155,72 @@ export function cleanRun(projectDir, callerDir, id, prState = ghPrInfo) {
       );
     if (elsewhere) return kept('the branch is checked out in another worktree');
     if (own) {
-      const changes = worktreeChanges(own.dir);
+      const changes = yield* worktreeChangesFlow(own.dir);
       if (changes === undefined) return kept('cannot read the Run worktree status');
       if (changes) return kept('the Run worktree has uncommitted changes');
-      const local = submoduleLocalWork(own.dir);
+      const local = yield* submoduleLocalWorkFlow(own.dir);
       if (local === undefined) return kept('cannot read the submodules of the Run worktree');
       if (local) return kept('a submodule of the Run worktree has commits or stashes that exist nowhere else');
       // Git refuses a plain remove when a submodule is initialised; the status above already showed nothing to lose.
-      const removal = git('worktree', 'remove', '--force', own.dir);
+      const removal = yield* git('worktree', 'remove', '--force', own.dir);
       if (removal.status !== 0) return kept(`git could not remove the Run worktree: ${removal.stderr.trim()}`);
     }
     // A squash merge leaves the branch unmerged as far as git knows, so it goes only if its tip is still the merged PR head.
     if (head) {
-      const deleted = git('update-ref', '-d', `refs/heads/${id}`, head);
+      const deleted = yield* git('update-ref', '-d', `refs/heads/${id}`, head);
       if (deleted.status !== 0) return kept(`git could not delete the branch: ${deleted.stderr.trim()}`);
     }
     return { id, outcome: 'cleaned' };
   });
 }
+/**
+ * @param {string} projectDir
+ * @param {string} callerDir
+ * @param {string | undefined} rawId
+ * @param {PrLookup} [prState]
+ */
+export const cleanRun = (projectDir, callerDir, rawId, prState) =>
+  runSync(cleanRunFlow(projectDir, callerDir, rawId, prState));
 
 // Ids of Runs whose PR is merged but whose worktree or branch is still there. Doctor reports them; nothing is changed.
+/**
+ * @param {string} callerDir
+ * @param {PrLookup} [prState]
+ */
 export function mergedLeftovers(callerDir, prState = ghPrInfo) {
-  let projectDir, root, trees, ids;
+  /** @type {string} */
+  let projectDir, root, ids;
+  /** @type {ReturnType<typeof ownWorktrees>} */
+  let trees;
   try {
     projectDir = mainCheckout(callerDir).dir;
     root = runRoot(projectDir, false);
     trees = ownWorktrees(projectDir);
     ids = runIds(root);
   } catch {
+    // Doctor's note about leftovers is optional; outside a Factory project there is nothing to list.
     return [];
   }
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  /** @param {...string} args */
+  const git = (...args) => runGit(projectDir, args);
   return ids.filter((id) => {
     try {
       const { record } = readRun(projectDir, id);
       const left = trees.has(id) || git('rev-parse', '--verify', '-q', `refs/heads/${id}`).status === 0;
       return left && record.status === 'done' && !!record.pr && prState(record.pr)?.state === 'MERGED';
     } catch {
+      // A Run record that cannot be read is not reported as a leftover; Run inspect reports unreadable records.
       return false;
     }
   });
 }
 
 // Cleans every Run that records a PR; a Run folder that cannot be read is reported and skipped.
+/**
+ * @param {string} projectDir
+ * @param {string} callerDir
+ * @param {PrLookup} [prState]
+ */
 export function cleanAll(projectDir, callerDir, prState) {
   if (!fs.existsSync(path.join(projectDir, '.factory', 'runs'))) return [];
   const root = runRoot(projectDir, false);
@@ -172,7 +228,7 @@ export function cleanAll(projectDir, callerDir, prState) {
     try {
       return readRun(projectDir, name).record.pr ? [cleanRun(projectDir, callerDir, name, prState)] : [];
     } catch (err) {
-      return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${err.message}` }];
+      return [{ id: name, outcome: 'kept', reason: `cannot read the Run: ${messageOf(err)}` }];
     }
   });
 }

@@ -5,8 +5,15 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo } from './git-repo.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/** @param {string} cwd */
 const start = (cwd, extra = {}) => {
   const result = run(
     cwd,
@@ -23,6 +30,11 @@ const start = (cwd, extra = {}) => {
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const record = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8'));
 
 test('a Run records the fast Verify command given at start, and rejects an unusable one', () => {
@@ -74,7 +86,7 @@ test('the full Verify is unchanged and still records the Evidence', () => {
   const id = start(cwd, { fast_commands: 'node -e "process.exit(1)"' });
   const result = run(cwd, 'verify', '--id', id);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(record(cwd, id).verify.exit_code, 0);
+  assert.equal(record(cwd, id).verify?.exit_code, 0);
 });
 
 test('run update cannot set the fast command after the Run has started', () => {

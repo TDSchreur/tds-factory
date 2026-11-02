@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 import { readRun } from './run-folder.js';
+
+/**
+ * @typedef {{ line: number, message: string }} GuideProblem
+ * @typedef {{ globs?: string[], problem?: GuideProblem }} ParsedGuide
+ * @typedef {{ path: string, globs?: string[], problem?: GuideProblem }} Guide
+ */
 
 // Instruction guides are the Markdown files AGENTS.md or CLAUDE.md links to. A guide may declare `applyTo` globs in its frontmatter
 // (Copilot's format); a guide without them is unscoped and applies to every Run. See ADR 0022.
@@ -10,16 +16,22 @@ const MAX_FILE = 1 << 20;
 const MAX_GUIDES = 200;
 
 // True when `file` resolves, symbolic links included, to a place inside the project.
+/**
+ * @param {string} projectDir
+ * @param {string} file
+ */
 export function insideProject(projectDir, file) {
   try {
     const root = fs.realpathSync(projectDir);
     const rel = path.relative(root, fs.realpathSync(file));
     return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
   } catch {
+    // A path that cannot be resolved cannot be shown to lie inside the project, so it does not count as inside.
     return false;
   }
 }
 
+/** @param {string} file */
 const readFile = (file) => {
   const stat = fs.statSync(file, { throwIfNoEntry: false });
   if (!stat?.isFile() || stat.size > MAX_FILE) return undefined;
@@ -32,6 +44,10 @@ const readFile = (file) => {
 export const MAX_GLOB_LENGTH = 200;
 
 // One path segment against one glob segment, with the linear two-pointer walk that remembers only the last `*`.
+/**
+ * @param {string} name
+ * @param {string} pattern
+ */
 function segmentMatches(name, pattern) {
   let n = 0,
     p = 0,
@@ -55,8 +71,13 @@ function segmentMatches(name, pattern) {
 
 const MAX_PATH_LENGTH = 4096;
 
+/**
+ * @param {string} file
+ * @param {string} glob
+ */
 export function globMatches(file, glob) {
   if (file.length > MAX_PATH_LENGTH) return false;
+  /** @type {string[]} */
   const pattern = [];
   for (const seg of (glob.includes('/') ? glob.replace(/^\.\//, '') : `**/${glob}`).split('/')) {
     const next = /^\*{2,}$/.test(seg) ? '**' : seg.replace(/\*+/g, '*');
@@ -78,9 +99,14 @@ export function globMatches(file, glob) {
   return reachable[parts.length] === 1;
 }
 
+/** @param {string} file @param {string[]} globs */
 export const matchesGlob = (file, globs) => globs.some((g) => globMatches(file, g));
 
 // Reads the frontmatter of a guide. Returns { globs } (empty when unscoped) or { problem: { line, message } }.
+/**
+ * @param {string} text
+ * @returns {ParsedGuide}
+ */
 export function parseGuide(text) {
   const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
   if (lines[0]?.trim() !== '---') return { globs: [] };
@@ -115,10 +141,15 @@ export function parseGuide(text) {
   return { globs: [] };
 }
 
+/** @param {string} projectDir */
 export const conventionsFile = (projectDir) =>
   CONVENTION_FILES.find((f) => fs.statSync(path.join(projectDir, f), { throwIfNoEntry: false })?.isFile());
 
 // Markdown links, plus backticked paths that exist, to other Markdown files inside the project. Only a link can be reported missing.
+/**
+ * @param {string} projectDir
+ * @returns {{ path: string, exists: boolean }[]}
+ */
 export function linkedGuides(projectDir) {
   const file = conventionsFile(projectDir);
   if (!file) return [];
@@ -126,7 +157,9 @@ export function linkedGuides(projectDir) {
     ? readFile(path.join(projectDir, file))
     : undefined;
   if (text === undefined) throw new Error(`${file} is not a regular file of at most 1 MiB inside the project`);
+  /** @type {Map<string, { path: string, exists: boolean }>} */
   const found = new Map();
+  /** @param {string} raw @param {boolean} link */
   const add = (raw, link) => {
     const target = raw.split('#')[0].trim();
     if (!/\.md$/i.test(target) || /^[a-z][a-z0-9+.-]*:/i.test(target) || path.isAbsolute(target)) return;
@@ -141,6 +174,10 @@ export function linkedGuides(projectDir) {
 }
 
 // A path the coordinator recorded in `conventions`: a Markdown file inside the project, other than the conventions file itself.
+/**
+ * @param {string} projectDir
+ * @param {unknown} raw
+ */
 function normalizeGuidePath(projectDir, raw) {
   if (typeof raw !== 'string' || !/\.md$/i.test(raw) || path.isAbsolute(raw) || /^[a-z][a-z0-9+.-]*:/i.test(raw))
     return undefined;
@@ -150,8 +187,13 @@ function normalizeGuidePath(projectDir, raw) {
 }
 
 // Every guide with its globs, from the links in the conventions file or from the paths given; a missing guide or a bad applyTo comes back as a problem.
+/**
+ * @param {string} projectDir
+ * @param {string[]} [only]
+ * @returns {Guide[]}
+ */
 export function loadGuides(projectDir, only) {
-  return (only ? only.map((p) => normalizeGuidePath(projectDir, p)).filter(Boolean) : linkedGuides(projectDir)).map(
+  return (only ? only.flatMap((p) => normalizeGuidePath(projectDir, p) ?? []) : linkedGuides(projectDir)).map(
     ({ path: rel, exists }) => {
       if (!exists) return { path: rel, globs: [], problem: { line: 1, message: 'the linked guide does not exist' } };
       if (!insideProject(projectDir, path.join(projectDir, rel)))
@@ -172,11 +214,15 @@ export function loadGuides(projectDir, only) {
   );
 }
 
+/**
+ * @param {string} projectDir
+ * @returns {[string, string]}
+ */
 export function guidesCheck(projectDir) {
   const guides = loadGuides(projectDir);
   const bad = guides.filter((g) => g.problem);
-  if (bad.length) return ['fail', bad.map((g) => `${g.path}:${g.problem.line}: ${g.problem.message}`).join('; ')];
-  const scoped = guides.filter((g) => g.globs.length).length;
+  if (bad.length) return ['fail', bad.map((g) => `${g.path}:${g.problem?.line}: ${g.problem?.message}`).join('; ')];
+  const scoped = guides.filter((g) => g.globs?.length).length;
   return [
     'pass',
     guides.length
@@ -186,35 +232,46 @@ export function guidesCheck(projectDir) {
 }
 
 // The guides that apply to a diff: the unscoped ones and the scoped ones with a glob that matches a changed file.
+/**
+ * @param {Guide[]} guides
+ * @param {string[]} files
+ */
 export function guidesForFiles(guides, files) {
-  return guides.filter((g) => !g.problem && (!g.globs.length || files.some((f) => matchesGlob(f, g.globs))));
+  return guides.filter((g) => !g.problem && (!g.globs?.length || files.some((f) => matchesGlob(f, g.globs ?? []))));
 }
 
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ */
 export function guidesRun(projectDir, id) {
   const { record } = readRun(projectDir, id);
   const root = record.worktree;
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
-  if (!/^[0-9a-f]{40,64}$/.test(record.base_sha ?? '')) throw new Error('the Run has no usable base commit');
-  const out = spawnSync(
-    'git',
-    ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '-z', '--name-only', record.base_sha],
-    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  const base = record.base_sha;
+  if (!base || !/^[0-9a-f]{40,64}$/.test(base)) throw new Error('the Run has no usable base commit');
+  const out = runGit(
+    root,
+    ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '-z', '--name-only', base],
+    { maxBuffer: 64 * 1024 * 1024 },
   );
   if (out.status !== 0) throw new Error(`git diff failed: ${(out.stderr || '').trim()}`);
   const files = out.stdout.split('\0').filter(Boolean);
   const guides = loadGuides(root, record.conventions ?? []);
   const broken = guides.find((g) => g.problem);
-  if (broken) throw new Error(`${broken.path}:${broken.problem.line}: ${broken.problem.message}`);
+  if (broken) throw new Error(`${broken.path}:${broken.problem?.line}: ${broken.problem?.message}`);
   const applying = guidesForFiles(guides, files);
   return {
     files: files.length,
-    guides: applying.map((g) => ({ path: g.path, applyTo: g.globs })),
+    guides: applying.map((g) => ({ path: g.path, applyTo: g.globs ?? [] })),
     skipped: guides.length - applying.length,
   };
 }
 
 // One guide per line, safe to print: control characters in a path become `?`.
+/** @param {ReturnType<typeof guidesRun>} result */
 export function formatGuides(result) {
+  /** @param {string} t */
   const clean = (t) => t.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
   const lines = result.guides.map(
     (g) => `${clean(g.path)} (${g.applyTo.length ? `applyTo ${g.applyTo.map(clean).join(', ')}` : 'unscoped'})`,

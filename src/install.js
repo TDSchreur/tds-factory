@@ -2,19 +2,24 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { FactoryError } from './errors.js';
+import { isMissing, messageOf } from './narrow.js';
 import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
-import { targets } from './flow.js';
+import { targets, userDir, agentNames, isAgent } from './flow.js';
 import { replaceDir } from './replace-dir.js';
 import { hashLine, modifiedLocally } from './tree-hash.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
+/**
+ * @param {{ agent: string, project?: boolean, force?: boolean, dryRun?: boolean }} options
+ */
 export function install({ agent, project, force, dryRun = false }) {
-  const all = Object.keys(targets);
-  const names = agent === 'all' ? all.filter((name) => name !== 'copilot') : [agent];
-  for (const name of names) {
-    if (!Object.hasOwn(targets, name))
-      throw new Error(`unknown agent "${name}" (${Object.keys(targets).join(', ')}, all)`);
+  const all = agentNames;
+  const requested = agent === 'all' ? all.filter((name) => name !== 'copilot') : [agent];
+  for (const name of requested) {
+    if (!isAgent(name)) throw new Error(`unknown agent "${name}" (${agentNames.join(', ')}, all)`);
   }
+  const names = requested.filter(isAgent);
   const base = project ? process.cwd() : os.homedir();
   const skills = fs
     .readdirSync(SKILLS_DIR, { withFileTypes: true })
@@ -22,7 +27,7 @@ export function install({ agent, project, force, dryRun = false }) {
     .map((e) => e.name);
 
   for (const name of names) {
-    const targetDir = path.join(base, targets[name][project ? 'project' : 'global']);
+    const targetDir = project ? path.join(base, targets[name].project) : userDir(name, 'global', base);
     if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
     for (const skill of skills) {
       const dest = path.join(targetDir, skill);
@@ -55,24 +60,43 @@ export function install({ agent, project, force, dryRun = false }) {
   }
   // Stage agents carry per-target model choices, so Copilot gets its own even when its skills are shared.
   for (const name of agent === 'all' ? all : names) {
-    installAgents(name, path.join(base, targets[name][project ? 'projectAgents' : 'agents']), force, dryRun);
+    installAgents(
+      name,
+      project ? path.join(base, targets[name].projectAgents) : userDir(name, 'agents', base),
+      force,
+      dryRun,
+    );
   }
 }
 
 // Stage agent files hold the editable model choices. Each installed file's hash is recorded, so a file you did not edit is updated
 // and one you edited is kept; --force replaces it anyway. A file without a record (an older install) counts as edited.
 const AGENT_RECORD = '.tds-factory-agents.json';
+/** @param {string} file */
 const sha = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
+/**
+ * @param {import('./run-record.js').AgentName} name
+ * @param {string} targetDir
+ * @param {boolean | undefined} force
+ * @param {boolean} dryRun
+ */
 function installAgents(name, targetDir, force, dryRun) {
   const sourceDir = path.join(AGENTS_DIR, name);
   if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
   const recordFile = path.join(targetDir, AGENT_RECORD);
+  /** @type {Record<string, string>} */
   let record = {};
   try {
     record = JSON.parse(fs.readFileSync(recordFile, 'utf8'));
-  } catch {
-    /* no record yet */
+  } catch (err) {
+    if (!isMissing(err)) {
+      throw new FactoryError(
+        `cannot read the install record ${recordFile}: ${messageOf(err)} (remove the file to install again)`,
+        { code: 'install-record-unreadable', cause: err },
+      );
+    }
+    // No record yet: nothing was installed here before.
   }
   for (const file of fs.readdirSync(sourceDir)) {
     const dest = path.join(targetDir, file);

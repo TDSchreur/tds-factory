@@ -5,8 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { startDashboard } from '../src/dashboard.js';
+import { viewsOf } from './run-view.js';
+
+/** @import { PrStatus } from '../src/pr-provider.js' */
+/** @import { Run } from '../src/run-record.js' */
 
 const GH = 'https://github.com/o/r/pull/1';
+/** @type {PrStatus} */
 const OPEN = {
   state: 'open',
   draft: false,
@@ -15,6 +20,7 @@ const OPEN = {
   review: 'approved',
 };
 
+/** @param {Partial<Run>[]} records */
 function project(records) {
   const dir = mkdtempSync(join(tmpdir(), 'dash-prs-'));
   records.forEach((record, i) => {
@@ -24,8 +30,20 @@ function project(records) {
   });
   return dir;
 }
+/** @type {Partial<Run>} */
 const finish = { stage: 'finish', status: 'running', pr: GH };
 
+/**
+ * @typedef {object} Page
+ * @property {() => ReturnType<typeof viewsOf>} views
+ * @property {(path: string) => Promise<Response>} get
+ */
+/**
+ * @param {Partial<Run>[]} records
+ * @param {(url: string) => Promise<PrStatus>} prStatus
+ * @param {(page: Page) => Promise<void>} body
+ * @param {{ statusRefreshMs?: number }} [options]
+ */
 async function withDashboard(records, prStatus, body, options = {}) {
   const dash = await startDashboard({
     projectDir: project(records),
@@ -36,8 +54,8 @@ async function withDashboard(records, prStatus, body, options = {}) {
   });
   try {
     await body({
-      views: async () => (await fetch(`${dash.url}/api/views`)).json(),
-      get: (path) => fetch(`${dash.url}${path}`),
+      views: () => viewsOf(dash),
+      get: (/** @type {string} */ path) => fetch(`${dash.url}${path}`),
     });
   } finally {
     await dash.close();
@@ -46,10 +64,12 @@ async function withDashboard(records, prStatus, body, options = {}) {
 const settle = () => delay(30);
 
 test('a poll never waits for the provider: checking first, then the cached answer', async () => {
-  let release;
+  /** @type {() => void} */
+  let release = () => {};
   const gate = new Promise((resolve) => {
-    release = resolve;
+    release = () => resolve(undefined);
   });
+  /** @type {string[]} */
   const calls = [];
   await withDashboard(
     [finish],
@@ -71,7 +91,9 @@ test('a poll never waits for the provider: checking first, then the cached answe
 });
 
 test('Finish, Follow-up and Done Runs get a status; other Runs and links get none', async () => {
+  /** @type {string[]} */
   const calls = [];
+  /** @type {Partial<Run>[]} */
   const records = [
     finish,
     { stage: 'follow-up', status: 'running', pr: 'https://github.com/o/r/pull/2' },
@@ -108,7 +130,7 @@ test('a provider failure becomes an unavailable status with its reason, never an
   await withDashboard(
     [finish],
     async () => {
-      if (mode) throw Object.assign(new Error('x'), { reason: mode });
+      if (mode) throw Object.assign(new Error('x'), { code: mode });
       return OPEN;
     },
     async ({ views, get }) => {
@@ -142,6 +164,7 @@ test('an unknown failure reason is reported as error, and a throwing provider do
 });
 
 test('the pr-status route answers for a Run, refuses others and limits refreshes', async () => {
+  /** @type {string[]} */
   const calls = [];
   await withDashboard(
     [finish, { stage: 'build', status: 'running' }],
@@ -164,6 +187,7 @@ test('the pr-status route answers for a Run, refuses others and limits refreshes
 });
 
 test('a merged PR is not looked up again within ten minutes', async () => {
+  /** @type {string[]} */
   const calls = [];
   await withDashboard(
     [{ stage: 'finish', status: 'done', pr: GH }],
@@ -176,7 +200,7 @@ test('a merged PR is not looked up again within ten minutes', async () => {
       await settle();
       await views();
       await views();
-      assert.equal((await views())[0].prStatus.state, 'merged');
+      assert.equal((await views())[0].prStatus?.state, 'merged');
       assert.equal(calls.length, 1);
     },
   );
@@ -184,7 +208,9 @@ test('a merged PR is not looked up again within ten minutes', async () => {
 
 test('an Azure DevOps PR gets a status from the same cache and shows its host and reasons', async () => {
   const AZ = 'https://dev.azure.com/o/p/_git/r/pullrequest/1';
+  /** @type {string[]} */
   const calls = [];
+  /** @type {Partial<Run>[]} */
   const records = [
     { stage: 'finish', status: 'running', pr: AZ },
     { stage: 'finish', status: 'running', pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/2' },
@@ -194,14 +220,14 @@ test('an Azure DevOps PR gets a status from the same cache and shows its host an
     async (url) => {
       calls.push(url);
       if (url === AZ) return OPEN;
-      throw Object.assign(new Error('x'), { reason: 'az-extension-missing' });
+      throw Object.assign(new Error('x'), { code: 'az-extension-missing' });
     },
     async ({ views }) => {
       await views();
       await settle();
       const list = await views();
       assert.deepEqual(
-        list.map((r) => [r.prHost, r.prCanMerge, r.prStatus.unavailable ?? r.prStatus.state]),
+        list.map((r) => [r.prHost, r.prCanMerge, r.prStatus?.unavailable ?? r.prStatus?.state]),
         [
           ['azure-devops', false, 'open'],
           ['azure-devops', false, 'az-extension-missing'],
@@ -219,7 +245,7 @@ test('an unknown reason of a provider shows as a plain error', async () => {
   await withDashboard(
     [finish],
     async () => {
-      throw Object.assign(new Error('x'), { reason: 'whatever' });
+      throw Object.assign(new Error('x'), { code: 'whatever' });
     },
     async ({ views }) => {
       await views();

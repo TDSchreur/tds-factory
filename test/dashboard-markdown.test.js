@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseMarkdown } from '../dashboard/markdown.js';
 
+/** @param {string} text */
 const parse = (text) => JSON.parse(JSON.stringify(parseMarkdown(text)));
+/** @param {string} v */
 const t = (v) => ({ t: 'text', v });
 
 test('headings, paragraphs and rules become blocks', () => {
@@ -45,7 +47,7 @@ test('an indented list item nests one level under the item above it', () => {
 
 test('a rule right after a text line is still a rule', () => {
   assert.deepEqual(
-    parse('text\n---').map((b) => b.type),
+    parse('text\n---').map((/** @type {{ type: string }} */ b) => b.type),
     ['paragraph', 'rule'],
   );
 });

@@ -1,24 +1,33 @@
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-export const EVAL_BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin');
+export const EVAL_BIN = join(import.meta.dirname, '..', 'bin');
 const CLI = join(EVAL_BIN, 'tds-factory');
 
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const git = (cwd, ...args) =>
   execFileSync('git', ['-c', 'user.name=eval', '-c', 'user.email=eval@example.com', ...args], {
     cwd,
     encoding: 'utf8',
   }).trim();
+/** @param {string} dir @param {string} file @param {string} text */
 const write = (dir, file, text) => {
   mkdirSync(dirname(join(dir, file)), { recursive: true });
   writeFileSync(join(dir, file), text);
 };
 
+/** @typedef {ReturnType<typeof fixture>} Fixture */
+
 // A small project with a local bare origin, the setup docs the Factory's Preflight needs, and the Factory installed for `agent`.
-export function fixture({ agent, verify = 'exit 0' } = {}) {
+/**
+ * @param {{ agent: string, verify?: string }} options
+ */
+export function fixture({ agent, verify = 'exit 0' }) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'factory-eval-')));
   const origin = join(root, 'origin.git');
   const dir = join(root, 'project');
@@ -59,6 +68,7 @@ export function fixture({ agent, verify = 'exit 0' } = {}) {
     EVAL_ACTION_LOG: actionLog,
     EVAL_GH_STATE: join(root, 'gh-state.json'),
   };
+  /** @param {...string} args */
   const factory = (...args) => execFileSync(CLI, args, { cwd: dir, env, encoding: 'utf8' }).trim();
   factory('install', '--agent', agent, '--project');
   git(dir, 'add', '-A');
@@ -72,13 +82,19 @@ export function fixture({ agent, verify = 'exit 0' } = {}) {
     actionLog,
     env,
     agent,
+    /** @param {...string} a */
     git: (...a) => git(dir, ...a),
     factory,
+    /** @param {string} f @param {string} t */
     write: (f, t) => write(dir, f, t),
   };
 }
 
 // Starts a Run the way /factory does and returns its id.
+/**
+ * @param {Fixture} fx
+ * @param {string} [title]
+ */
 export function startRun(fx, title = 'Eval run') {
   return fx.factory(
     'run',
@@ -90,13 +106,21 @@ export function startRun(fx, title = 'Eval run') {
 
 // Starts a Run and drives it, through the Run commands, to the given point: `build`, `check`, `evidence` (Check with Verify and every verdict recorded)
 // or `finish` (the branch is also pushed). The worktree holds a Spec, one Ticket and one implementation commit once past `build`.
+/**
+ * @param {Fixture} fx
+ * @param {'build' | 'check' | 'evidence' | 'finish'} upTo
+ * @param {string} [title]
+ */
 export function runAt(fx, upTo, title = 'Add a shout function') {
   const id = startRun(fx, title);
   const wt =
     JSON.parse(fx.factory('run', 'inspect', '--id', id, '--json')).worktree ??
     join(fx.dir, '.factory', 'worktrees', id);
+  /** @param {...string} a */
   const wgit = (...a) => git(wt, ...a);
+  /** @param {object} data */
   const update = (data) => fx.factory('run', 'update', '--id', id, '--data', JSON.stringify(data));
+  /** @param {string} stage */
   const to = (stage) => fx.factory('run', 'transition', '--id', id, '--to', stage);
   write(wt, 'docs/specs/shout.md', '# Shout\n\n## Problem Statement\n\nGreetings cannot be shouted.\n');
   wgit('add', '-A');

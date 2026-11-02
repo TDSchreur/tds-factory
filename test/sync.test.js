@@ -7,6 +7,11 @@ import { sync } from '../src/sync.js';
 import { MARKER } from '../src/paths.js';
 
 // A fake repo: vendor/up/skills/<name>/SKILL.md (+ references), a manifest, and a factory Skill.
+/**
+ * @param {unknown[]} manifest
+ * @param {Record<string, Record<string, string>>} skills
+ * @param {string} [flow]
+ */
 function fakeRepo(manifest, skills, flow = 'Invoke `renamed`.\n') {
   const root = mkdtempSync(join(tmpdir(), 'tds-sync-'));
   const skillsDir = join(root, 'skills');
@@ -22,6 +27,7 @@ function fakeRepo(manifest, skills, flow = 'Invoke `renamed`.\n') {
   return { root, skillsDir };
 }
 
+/** @param {Parameters<typeof sync>[0]} opts */
 const quietSync = (opts) => {
   const log = mock.method(console, 'log', () => {});
   try {
@@ -76,7 +82,7 @@ test('sync refuses a shipped name that is not lowercase letters, digits and hyph
     const { root, skillsDir } = fakeRepo([{ path: 'vendor/up/skills/alpha', as }], { alpha });
     assert.throws(
       () => quietSync({ root, skillsDir }),
-      (err) => err.message.includes(JSON.stringify(as)),
+      (err) => err instanceof Error && err.message.includes(JSON.stringify(as)),
       as,
     );
     assert.deepEqual(readdirSync(skillsDir), ['factory'], as);
@@ -119,7 +125,7 @@ test('sync names a malformed manifest entry instead of throwing a bare TypeError
     const { root, skillsDir } = fakeRepo([entry], { alpha });
     assert.throws(
       () => quietSync({ root, skillsDir }),
-      (err) => !(err instanceof TypeError) && err.message.includes(JSON.stringify(entry)),
+      (err) => err instanceof Error && !(err instanceof TypeError) && err.message.includes(JSON.stringify(entry)),
       JSON.stringify(entry),
     );
   }
@@ -272,6 +278,9 @@ test('sync without a manifest says it is a maintainer command that needs a repos
   assert.throws(
     () => quietSync({ root, skillsDir: join(root, 'skills') }),
     (err) =>
-      /checkout/.test(err.message) && /bin\/tds-factory\.js sync/.test(err.message) && !/ENOENT/.test(err.message),
+      err instanceof Error &&
+      /checkout/.test(err.message) &&
+      /bin\/tds-factory\.js sync/.test(err.message) &&
+      !/ENOENT/.test(err.message),
   );
 });

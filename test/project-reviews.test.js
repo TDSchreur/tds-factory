@@ -6,9 +6,19 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 import { openRunStore } from '../src/run-store.js';
+import { metricsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const invoke = (cwd, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
+/** @typedef {{ id: string, name: string, mode: string, skill: { source: string, path?: string, name?: string }, patterns: string[], runtime?: { start: string, ready: string, setup: string } }} ReviewConfig */
+/** @typedef {{ verdict: string, inspected: string[], findings: { severity: string, description: string, location: string }[], evidence?: string[] }} ReviewReport */
+/** @type {{ reviews: ReviewConfig[] }} */
 const config = {
   reviews: [
     {
@@ -19,6 +29,20 @@ const config = {
       patterns: ['src/**/*.ts'],
     },
   ],
+};
+/** @param {string} stdout What `doctor --json` printed. */
+const reviewCheck = (stdout) => {
+  /** @type {{ agents: { checks: { id: string, status: string, message: string }[] }[] }} */
+  const report = JSON.parse(stdout);
+  const check = report.agents[0].checks.find((c) => c.id === 'review');
+  assert.ok(check, 'doctor reports a review check');
+  return check;
+};
+/** @param {string} stdout What `run inspect --json` printed. */
+const problemsOf = (stdout) => {
+  /** @type {{ problems: { code: string }[] }[]} */
+  const reports = JSON.parse(stdout);
+  return reports[0].problems;
 };
 function setup() {
   const cwd = repo();
@@ -33,6 +57,7 @@ function setup() {
   git(cwd, 'commit', '-qm', 'reviews');
   return cwd;
 }
+/** @param {string} cwd */
 const start = (cwd) =>
   invoke(
     cwd,
@@ -41,6 +66,10 @@ const start = (cwd) =>
     '--data',
     JSON.stringify({ title: 'Review', agent: 'codex', commands: 'true', conventions: [] }),
   );
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const plan = (cwd, id) => invoke(cwd, 'run', 'reviews', '--id', id);
 
 test('a Run freezes project review instructions and selects them from the whole diff', () => {
@@ -48,7 +77,7 @@ test('a Run freezes project review instructions and selects them from the whole 
   const created = start(cwd);
   assert.equal(created.status, 0, created.stderr);
   const id = created.stdout.trim();
-  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).worktree;
+  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8')).worktree;
   writeFileSync(join(cwd, 'review/angular/SKILL.md'), 'Review Angular v2');
   mkdirSync(join(wt, 'src/app'), { recursive: true });
   writeFileSync(join(wt, 'src/app/item.ts'), 'export {}');
@@ -68,7 +97,7 @@ test('Doctor rejects duplicate and reserved review IDs with an actionable error'
   for (const reviews of [[config.reviews[0], config.reviews[0]], [{ ...config.reviews[0], id: 'security' }]]) {
     writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify({ reviews }));
     const result = invoke(cwd, 'doctor', '--json', '--agent', 'codex');
-    const review = JSON.parse(result.stdout).agents[0].checks.find((check) => check.id === 'review');
+    const review = reviewCheck(result.stdout);
     assert.equal(review.status, 'fail');
     assert.match(review.message, /review ID/);
   }
@@ -83,10 +112,10 @@ test('a deleted or renamed matching file triggers review and nonmatching changes
   const created = start(cwd);
   assert.equal(created.status, 0, created.stderr);
   const id = created.stdout.trim();
-  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).worktree;
+  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8')).worktree;
   let reviews = JSON.parse(plan(cwd, id).stdout);
   assert.equal(reviews[0].applicable, false);
-  assert.match(reviews[0].reason, /No changed file/);
+  assert.match(reviews[0].reason ?? '', /No changed file/);
   git(wt, 'mv', 'src/old.ts', 'src/old.txt');
   git(wt, 'commit', '-qm', 'rename');
   reviews = JSON.parse(plan(cwd, id).stdout);
@@ -100,7 +129,7 @@ test('Doctor fails when a referenced project Skill is missing', () => {
   changed.reviews[0].skill.path = 'review/missing';
   writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify(changed));
   const result = invoke(cwd, 'doctor', '--json', '--agent', 'codex');
-  const review = JSON.parse(result.stdout).agents[0].checks.find((check) => check.id === 'review');
+  const review = reviewCheck(result.stdout);
   assert.equal(review.status, 'fail');
   assert.match(review.message, /angular.*cannot load Skill/);
 });
@@ -139,7 +168,8 @@ test('a required project review gates Finish and its evidence goes stale on new 
   const created = start(cwd);
   assert.equal(created.status, 0, created.stderr);
   const id = created.stdout.trim();
-  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).worktree;
+  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8')).worktree;
+  /** @param {...string} args */
   const run = (...args) => invoke(cwd, 'run', ...args, '--id', id);
   assert.equal(
     run('update', '--data', JSON.stringify({ spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 }))
@@ -163,6 +193,7 @@ test('a required project review gates Finish and its evidence goes stale on new 
   const missing = run('transition', '--to', 'finish');
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /angular/);
+  /** @type {ReviewReport} */
   const report = { verdict: 'pass', inspected: ['src/app.ts'], findings: [] };
   const result = run('review', '--axis', 'angular', '--data', JSON.stringify(report));
   assert.equal(result.status, 0, result.stderr);
@@ -172,11 +203,13 @@ test('a required project review gates Finish and its evidence goes stale on new 
   assert.match(stale.stderr, /angular/);
 });
 
+/** @param {string} cwd */
 function checking(cwd, withChange = true) {
   const created = start(cwd);
   assert.equal(created.status, 0, created.stderr);
   const id = created.stdout.trim();
-  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).worktree;
+  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8')).worktree;
+  /** @param {...string} args */
   const run = (...args) => invoke(cwd, 'run', ...args, '--id', id);
   assert.equal(
     run('update', '--data', JSON.stringify({ spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 }))
@@ -198,8 +231,8 @@ test('only a nonmatching project review can skip and its reason is recorded', ()
   const cwd = setup(),
     { id, run } = checking(cwd, false);
   assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify({ verdict: 'skipped' })).status, 0);
-  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
-  assert.match(record.project_results.angular.reason, /No changed file/);
+  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8'));
+  assert.match(record.project_results.angular.reason ?? '', /No changed file/);
   const other = setup(),
     active = checking(other);
   const result = active.run('review', '--axis', 'angular', '--data', JSON.stringify({ verdict: 'skipped' }));
@@ -210,6 +243,7 @@ test('only a nonmatching project review can skip and its reason is recorded', ()
 test('medium findings cannot pass and Rework clears project review Evidence', () => {
   const cwd = setup(),
     { id, run } = checking(cwd);
+  /** @type {ReviewReport} */
   const report = {
     verdict: 'pass',
     inspected: ['src/app.ts'],
@@ -219,11 +253,12 @@ test('medium findings cannot pass and Rework clears project review Evidence', ()
   report.verdict = 'fail';
   assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify(report)).status, 0);
   assert.equal(run('rework').status, 0);
-  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
+  /** @type {Run} */
+  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8'));
   assert.equal(record.project_results, undefined);
   assert.equal(record.check_loops, 1);
   assert.deepEqual(
-    record.metrics.verdicts.map(({ axis, value, attempt, base_sha }) => ({ axis, value, attempt, base_sha })),
+    metricsOf(record).verdicts.map(({ axis, value, attempt, base_sha }) => ({ axis, value, attempt, base_sha })),
     [{ axis: 'angular', value: 'fail', attempt: 1, base_sha: record.base_sha }],
   );
 });
@@ -237,6 +272,7 @@ test('interactive reviews require browser artifacts kept in the Run folder', () 
   git(cwd, 'add', '.');
   git(cwd, 'commit', '-qm', 'interactive');
   const { id, run } = checking(cwd);
+  /** @type {ReviewReport} */
   const report = { verdict: 'pass', inspected: ['home screen'], findings: [] };
   let result = run('review', '--axis', 'angular', '--data', JSON.stringify(report));
   assert.notEqual(result.status, 0);
@@ -280,7 +316,7 @@ test('Run inspection reports stale project review Evidence after a new commit', 
   git(wt, 'commit', '--allow-empty', '-qm', 'new code');
   const result = run('inspect', '--json');
   assert.equal(result.status, 0, result.stderr);
-  assert.ok(JSON.parse(result.stdout)[0].problems.some((p) => p.code === 'stale-evidence'));
+  assert.ok(problemsOf(result.stdout).some((p) => p.code === 'stale-evidence'));
 });
 
 test('missing browser evidence prevents a clean Check after an interactive pass', () => {
@@ -339,6 +375,7 @@ test('a passing required project review allows Finish after baseline and Verify 
 test('sync clears project review Evidence when rebasing onto an advanced base', () => {
   const cwd = setup(),
     { id, run } = checking(cwd);
+  /** @type {ReviewReport} */
   const report = { verdict: 'pass', inspected: ['src/app.ts'], findings: [] };
   assert.equal(run('review', '--axis', 'angular', '--data', JSON.stringify(report)).status, 0);
   writeFileSync(join(cwd, 'other.txt'), 'change');
@@ -346,11 +383,12 @@ test('sync clears project review Evidence when rebasing onto an advanced base', 
   git(cwd, 'commit', '-qm', 'other change');
   const result = run('sync');
   assert.equal(result.status, 0, result.stderr);
-  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
+  /** @type {Run} */
+  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8'));
   assert.equal(record.project_results, undefined);
-  assert.equal(record.metrics.verdicts[0].axis, 'angular');
-  assert.equal(record.metrics.verdicts[0].value, 'pass');
-  assert.notEqual(record.metrics.verdicts[0].base_sha, record.base_sha);
+  assert.equal(metricsOf(record).verdicts[0].axis, 'angular');
+  assert.equal(metricsOf(record).verdicts[0].value, 'pass');
+  assert.notEqual(metricsOf(record).verdicts[0].base_sha, record.base_sha);
   assert.equal(record.check_loops, 0);
 });
 
@@ -363,7 +401,8 @@ test('sync invalidates skipped reviews when the recorded base changes without mo
   const created = start(cwd);
   assert.equal(created.status, 0, created.stderr);
   const id = created.stdout.trim();
-  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).worktree;
+  const wt = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8')).worktree;
+  /** @param {...string} args */
   const run = (...args) => invoke(cwd, 'run', ...args, '--id', id);
   assert.equal(
     run('update', '--data', JSON.stringify({ spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 }))
@@ -404,7 +443,8 @@ test('sync invalidates skipped reviews when the recorded base changes without mo
   ])
     assert.equal(run('verdict', '--axis', axis, '--value', value).status, 0);
   assert.deepEqual(openRunStore(cwd).mergeEligibility(id).problems, []);
-  const oldResult = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'))).project_results.angular;
+  const oldResult = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8')).project_results
+    .angular;
   const sync = run('sync');
   assert.equal(sync.status, 0, sync.stderr);
   assert.equal(git(wt, 'rev-parse', 'HEAD'), head, 'the follow-up sync only updates the recorded base');
@@ -415,7 +455,7 @@ test('sync invalidates skipped reviews when the recorded base changes without mo
     JSON.stringify(merge.problems),
   );
   assert.notEqual(run('transition', '--to', 'finish').status, 0, 'Finish must require a fresh applicable review');
-  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json')));
+  const record = JSON.parse(readFileSync(join(cwd, '.factory/runs', id, 'run.json'), 'utf8'));
   assert.equal(record.base_sha, base);
   assert.equal(record.project_results, undefined);
   assert.equal(record.verify, undefined);
@@ -429,5 +469,10 @@ test('sync invalidates skipped reviews when the recorded base changes without mo
   );
   const inspection = run('inspect', '--json');
   assert.equal(inspection.status, 0, inspection.stderr);
-  assert.ok(JSON.parse(inspection.stdout)[0].problems.some((p) => p.code === 'stale-evidence'));
+  assert.ok(problemsOf(inspection.stdout).some((p) => p.code === 'stale-evidence'));
+});
+
+test('reviewPlan says so when the Run records no base commit', async () => {
+  const { reviewPlan } = await import('../src/project-reviews.js');
+  assert.throws(() => reviewPlan({ worktree: tmpdir(), project_reviews: [] }), /the Run records no base commit/);
 });

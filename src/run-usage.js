@@ -126,9 +126,13 @@ function sortRows(rows) {
  * Best-effort: it never throws and stays within a time budget.
  * @param {any} record the Run record after the change
  * @param {string} dir the Run folder
- * @param {{ home?: string, now?: number, budgetMs?: number }} [options]
+ * @param {{ home?: string, env?: NodeJS.ProcessEnv, now?: number, budgetMs?: number }} [options]
  */
-export function readUsage(record, dir, { home = os.homedir(), now = Date.now(), budgetMs = BUDGET_MS } = {}) {
+export function readUsage(
+  record,
+  dir,
+  { home = os.homedir(), env = process.env, now = Date.now(), budgetMs = BUDGET_MS } = {},
+) {
   const kept = record.metrics.usage;
   const untracked = (/** @type {string} */ reason) =>
     kept?.status === 'tracked' ? kept : { status: 'not tracked', reason };
@@ -141,6 +145,7 @@ export function readUsage(record, dir, { home = os.homedir(), now = Date.now(), 
     const from = Date.parse(record.created);
     const result = reader({
       home,
+      env,
       runId: id,
       sessions: Array.isArray(record.metrics.sessions) ? record.metrics.sessions : [],
       from: Number.isFinite(from) ? from : 0,
@@ -160,6 +165,7 @@ export function readUsage(record, dir, { home = os.homedir(), now = Date.now(), 
       rows,
     };
   } catch {
+    // Usage is best-effort and never throws (see above); an unexpected reader failure keeps the earlier Usage.
     return untracked('the session logs could not be read');
   }
 }

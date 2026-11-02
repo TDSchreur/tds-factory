@@ -12,6 +12,7 @@ export const references = Object.fromEntries(
 );
 export const flow = [main, ...Object.values(references)].join('\n');
 // A stage section of the main file, followed by the reference file that holds its details.
+/** @type {Record<string, string | string[]>} */
 const details = {
   Define: ['fast-track.md', 'define.md'],
   Build: 'exit-checklist.md',
@@ -21,6 +22,7 @@ const details = {
   'Invoked Skills': 'invoked-skills.md',
   'Stage agents': 'stage-agents.md',
 };
+/** @param {string} name */
 export function section(name) {
   const found = main.split(/^## /m).find((s) => s.startsWith(`${name}\n`));
   if (!found) throw new Error(`SKILL.md has no "## ${name}" section`);

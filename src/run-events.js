@@ -1,6 +1,8 @@
 // @ts-check
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
+/** @import { Run } from './run-record.js' */
 import { loopCap } from './run-record.js';
 
 // The event log of a Run (ADR 0021): append-only, one JSON object per line. It describes what happened and never feeds a gate or Evidence.
@@ -12,6 +14,7 @@ const isLink = (file) => {
   try {
     return fs.lstatSync(file).isSymbolicLink();
   } catch {
+    // No file yet, or one that cannot be inspected: not a link we know of. The open in appendEvent refuses links on its own.
     return false;
   }
 };
@@ -45,12 +48,26 @@ export function appendEvent(dir, event) {
       fs.closeSync(fd);
     }
   } catch {
+    // Best-effort, as the comment above says: the Run record is the source of truth, not its history.
     return false;
   }
 }
 
+/** @typedef {{ events: any[], damaged: number, unreadable?: boolean }} EventLog */
+/** @param {unknown} err @returns {EventLog} */
+const readFailure = (err) =>
+  err instanceof Error && 'code' in err && err.code === 'ENOENT'
+    ? { events: [], damaged: 0 }
+    : { events: [], damaged: 0, unreadable: true };
+// The part of the log a read looks at: the last WINDOW bytes, without the line they cut.
+/** @param {Buffer} buffer @param {number} size */
+const windowText = (buffer, size) => {
+  const text = buffer.toString('utf8');
+  return size > WINDOW ? text.slice(text.indexOf('\n') + 1) : text;
+};
+
 // Reads the end of the log. Lines that cannot be parsed are skipped and counted; the line cut by the read window is neither.
-/** @param {string} dir */
+/** @param {string} dir @returns {EventLog} */
 export function readEvents(dir) {
   const file = path.join(dir, EVENTS_FILE);
   if (isLink(file)) return { events: [], damaged: 0, unreadable: true };
@@ -63,16 +80,45 @@ export function readEvents(dir) {
       const length = Math.min(size, WINDOW),
         buffer = Buffer.alloc(length);
       fs.readSync(fd, buffer, 0, length, size - length);
-      text = buffer.toString('utf8');
-      if (size > WINDOW) text = text.slice(text.indexOf('\n') + 1);
+      text = windowText(buffer, size);
     } finally {
       fs.closeSync(fd);
     }
   } catch (err) {
-    return err instanceof Error && 'code' in err && err.code === 'ENOENT'
-      ? { events: [], damaged: 0 }
-      : { events: [], damaged: 0, unreadable: true };
+    return readFailure(err);
   }
+  return parseEvents(text);
+}
+// The same read without blocking the event loop, for the Dashboard.
+/** @param {string} dir @returns {Promise<EventLog>} */
+export async function readEventsAsync(dir) {
+  const file = path.join(dir, EVENTS_FILE);
+  try {
+    if ((await fsp.lstat(file)).isSymbolicLink()) return { events: [], damaged: 0, unreadable: true };
+  } catch {
+    // No file yet, or one that cannot be inspected: not a link we know of; the open below reports what it finds.
+  }
+  let text;
+  try {
+    const handle = await fsp.open(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | NONBLOCK);
+    try {
+      const st = await handle.stat();
+      if (!st.isFile() || st.nlink !== 1) return { events: [], damaged: 0, unreadable: true };
+      const length = Math.min(st.size, WINDOW),
+        buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, st.size - length);
+      text = windowText(buffer, st.size);
+    } finally {
+      await handle.close();
+    }
+  } catch (err) {
+    return readFailure(err);
+  }
+  return parseEvents(text);
+}
+
+/** @param {string} text @returns {EventLog} */
+function parseEvents(text) {
   const events = [];
   let damaged = 0;
   for (const line of text.split('\n')) {
@@ -89,6 +135,7 @@ export function readEvents(dir) {
         events.push(value);
       else damaged++;
     } catch {
+      // A line that is not JSON is counted as damaged and reported with the history.
       damaged++;
     }
   }
@@ -97,8 +144,8 @@ export function readEvents(dir) {
 
 // The events a change of the Run record stands for, found by comparing the record before and after, so no operation can forget one.
 /**
- * @param {Record<string, any>} old
- * @param {Record<string, any>} next
+ * @param {Run} old
+ * @param {Run} next
  */
 export function deriveEvents(old, next) {
   /** @type {Record<string, unknown>[]} */

@@ -4,14 +4,28 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
+import { metricsOf } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+/** @param {import('node:child_process').SpawnSyncReturns<string>} result */
 const ok = (result) => {
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8'));
+/** @param {unknown} value */
 const data = (value) => JSON.stringify(value);
 
 // A Run in Check with a clean Check for its current head, on top of `origin` (the same repository).
@@ -38,6 +52,10 @@ function checked() {
   ok(run(cwd, 'transition', '--id', id, '--to', 'check'));
   return { cwd, id, wt };
 }
+/**
+ * @param {string} cwd
+ * @param {string} id
+ */
 const review = (cwd, id) => {
   ok(run(cwd, 'verify', '--id', id));
   for (const [axis, value] of [
@@ -48,6 +66,12 @@ const review = (cwd, id) => {
   ])
     ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
+/**
+ * @param {string} cwd
+ * @param {string} file
+ * @param {string} text
+ * @param {string} message
+ */
 const advance = (cwd, file, text, message) => {
   writeFileSync(join(cwd, file), text);
   git(cwd, 'add', '-A');
@@ -75,7 +99,7 @@ test('sync rebases onto the moved base, records it and clears the Evidence', () 
   ])
     assert.equal(key in after, false, key);
   assert.equal(after.check_loops, 0);
-  assert.deepEqual(after.metrics.verdicts, before.metrics.verdicts, 'observed Check history stays');
+  assert.deepEqual(metricsOf(after).verdicts, metricsOf(before).verdicts, 'observed Check history stays');
   assert.equal(after.title, before.title);
   assert.notEqual(
     run(cwd, 'transition', '--id', id, '--to', 'finish').status,
@@ -90,7 +114,7 @@ test('sync keeps the Evidence when the base has not moved', () => {
   const before = read(cwd, id);
   ok(run(cwd, 'sync', '--id', id));
   const after = read(cwd, id);
-  for (const key of ['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed'])
+  for (const key of /** @type {const} */ (['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed']))
     assert.deepEqual(after[key], before[key], key);
 });
 

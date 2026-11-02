@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { chipsOf } from '../dashboard/model.js';
+import { runView } from './run-view.js';
 
-const rows = (run) => chipsOf(run).map((c) => [c.key, c.icon, c.label, c.value, c.cls]);
+/** @param {Partial<import('../dashboard/model.js').RunView>} run */
+const rows = (run) => chipsOf(runView(run)).map((c) => [c.key, c.icon, c.label, c.value, c.cls]);
 
 test('each Run fact is a row with an icon, a label and a value', () => {
   assert.deepEqual(
@@ -14,7 +16,7 @@ test('each Run fact is a row with an icon, a label and a value', () => {
       spec: 'fail',
       security: 'pass',
       infrastructure: 'skipped',
-      projectReviews: [{ id: 'ux', name: 'UX', verdict: 'pass' }],
+      projectReviews: [{ id: 'ux', name: 'UX', verdict: 'pass', reason: '', findings: [] }],
       loops: 1,
       loopCap: 5,
     }),
@@ -37,7 +39,7 @@ test('the Full track has its own icon, and a Run with nothing recorded has no ro
 });
 
 test('every row has a plain-text reading and an explanation', () => {
-  for (const c of chipsOf({ track: 'fast', standards: 'pass', loops: 0 })) {
+  for (const c of chipsOf(runView({ track: 'fast', standards: 'pass', loops: 0 }))) {
     assert.equal(c.text, `${c.label} ${c.value}`);
     assert.ok(c.tip.length > 10, c.key);
   }

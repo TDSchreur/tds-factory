@@ -6,7 +6,7 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 
 | You need                                                                                     | Check it with                             | Notes                                                                                                                                                       |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node 24 or newer                                                                             | `node --version`                          | Installs from nodejs.org, your package manager or nvm.                                                                                                      |
+| Node 24.4 or newer                                                                           | `node --version`                          | Installs from nodejs.org, your package manager or nvm.                                                                                                      |
 | git (2.38 or later)                                                                          | `git --version`                           | The Factory works in git worktrees, so the project must be a git repository with an `origin` remote.                                                        |
 | GitHub CLI, signed in                                                                        | `gh auth status`                          | Tickets and pull requests go through `gh`. Sign in with `gh auth login`.                                                                                    |
 | Azure CLI with the `azure-devops` extension, signed in (only for Azure DevOps pull requests) | `az extension list` and `az account show` | The Dashboard reads the status of an Azure DevOps pull request with `az`. Run `az extension add --name azure-devops` and `az login`. Nothing else needs it. |
@@ -61,7 +61,7 @@ tds-factory install --agent copilot
 | Agent               | Folder `tds-factory install --agent <name>` writes to |
 | ------------------- | ----------------------------------------------------- |
 | `copilot`           | `~/.copilot/skills`                                   |
-| `claude`            | `~/.claude/skills`                                    |
+| `claude`            | `~/.claude/skills` (see below)                        |
 | `codex`             | `~/.agents/skills`                                    |
 | `all` (the default) | Claude and Codex folders, which Copilot also reads    |
 
@@ -82,6 +82,8 @@ Install options:
 | codex   | `.agents/skills`  | `~/.agents/skills`  |
 | copilot | `.github/skills`  | `~/.copilot/skills` |
 
+Claude Code reads its user-level folder from `CLAUDE_CONFIG_DIR` when that variable is set to a non-empty value, and from `~/.claude` otherwise. `install`, `doctor`, project reviews and Usage follow the same rule, so with the variable set the Claude skills and agents go to `$CLAUDE_CONFIG_DIR/skills` and `$CLAUDE_CONFIG_DIR/agents` (a relative value is resolved against the current directory). `--project` installs and the Codex and Copilot folders do not change.
+
 After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
 
 ### Check that your agent sees the skills
@@ -91,7 +93,7 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 ## 4. Update
 
-Run `tds-factory update`. It looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and then runs `tds-factory install --force` so the skills and agents match the CLI. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades.
+Run `tds-factory update`. It looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and then runs `tds-factory install --force` so the skills and agents match the CLI. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades. Each request it makes ends after 30 seconds (the download after 120 seconds) and is retried like a server error, so an unreachable server ends the command with an error instead of leaving it hanging.
 
 `--force` replaces agent files and skills you edited with the defaults, and any skill folder of the same name that `tds-factory` did not install. To keep them, run `tds-factory update --no-force`. To change the model of a Stage you do not need `--force` or edits to agent files: set it in the project's `.factory/config.json` (see [Set project options](usage.md#set-project-options)).
 

@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { dirname, posix, resolve } from 'node:path';
 
+/** @param {string} file */
 const read = (file) => readFileSync(resolve(file), 'utf8');
 const scripts = JSON.parse(read('package.json')).scripts;
+const PROJECTS = ['tsconfig.json', 'dashboard/tsconfig.json', 'test/tsconfig.json'];
 
 test('npm run check runs lint, format:check and typecheck, and the docs name it', () => {
   for (const name of ['lint', 'format:check', 'typecheck']) {
@@ -20,7 +22,17 @@ test('every folder with tracked JavaScript is inside the lint, format and typech
   assert.equal(scripts.lint, 'eslint .');
   assert.match(scripts['format:check'], /"\*\*\/\*\.\{[^}]*\bjs\b[^}]*\}"/);
   const tracked = execFileSync('git', ['ls-files', '*.js'], { encoding: 'utf8' }).split('\n').filter(Boolean);
-  const { include } = JSON.parse(read('tsconfig.json'));
+  // Each project lists its folders relative to its own tsconfig; together they must cover every tracked file.
+  const include = PROJECTS.flatMap((config) => {
+    const dir = dirname(config);
+    /** @type {string[]} */
+    const globs = JSON.parse(read(config)).include;
+    return globs.map((glob) => posix.normalize(posix.join(dir, glob)));
+  });
+  /**
+   * @param {string} glob
+   * @param {string} file
+   */
   const matches = (glob, file) =>
     new RegExp(
       '^' +
@@ -34,5 +46,41 @@ test('every folder with tracked JavaScript is inside the lint, format and typech
     (file) =>
       !file.startsWith('vendor/') && !file.startsWith('dashboard/vendor/') && !include.some((g) => matches(g, file)),
   );
-  assert.deepEqual(outside, [], 'add the folder to the include list in tsconfig.json');
+  assert.deepEqual(outside, [], 'add the folder to the include list of a tsconfig.json');
+});
+
+test('the typecheck runs the three projects, and every test file is checked', () => {
+  assert.equal(
+    scripts.typecheck,
+    'tsc -p tsconfig.json && tsc -p dashboard/tsconfig.json && tsc -p test/tsconfig.json',
+  );
+  assert.equal(existsSync(resolve('test/tsconfig.unchecked.json')), false, 'no test project opts out of the checkJs');
+  assert.deepEqual(JSON.parse(read('test/tsconfig.json')).include, ['**/*.js']);
+  /** @param {string} config */
+  const options = (config) => JSON.parse(read(config)).compilerOptions;
+  assert.equal(options('tsconfig.json').checkJs, true);
+  assert.equal(options('dashboard/tsconfig.json').checkJs, true);
+  assert.equal(options('test/tsconfig.json').checkJs, true);
+  assert.deepEqual(options('tsconfig.json').types, ['node']);
+  assert.deepEqual(options('dashboard/tsconfig.json').types, [], 'the Dashboard runs in a browser: no Node types');
+  assert.ok(options('dashboard/tsconfig.json').lib.includes('DOM'));
+  for (const config of PROJECTS) assert.equal(options(config).strict, true, `${config} is not strict`);
+  for (const config of ['tsconfig.json', 'test/tsconfig.json']) {
+    assert.equal(options(config).target, 'ES2024', `${config} does not target ES2024`);
+    assert.deepEqual(options(config).lib, ['ES2024'], `${config} has a lib other than ES2024`);
+  }
+});
+
+test('no production or test code has a per-file opt-out from the typecheck', () => {
+  const tracked = execFileSync('git', ['ls-files', 'bin', 'src', 'scripts', 'eval', 'test', 'dashboard/*.js'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter((file) => file.endsWith('.js') && !file.startsWith('dashboard/vendor/'));
+  assert.ok(tracked.length > 20);
+  const optOut = /@ts-(?:nocheck|ignore|expect-error)/;
+  assert.deepEqual(
+    tracked.filter((file) => optOut.test(read(file))),
+    [],
+  );
 });

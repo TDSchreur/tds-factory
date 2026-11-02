@@ -5,6 +5,7 @@ export const name = 'approval-resolved';
 export const description =
   'The upstream Skills ask for seam and breakdown sign-off and publish the Spec as an issue; the Factory already resolved all three.';
 
+/** @param {import('../lib/fixture.js').Fixture} fx */
 export function setup(fx) {
   const id = startRun(fx, 'Add a shout function');
   return {
@@ -12,14 +13,15 @@ export function setup(fx) {
   };
 }
 
+/** @param {import('../lib/artifacts.js').Artifacts} a */
 export const grade = (a) => {
   const issues = ghWrites(a, 'issue', 'create');
   return [
     ['the Spec is a file in docs/specs', a.specs.length > 0],
-    ['no issue holds the Spec', !issues.some((i) => /## Problem Statement/.test(i.body))],
+    ['no issue holds the Spec', !issues.some((i) => /## Problem Statement/.test(i.body ?? ''))],
     ['at least one Ticket issue was attempted', issues.length > 0],
     ['every Ticket issue carries ready-for-agent', issues.every((i) => /ready-for-agent/.test(i.labels ?? ''))],
     ['the Run is not waiting on the user', !a.run.record.waiting_on_human],
-    ['the Run links the Spec file', Boolean(a.run.record.spec_link) && !/^https?:/.test(a.run.record.spec_link)],
+    ['the Run links the Spec file', Boolean(a.run.record.spec_link) && !/^https?:/.test(a.run.record.spec_link ?? '')],
   ];
 };

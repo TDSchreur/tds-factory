@@ -5,8 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './eval-root.js';
+import { fromJson } from './run-view.js';
 
 // The eval harness drives agents through POSIX shell commands and a shell script for gh.
+/**
+ * @param {string} name
+ * @param {import('node:test').TestFn} fn
+ */
 const test = (name, fn) =>
   run(name, { skip: process.platform === 'win32' && 'the eval harness needs a POSIX shell' }, fn);
 
@@ -15,7 +20,12 @@ const gh = join(ROOT, 'eval', 'bin', 'gh');
 const runner = join(ROOT, 'eval', 'run.js');
 const sandbox = () => join(mkdtempSync(join(tmpdir(), 'eval-shim-')), 'actions.jsonl');
 
+/**
+ * @param {string} log
+ * @param {...string} args
+ */
 const shim = (log, ...args) => spawnSync(gh, args, { env: { ...process.env, EVAL_ACTION_LOG: log }, encoding: 'utf8' });
+/** @param {string} log */
 const logged = (log) =>
   readFileSync(log, 'utf8')
     .split('\n')
@@ -46,6 +56,10 @@ test('npm run eval without an agent runs nothing and says why', () => {
 });
 
 // The real runner and graders, with a scripted stand-in for the agent.
+/**
+ * @param {string} scenario
+ * @param {string} agentCommand
+ */
 const grade = (scenario, agentCommand) =>
   spawnSync('node', [runner, 'copilot', scenario], {
     env: { ...process.env, EVAL_AGENT_CMD: agentCommand },
@@ -147,7 +161,13 @@ test('Follow-up grader rejects missing scope, stale Evidence, excess loops and a
     pr: 'https://github.com/eval/fixture/pull/7',
     follow_up: { failures: [{ name: 'unit' }], threads: [{ comments: [{ body: 'Handle empty names' }] }] },
   };
-  const artifacts = (changes = {}, actions = []) => ({ run: { record: { ...record, ...changes } }, actions });
+  /**
+   * Artifacts as a scenario grader reads them; the changes may be of any shape, since the grader reads records from disk.
+   * @param {Record<string, unknown>} [changes]
+   * @param {unknown[]} [actions]
+   */
+  const artifacts = (changes = {}, actions = []) => fromJson({ run: { record: { ...record, ...changes } }, actions });
+  /** @param {import('../eval/lib/artifacts.js').Artifacts} value */
   const results = (value) => Object.fromEntries(followUpGrade(value));
   assert.ok(Object.values(results(artifacts())).every(Boolean));
   assert.equal(results(artifacts({ follow_up: {} }))['the CI failure and unresolved comment are in scope'], false);

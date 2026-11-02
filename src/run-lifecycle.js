@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { stages } from './flow.js';
+import { git as runGit, gitStep, runSync } from './git.js';
+/** @import { Step } from './git.js' */
+/** @import { Run, Stage, Track } from './run-record.js' */
+import { stages, isStage, stageIndex } from './flow.js';
+import { codeOf, messageOf, oneOf } from './narrow.js';
 import { loadProjectConfig, frozenSettings } from './project-config.js';
 import {
   loopCap,
@@ -16,12 +19,17 @@ import {
   fastCommandProblem,
   verifyCommandProblem,
   loops,
+  isTrack,
 } from './run-record.js';
-import { runRoot, changeRun, changeRunning } from './run-folder.js';
-import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
+import { runRoot, changeRun, changeRunning, changeRunningFlow } from './run-folder.js';
+import { fetchOriginDefault, fetchOriginDefaultFlow, mergeProblem, worktreeStateFlow } from './worktrees.js';
 import { finishProblems, clearEvidence } from './evidence.js';
 import { newMetrics, moveVisit, firstCheck, recordCauses, REWORK_CAUSES } from './run-metrics.js';
 
+/**
+ * @param {string} projectDir
+ * @param {Partial<Run>} data
+ */
 export function startRun(projectDir, data) {
   validate(data);
   if (Object.keys(data).some((key) => !['title', 'agent', 'commands', 'fast_commands', 'conventions'].includes(key)))
@@ -31,7 +39,8 @@ export function startRun(projectDir, data) {
   checkCommands(data.commands);
   const fastProblem = fastCommandProblem(data.fast_commands);
   if (fastProblem) throw new Error(fastProblem);
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  /** @param {...string} args */
+  const git = (...args) => runGit(projectDir, args);
   if (git('rev-parse', '--git-dir').status !== 0)
     throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0)
@@ -53,7 +62,7 @@ export function startRun(projectDir, data) {
     try {
       fs.mkdirSync(path.join(root, id));
     } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
+      if (codeOf(err) !== 'EEXIST') throw err;
       id = `${base}-${n++}`;
       continue;
     }
@@ -73,6 +82,9 @@ export function startRun(projectDir, data) {
     write(path.join(root, id), {
       ...apply(
         {
+          // The type of a Run needs these two here; the second argument sets them again, after `data`, so `data` cannot override them.
+          worktree,
+          base_sha: commit,
           stage: 'define',
           status: 'running',
           waiting_on_human: false,
@@ -91,6 +103,7 @@ export function startRun(projectDir, data) {
       metrics: newMetrics(now),
     });
   } catch (err) {
+    /** @type {string[]} */
     const failures = [];
     if (created) {
       const removed = git('worktree', 'remove', worktree);
@@ -104,14 +117,19 @@ export function startRun(projectDir, data) {
     try {
       fs.rmdirSync(path.join(root, id));
     } catch (cleanup) {
-      failures.push(`Run folder remains at ${path.join(root, id)}: ${cleanup.message}`);
+      failures.push(`Run folder remains at ${path.join(root, id)}: ${messageOf(cleanup)}`);
     }
-    if (failures.length) throw new Error(`${err.message}; rollback failed: ${failures.join('; ')}`, { cause: err });
+    if (failures.length) throw new Error(`${messageOf(err)}; rollback failed: ${failures.join('; ')}`, { cause: err });
     throw err;
   }
   return id;
 }
 
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {Partial<Run>} data
+ */
 export function updateRun(projectDir, id, data) {
   changeRun(projectDir, id, (old) => {
     validate(data);
@@ -123,29 +141,35 @@ export function updateRun(projectDir, id, data) {
     if ('commands' in data) checkCommands(data.commands);
     if ('fast_commands' in data) throw new Error('the fast Verify command is set when the Run starts');
     if (data.status === 'done') throw new Error('a Run is completed with run complete');
-    if ('status' in data && ['done', 'abandoned'].includes(old.status))
+    if ('status' in data && oneOf(['done', 'abandoned'], old.status))
       throw new Error(`a ${old.status} Run cannot change status`);
     const next = apply(old, data);
     return data.status === 'abandoned' ? moveVisit(next, null) : next;
   });
 }
 
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {string | undefined} to
+ * @param {{ activity?: string }} [data]
+ */
 export function transitionRun(projectDir, id, to, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     // Runs recorded before the Prepare Stage was removed still say `prepare`; they are in Define.
     const from = old.stage === 'prepare' ? 'define' : old.stage;
-    const next = stages[stages.indexOf(from) + 1];
-    if (!stages.includes(to) || to !== next)
+    const next = stages[stageIndex(from ?? '') + 1];
+    if (!isStage(to) || to !== next)
       throw new Error(`a Run in ${from} can only move to ${next ?? 'nowhere'}, not ${to}`);
     // Everything from Build on depends on verification, so an unusable command stops the Run here.
-    const commandProblem = ['build', 'check', 'finish'].includes(to) && verifyCommandProblem(old.commands);
+    const commandProblem = oneOf(['build', 'check', 'finish'], to) && verifyCommandProblem(old.commands);
     if (commandProblem)
       throw new Error(`${to[0].toUpperCase()}${to.slice(1)} needs a usable Verify command: ${commandProblem}`);
     if (to === 'build') {
-      const missing = [!old.spec_link && 'a Spec link', !(old.tickets?.length > 0) && 'Tickets'].filter(Boolean);
+      const missing = [!old.spec_link && 'a Spec link', !((old.tickets?.length ?? 0) > 0) && 'Tickets'].filter(Boolean);
       if (missing.length) throw new Error(`Build needs ${missing.join(' and ')}`);
     }
-    if (['build', 'check'].includes(to) && trackOf(old) === 'fast' && old.tickets?.length !== 1) {
+    if (oneOf(['build', 'check'], to) && trackOf(old) === 'fast' && old.tickets?.length !== 1) {
       throw new Error(`the Fast track needs exactly one Ticket, not ${old.tickets?.length ?? 0}`);
     }
     if (to === 'check' && (!old.tickets_total || old.tickets_done !== old.tickets_total))
@@ -166,52 +190,77 @@ export function transitionRun(projectDir, id, to, data = {}) {
 }
 
 // The user's choice of Track, recorded only in Define; a record without one is a Full track Run.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {string | undefined} value
+ */
 export function trackRun(projectDir, id, value) {
-  if (!tracks.includes(value)) throw new Error(`track must be ${tracks.join(' or ')}`);
+  if (!isTrack(value)) throw new Error(`track must be ${tracks.join(' or ')}`);
   changeRunning(projectDir, id, {}, (old) => {
-    if (!['define', 'prepare'].includes(old.stage)) throw new Error('the track is chosen in Define');
+    if (!oneOf(['define', 'prepare'], old.stage)) throw new Error('the track is chosen in Define');
     return { record: { ...old, track: value }, activity: `${value === 'fast' ? 'Fast' : 'Full'} track chosen` };
   });
 }
 
-export function acceptRun(projectDir, id, data) {
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {unknown} data
+ * @returns {Generator<Step, void, any>}
+ */
+export function* acceptRunFlow(projectDir, id, data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
   if (Object.keys(data).some((key) => !['findings', 'decision'].includes(key)))
     throw new Error('accept takes only findings and decision');
-  for (const key of ['findings', 'decision'])
-    if (typeof data[key] !== 'string' || !data[key].trim()) throw new Error(`accept needs ${key}`);
-  changeRunning(projectDir, id, {}, (old) => {
+  const { findings, decision } = /** @type {Record<string, unknown>} */ (data);
+  if (typeof findings !== 'string' || !findings.trim()) throw new Error('accept needs findings');
+  if (typeof decision !== 'string' || !decision.trim()) throw new Error('accept needs decision');
+  yield* changeRunningFlow(projectDir, id, {}, function* (old) {
     if (old.stage !== 'check') throw new Error('only a Run in Check can accept its Check');
-    const { head, dirty } = worktreeState(old);
+    const { head, dirty } = yield* worktreeStateFlow(old);
     if (dirty) throw new Error('cannot accept a Check while the Run worktree has uncommitted changes');
     return {
       record: {
         ...old,
-        accepted: { findings: data.findings, decision: data.decision, head, at: new Date().toISOString() },
+        accepted: { findings, decision, head, at: new Date().toISOString() },
       },
       activity: 'Check accepted by the user',
     };
   });
 }
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {unknown} data
+ */
+export const acceptRun = (projectDir, id, data) => runSync(acceptRunFlow(projectDir, id, data));
 // Rebases onto origin's default branch. A changed head or recorded base makes Evidence stale, so it goes.
-export function syncRun(projectDir, id, data = {}) {
-  changeRunning(projectDir, id, data, (old) => {
-    if (!['build', 'check'].includes(old.stage)) throw new Error('only a Run in Build or Check can be synced');
-    const git = (...args) => spawnSync('git', args, { cwd: old.worktree, encoding: 'utf8' });
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ activity?: string }} [data]
+ * @returns {Generator<Step, void, any>}
+ */
+export function* syncRunFlow(projectDir, id, data = {}) {
+  yield* changeRunningFlow(projectDir, id, data, function* (old) {
+    if (!oneOf(['build', 'check'], old.stage)) throw new Error('only a Run in Build or Check can be synced');
+    /** @param {...string} args */
+    const git = (...args) => gitStep(old.worktree, args);
     // A rebase the user left open is theirs to finish; starting another or aborting it would lose their work.
     for (const dir of ['rebase-merge', 'rebase-apply']) {
-      if (fs.existsSync(path.resolve(old.worktree, git('rev-parse', '--git-path', dir).stdout.trim())))
+      if (fs.existsSync(path.resolve(old.worktree, (yield* git('rev-parse', '--git-path', dir)).stdout.trim())))
         throw new Error(
           'a rebase is already in progress in the Run worktree: finish it with git rebase --continue (or stop it with git rebase --abort), then run sync again',
         );
     }
-    const { head, dirty } = worktreeState(old);
+    const { head, dirty } = yield* worktreeStateFlow(old);
     if (dirty) throw new Error('cannot sync while the Run worktree has uncommitted changes');
-    const base = fetchOriginDefault(projectDir);
-    const rebased = git('rebase', base);
+    const base = yield* fetchOriginDefaultFlow(projectDir);
+    const rebased = yield* git('rebase', base);
     if (rebased.status !== 0) {
-      const files = git('diff', '--name-only', '--diff-filter=U').stdout.trim().split('\n').filter(Boolean);
-      const aborted = git('rebase', '--abort');
+      const files = (yield* git('diff', '--name-only', '--diff-filter=U')).stdout.trim().split('\n').filter(Boolean);
+      const aborted = yield* git('rebase', '--abort');
       const why = files.length ? `conflicts in ${files.join(', ')}` : `failed: ${rebased.stderr.trim()}`;
       if (aborted.status !== 0)
         throw new Error(`rebase onto origin ${why}; it could not be aborted: ${aborted.stderr.trim()}`);
@@ -219,13 +268,25 @@ export function syncRun(projectDir, id, data = {}) {
         `rebase onto origin ${why}; the branch is unchanged. To resolve it, run git rebase ${base} in the Run worktree, fix each conflicted file, git add it, run git rebase --continue, then run sync again`,
       );
     }
-    const moved = worktreeState(old).head !== head;
+    const moved = (yield* worktreeStateFlow(old)).head !== head;
     const changed = moved || old.base_sha !== base;
     const record = changed ? clearEvidence({ ...old, base_sha: base }) : { ...old, base_sha: base };
     return { record, activity: changed ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
   });
 }
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ activity?: string }} [data]
+ */
+export const syncRun = (projectDir, id, data = {}) => runSync(syncRunFlow(projectDir, id, data));
 
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ activity?: string }} [data]
+ * @param {string[]} [causes]
+ */
 export function reworkRun(projectDir, id, data = {}, causes = []) {
   const unknown = causes.find((cause) => !REWORK_CAUSES.includes(cause));
   if (unknown !== undefined) throw new Error(`unknown cause "${unknown}" (use ${REWORK_CAUSES.join(', ')})`);
@@ -242,6 +303,11 @@ export function reworkRun(projectDir, id, data = {}, causes = []) {
 }
 // The user's decision to allow one more Rework (ADR 0024). Not reachable from the command line: only the Dashboard route calls it.
 // `updated` is the record time the user saw; a Run that changed since is refused.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ updated?: string }} [options]
+ */
 export function grantLoopRun(projectDir, id, { updated } = {}) {
   changeRun(projectDir, id, (old) => {
     if (old.stage !== 'check') throw new Error('only a Run in Check can be granted an extra loop');
@@ -260,12 +326,17 @@ export function grantLoopRun(projectDir, id, { updated } = {}) {
     };
   });
 }
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ activity?: string }} [data]
+ */
 export function completeRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
-    if (!['finish', 'follow-up'].includes(old.stage))
+    if (!oneOf(['finish', 'follow-up'], old.stage))
       throw new Error('only a Run in Finish or Follow-up can be completed');
     if (!old.pr) throw new Error('completing a Run needs a PR link');
-    if (old.tickets_done > old.tickets_total)
+    if (old.tickets_done !== undefined && old.tickets_total !== undefined && old.tickets_done > old.tickets_total)
       throw new Error(`more Tickets done (${old.tickets_done}) than counted (${old.tickets_total})`);
     return {
       record: { ...moveVisit(old, null), status: 'done', waiting_on_human: false, waiting_reason: '' },

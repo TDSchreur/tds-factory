@@ -1,4 +1,80 @@
 // Constants and pure helpers of the Dashboard page. No DOM access.
+
+// The shape of one Run as the Dashboard reads it: the result of interpretRun in src/dashboard.js plus the PR lookups of the views route.
+// It is declared here and not imported from src/, because this folder is checked without Node types (see dashboard/tsconfig.json).
+// src/dashboard.js declares that interpretRun returns this shape, so the two cannot drift apart unnoticed.
+
+/**
+ * @typedef {object} UsageRowView
+ * @property {string} label
+ * @property {string} fresh
+ * @property {string} input
+ * @property {string} cacheRead
+ * @property {string} cacheWrite
+ * @property {string} output
+ * @property {string | null} reasoning
+ * @property {string} subagents
+ */
+/**
+ * @typedef {object} UsageTileView
+ * @property {number | null} ticket
+ * @property {string | null} bucket
+ * @property {string} fresh
+ * @property {string[]} models
+ * @property {{ model: string, fresh: string, input: string, cacheRead: string, cacheWrite: string, output: string }[]} breakdown
+ */
+/**
+ * @typedef {object} MetricsView
+ * @property {Record<string, string>} stages
+ * @property {string} [track]
+ * @property {string} reworks
+ * @property {string} reworkCauses
+ * @property {string} firstPass
+ * @property {string} tokens
+ * @property {{ tokens: string, rows: UsageRowView[], gaps: { label: string }[], tiles: UsageTileView[] }} usage
+ * @property {string} cost
+ */
+/** @typedef {{ severity: string, description: string, location: string }} FindingView */
+/** @typedef {{ id: string, name: string, verdict: string, reason: string, findings: FindingView[] }} ProjectReviewView */
+/** @typedef {Record<string, string | number | boolean>} EventView */
+/** @typedef {{ checking?: boolean, unavailable?: string, state?: string, draft?: boolean, checks?: { result?: string, failing?: string[] }, merge?: string, review?: string }} PrStatusData */
+/**
+ * @typedef {object} RunView
+ * @property {string} id
+ * @property {boolean} unreadable
+ * @property {string} title
+ * @property {string} activity
+ * @property {string} agent
+ * @property {boolean} waiting
+ * @property {string} reason
+ * @property {string} column The Stage key, or `done`.
+ * @property {string} updated
+ * @property {string[]} files
+ * @property {{ label: string, href: string }[]} links
+ * @property {string} status
+ * @property {string} pr
+ * @property {{ requested: string, effort: string, observed: string }} model
+ * @property {string} lastSeen
+ * @property {EventView[]} events
+ * @property {number} eventsDamaged
+ * @property {MetricsView} [metrics]
+ * @property {'fast' | 'full'} [track]
+ * @property {ProjectReviewView[]} [projectReviews]
+ * @property {string[]} [tickets]
+ * @property {number | null} [ticketsDone]
+ * @property {number | null} [ticketsTotal]
+ * @property {string} [standards]
+ * @property {string} [spec]
+ * @property {string} [security]
+ * @property {string} [infrastructure]
+ * @property {number | null} [loops]
+ * @property {number} [loopCap]
+ * @property {string} [prState]
+ * @property {PrStatusData | null} [prStatus]
+ * @property {string} [prHost]
+ * @property {boolean} [prCanMerge]
+ */
+/** @type {{ key: string, label: string, help: string }[]} */
 export const COLUMNS = [
   {
     key: 'define',
@@ -32,6 +108,7 @@ export const COLUMNS = [
   },
 ];
 
+/** @type {Record<string, string>} */
 export const CHIP_HELP = {
   tickets: 'Tickets finished out of the Tickets cut from the Spec.',
   standards: 'Check verdict: does the code follow the project conventions?',
@@ -48,14 +125,17 @@ export const STALE_MS = 10 * 60 * 1000;
 export const OLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Lenient reader: any field may be missing or of the wrong type.
+/** @param {unknown} v */
 export const str = (v) => (typeof v === 'string' ? v.trim() : '');
 
 // Age in ms of an ISO timestamp, or null when missing or unparseable.
+/** @param {unknown} iso */
 export function ageMs(iso) {
-  const t = Date.parse(iso);
+  const t = Date.parse(String(iso));
   return Number.isNaN(t) ? null : Date.now() - t;
 }
 
+/** @param {number} ms */
 export function ago(ms) {
   const m = Math.floor(ms / 60000);
   if (m < 1) return 'just now';
@@ -65,18 +145,23 @@ export function ago(ms) {
 }
 
 // Only http(s) links become anchors.
+/** @param {unknown} v */
 export function safeUrl(v) {
   const u = str(v);
   return /^https?:\/\//i.test(u) ? u : '';
 }
 
 // The chips of a card, in display order: { key, cls, text, tip }.
+/** @type {Record<string, string>} */
 const VERDICT_ICON = { pass: '✓', fail: '✗', skipped: '⊘' };
 
 // One row per fact of the Run: an icon, a label and a value. `cls` colours the row and `text` is its plain reading.
+/** @param {string} key @param {string} cls @param {string} icon @param {string} label @param {string} value @param {string} tip */
 const row = (key, cls, icon, label, value, tip) => ({ key, cls, icon, label, value, text: `${label} ${value}`, tip });
 
+/** @param {RunView} run */
 export function chipsOf(run) {
+  /** @type {ReturnType<typeof row>[]} */
   const chips = [];
   if (run.track)
     chips.push(
@@ -100,12 +185,14 @@ export function chipsOf(run) {
         CHIP_HELP.tickets,
       ),
     );
-  for (const [key, label] of [
+  /** @type {['standards' | 'spec' | 'security' | 'infrastructure', string][]} */
+  const verdictKeys = [
     ['standards', 'Standards'],
     ['spec', 'Spec'],
     ['security', 'Security'],
     ['infrastructure', 'Infrastructure'],
-  ]) {
+  ];
+  for (const [key, label] of verdictKeys) {
     if (run[key]) chips.push(row(key, run[key], VERDICT_ICON[run[key]] ?? '•', label, run[key], CHIP_HELP[key]));
   }
   for (const review of run.projectReviews ?? []) {
@@ -136,6 +223,7 @@ export function chipsOf(run) {
 }
 
 // Short label of a Ticket link: "#111" for an issue URL, the file name for a path.
+/** @param {unknown} link */
 export const ticketLabel = (link) => {
   const last =
     str(link)
@@ -147,19 +235,22 @@ export const ticketLabel = (link) => {
 };
 
 // The Tickets of a card with their state: Tickets finish in order, so the first ticketsDone are done and the next is active during Build.
+/** @param {RunView} run */
 export function ticketsOf(run) {
   const done = Math.min(run.ticketsDone || 0, (run.tickets || []).length);
   return (run.tickets || []).map((href, i) => ({
     href,
     label: ticketLabel(href),
     state: i < done ? 'done' : i === done && run.column === 'build' ? 'active' : 'todo',
+    /** @type {UsageTileView | null} */
     usage: null,
   }));
 }
 
 // The Tickets with their Usage tile (a todo Ticket has none), and the Rework bucket as a tile of its own at the end.
+/** @param {RunView} run */
 export function ticketTilesOf(run) {
-  const tiles = Array.isArray(run.metrics?.usage?.tiles) ? run.metrics.usage.tiles : [];
+  const tiles = run.metrics?.usage && Array.isArray(run.metrics.usage.tiles) ? run.metrics.usage.tiles : [];
   const tickets = ticketsOf(run).map((t, i) => ({
     ...t,
     key: t.href,
@@ -172,6 +263,7 @@ export function ticketTilesOf(run) {
 }
 
 // The last segment of a project path, with either kind of separator; empty when there is none.
+/** @param {unknown} path */
 export const folderName = (path) =>
   String(path ?? '')
     .split(/[\\/]/)
@@ -179,15 +271,21 @@ export const folderName = (path) =>
     .pop() ?? '';
 
 // Ticket progress of a card: null without a positive Ticket total, so an old Run shows no bar.
+/** @param {RunView} run */
 export function progressOf(run) {
-  const total = Number.isSafeInteger(run.ticketsTotal) && run.ticketsTotal > 0 ? run.ticketsTotal : 0;
+  const { ticketsTotal, ticketsDone } = run;
+  const total =
+    typeof ticketsTotal === 'number' && Number.isSafeInteger(ticketsTotal) && ticketsTotal > 0 ? ticketsTotal : 0;
   if (!total) return null;
-  const done = Number.isSafeInteger(run.ticketsDone) && run.ticketsDone > 0 ? run.ticketsDone : 0;
+  const done =
+    typeof ticketsDone === 'number' && Number.isSafeInteger(ticketsDone) && ticketsDone > 0 ? ticketsDone : 0;
   return { done: Math.min(done, total), total };
 }
 
 // The model line of a card. A request is labelled "requested"; only an agent-reported observed model is labelled "observed".
+/** @param {RunView} run */
 export function modelOf(run) {
+  /** @type {Partial<RunView['model']>} */
   const m = run.model && typeof run.model === 'object' ? run.model : {};
   const requested = str(m.requested),
     effort = str(m.effort),
@@ -208,6 +306,10 @@ export function modelOf(run) {
 export const QUIET_MS = 10 * 60 * 1000;
 
 // "Last seen" of a card. Only a running Run can be quiet; a waiting Run shows the time without a warning; a finished or unreadable Run, or one without a last-seen time, shows nothing.
+/**
+ * @param {RunView} run
+ * @param {number} [now]
+ */
 export function lastSeenOf(run, now = Date.now()) {
   if (run.unreadable || !['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))
     return null;
@@ -218,11 +320,13 @@ export function lastSeenOf(run, now = Date.now()) {
   return { text: `Last seen ${ago(age)}${quiet ? ', quiet' : ''}`, quiet };
 }
 
+/** @param {number} ms */
 function duration(ms) {
   const s = Math.round(ms / 1000);
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+/** @param {EventView} e */
 function describe(e) {
   const fast = e.fast === true ? 'Fast ' : '';
   switch (e.type) {
@@ -256,6 +360,10 @@ function describe(e) {
 }
 
 // The event timeline of the Run detail, oldest first: { text, when } with a relative time, or '' when the event has no usable time.
+/**
+ * @param {RunView} run
+ * @param {number} [now]
+ */
 export function timelineOf(run, now = Date.now()) {
   if (!Array.isArray(run.events)) return [];
   return run.events
@@ -267,6 +375,7 @@ export function timelineOf(run, now = Date.now()) {
 }
 
 // When the current wait began, in ms, or null when the event log cannot tell: the latest waiting event counts only if nothing released the Run or changed its status after it.
+/** @param {RunView} run */
 export function waitingSince(run) {
   if (!Array.isArray(run.events)) return null;
   for (let i = run.events.length - 1; i >= 0; i--) {
@@ -282,6 +391,10 @@ export function waitingSince(run) {
 }
 
 // "waiting 12 min" for a Run that waits on the user and whose wait start is known; otherwise null, never a guess.
+/**
+ * @param {RunView} run
+ * @param {number} [now]
+ */
 export function waitAgeOf(run, now = Date.now()) {
   if (run.waiting !== true) return null;
   const since = waitingSince(run);
@@ -293,23 +406,30 @@ export function waitAgeOf(run, now = Date.now()) {
 }
 
 // Whether the Run waits on the user in Check at its loop limit, so that the user may grant an extra loop (ADR 0024).
+/** @param {RunView} run */
 export const canGrantLoop = (run) =>
   !run.unreadable &&
   run.waiting === true &&
   run.column === 'check' &&
+  typeof run.loops === 'number' &&
   Number.isSafeInteger(run.loops) &&
+  typeof run.loopCap === 'number' &&
   Number.isSafeInteger(run.loopCap) &&
   run.loops >= run.loopCap;
 
 // Waiting Runs first, the longest wait first and unknown starts after known ones; the other Runs keep their order. Returns a new list.
+/** @param {RunView[]} runs */
 export function sortWaitingFirst(runs) {
   const waiting = runs.filter((r) => r.waiting).map((r) => ({ r, since: waitingSince(r) ?? Infinity }));
   waiting.sort((a, b) => (a.since === b.since ? 0 : a.since < b.since ? -1 : 1));
   return [...waiting.map((x) => x.r), ...runs.filter((r) => !r.waiting)];
 }
 
+/** @type {Record<string, string>} */
 const HOSTS = { 'azure-devops': 'Azure DevOps' };
-const hostOf = (run) => HOSTS[run.prHost] ?? 'GitHub';
+/** @param {RunView} run */
+const hostOf = (run) => HOSTS[run.prHost ?? ''] ?? 'GitHub';
+/** @type {Record<string, (run: RunView) => string>} */
 const UNAVAILABLE = {
   'gh-missing': () => 'the gh command is not installed',
   'not-signed-in': () => 'gh is not signed in (run gh auth login)',
@@ -321,6 +441,7 @@ const UNAVAILABLE = {
 
 // What the PR status block shows for a Run: null without a status, otherwise { kind, lines, text } where kind is checking,
 // unavailable (text says why), closed (a merged or closed PR: the state badge says the rest) or open (lines hold the facts).
+/** @param {RunView} run */
 export function prStatusOf(run) {
   const s = run.prStatus;
   if (!s || typeof s !== 'object') return null;
@@ -333,25 +454,24 @@ export function prStatusOf(run) {
     };
   if (s.state === 'merged' || s.state === 'closed') return { kind: 'closed', lines: [] };
   if (s.state !== 'open') return null;
+  /** @type {NonNullable<PrStatusData['checks']>} */
   const checks = s.checks && typeof s.checks === 'object' ? s.checks : {};
   const failing = Array.isArray(checks.failing) ? checks.failing.filter((n) => typeof n === 'string' && n) : [];
+  /** @type {string[]} */
   const lines = [];
   if (s.draft === true) lines.push('Draft');
-  lines.push(
-    'Checks: ' +
-      ({
-        passing: 'passing',
-        failing: 'failing' + (failing.length ? ': ' + failing.join(', ') : ''),
-        pending: 'pending',
-      }[checks.result] ?? 'none reported'),
-  );
-  lines.push(
-    'Merge: ' + ({ mergeable: 'no conflicts', conflicting: 'conflicts with the base branch' }[s.merge] ?? 'unknown'),
-  );
-  lines.push(
-    'Review: ' +
-      ({ approved: 'approved', 'changes-requested': 'changes requested', required: 'review required' }[s.review] ??
-        'none yet'),
-  );
+  /** @type {Record<string, string>} */
+  const checkText = {
+    passing: 'passing',
+    failing: 'failing' + (failing.length ? ': ' + failing.join(', ') : ''),
+    pending: 'pending',
+  };
+  /** @type {Record<string, string>} */
+  const mergeText = { mergeable: 'no conflicts', conflicting: 'conflicts with the base branch' };
+  /** @type {Record<string, string>} */
+  const reviewText = { approved: 'approved', 'changes-requested': 'changes requested', required: 'review required' };
+  lines.push('Checks: ' + (checkText[checks.result ?? ''] ?? 'none reported'));
+  lines.push('Merge: ' + (mergeText[s.merge ?? ''] ?? 'unknown'));
+  lines.push('Review: ' + (reviewText[s.review ?? ''] ?? 'none yet'));
   return { kind: 'open', lines, failing: checks.result === 'failing', conflicting: s.merge === 'conflicting' };
 }

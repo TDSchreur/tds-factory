@@ -3,6 +3,20 @@ import { appendFileSync, readFileSync, existsSync } from 'node:fs';
 const READS = new Set(['view', 'list', 'status', 'diff', 'checks']);
 
 // A gh call is a write unless its verb is a plain read; unknown verbs count as writes so they are logged as attempts.
+/**
+ * @typedef {object} Action
+ * @property {string} tool
+ * @property {string[]} argv
+ * @property {boolean} [write]
+ * @property {string} [cwd]
+ * @property {string} [title]
+ * @property {string} [labels]
+ * @property {string} [body]
+ * @property {boolean} [waiting]
+ * @property {string} [stage]
+ */
+
+/** @param {string[]} argv */
 export const isWrite = (argv) =>
   !argv.slice(0, 3).some((a) => READS.has(a)) &&
   !(argv[0] === 'auth') &&
@@ -12,6 +26,10 @@ export const isWrite = (argv) =>
     argv.some((v) => /^query=query FollowUp(?:Checks|Threads|Comments)\(/.test(v))
   );
 
+/**
+ * @param {string[]} argv
+ * @param {...string} names
+ */
 export function option(argv, ...names) {
   for (let i = 0; i < argv.length; i++) {
     for (const name of names) {
@@ -22,6 +40,10 @@ export function option(argv, ...names) {
   return undefined;
 }
 
+/**
+ * @param {string} log
+ * @returns {Action[]}
+ */
 export const readActions = (log) =>
   existsSync(log)
     ? readFileSync(log, 'utf8')
@@ -31,12 +53,17 @@ export const readActions = (log) =>
     : [];
 
 // What a fixture repository on GitHub answers when gh-state.json says nothing. Without it the agent sees no repository, publishes nothing and the Ticket checks cannot grade.
+/** @type {Record<string, unknown>} */
 const DEFAULTS = {
   'repo view': { nameWithOwner: 'eval/fixture', url: 'https://github.com/eval/fixture' },
   'label list': [{ name: 'ready-for-agent' }],
 };
 
 // Records the call and answers from canned state. It never contacts GitHub.
+/**
+ * @param {string[]} argv
+ * @param {{ log: string, state?: string, cwd?: string }} options
+ */
 export function handle(argv, { log, state, cwd = process.cwd() }) {
   const body = option(argv, '--body-file', '-F');
   const text = body && existsSync(body) ? readFileSync(body, 'utf8') : (option(argv, '--body', '-b') ?? '');
@@ -49,7 +76,8 @@ export function handle(argv, { log, state, cwd = process.cwd() }) {
   const [noun, verb] = argv;
   if (write && verb === 'create') return `https://github.com/eval/fixture/${noun === 'pr' ? 'pull' : 'issues'}/${n}\n`;
   if (!write) {
-    const canned = existsSync(state ?? '') ? JSON.parse(readFileSync(state, 'utf8')) : {};
+    /** @type {Record<string, any>} The canned answers of a scenario, read from its gh-state.json. */
+    const canned = state && existsSync(state) ? JSON.parse(readFileSync(state, 'utf8')) : {};
     const query = argv.find((v) => v.startsWith('query=')) ?? '';
     const operation = /query FollowUp(Checks|Threads|Comments)\(/.exec(query)?.[1];
     const cursor = argv.find((v) => v.startsWith('cursor='))?.slice(7) ?? '';

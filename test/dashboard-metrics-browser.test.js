@@ -3,9 +3,18 @@ import assert from 'node:assert/strict';
 import { openPage } from './browser.js';
 import { interpretRun } from '../src/dashboard.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
 test('Run detail shows observed metrics and legacy no data', async (t) => {
-  const entry = (id, record) =>
-    interpretRun({ id, record: { title: id, stage: 'build', status: 'running', ...record }, files: [] });
+  /**
+   * @param {string} id
+   * @param {Partial<Run>} record
+   */
+  const entry = (id, record) => {
+    /** @type {Run} */
+    const full = { worktree: '/work', title: id, stage: 'build', status: 'running', ...record };
+    return interpretRun({ id, unreadable: false, record: full, files: [], events: { events: [], damaged: 0 } });
+  };
   const runs = [
     entry('measured', {
       track: 'fast',

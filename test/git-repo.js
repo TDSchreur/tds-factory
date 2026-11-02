@@ -4,16 +4,23 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 // Every folder this helper makes is removed when the test process exits, so repositories never pile up in the temp directory.
+/** @type {string[]} */
 const made = [];
 process.on('exit', () => {
   for (const dir of made) rmSync(dir, { recursive: true, force: true });
 });
+/** @param {string} prefix */
 function tempDir(prefix) {
   const dir = realpathSync.native(mkdtempSync(join(tmpdir(), prefix)));
   made.push(dir);
   return dir;
 }
 
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ * @returns {string} The trimmed output of git.
+ */
 export const git = (cwd, ...args) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' }).trim();
 
@@ -27,6 +34,7 @@ export function repo() {
 }
 
 // A linked worktree of `main`, on branch `side`.
+/** @param {string} main The path of the main repository. */
 export function linked(main) {
   const dir = join(tempDir('git-repo-linked-'), 'wt');
   git(main, 'worktree', 'add', '-q', '-b', 'side', dir);

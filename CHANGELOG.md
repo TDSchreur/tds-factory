@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-02
+
+### Changed
+- The Dashboard no longer blocks other requests while a git call runs: the git calls of a request are async.
+- One git helper (`src/git.js`) and one shared module for the PR adapters (`src/pr-exec.js`) replace the copies in each module, and `startDashboard` is split into a route table and handlers. Routes, auth and responses are unchanged.
+- `npm run typecheck` checks all the production code (`bin/`, `src/`, `scripts/`, `eval/` and `dashboard/`) under `strict` with `checkJs`, in three TypeScript projects (root, Dashboard and `test/`), and the Run record has shared JSDoc types in `src/run-record.js`. The code behaves as before.
+- `npm run typecheck` checks every file in `test/` under `strict` with `checkJs`, in the same `test/tsconfig.json` that lists `**/*.js`; the temporary `test/tsconfig.unchecked.json` is gone and the quality-tools test now also refuses a `@ts-nocheck`, `@ts-ignore` or `@ts-expect-error` in `test/`. Test helpers `test/run-view.js` and `findRow` in `test/usage-fixtures.js` keep the tests short. The tests assert what they asserted before.
+- The extra-loop route test in `test/dashboard-actions.test.js` sent three of its five refused requests with lower-case header names that matched nothing the helper returns, so they tested a missing header, not a wrong token or a foreign Origin; they now send the real `Origin` and `X-Factory-Token` headers.
+- tds-factory needs Node 24.4 or newer (`engines.node` is `>=24.4`, and CI and the release workflow test `24.4` and the latest LTS). The code uses `import.meta.dirname`, `import.meta.main`, `fs.mkdtempDisposableSync` with `using`, `events.once`, `timers/promises`, `findLast` and `fs.globSync` in place of the hand-written versions; behaviour is unchanged.
+- Failures that a caller has to tell apart now carry one marker, a `code` on a `FactoryError`, instead of a `reason`, a `permanent` flag or a pattern in the message. Messages are unchanged.
+
+### Fixed
+- The Claude user folder follows `CLAUDE_CONFIG_DIR` when it is set to a non-empty value, instead of always being `~/.claude`: `tds-factory install`, `scripts/dev-install.js`, `doctor`, project reviews and the Usage of Claude sessions use it.
+- Launch the Azure CLI Windows command shim correctly for Dashboard PR status and Run cleanup instead of reporting an installed CLI as missing.
+- Recognise a missing Azure CLI on a Windows in any language, by the exit code 9009 of `cmd.exe`.
+- `tds-factory doctor` reports a package that ships no `factory-check` agent as a missing agent, and a `package.json` whose `engines.node` names no version as a failed `cli` check, instead of stopping on a TypeError.
+- `npm run test:package` says `npm pack made no tarball` when `npm pack` leaves no tarball, instead of stopping on a TypeError.
+- `run reviews` and the project review verdict say that the Run records no base commit instead of stopping on a TypeError.
+- `tds-factory update` no longer hangs on a server that never answers: each request is limited to 30 seconds (the download to 120 seconds), and a request that runs out of time is retried like a server error.
+- `tds-factory install` stops with a message that names the file when the agent install record cannot be parsed, instead of treating it as missing.
+- The Dashboard writes the cause of an unexpected error, and of a failed GitHub PR lookup, merge or checks call, to stderr instead of dropping it. Reading a Run file, a Run folder or a session log now fails on a permission error instead of reporting it as absent.
+
 ## [0.6.2] - 2026-11-02
 
 ### Added

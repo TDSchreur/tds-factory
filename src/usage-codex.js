@@ -14,6 +14,7 @@ const listDir = (dir) => {
   try {
     return fs.readdirSync(dir, { withFileTypes: true });
   } catch {
+    // A day folder that is missing or cannot be read holds no rollouts here; the other days still count.
     return [];
   }
 };
@@ -79,6 +80,7 @@ function parse(text) {
     try {
       data = JSON.parse(line);
     } catch {
+      // A damaged line is skipped; the others still count.
       continue;
     }
     const payload = data?.payload;

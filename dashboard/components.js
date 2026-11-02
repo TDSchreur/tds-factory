@@ -1,4 +1,7 @@
 // Presentational components of the Dashboard page. State, polling and actions live in app.js.
+/** @import { VNode } from 'preact' */
+/** @import { RunView } from './model.js' */
+/** @import { Span, ListItem } from './markdown.js' */
 import { Fragment, h } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
@@ -24,7 +27,17 @@ import {
 
 export const html = htm.bind(h);
 
+// The HTML elements below a node that match a selector.
+/** @param {ParentNode} root @param {string} selector */
+const elementsOf = (root, selector) => [...root.querySelectorAll(selector)].filter((e) => e instanceof HTMLElement);
+
+/** @param {unknown} element @param {FocusOptions} [options] */
+const focus = (element, options) => {
+  if (element instanceof HTMLElement) element.focus(options);
+};
+
 // An anchor that opens in a new tab for an http(s) URL; anything else is plain text.
+/** @param {{ href: unknown, children?: unknown }} props */
 export function Link({ href, children }) {
   const url = safeUrl(href);
   return url
@@ -32,6 +45,10 @@ export function Link({ href, children }) {
     : html`<span>${children}</span>`;
 }
 
+/**
+ * @param {Span[]} spans
+ * @returns {unknown[]}
+ */
 const inline = (spans) =>
   spans.map((sp) => {
     if (sp.t === 'text') return sp.v;
@@ -40,12 +57,17 @@ const inline = (spans) =>
     return h(sp.t, null, inline(sp.c));
   });
 
+/**
+ * @param {{ list: { ordered: boolean, items: ListItem[] } }} props
+ * @returns {VNode}
+ */
 function MdList({ list }) {
   const Tag = list.ordered ? 'ol' : 'ul';
   return html`<${Tag}>${list.items.map((item) => html`<li>${inline(item.inline)}${item.sub && html`<${MdList} list=${item.sub} />`}</li>`)}<//>`;
 }
 
 // Text becomes Preact text nodes only, so file content can never inject markup.
+/** @param {{ text: string }} props */
 export function Markdown({ text }) {
   return html`<div class="md">${parseMarkdown(text).map((b) => {
     if (b.type === 'heading') return h('h' + Math.min(6, b.level + 3), null, inline(b.inline));
@@ -64,8 +86,10 @@ export function Markdown({ text }) {
   })}</div>`;
 }
 
-const stop = (e) => e.stopPropagation();
+/** @param {Event} e */
+const stop = (/** @type {Event} */ e) => e.stopPropagation();
 
+/** @param {{ run: RunView }} props */
 function Chips({ run }) {
   const chips = chipsOf(run);
   return chips.length
@@ -76,6 +100,7 @@ function Chips({ run }) {
     : null;
 }
 
+/** @param {{ run: RunView }} props */
 function Progress({ run }) {
   const p = progressOf(run);
   return p
@@ -83,12 +108,14 @@ function Progress({ run }) {
     : null;
 }
 
+/** @param {{ run: RunView }} props */
 function ModelLine({ run }) {
   const m = modelOf(run);
   return m ? html`<div class=${'model' + (m.observed ? ' observed' : '')} title=${m.title}>${m.label}</div>` : null;
 }
 
 // The event log of the Run, oldest first. A damaged log is said so, because the timeline is then incomplete.
+/** @param {{ run: RunView }} props */
 function Timeline({ run }) {
   const events = timelineOf(run);
   const damaged = Number.isSafeInteger(run.eventsDamaged) ? run.eventsDamaged : 0;
@@ -100,6 +127,7 @@ function Timeline({ run }) {
 }
 
 // The status of the Run's pull request. The PR link is shown here for a Run that is not Done; a Done card has its own link.
+/** @param {{ run: RunView, onCheckPr: (run: RunView) => void, showLink?: boolean }} props */
 function PrStatus({ run, onCheckPr, showLink = true }) {
   const status = prStatusOf(run);
   if (!status) return null;
@@ -111,7 +139,7 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
     ${
       status.kind === 'unavailable' &&
       html`<span class="unavailable">PR status unavailable: ${status.text}</span> <button type="button" aria-label=${'Check the PR status of ' + run.title + ' again'} onClick=${(
-        e,
+        /** @type {Event} */ e,
       ) => {
         stop(e);
         onCheckPr(run);
@@ -121,8 +149,10 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
   </div>`;
 }
 
+/** @param {{ run: RunView }} props */
 function Tickets({ run }) {
   const tickets = ticketTilesOf(run);
+  /** @type {Record<string, string>} */
   const mark = { done: '✓', active: '▶', todo: '○', rework: '↻' };
   return tickets.length
     ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => {
@@ -142,15 +172,33 @@ function Tickets({ run }) {
 }
 
 // One card per Run. Done cards keep their detail in a block that starts hidden, so the Done column stays short.
-const pauseLabel = (run) =>
-  run.waiting
-    ? 'Needs you' + (waitAgeOf(run) ? ', ' + waitAgeOf(run).text : '')
+/** @param {RunView} run */
+const pauseLabel = (run) => {
+  const wait = waitAgeOf(run);
+  return run.waiting
+    ? 'Needs you' + (wait ? ', ' + wait.text : '')
     : run.status === 'verification-unavailable'
       ? 'Verification unavailable'
       : run.status === 'interrupted'
         ? 'Agent interrupted'
         : '';
+};
 
+/**
+ * @param {object} props
+ * @param {RunView} props.run
+ * @param {boolean} props.selected
+ * @param {boolean} props.expanded
+ * @param {(id: string) => void} props.onSelect
+ * @param {(id: string) => void} props.onToggle
+ * @param {(run: RunView) => void} props.onCheckPr
+ * @param {(run: RunView) => void} props.onGrant
+ * @param {(run: RunView) => void} props.onMerge
+ * @param {(run: RunView) => void} props.onSync
+ * @param {(run: RunView) => void} props.onClean
+ * @param {(run: RunView) => void} props.onAccept
+ * @param {(run: RunView) => void} props.onDelete
+ */
 export function Card({
   run,
   selected,
@@ -169,7 +217,9 @@ export function Card({
   const age = ageMs(run.updated);
   const stale = age !== null && !done && !run.unreadable && age > STALE_MS;
   const seen = lastSeenOf(run);
-  const prLabel = { open: 'Open', merged: 'Merged', closed: 'Closed' }[run.prState];
+  /** @type {Record<string, string>} */
+  const prLabels = { open: 'Open', merged: 'Merged', closed: 'Closed' };
+  const prLabel = prLabels[run.prState ?? ''];
   const more = [
     run.activity && html`<div class="activity">${run.activity}</div>`,
     html`<${ModelLine} run=${run} />`,
@@ -190,7 +240,7 @@ export function Card({
         run.status === 'done' &&
         run.prCanMerge !== false &&
         html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(
-          e,
+          /** @type {Event} */ e,
         ) => {
           stop(e);
           onMerge(run);
@@ -200,14 +250,18 @@ export function Card({
         !run.unreadable &&
         ['build', 'check'].includes(run.column) &&
         run.status === 'running' &&
-        html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(e) => {
+        html`<button type="button" aria-label=${'Sync ' + run.title + ' with origin'} onClick=${(
+          /** @type {Event} */ e,
+        ) => {
           stop(e);
           onSync(run);
         }} onKeyDown=${stop}>Sync</button>`
       }
       ${
         canGrantLoop(run) &&
-        html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(e) => {
+        html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(
+          /** @type {Event} */ e,
+        ) => {
           stop(e);
           onGrant(run);
         }} onKeyDown=${stop}>Grant extra loop</button>`
@@ -216,7 +270,9 @@ export function Card({
         !run.unreadable &&
         run.column === 'check' &&
         run.status === 'waiting' &&
-        html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(e) => {
+        html`<button type="button" class="primary" aria-label=${'Accept the Check of ' + run.title} onClick=${(
+          /** @type {Event} */ e,
+        ) => {
           stop(e);
           onAccept(run);
         }} onKeyDown=${stop}>Accept Check</button>`
@@ -224,7 +280,7 @@ export function Card({
       ${
         run.status === 'done' &&
         run.prState === 'merged' &&
-        html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(e) => {
+        html`<button type="button" aria-label=${'Clean up ' + run.title} onClick=${(/** @type {Event} */ e) => {
           stop(e);
           onClean(run);
         }} onKeyDown=${stop}>Clean up</button>`
@@ -232,7 +288,9 @@ export function Card({
       ${
         !run.unreadable &&
         ['running', 'waiting', 'verification-unavailable', 'interrupted', 'done', 'abandoned'].includes(run.status) &&
-        html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(e) => {
+        html`<button type="button" class="danger" aria-label=${'Delete ' + run.title} onClick=${(
+          /** @type {Event} */ e,
+        ) => {
           stop(e);
           onDelete(run);
         }} onKeyDown=${stop}>Delete</button>`
@@ -249,7 +307,9 @@ export function Card({
   ]
     .filter(Boolean)
     .join(' ');
-  return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(e) => {
+  return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(
+    /** @type {KeyboardEvent} */ e,
+  ) => {
     if (e.key === 'Enter') onSelect(run.id);
   }}>
     ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
@@ -260,7 +320,7 @@ export function Card({
     ${
       done &&
       html`<button type="button" class="toggle" aria-expanded=${String(expanded)} aria-label=${toggleText + ': ' + run.title} onClick=${(
-        e,
+        /** @type {Event} */ e,
       ) => {
         stop(e);
         onToggle(run.id);
@@ -271,6 +331,7 @@ export function Card({
 }
 
 // Shown instead of the Stages when there is no Run at all.
+/** @param {{ onHelp: () => void }} props */
 export function Welcome({ onHelp }) {
   return html`<div class="board-wrap"><section class="welcome" aria-labelledby="welcome-title">
     <h2 id="welcome-title">No Runs yet</h2>
@@ -281,6 +342,30 @@ export function Welcome({ onHelp }) {
   </section></div>`;
 }
 
+/**
+ * @typedef {object} Actions
+ * @property {(id: string) => void} select
+ * @property {(id: string) => void} toggle
+ * @property {(run: RunView) => Promise<void>} checkPr
+ * @property {(run: RunView) => Promise<void>} merge
+ * @property {(run: RunView) => Promise<void>} sync
+ * @property {(run: RunView) => Promise<void>} clean
+ * @property {(run: RunView) => Promise<void>} accept
+ * @property {(run: RunView) => Promise<void>} grant
+ * @property {(run: RunView) => Promise<void>} remove
+ * @property {() => Promise<void>} deleteAll
+ */
+/**
+ * @param {object} props
+ * @param {RunView[]} props.runs
+ * @param {boolean} props.onlyWaiting
+ * @param {string} props.stage
+ * @param {(stage: string) => void} props.onStage
+ * @param {string | null} props.selectedId
+ * @param {Set<string>} props.expandedIds
+ * @param {number} props.doneCount
+ * @param {Actions} props.actions
+ */
 export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
   return html`<div class="board-wrap">
   <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
@@ -302,22 +387,27 @@ export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedI
 }
 
 // The help panel: static text from help.js in a native dialog. The dialog closes itself on Esc and on the Close button; onClose tells the page.
+/** @param {{ open: boolean, onClose: () => void }} props */
 export function HelpPanel({ open, onClose }) {
+  /** @type {{ current: HTMLDialogElement | null }} */
   const dialog = useRef(null);
+  /** @type {{ current: HTMLButtonElement | null }} */
   const close = useRef(null);
+  /** @type {{ current: Element | null }} */
   const opener = useRef(null);
   useEffect(() => {
     const element = dialog.current;
+    if (!element) return;
     if (open && !element.open) {
       opener.current = document.activeElement;
       element.showModal();
-      close.current.focus();
+      close.current?.focus();
     } else if (!open && element.open) element.close();
   }, [open]);
   // The page behind the dialog is inert; Tab cycles inside it instead of leaving for the browser's own controls.
-  const trap = (event) => {
-    if (event.key !== 'Tab') return;
-    const targets = [...dialog.current.querySelectorAll('button:not([disabled]), a[href]')];
+  const trap = (/** @type {KeyboardEvent} */ event) => {
+    if (event.key !== 'Tab' || !dialog.current) return;
+    const targets = elementsOf(dialog.current, 'button:not([disabled]), a[href]');
     const first = targets[0],
       last = targets[targets.length - 1];
     if (event.shiftKey && document.activeElement === first) {
@@ -334,9 +424,9 @@ export function HelpPanel({ open, onClose }) {
       opener.current && opener.current !== document.body && opener.current.isConnected
         ? opener.current
         : document.getElementById('help');
-    back?.focus();
+    focus(back);
     requestAnimationFrame(() => {
-      if (back?.isConnected && document.activeElement !== back) back.focus();
+      if (back?.isConnected && document.activeElement !== back) focus(back);
     }); // the browser may still be lifting the inert state
     onClose();
   };
@@ -350,7 +440,7 @@ export function HelpPanel({ open, onClose }) {
         <ul>${section.items.map((item) => html`<li key=${item.term || item.text}>${item.term && html`<strong>${item.term}</strong>: `}${item.text}</li>`)}</ul>
       </section>`,
       )}
-      <div class="dialog-actions"><button id="help-close" ref=${close} type="button" class="primary" onClick=${() => dialog.current.close()}>Close</button></div>
+      <div class="dialog-actions"><button id="help-close" ref=${close} type="button" class="primary" onClick=${() => dialog.current?.close()}>Close</button></div>
     </div>
   </dialog>`;
 }
@@ -360,10 +450,12 @@ const THEME_KEY = 'dashboard-theme';
 
 // The inline script in index.html has already applied the saved theme; this keeps the selector in step with it.
 function ThemeSelect() {
-  const [theme, setTheme] = useState(() =>
-    THEMES.includes(document.documentElement.dataset.theme) ? document.documentElement.dataset.theme : 'system',
-  );
-  const change = (e) => {
+  const [theme, setTheme] = useState(() => {
+    const saved = document.documentElement.dataset.theme;
+    return saved !== undefined && THEMES.includes(saved) ? saved : 'system';
+  });
+  const change = (/** @type {Event} */ e) => {
+    if (!(e.target instanceof HTMLSelectElement)) return;
     const choice = e.target.value;
     setTheme(choice);
     document.documentElement.dataset.theme = choice;
@@ -391,6 +483,20 @@ function Logo() {
 }
 
 // The pill shows the last segment of the project path; the full path is its tooltip.
+/**
+ * @param {object} props
+ * @param {string} props.project
+ * @param {string} props.version
+ * @param {{ error: boolean, text: string }} props.status
+ * @param {string} props.olderLabel
+ * @param {() => void} props.onOlder
+ * @param {boolean} props.canNotify
+ * @param {() => void} props.onNotify
+ * @param {number} props.waitingCount
+ * @param {boolean} props.onlyWaiting
+ * @param {() => void} props.onToggleWaiting
+ * @param {() => void} props.onHelp
+ */
 export function Header({
   project,
   version,
@@ -416,11 +522,22 @@ export function Header({
   </header>`;
 }
 
+/** @typedef {{ name: string, text?: string, error?: string }} LoadedFile */
+
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
+/**
+ * @param {object} props
+ * @param {RunView | null} props.run
+ * @param {boolean} props.compact
+ * @param {() => void} props.onClose
+ * @param {(run: RunView) => void} props.onCheckPr
+ * @param {(run: RunView) => void} props.onGrant
+ */
 export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
-  const [loaded, setLoaded] = useState(null);
+  const [loaded, setLoaded] = useState(/** @type {{ id: string, files: LoadedFile[] } | null} */ (null));
+  /** @type {{ current: HTMLHeadingElement | null }} */
   const heading = useRef(null);
   useEffect(() => {
     if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true });
@@ -429,7 +546,8 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
   useLayoutEffect(() => {
     if (!run || !compact) return undefined;
     const detail = document.getElementById('detail');
-    const background = [...document.querySelectorAll('#app > header, .board-wrap')];
+    if (!detail) return undefined;
+    const background = elementsOf(document, '#app > header, .board-wrap');
     const previous = background.map((element) => element.inert);
     const overflow = document.body.style.overflow;
     background.forEach((element) => {
@@ -437,13 +555,12 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     });
     document.body.style.overflow = 'hidden';
     if (!detail.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
-    const trap = (event) => {
+    const trap = (/** @type {KeyboardEvent} */ event) => {
       if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
-      const targets = [
-        ...detail.querySelectorAll(
-          'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      ].filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
+      const targets = elementsOf(
+        detail,
+        'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ).filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
       if (!targets.length) {
         event.preventDefault();
         return;
@@ -474,6 +591,7 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     if (!run || compact) return undefined;
     const detail = document.getElementById('detail');
     const header = document.querySelector('#app > header');
+    if (!detail || !header) return undefined;
     const fit = () => {
       detail.style.top = header.getBoundingClientRect().height + 20 + 'px';
       detail.style.maxHeight =
@@ -496,7 +614,7 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     if (!run) return undefined;
     let live = true;
     Promise.all(
-      run.files.map((name) =>
+      run.files.map((/** @type {string} */ name) =>
         fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
           .then((res) => {
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -515,13 +633,16 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     };
   }, [key]);
   if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
+  const updatedAge = ageMs(run.updated);
+  const reviews = run.projectReviews ?? [];
+  /** @type {LoadedFile[]} */
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
   return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
-      <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${ageMs(run.updated) === null ? 'unknown' : ago(ageMs(run.updated))}</span></div>
+      <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${updatedAge === null ? 'unknown' : ago(updatedAge)}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
       ${canGrantLoop(run) && html`<div class="actions"><button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button></div>`}
@@ -544,7 +665,7 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       <div>Cost: ${run.metrics.cost}</div>
     </section>`
     }
-    ${(run.projectReviews ?? []).length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${run.projectReviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
+    ${reviews.length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${reviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
     ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
     ${
@@ -560,23 +681,31 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
 }
 
 // A native dialog driven by one request at a time: { title, message, action, danger, notice, resolve }, or null when closed.
+/**
+ * @typedef {{ title: string, message: string, action: string, danger?: boolean, notice?: boolean, resolve: (confirmed: boolean) => void }} ConfirmRequest
+ */
+/** @param {{ request: ConfirmRequest | null, onClose: (confirmed: boolean) => void }} props */
 export function ConfirmDialog({ request, onClose }) {
+  /** @type {{ current: HTMLDialogElement | null }} */
   const dialog = useRef(null);
+  /** @type {{ current: HTMLButtonElement | null }} */
   const cancel = useRef(null);
+  /** @type {{ current: HTMLButtonElement | null }} */
   const confirm = useRef(null);
   useEffect(() => {
-    if (!request || dialog.current.open) return;
-    dialog.current.returnValue = '';
-    dialog.current.showModal();
-    (request.notice ? confirm : cancel).current.focus();
+    const element = dialog.current;
+    if (!request || !element || element.open) return;
+    element.returnValue = '';
+    element.showModal();
+    (request.notice ? confirm : cancel).current?.focus();
   }, [request]);
-  return html`<dialog id="dialog" ref=${dialog} aria-labelledby="dialog-title" aria-describedby="dialog-message" onClose=${() => onClose(dialog.current.returnValue === 'confirm')}>
+  return html`<dialog id="dialog" ref=${dialog} aria-labelledby="dialog-title" aria-describedby="dialog-message" onClose=${() => onClose(dialog.current?.returnValue === 'confirm')}>
     <div class="dialog-content">
       <h2 id="dialog-title">${request ? request.title : ''}</h2>
       <p id="dialog-message">${request ? request.message : ''}</p>
       <div class="dialog-actions">
-        <button id="dialog-cancel" ref=${cancel} type="button" hidden=${!!(request && request.notice)} onClick=${() => dialog.current.close('cancel')}>Cancel</button>
-        <button id="dialog-confirm" ref=${confirm} type="button" class=${request && request.danger ? 'primary danger' : 'primary'} onClick=${() => dialog.current.close('confirm')}>${request ? request.action : ''}</button>
+        <button id="dialog-cancel" ref=${cancel} type="button" hidden=${!!(request && request.notice)} onClick=${() => dialog.current?.close('cancel')}>Cancel</button>
+        <button id="dialog-confirm" ref=${confirm} type="button" class=${request && request.danger ? 'primary danger' : 'primary'} onClick=${() => dialog.current?.close('confirm')}>${request ? request.action : ''}</button>
       </div>
     </div>
   </dialog>`;

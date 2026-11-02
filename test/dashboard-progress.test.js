@@ -1,52 +1,59 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { runView, strayView } from './run-view.js';
 import { QUIET_MS, lastSeenOf, modelOf, progressOf, timelineOf } from '../dashboard/model.js';
 
 const NOW = Date.parse('2026-11-01T12:00:00Z');
+/** @param {number} m */
 const minutesAgo = (m) => new Date(NOW - m * 60000).toISOString();
 
 test('progressOf gives done and total only for a positive total', () => {
-  assert.deepEqual(progressOf({ ticketsDone: 1, ticketsTotal: 3 }), { done: 1, total: 3 });
-  assert.deepEqual(progressOf({ ticketsDone: 9, ticketsTotal: 3 }), { done: 3, total: 3 });
-  assert.deepEqual(progressOf({ ticketsTotal: 2 }), { done: 0, total: 2 });
-  assert.equal(progressOf({ ticketsTotal: 0 }), null);
-  assert.equal(progressOf({ ticketsDone: 'x', ticketsTotal: 'y' }), null);
-  assert.equal(progressOf({}), null);
+  assert.deepEqual(progressOf(runView({ ticketsDone: 1, ticketsTotal: 3 })), { done: 1, total: 3 });
+  assert.deepEqual(progressOf(runView({ ticketsDone: 9, ticketsTotal: 3 })), { done: 3, total: 3 });
+  assert.deepEqual(progressOf(runView({ ticketsTotal: 2 })), { done: 0, total: 2 });
+  assert.equal(progressOf(runView({ ticketsTotal: 0 })), null);
+  assert.equal(progressOf(strayView({ ticketsDone: 'x', ticketsTotal: 'y' })), null);
+  assert.equal(progressOf(strayView({})), null);
 });
 
 test('modelOf labels a request as requested and only a report as observed', () => {
-  assert.deepEqual(modelOf({ model: { requested: 'sonnet', effort: 'high', observed: '' } }), {
+  assert.deepEqual(modelOf(runView({ model: { requested: 'sonnet', effort: 'high', observed: '' } })), {
     label: 'Model (requested): sonnet, effort high',
     observed: false,
   });
-  assert.deepEqual(modelOf({ model: { requested: 'sonnet', effort: '', observed: 'haiku' } }), {
+  assert.deepEqual(modelOf(runView({ model: { requested: 'sonnet', effort: '', observed: 'haiku' } })), {
     label: 'Model (observed): haiku',
     observed: true,
     title: 'Requested: sonnet',
   });
-  assert.deepEqual(modelOf({ model: { requested: '', effort: 'low', observed: '' } }), {
+  assert.deepEqual(modelOf(runView({ model: { requested: '', effort: 'low', observed: '' } })), {
     label: 'Effort (requested): low',
     observed: false,
   });
-  assert.equal(modelOf({ model: { requested: '', effort: '', observed: '' } }), null);
-  assert.equal(modelOf({}), null);
-  assert.equal(modelOf({ model: 'sonnet' }), null);
+  assert.equal(modelOf(runView({ model: { requested: '', effort: '', observed: '' } })), null);
+  assert.equal(modelOf(strayView({})), null);
+  assert.equal(modelOf(strayView({ model: 'sonnet' })), null);
 });
 
 test('lastSeenOf warns after ten minutes, only while running', () => {
   assert.equal(QUIET_MS, 10 * 60 * 1000);
-  const run = (status, seen, extra = {}) => ({ status, lastSeen: seen, ...extra });
+  /**
+   * @param {string} status
+   * @param {string} seen
+   * @param {{ updated?: string }} [extra]
+   */
+  const run = (status, seen, extra = {}) => runView({ status, lastSeen: seen, ...extra });
   assert.deepEqual(lastSeenOf(run('running', minutesAgo(3)), NOW), { text: 'Last seen 3 min ago', quiet: false });
   assert.deepEqual(lastSeenOf(run('running', minutesAgo(10)), NOW), {
     text: 'Last seen 10 min ago, quiet',
     quiet: true,
   });
-  assert.equal(lastSeenOf(run('waiting', minutesAgo(30)), NOW).quiet, false);
+  assert.equal(lastSeenOf(run('waiting', minutesAgo(30)), NOW)?.quiet, false);
   assert.equal(lastSeenOf(run('done', minutesAgo(30)), NOW), null);
   assert.equal(lastSeenOf(run('abandoned', minutesAgo(30)), NOW), null);
   assert.equal(lastSeenOf(run('running', '', { updated: minutesAgo(12) }), NOW), null);
   assert.equal(lastSeenOf(run('running', 'nonsense'), NOW), null);
-  assert.equal(lastSeenOf({ unreadable: true, lastSeen: minutesAgo(1) }, NOW), null);
+  assert.equal(lastSeenOf(runView({ unreadable: true, lastSeen: minutesAgo(1) }), NOW), null);
 });
 
 test('timelineOf describes known events and tolerates bad ones', () => {
@@ -64,7 +71,7 @@ test('timelineOf describes known events and tolerates bad ones', () => {
     { type: 'stage' },
     null,
   ];
-  const lines = timelineOf({ events }, NOW).map((e) => e.text);
+  const lines = timelineOf(strayView({ events }), NOW).map((e) => e.text);
   assert.deepEqual(lines, [
     'Moved from define to build',
     'Ticket 2 of 3 done',
@@ -78,8 +85,8 @@ test('timelineOf describes known events and tolerates bad ones', () => {
     'mystery',
     'stage',
   ]);
-  assert.equal(timelineOf({ events }, NOW)[0].when, '30 min ago');
-  assert.equal(timelineOf({ events }, NOW).at(-1).when, '');
-  assert.deepEqual(timelineOf({}, NOW), []);
-  assert.deepEqual(timelineOf({ events: 'x' }, NOW), []);
+  assert.equal(timelineOf(strayView({ events }), NOW)[0].when, '30 min ago');
+  assert.equal(timelineOf(strayView({ events }), NOW).at(-1)?.when, '');
+  assert.deepEqual(timelineOf(strayView({}), NOW), []);
+  assert.deepEqual(timelineOf(strayView({ events: 'x' }), NOW), []);
 });

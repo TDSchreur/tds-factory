@@ -6,7 +6,7 @@ New here? Read the [install guide](docs/install.md) to set the Factory up, then 
 
 ## Setup
 
-You need Node 24 or newer. One line installs the latest Release and its skills.
+You need Node 24.4 or newer. One line installs the latest Release and its skills.
 
 macOS and Linux:
 
