@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 import { readRun } from './run-folder.js';
 
 /**
@@ -250,10 +250,10 @@ export function guidesRun(projectDir, id) {
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
   const base = record.base_sha;
   if (!base || !/^[0-9a-f]{40,64}$/.test(base)) throw new Error('the Run has no usable base commit');
-  const out = spawnSync(
-    'git',
+  const out = runGit(
+    root,
     ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '-z', '--name-only', base],
-    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    { maxBuffer: 64 * 1024 * 1024 },
   );
   if (out.status !== 0) throw new Error(`git diff failed: ${(out.stderr || '').trim()}`);
   const files = out.stdout.split('\0').filter(Boolean);

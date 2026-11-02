@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 import { originDefaultBranch } from './origin.js';
 /** @import { Run } from './run-record.js' */
 import { validId } from './run-record.js';
@@ -11,7 +11,7 @@ import { validId } from './run-record.js';
 /** @param {string} dir */
 export function fetchOriginDefault(dir) {
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+  const git = (...args) => runGit(dir, args);
   const { branch, error } = originDefaultBranch(dir);
   if (!branch) throw new Error(`cannot determine origin default branch: ${error}`);
   const fetchRef = `refs/tds-factory/fetch/${randomUUID()}`;
@@ -30,10 +30,7 @@ export function fetchOriginDefault(dir) {
  */
 export function mergeProblem(projectDir, record) {
   const base = fetchOriginDefault(projectDir);
-  const merged = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', base, 'HEAD'], {
-    cwd: record.worktree,
-    encoding: 'utf8',
-  });
+  const merged = runGit(record.worktree, ['merge-tree', '--write-tree', '--name-only', base, 'HEAD']);
   if (merged.status === 0) return '';
   if (merged.status !== 1)
     throw new Error(
@@ -49,7 +46,7 @@ export function mergeProblem(projectDir, record) {
 export function worktreeState(record) {
   if (!record.worktree || !fs.existsSync(record.worktree)) throw new Error('the Run worktree is missing');
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: record.worktree, encoding: 'utf8' });
+  const git = (...args) => runGit(record.worktree, args);
   const head = git('rev-parse', 'HEAD'),
     status = git('status', '--porcelain');
   if (head.status !== 0 || status.status !== 0)
@@ -63,7 +60,7 @@ export function ownWorktrees(projectDir) {
   const base = path.join(projectDir, '.factory', 'worktrees');
   if (fs.existsSync(base) && fs.realpathSync(base) !== base)
     throw new Error('Run worktree storage must not be symlinked');
-  const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: projectDir, encoding: 'utf8' });
+  const listed = runGit(projectDir, ['worktree', 'list', '--porcelain']);
   if (listed.status !== 0) throw new Error('cannot list git worktrees');
   /** @type {Map<string, { dir: string, branch: string | undefined, head: string | undefined, missing: boolean, safe: boolean }>} */
   const entries = new Map();
@@ -86,19 +83,15 @@ export function ownWorktrees(projectDir) {
 // Uncommitted work in a worktree, as Git reports it with untracked files shown and submodules inspected; undefined when Git cannot say.
 /** @param {string} dir */
 export const worktreeChanges = (dir) => {
-  const status = spawnSync(
-    'git',
-    [
-      '-c',
-      'status.showUntrackedFiles=normal',
-      '-c',
-      'core.fsmonitor=false',
-      'status',
-      '--porcelain',
-      '--ignore-submodules=none',
-    ],
-    { cwd: dir, encoding: 'utf8' },
-  );
+  const status = runGit(dir, [
+    '-c',
+    'status.showUntrackedFiles=normal',
+    '-c',
+    'core.fsmonitor=false',
+    'status',
+    '--porcelain',
+    '--ignore-submodules=none',
+  ]);
   return status.status === 0 ? status.stdout.trim() : undefined;
 };
 
@@ -106,16 +99,12 @@ export const worktreeChanges = (dir) => {
 // Commits that no remote has and stashes live only there; undefined when Git cannot say.
 /** @param {string} dir */
 export const submoduleLocalWork = (dir) => {
-  const out = spawnSync(
-    'git',
-    [
-      'submodule',
-      'foreach',
-      '--recursive',
-      '--quiet',
-      'git log --branches --tags HEAD --not --remotes --oneline; git stash list',
-    ],
-    { cwd: dir, encoding: 'utf8' },
-  );
+  const out = runGit(dir, [
+    'submodule',
+    'foreach',
+    '--recursive',
+    '--quiet',
+    'git log --branches --tags HEAD --not --remotes --oneline; git stash list',
+  ]);
   return out.status === 0 ? out.stdout.trim() : undefined;
 };

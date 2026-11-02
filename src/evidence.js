@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 /** @import { Run, Axis, Verify } from './run-record.js' */
 import { messageOf } from './narrow.js';
 import { reviewPlan } from './project-reviews.js';
@@ -267,7 +268,7 @@ function carriedFrom(record, axis, value, head, worktree) {
   if (earlier.value !== value)
     throw new Error(`the earlier ${axis} verdict was ${earlier.value}; a carried verdict needs the same value`);
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: worktree, encoding: 'utf8' });
+  const git = (...args) => runGit(worktree, args);
   if (git('merge-base', '--is-ancestor', earlierHead, head).status !== 0)
     throw new Error(
       `the earlier ${axis} head is not an ancestor of the current head (the branch was rebased or rewritten); review the axis`,

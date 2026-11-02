@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 /** @typedef {(url: string) => { state: string, head?: string } | undefined} PrLookup */
 import { codeOf, messageOf, oneOf } from './narrow.js';
 import { statuses, validId } from './run-record.js';
@@ -62,7 +62,7 @@ export function removeRun(projectDir, id, why = () => {}, { discardChanges = fal
           /** @type {{ status: number | null, stderr: string, error?: Error }} */
           const removal =
             changes !== undefined
-              ? spawnSync('git', ['worktree', 'remove', '--force', own], { cwd: project, encoding: 'utf8' })
+              ? runGit(project, ['worktree', 'remove', '--force', own])
               : { status: 1, stderr: 'cannot read the Run worktree status' };
           if (removal.status !== 0) {
             why('git could not remove the Run worktree: ' + (removal.stderr || removal.error?.message || '').trim());
@@ -110,7 +110,7 @@ export function cleanRun(projectDir, callerDir, rawId, prState = ghPrInfo) {
   const { root, record } = readRun(projectDir, id);
   const own = ownWorktrees(projectDir).get(id);
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  const git = (...args) => runGit(projectDir, args);
   const tip = git('rev-parse', '--verify', '-q', `refs/heads/${id}`);
   const head = tip.status === 0 ? tip.stdout.trim() : undefined;
   if (!own && !head) return { id, outcome: 'already clean' };
@@ -185,7 +185,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
     return [];
   }
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  const git = (...args) => runGit(projectDir, args);
   return ids.filter((id) => {
     try {
       const { record } = readRun(projectDir, id);

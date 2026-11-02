@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 /** @import { Run, Stage, Track } from './run-record.js' */
 import { stages, isStage, stageIndex } from './flow.js';
 import { codeOf, messageOf, oneOf } from './narrow.js';
@@ -39,7 +39,7 @@ export function startRun(projectDir, data) {
   const fastProblem = fastCommandProblem(data.fast_commands);
   if (fastProblem) throw new Error(fastProblem);
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  const git = (...args) => runGit(projectDir, args);
   if (git('rev-parse', '--git-dir').status !== 0)
     throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0)
@@ -237,7 +237,7 @@ export function syncRun(projectDir, id, data = {}) {
   changeRunning(projectDir, id, data, (old) => {
     if (!oneOf(['build', 'check'], old.stage)) throw new Error('only a Run in Build or Check can be synced');
     /** @param {...string} args */
-    const git = (...args) => spawnSync('git', args, { cwd: old.worktree, encoding: 'utf8' });
+    const git = (...args) => runGit(old.worktree, args);
     // A rebase the user left open is theirs to finish; starting another or aborting it would lose their work.
     for (const dir of ['rebase-merge', 'rebase-apply']) {
       if (fs.existsSync(path.resolve(old.worktree, git('rev-parse', '--git-path', dir).stdout.trim())))

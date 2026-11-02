@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 /** @import { ProjectReview, AgentName, Run } from './run-record.js' */
 import { userDir } from './flow.js';
 import { messageOf } from './narrow.js';
@@ -216,10 +216,7 @@ function globRegex(pattern) {
 /** @param {Run} record */
 export function reviewPlan(record) {
   if (!record.base_sha) throw new Error('cannot determine Run changes: the Run records no base commit');
-  const result = spawnSync('git', ['diff', '--name-only', '--no-renames', '-z', record.base_sha, 'HEAD', '--'], {
-    cwd: record.worktree,
-    encoding: 'utf8',
-  });
+  const result = runGit(record.worktree, ['diff', '--name-only', '--no-renames', '-z', record.base_sha, 'HEAD', '--']);
   if (result.status !== 0)
     throw new Error(`cannot determine Run changes: ${(result.stderr || result.error?.message || '').trim()}`);
   const changed = result.stdout.split('\0').filter(Boolean);

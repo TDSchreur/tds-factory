@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 /** @import { AgentName } from './run-record.js' */
 /** @typedef {[string, string]} Result A check's status and message. */
 import { messageOf } from './narrow.js';
@@ -60,7 +60,7 @@ function trackerCheck(projectDir) {
  */
 function gitCheck(projectDir) {
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  const git = (...args) => runGit(projectDir, args);
   if (git('rev-parse', '--git-dir').status !== 0) return ['fail', 'not a git repository'];
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) return ['fail', 'the git repository has no commit'];
   if (git('remote', 'get-url', 'origin').status !== 0) return ['fail', 'there is no origin remote'];
@@ -242,7 +242,7 @@ function binaryCheck(agent) {
 export function doctor({ projectDir, agent, homeDir = os.homedir(), prState, env = process.env }) {
   if (agent !== undefined && !isAgent(agent)) throw new Error(`unknown agent "${agent}" (${agentNames.join(', ')})`);
   // Git resolves the current worktree (including linked worktrees), not the shared main checkout.
-  const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: projectDir, encoding: 'utf8' });
+  const root = runGit(projectDir, ['rev-parse', '--show-toplevel']);
   const worktreeRoot = root.stdout?.replace(process.platform === 'win32' ? /\r?\n$/ : /\n$/, '');
   if (root.status === 0 && worktreeRoot) projectDir = worktreeRoot;
   // An unreadable project file is a failed check, not a crash, so the report always has every check.
