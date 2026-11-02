@@ -2,8 +2,10 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { usageOf } from './run-view.js';
 
-/** @import { AgentName, Run } from '../src/run-record.js' */
+/** @import { AgentName, Run, UsageRow } from '../src/run-record.js' */
 
 const cli = resolve('bin/tds-factory.js');
 
@@ -272,3 +274,16 @@ export const copilotUsage = (
       },
     },
   });
+
+// The one usage row of a Run record whose fields equal `match`.
+/**
+ * @param {Run} record
+ * @param {Partial<UsageRow>} match
+ */
+export function findRow(record, match) {
+  const row = (usageOf(record).rows ?? []).find((r) =>
+    Object.entries(match).every(([key, value]) => Object.entries(r).some(([k, v]) => k === key && v === value)),
+  );
+  assert.ok(row, `a usage row matches ${JSON.stringify(match)}`);
+  return row;
+}

@@ -6,10 +6,28 @@ import { spawnSync } from 'node:child_process';
 import { openRunStore, loopCap } from '../src/run-store.js';
 import { readEvents } from '../src/run-events.js';
 import { repo } from './git-repo.js';
+import { fromJson } from './run-view.js';
 
+/** @import { Run } from '../src/run-record.js' */
+
+/** @type {Partial<Run>} */
 const start = { title: 'Example', agent: 'claude', commands: 'true', conventions: [] };
+/**
+ * @param {string} main
+ * @param {string} id
+ */
 const file = (main, id) => join(main, '.factory', 'runs', id, 'run.json');
+/**
+ * @param {string} main
+ * @param {string} id
+ * @returns {Run}
+ */
 const read = (main, id) => JSON.parse(readFileSync(file(main, id), 'utf8'));
+/**
+ * @param {string} main
+ * @param {string} id
+ * @param {Record<string, unknown>} change
+ */
 const setRecord = (main, id, change) => writeFileSync(file(main, id), JSON.stringify({ ...read(main, id), ...change }));
 
 // A Run in Check that waits on the user at its loop limit.
@@ -27,6 +45,12 @@ function atLimit(over = {}) {
   });
   return { main, store, id };
 }
+/**
+ * @param {ReturnType<typeof openRunStore>} store
+ * @param {string} id
+ * @param {RegExp} pattern
+ * @param {{ updated?: string }} [data]
+ */
 const refuses = (store, id, pattern, data) => assert.throws(() => store.grantLoop(id, data), pattern);
 
 test('the grant adds one loop, raises the cap and releases the Run', () => {
@@ -40,7 +64,7 @@ test('the grant adds one loop, raises the cap and releases the Run', () => {
   assert.equal(record.waiting_on_human, false);
   assert.equal(record.waiting_reason, '');
   assert.equal(record.check_loops, 4);
-  assert.match(record.activity, /granted an extra Check loop/);
+  assert.match(record.activity ?? '', /granted an extra Check loop/);
 });
 
 test('the grant is in the Event log with the new limit', () => {
@@ -116,7 +140,7 @@ test('an old record without the field has no extra loops and loads unchanged', (
   const { main, id } = atLimit();
   assert.equal(read(main, id).extra_loops, undefined);
   assert.equal(loopCap(read(main, id)), 4);
-  assert.equal(loopCap({ extra_loops: 'x', project_config: { max_check_loops: 2 } }), 2);
-  assert.equal(loopCap({ extra_loops: -3 }), 4);
+  assert.equal(loopCap(fromJson({ extra_loops: 'x', project_config: { max_check_loops: 2 } })), 2);
+  assert.equal(loopCap(fromJson({ extra_loops: -3 })), 4);
   assert.equal(loopCap(undefined), 4);
 });

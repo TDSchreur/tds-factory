@@ -6,13 +6,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openRunStore } from '../src/run-store.js';
 import { repo } from './git-repo.js';
+import { defined, fromJson } from './run-view.js';
+
+/** @import { Run } from '../src/run-record.js' */
 
 const project = () => mkdtempSync(join(tmpdir(), 'run-store-'));
+/**
+ * @param {string} cwd
+ * @param {string} id
+ * @param {Record<string, string>} files
+ */
 const seed = (cwd, id, files) => {
   const dir = join(cwd, '.factory', 'runs', id);
   mkdirSync(dir, { recursive: true });
   for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
 };
+/** @type {Partial<Run>} */
 const start = { title: 'Example', agent: 'codex', commands: 'npm test', conventions: [] };
 
 test('start and update go through the store and list returns the raw record', async () => {
@@ -45,18 +54,34 @@ test('list flags broken records, tolerates a missing store and orders summaries 
     'define.md': 'x',
   });
   const runs = await openRunStore(cwd).list();
-  assert.equal(runs.find((r) => r.id === 'broken').unreadable, true);
-  assert.equal(runs.find((r) => r.id === 'norecord').unreadable, true);
-  assert.equal(runs.find((r) => r.id === 'good').unreadable, false);
-  assert.deepEqual(runs.find((r) => r.id === 'good').files, [
-    'define.md',
-    'build.md',
-    'check-1.md',
-    'check-2.md',
-    'check-10.md',
-    'finish.md',
-    'notes.md',
-  ]);
+  assert.equal(
+    defined(
+      runs.find((r) => r.id === 'broken'),
+      'broken' + ' is listed',
+    ).unreadable,
+    true,
+  );
+  assert.equal(
+    defined(
+      runs.find((r) => r.id === 'norecord'),
+      'norecord' + ' is listed',
+    ).unreadable,
+    true,
+  );
+  assert.equal(
+    defined(
+      runs.find((r) => r.id === 'good'),
+      'good' + ' is listed',
+    ).unreadable,
+    false,
+  );
+  assert.deepEqual(
+    defined(
+      runs.find((r) => r.id === 'good'),
+      'good' + ' is listed',
+    ).files,
+    ['define.md', 'build.md', 'check-1.md', 'check-2.md', 'check-10.md', 'finish.md', 'notes.md'],
+  );
 });
 
 test('readFile serves only Markdown inside a Run folder', async () => {
@@ -128,7 +153,7 @@ test('update preserves unknown fields and clears waiting on resume', () => {
     }),
   });
   openRunStore(cwd).update('old', { status: 'running', activity: 'continuing' });
-  const record = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json')));
+  const record = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', 'old', 'run.json'), 'utf8'));
   assert.deepEqual(record.future, { value: 42 });
   assert.equal(record.created, 'original');
   assert.equal(record.waiting_on_human, false);
@@ -141,7 +166,7 @@ test('update rejects invalid values and leaves the record as it was', () => {
   const id = store.start(start);
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
   const before = readFileSync(file, 'utf8');
-  assert.throws(() => store.update(id, { stage: 'wrong' }), /invalid field or value: stage/);
+  assert.throws(() => store.update(id, fromJson({ stage: 'wrong' })), /invalid field or value: stage/);
   assert.throws(() => store.update(id, { status: 'waiting' }), /waiting requires a reason/);
   assert.equal(readFileSync(file, 'utf8'), before);
 });
@@ -198,6 +223,7 @@ test('Run locks identify their process and inspection diagnoses the owner', asyn
   const id = store.start(start);
   const lock = join(cwd, '.factory', 'runs', `.lock-${createHash('sha256').update(id).digest('hex')}`);
   const rename = fs.renameSync;
+  /** @type {{ pid: number, host?: string, started: string } | undefined} */
   let owner;
   fs.renameSync = (...args) => {
     owner = JSON.parse(readFileSync(lock, 'utf8'));
@@ -208,11 +234,12 @@ test('Run locks identify their process and inspection diagnoses the owner', asyn
   } finally {
     fs.renameSync = rename;
   }
+  assert.ok(owner, 'the lock named its owner');
   assert.equal(owner.pid, process.pid);
   assert.ok(owner.host);
   assert.ok(Date.parse(owner.started));
   writeFileSync(lock, JSON.stringify(owner));
   const report = (await store.inspect(id))[0];
-  assert.match(report.problems.find((p) => p.code === 'lock').message, /live/);
-  assert.match(report.problems.find((p) => p.code === 'lock').message, new RegExp(String(process.pid)));
+  assert.match(report.problems.find((p) => p.code === 'lock')?.message ?? '', /live/);
+  assert.match(report.problems.find((p) => p.code === 'lock')?.message ?? '', new RegExp(String(process.pid)));
 });

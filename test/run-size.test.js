@@ -6,9 +6,17 @@ import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 
 // A Run in Build with `tickets` Tickets all done; `files` are committed in the Run worktree, one commit per entry of `commits`.
+/**
+ * @param {number} tickets
+ * @param {Record<string, string>[]} commits
+ */
 function inBuild(tickets, commits) {
   const cwd = repo();
   const started = run(
@@ -38,6 +46,7 @@ function inBuild(tickets, commits) {
   assert.equal(run(cwd, 'transition', '--id', id, '--to', 'build').status, 0);
   return { cwd, id };
 }
+/** @param {{ cwd: string, id: string }} run */
 const toCheck = ({ cwd, id }) => run(cwd, 'transition', '--id', id, '--to', 'check');
 
 test('a small Run with a commit for each Ticket moves to Check without a warning', () => {

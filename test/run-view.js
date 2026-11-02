@@ -35,14 +35,15 @@ export const runView = (fields = {}) => ({
  * @param {string} id
  * @param {unknown} [record]
  * @param {string[]} [files]
+ * @param {ReadableEntry['events']} [events]
  * @returns {ReadableEntry}
  */
-export const entryOf = (id, record = {}, files = []) => ({
+export const entryOf = (id, record = {}, files = [], events = { events: [], damaged: 0 }) => ({
   id,
   unreadable: false,
   record: JSON.parse(JSON.stringify(record)),
   files,
-  events: { events: [], damaged: 0 },
+  events,
 });
 
 /**
@@ -63,3 +64,36 @@ export async function viewsOf(dash) {
   assert.ok(Array.isArray(body), '/api/views answers with a list');
   return body;
 }
+
+/**
+ * A value as it comes back from a file or the wire: a test uses it for an argument of the wrong shape, which
+ * the types forbid and the code under test has to survive because run.json is user-editable.
+ * @param {unknown} value
+ */
+export const fromJson = (value) => JSON.parse(JSON.stringify(value));
+
+/**
+ * The value of an optional field a test has just made the code set, or a failed assertion.
+ * @template T
+ * @param {T} value
+ * @param {string} what
+ * @returns {NonNullable<T>}
+ */
+export function defined(value, what) {
+  assert.ok(value !== undefined && value !== null, what);
+  return value;
+}
+
+/**
+ * @template M
+ * @param {{ metrics?: M }} record
+ * @returns {M}
+ */
+export const metricsOf = (record) => defined(record.metrics, 'the record has metrics');
+
+/**
+ * @template U
+ * @param {{ metrics?: { usage?: U } }} record
+ * @returns {U}
+ */
+export const usageOf = (record) => defined(metricsOf(record).usage, 'the record has usage');

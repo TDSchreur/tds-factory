@@ -1,10 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { repo } from './git-repo.js';
-import { world, copilotSession, copilotMention, copilotUsage } from './usage-fixtures.js';
-
-const find = (record, match) =>
-  record.metrics.usage.rows.find((r) => Object.entries(match).every(([k, v]) => r[k] === v));
+import { findRow as find, world, copilotSession, copilotMention, copilotUsage } from './usage-fixtures.js';
+import { usageOf } from './run-view.js';
 
 test('Copilot Usage: cache reads and writes are taken out of input, and reasoning stays part of output', () => {
   const w = world('copilot');
@@ -61,6 +59,6 @@ test('Copilot Usage: two Runs never mix, and an unknown format is not tracked wi
   assert.equal(find(w.read(cwd, one), { stage: 'define' }).input, 11);
   const second = w.read(cwd, two);
   assert.equal(second.stage, 'build');
-  assert.equal(second.metrics.usage.status, 'not tracked');
-  assert.match(second.metrics.usage.reason, /no usage found.*Copilot/);
+  assert.equal(usageOf(second).status, 'not tracked');
+  assert.match(usageOf(second).reason ?? '', /no usage found.*Copilot/);
 });

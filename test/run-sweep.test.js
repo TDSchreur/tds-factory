@@ -6,9 +6,17 @@ import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
+/**
+ * @param {string} cwd
+ * @param {...string} args
+ */
 const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
 
 // A project with a Run whose worktree starts from `files`; `change` then edits and commits inside the Run worktree.
+/**
+ * @param {Record<string, string>} files
+ * @param {Record<string, string>} change
+ */
 function project(files, change) {
   const cwd = repo();
   for (const [name, text] of Object.entries(files)) {
@@ -34,6 +42,10 @@ function project(files, change) {
   git(worktree, 'commit', '-q', '-m', 'change');
   return { cwd, id, worktree };
 }
+/**
+ * @param {{ cwd: string, id: string }} p
+ * @param {...string} args
+ */
 const sweep = (p, ...args) => run(p.cwd, 'sweep', '--id', p.id, ...args);
 
 test('the sweep finds a stale use of an identifier the Run changed, and tags hits in changed files', () => {
@@ -87,6 +99,7 @@ test('the sweep is read-only, strips control characters and never follows links'
 });
 
 test('the output is bounded and says what was left out', () => {
+  /** @type {Record<string, string>} */
   const files = {};
   for (let i = 0; i < 60; i += 1) files[`docs/f${i}.md`] = `${'x'.repeat(300)} common_term ${i}\n`;
   const p = project(files, { 'docs/z.md': 'adds `common_term`\n' });
@@ -114,6 +127,7 @@ test('an unknown Run is refused', () => {
 });
 
 test('a term that occurs everywhere is not listed and says so', () => {
+  /** @type {Record<string, string>} */
   const files = {};
   for (let i = 0; i < 120; i += 1) files[`docs/g${i}.md`] = 'shared_word appears here\n';
   const p = project(files, { 'docs/z.md': 'uses `shared_word`\n' });
@@ -151,6 +165,7 @@ test(
 );
 
 test('the total of listed hits is bounded and the rest is counted', () => {
+  /** @type {Record<string, string>} */
   const files = {};
   for (let i = 0; i < 50; i += 1) files[`docs/t${i}.md`] = 'tm1_x tm2_x tm3_x tm4_x tm5_x tm6_x tm7_x tm8_x\n';
   const p = project(files, { 'docs/z.md': 'adds `tm1_x` `tm2_x` `tm3_x` `tm4_x` `tm5_x` `tm6_x` `tm7_x` `tm8_x`\n' });
@@ -227,6 +242,7 @@ test('hostile input does not slow the sweep or add lines', () => {
   assert.doesNotMatch(result.stdout, /\x1b/);
 });
 
+/** @param {string} out */
 const sections = (out) => (out.split('== lists that miss')[1] ?? '').split('== documents to read')[0];
 
 test('a list that misses a member the diff added is listed, and one that has it is not', () => {
@@ -309,6 +325,7 @@ test('bidi controls in a document line are not printed', () => {
   assert.doesNotMatch(sweep(p).stdout, /‮/);
 });
 
+/** @param {string} out */
 const toRead = (out) => out.slice(out.indexOf('== documents to read')).split('\n').slice(1);
 
 test('the sweep ends with the documents still to read: not the changed ones, most hits first', () => {
@@ -327,10 +344,11 @@ test('the sweep ends with the documents still to read: not the changed ones, mos
     list.map((l) => l.trim()),
     ['docs/many.md: 3 hit(s)', 'docs/few.md: 1 hit(s)'],
   );
-  assert.ok(out.trimEnd().endsWith(list.at(-1)), 'the list is the end of the output');
+  assert.ok(out.trimEnd().endsWith(list.at(-1) ?? ''), 'the list is the end of the output');
 });
 
 test('--files prints only that list, and the list is capped with a count of the rest', () => {
+  /** @type {Record<string, string>} */
   const files = { 'docs/z.md': 'Use `old_flag`.\n' };
   for (let i = 0; i < 20; i += 1) files[`docs/f${String(i).padStart(2, '0')}.md`] = 'old_flag\n';
   const p = project(files, { 'docs/z.md': 'Use `new_flag`.\n' });
