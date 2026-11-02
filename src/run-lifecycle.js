@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit, gitStep, runSync } from './git.js';
+/** @import { Step } from './git.js' */
 /** @import { Run, Stage, Track } from './run-record.js' */
 import { stages, isStage, stageIndex } from './flow.js';
 import { codeOf, messageOf, oneOf } from './narrow.js';
@@ -20,8 +21,8 @@ import {
   loops,
   isTrack,
 } from './run-record.js';
-import { runRoot, changeRun, changeRunning } from './run-folder.js';
-import { fetchOriginDefault, mergeProblem, worktreeState } from './worktrees.js';
+import { runRoot, changeRun, changeRunning, changeRunningFlow } from './run-folder.js';
+import { fetchOriginDefault, fetchOriginDefaultFlow, mergeProblem, worktreeStateFlow } from './worktrees.js';
 import { finishProblems, clearEvidence } from './evidence.js';
 import { newMetrics, moveVisit, firstCheck, recordCauses, REWORK_CAUSES } from './run-metrics.js';
 
@@ -39,7 +40,7 @@ export function startRun(projectDir, data) {
   const fastProblem = fastCommandProblem(data.fast_commands);
   if (fastProblem) throw new Error(fastProblem);
   /** @param {...string} args */
-  const git = (...args) => spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' });
+  const git = (...args) => runGit(projectDir, args);
   if (git('rev-parse', '--git-dir').status !== 0)
     throw new Error('a Run worktree needs a git repository: run git init first');
   if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0)
@@ -206,17 +207,18 @@ export function trackRun(projectDir, id, value) {
  * @param {string} projectDir
  * @param {string | undefined} id
  * @param {unknown} data
+ * @returns {Generator<Step, void, any>}
  */
-export function acceptRun(projectDir, id, data) {
+export function* acceptRunFlow(projectDir, id, data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('data must be an object');
   if (Object.keys(data).some((key) => !['findings', 'decision'].includes(key)))
     throw new Error('accept takes only findings and decision');
   const { findings, decision } = /** @type {Record<string, unknown>} */ (data);
   if (typeof findings !== 'string' || !findings.trim()) throw new Error('accept needs findings');
   if (typeof decision !== 'string' || !decision.trim()) throw new Error('accept needs decision');
-  changeRunning(projectDir, id, {}, (old) => {
+  yield* changeRunningFlow(projectDir, id, {}, function* (old) {
     if (old.stage !== 'check') throw new Error('only a Run in Check can accept its Check');
-    const { head, dirty } = worktreeState(old);
+    const { head, dirty } = yield* worktreeStateFlow(old);
     if (dirty) throw new Error('cannot accept a Check while the Run worktree has uncommitted changes');
     return {
       record: {
@@ -227,31 +229,38 @@ export function acceptRun(projectDir, id, data) {
     };
   });
 }
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {unknown} data
+ */
+export const acceptRun = (projectDir, id, data) => runSync(acceptRunFlow(projectDir, id, data));
 // Rebases onto origin's default branch. A changed head or recorded base makes Evidence stale, so it goes.
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
  * @param {{ activity?: string }} [data]
+ * @returns {Generator<Step, void, any>}
  */
-export function syncRun(projectDir, id, data = {}) {
-  changeRunning(projectDir, id, data, (old) => {
+export function* syncRunFlow(projectDir, id, data = {}) {
+  yield* changeRunningFlow(projectDir, id, data, function* (old) {
     if (!oneOf(['build', 'check'], old.stage)) throw new Error('only a Run in Build or Check can be synced');
     /** @param {...string} args */
-    const git = (...args) => spawnSync('git', args, { cwd: old.worktree, encoding: 'utf8' });
+    const git = (...args) => gitStep(old.worktree, args);
     // A rebase the user left open is theirs to finish; starting another or aborting it would lose their work.
     for (const dir of ['rebase-merge', 'rebase-apply']) {
-      if (fs.existsSync(path.resolve(old.worktree, git('rev-parse', '--git-path', dir).stdout.trim())))
+      if (fs.existsSync(path.resolve(old.worktree, (yield* git('rev-parse', '--git-path', dir)).stdout.trim())))
         throw new Error(
           'a rebase is already in progress in the Run worktree: finish it with git rebase --continue (or stop it with git rebase --abort), then run sync again',
         );
     }
-    const { head, dirty } = worktreeState(old);
+    const { head, dirty } = yield* worktreeStateFlow(old);
     if (dirty) throw new Error('cannot sync while the Run worktree has uncommitted changes');
-    const base = fetchOriginDefault(projectDir);
-    const rebased = git('rebase', base);
+    const base = yield* fetchOriginDefaultFlow(projectDir);
+    const rebased = yield* git('rebase', base);
     if (rebased.status !== 0) {
-      const files = git('diff', '--name-only', '--diff-filter=U').stdout.trim().split('\n').filter(Boolean);
-      const aborted = git('rebase', '--abort');
+      const files = (yield* git('diff', '--name-only', '--diff-filter=U')).stdout.trim().split('\n').filter(Boolean);
+      const aborted = yield* git('rebase', '--abort');
       const why = files.length ? `conflicts in ${files.join(', ')}` : `failed: ${rebased.stderr.trim()}`;
       if (aborted.status !== 0)
         throw new Error(`rebase onto origin ${why}; it could not be aborted: ${aborted.stderr.trim()}`);
@@ -259,12 +268,18 @@ export function syncRun(projectDir, id, data = {}) {
         `rebase onto origin ${why}; the branch is unchanged. To resolve it, run git rebase ${base} in the Run worktree, fix each conflicted file, git add it, run git rebase --continue, then run sync again`,
       );
     }
-    const moved = worktreeState(old).head !== head;
+    const moved = (yield* worktreeStateFlow(old)).head !== head;
     const changed = moved || old.base_sha !== base;
     const record = changed ? clearEvidence({ ...old, base_sha: base }) : { ...old, base_sha: base };
     return { record, activity: changed ? 'Synced with origin; Evidence cleared' : 'Already up to date with origin' };
   });
 }
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ activity?: string }} [data]
+ */
+export const syncRun = (projectDir, id, data = {}) => runSync(syncRunFlow(projectDir, id, data));
 
 /**
  * @param {string} projectDir

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { git as runGit } from './git.js';
 import { readRun } from './run-folder.js';
 
 /**
@@ -38,7 +38,7 @@ const clean = (text) =>
  * @param {...string} args
  */
 const git = (cwd, ...args) => {
-  const out = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const out = runGit(cwd, args, { maxBuffer: 64 * 1024 * 1024 });
   if (out.status !== 0) throw new Error(`git ${args[0]} failed: ${(out.stderr || out.error?.message || '').trim()}`);
   return out.stdout;
 };

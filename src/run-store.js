@@ -7,7 +7,8 @@ import { totalUsage } from './run-usage.js';
 import { reviewPlan } from './project-reviews.js';
 import { tracks } from './run-record.js';
 import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
-import { worktreeState } from './worktrees.js';
+import { worktreeState, worktreeStateFlow } from './worktrees.js';
+import { runAsync } from './git.js';
 import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeReview } from './evidence.js';
 import {
   startRun,
@@ -17,11 +18,13 @@ import {
   acceptRun,
   grantLoopRun,
   syncRun,
+  syncRunFlow,
+  acceptRunFlow,
   reworkRun,
   completeRun,
 } from './run-lifecycle.js';
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
-import { removeRun, cleanRun, cleanAll } from './run-clean.js';
+import { removeRun, removeRunFlow, cleanRun, cleanRunFlow, cleanAll } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
 import { guidesRun } from './guides.js';
 import { sizeWarnings } from './run-size.js';
@@ -29,6 +32,13 @@ import { sizeWarnings } from './run-size.js';
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
 export { MAX_CHECK_LOOPS, loopCap, verifyCommandProblem, fastCommandProblem, trackOf } from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
+
+/** @param {Run} record @param {{ head: string, dirty: boolean }} state */
+const eligibility = (record, state) => ({
+  ...state,
+  problems: finishProblems(record, state),
+  worktree: record.worktree,
+});
 
 // The one interface to the modules that touch .factory/runs. The CLI passes its flags through unchanged, so an id, Stage, axis or value may be undefined; the module that uses it refuses it. remove(id, why, options) reports dirty work separately from other refusals.
 /** @param {string} callerDir */
@@ -78,9 +88,22 @@ export function openRunStore(callerDir) {
     /** @param {string | undefined} id */
     mergeEligibility: (id) => {
       const { record } = readRun(projectDir, id);
-      const state = worktreeState(record);
-      return { ...state, problems: finishProblems(record, state), worktree: record.worktree };
+      return eligibility(record, worktreeState(record));
     },
+    // The Dashboard's variants of the operations below: the same logic, with git calls that do not block the event loop.
+    /** @param {string | undefined} id */
+    mergeEligibilityAsync: async (id) => {
+      const { record } = readRun(projectDir, id);
+      return eligibility(record, await runAsync(worktreeStateFlow(record)));
+    },
+    /** @param {string | undefined} id @param {{ activity?: string }} [data] */
+    syncAsync: (id, data) => runAsync(syncRunFlow(projectDir, id, data)),
+    /** @param {string | undefined} id @param {unknown} data */
+    acceptAsync: (id, data) => runAsync(acceptRunFlow(projectDir, id, data)),
+    /** @param {string} id @param {(reason: string) => void} [why] @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options] */
+    removeAsync: (id, why, options) => runAsync(removeRunFlow(projectDir, id, why, options)),
+    /** @param {string | undefined} id @param {{ prState?: PrLookup }} [options] */
+    cleanAsync: (id, { prState } = {}) => runAsync(cleanRunFlow(projectDir, callerDir, id, prState)),
     list: () => listRuns(runsDir),
     /** @param {string} [id] */
     stats: async (id) => {

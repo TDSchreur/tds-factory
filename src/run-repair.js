@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 /** @import { Run } from './run-record.js' */
 import { messageOf, oneOf } from './narrow.js';
 import { validId, paused, write } from './run-record.js';
@@ -16,6 +15,7 @@ import {
   listRuns,
 } from './run-folder.js';
 import { ownWorktrees, worktreeState } from './worktrees.js';
+import { git } from './git.js';
 import { remoteRepo } from './pr-provider.js';
 
 // Produce a reviewable plan from current git, Run and GitHub facts. No writes occur here.
@@ -92,7 +92,7 @@ export function repairPlan(projectDir, runsDir, id, ignoreLock = false) {
   if (!record && !blockers.length && wt)
     actions.push('recreate missing Run record as interrupted without inventing progress or Evidence');
   if (wt?.safe && wt.branch === id) {
-    const remote = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: projectDir, encoding: 'utf8' });
+    const remote = git(projectDir, ['remote', 'get-url', 'origin']);
     const url = remote.status === 0 ? remote.stdout.trim() : '';
     const host = remoteRepo(url);
     const listByHead = host?.provider.listByHead;
@@ -222,8 +222,7 @@ export async function inspectRuns(projectDir, runsDir, only) {
   }
   const selected = runs.filter((run) => only === undefined || run.id === only);
   if (only !== undefined && !selected.length) throw new Error(`no such Run: ${only}`);
-  const listed =
-    spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: projectDir, encoding: 'utf8' }).stdout ?? '';
+  const listed = git(projectDir, ['worktree', 'list', '--porcelain']).stdout ?? '';
   const known = new Set(
     [...listed.matchAll(/^worktree (.+)$/gm)].map((m) => (fs.existsSync(m[1]) ? fs.realpathSync(m[1]) : m[1])),
   );
@@ -280,11 +279,15 @@ export async function inspectRuns(projectDir, runsDir, only) {
           if (active && record.stage === 'define' && record.base_sha) {
             // base_sha comes from a file an agent can edit: only a plain commit id may reach git, never something it would read as an option.
             if (!/^[0-9a-f]{40,64}$/.test(record.base_sha)) throw new Error('base_sha is not a commit id');
-            const diff = spawnSync(
-              'git',
-              ['diff', '--name-only', '--no-renames', '-z', record.base_sha, 'HEAD', '--'],
-              { cwd: record.worktree, encoding: 'utf8' },
-            );
+            const diff = git(record.worktree, [
+              'diff',
+              '--name-only',
+              '--no-renames',
+              '-z',
+              record.base_sha,
+              'HEAD',
+              '--',
+            ]);
             if (diff.status !== 0)
               throw new Error(`cannot compare the Run branch with its base: ${(diff.stderr ?? '').trim()}`);
             const outside = diff.stdout

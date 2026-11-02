@@ -1,11 +1,8 @@
 /** @import { PrStatus, PrView } from './pr-provider.js' */
-import { execFile, spawnSync } from 'node:child_process';
-import { promisify } from 'node:util';
-import { FactoryError } from './errors.js';
+import { exec, failureText, MAX_BUFFER, reasonError, remoteText, spawnText } from './pr-exec.js';
 
 // The Azure DevOps adapter of the PR provider seam (ADR 0020): every call of the `az` command lives here, and every call only reads.
 // It needs the `azure-devops` extension of the Azure CLI and a signed-in user (`az login`). There is no merge, no Follow-up and no write operation.
-const exec = promisify(execFile);
 const ORG = '[A-Za-z0-9][\\w.-]{0,63}';
 const NAME = '(?:[\\w.~-]|%[0-9A-Fa-f]{2}){1,128}'; // a project or repository name, percent-encoded
 const PR = new RegExp(`^https://dev\\.azure\\.com/(${ORG})/(${NAME})/_git/(${NAME})/pullrequest/([1-9]\\d{0,9})$`);
@@ -37,7 +34,7 @@ export const matches = (url) => {
 // Organisation and project (as owner) and repository a git remote URL points at, or undefined when it is not Azure DevOps.
 /** @param {unknown} remote */
 export function repoOfRemote(remote) {
-  const match = REMOTE_HTTPS.exec(String(remote).trim()) ?? REMOTE_SSH.exec(String(remote).trim());
+  const match = REMOTE_HTTPS.exec(remoteText(remote)) ?? REMOTE_SSH.exec(remoteText(remote));
   if (!match) return undefined;
   const [project, repo] = [decode(match[2]), decode(match[3])];
   return plain(project) && plain(repo) ? { owner: `${match[1]}/${project}`, name: repo } : undefined;
@@ -173,7 +170,7 @@ export function launch(argv, platform = process.platform) {
 /** @param {string[]} argv */
 const defaultRun = (argv) => {
   const [file, launched, options] = launch(argv);
-  return exec(file, launched, { timeout: 20_000, maxBuffer: 16 * 1024 * 1024, ...options });
+  return exec(file, launched, { timeout: 20_000, maxBuffer: MAX_BUFFER, ...options });
 };
 /**
  * @param {(argv: string[]) => Promise<{ stdout: string }>} run
@@ -200,23 +197,20 @@ function belongsTo(pr, target) {
  * @returns {Promise<PrStatus>}
  */
 export async function statusAsync(url, { run = defaultRun } = {}) {
-  if (!matches(url)) throw new FactoryError('not an Azure DevOps pull request', { code: 'error' });
+  if (!matches(url)) throw reasonError('not an Azure DevOps pull request', 'error');
   const target = parts(url);
   /** @type {unknown} */
   let pr, policies;
   try {
     [pr, policies] = await Promise.all([read(run, target, SHOW), read(run, target, POLICIES)]);
   } catch (err) {
-    throw new FactoryError('cannot read Azure DevOps PR status', {
-      code: err instanceof SyntaxError ? 'error' : failure(err),
-      cause: err,
-    });
+    throw reasonError('cannot read Azure DevOps PR status', err instanceof SyntaxError ? 'error' : failure(err), err);
   }
   try {
     belongsTo(pr, target);
     return parseStatus(pr, policies);
   } catch (err) {
-    throw err instanceof Error ? new FactoryError(err.message, { code: 'error', cause: err }) : err;
+    throw err instanceof Error ? reasonError(err.message, 'error', err) : err;
   }
 }
 
@@ -257,9 +251,9 @@ export function view(url, { cwd, timeout = 20_000, run } = {}) {
     run ??
     ((argv) => {
       const [file, launched, options] = launch(argv);
-      return spawnSync(file, launched, { cwd, encoding: 'utf8', timeout, ...options });
+      return spawnText(file, launched, { cwd, timeout, ...options });
     });
   const out = call(args(SHOW, target));
-  if (out.status !== 0) throw new Error((out.stderr || out.error?.message || 'az failed').trim());
+  if (out.status !== 0) throw new Error(failureText(out, 'az failed'));
   return viewOf(JSON.parse(out.stdout), target);
 }
