@@ -37,7 +37,7 @@ The tests run on Windows with PowerShell 7 and Git for Windows. `.gitattributes`
 
 Tests that need symbolic links, the executable bit, `mkfifo`, POSIX signals or file names Windows does not allow are skipped on Windows with a reason. Fake `gh` commands in tests come from `test/fake-command.js`, which on Windows makes a copy of `node.exe` that runs the fake's script.
 
-The browser tests are skipped on Windows for now because they are slow there. Set `TDS_WINDOWS_BROWSER=1` (or `REQUIRE_BROWSER=1`) to run them with `msedgedriver` and Edge, falling back to `chromedriver` with Chrome (`CHROME_BIN` overrides the browser path). Put the driver, whose version must match the browser, on PATH. `REQUIRE_BROWSER=1` fails instead of skipping when no browser is found.
+The browser tests are not supported on Windows: every one of them skips there with a reason, also with `REQUIRE_BROWSER=1`. Run them on Linux or macOS (or in WSL) with `chromedriver` and Chromium or Chrome on PATH.
 
 The `ci-ok` job succeeds only when all the other jobs do. The `main` ruleset requires it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.
 
@@ -92,3 +92,7 @@ Besides the skills the Factory ships, a few skills help while developing the Fac
 | `principle-prove-it-works`, `principle-test-behavior-not-implementation` | Guide Build and Check: prove behaviour, do not test internals.                                                                |
 | `github-release`, `conventional-commit`                                  | Write release notes for the per-merge Releases and consistent commit messages.                                                |
 | `create-agentsmd`                                                        | Flesh out `AGENTS.md` with build, test and architecture hints.                                                                |
+| `npm-trusted-publishing`                                                 | Move the Release workflow from a long-lived npm token to OIDC trusted publishing.                                             |
+| `github-actions-runtime-upgrade-conventions`                             | Keep the Node and action versions in `.github/workflows/` current.                                                            |
+| `agent-supply-chain`, `sandbox-npm-install`                              | Check the supply chain of what `install` and `dev-install` fetch, and try unknown npm packages in a sandbox.                  |
+| `dependabot`                                                             | Review `.github/dependabot.yml` for npm and Actions updates.                                                                  |
