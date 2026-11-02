@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT, SKILLS_DIR, AGENTS_DIR } from './paths.js';
-import { targets } from './flow.js';
+import { targets, userDir } from './flow.js';
 import { originDefaultBranch } from './origin.js';
 import { invokedByFactory } from './sync.js';
 import { verifyCommandProblem, fastCommandProblem, mergedLeftovers } from './run-store.js';
@@ -94,10 +94,10 @@ const requiredSkills = () => ['factory', ...invokedByFactory(SKILLS_DIR)];
 // Copilot CLI also reads the Claude and Codex Skill folders, and the default install writes only those.
 const skillTargets = (agent) => (agent === 'copilot' ? ['copilot', 'claude', 'codex'] : [agent]);
 const isInstalled =
-  (agent, projectDir, homeDir) =>
+  (agent, projectDir, homeDir, env) =>
   (name, file = 'SKILL.md') =>
     skillTargets(agent)
-      .flatMap((a) => [path.join(projectDir, targets[a].project), path.join(homeDir, targets[a].global)])
+      .flatMap((a) => [path.join(projectDir, targets[a].project), userDir(a, 'global', homeDir, env)])
       .some((dir) => fs.existsSync(path.join(dir, name, file)));
 
 function skillsCheck(has) {
@@ -112,11 +112,11 @@ function skillsCheck(has) {
 }
 
 // Review needs its two Skills and the read-only reviewer; without the reviewer Check cannot run its axes independently.
-function reviewCheck(agent, projectDir, homeDir, has) {
-  const { reviews } = loadProjectConfig(projectDir, agent, homeDir);
+function reviewCheck(agent, projectDir, homeDir, has, env) {
+  const { reviews } = loadProjectConfig(projectDir, agent, homeDir, env);
   const missing = ['code-review', 'security-scan'].filter((name) => !has(name));
   const file = fs.readdirSync(path.join(AGENTS_DIR, agent)).find((f) => f.startsWith('factory-check.'));
-  const agentDirs = [path.join(projectDir, targets[agent].projectAgents), path.join(homeDir, targets[agent].agents)];
+  const agentDirs = [path.join(projectDir, targets[agent].projectAgents), userDir(agent, 'agents', homeDir, env)];
   if (!agentDirs.some((dir) => fs.existsSync(path.join(dir, file))))
     missing.push(`the factory-check Stage agent (${file})`);
   if (reviews.some((review) => review.mode === 'interactive')) {
@@ -132,8 +132,8 @@ function reviewCheck(agent, projectDir, homeDir, has) {
 }
 
 // A project's .factory/config.json is optional; when present, a bad value is named with its line so it can be fixed before a Run freezes it.
-function configCheck(agent, projectDir, homeDir) {
-  const config = loadProjectConfig(projectDir, agent, homeDir);
+function configCheck(agent, projectDir, homeDir, env) {
+  const config = loadProjectConfig(projectDir, agent, homeDir, env);
   const file = path.join(projectDir, '.factory', 'config.json');
   if (!fs.existsSync(file)) return ['pass', 'no .factory/config.json; the Factory defaults apply'];
   const set = [
@@ -168,7 +168,7 @@ function binaryCheck(agent) {
 
 // Checks, without changing anything, whether a project is ready for a Run. `missing` is something the user can supply.
 // Without `agent` every Agent target is reported and one usable target is enough; with `agent` only that target is, and its command need not be on PATH.
-export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
+export function doctor({ projectDir, agent, homeDir = os.homedir(), prState, env = process.env }) {
   if (agent !== undefined && !Object.hasOwn(targets, agent))
     throw new Error(`unknown agent "${agent}" (${Object.keys(targets).join(', ')})`);
   // Git resolves the current worktree (including linked worktrees), not the shared main checkout.
@@ -194,12 +194,12 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState }) {
     ['guides', () => guidesCheck(projectDir)],
   ].map(attempt);
   const agents = (agent === undefined ? Object.keys(targets) : [agent]).map((id) => {
-    const has = isInstalled(id, projectDir, homeDir);
+    const has = isInstalled(id, projectDir, homeDir, env);
     const list = [
       ['binary', () => binaryCheck(id)],
       ['skills', () => skillsCheck(has)],
-      ['config', () => configCheck(id, projectDir, homeDir)],
-      ['review', () => reviewCheck(id, projectDir, homeDir, has)],
+      ['config', () => configCheck(id, projectDir, homeDir, env)],
+      ['review', () => reviewCheck(id, projectDir, homeDir, has, env)],
     ].map(attempt);
     return { id, usable: list.every((c) => c.status === 'pass'), checks: list };
   });

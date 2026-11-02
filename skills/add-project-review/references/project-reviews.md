@@ -9,7 +9,7 @@ If your `.gitignore` ignores all of `.factory/`, commit only the configuration w
 Create `.factory/reviews.json` with a `reviews` array. Each ID begins with a lowercase letter and uses lowercase letters, digits and hyphens, at most 64 characters. IDs must be unique and cannot be `standards`, `spec`, `security` or `infrastructure`. Each Skill source is explicit:
 
 - `{ "source": "project", "path": "reviews/angular" }` refers to a project-relative directory containing `SKILL.md`.
-- `{ "source": "installed", "name": "angular-review" }` refers to a Skill in the selected target's global Skill directory: `~/.claude/skills`, `~/.agents/skills`, or `~/.copilot/skills`. Use a project reference for locally installed Skills.
+- `{ "source": "installed", "name": "angular-review" }` refers to a Skill in the selected target's global Skill directory: `~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills` when that is set), `~/.agents/skills`, or `~/.copilot/skills`. Use a project reference for locally installed Skills.
 
 ```json
 {
