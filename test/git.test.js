@@ -27,7 +27,9 @@ test('git returns text output from the given directory', () => {
 test('git passes options through to the process', () => {
   const dir = tempRepo();
   try {
-    const out = git(dir, ['var', 'GIT_AUTHOR_IDENT'], { env: { ...process.env, GIT_AUTHOR_NAME: 'Zed Option' } });
+    const out = git(dir, ['var', 'GIT_AUTHOR_IDENT'], {
+      env: { ...process.env, GIT_AUTHOR_NAME: 'Zed Option', GIT_AUTHOR_EMAIL: 'z@example.com' },
+    });
     assert.match(out.stdout, /^Zed Option /);
     const overflow = git(dir, ['--version'], { maxBuffer: 1 });
     assert.ok(overflow.error);
@@ -69,7 +71,7 @@ test('gitAsync closes stdin when no input is given, passes env and kills on time
     assert.equal(hashed.status, 0);
     assert.match(hashed.stdout, /^[0-9a-f]{40,64}\n$/);
     const ident = await gitAsync(dir, ['var', 'GIT_AUTHOR_IDENT'], {
-      env: { ...process.env, GIT_AUTHOR_NAME: 'Zed Async' },
+      env: { ...process.env, GIT_AUTHOR_NAME: 'Zed Async', GIT_AUTHOR_EMAIL: 'z@example.com' },
     });
     assert.match(ident.stdout, /^Zed Async /);
     const slow = await gitAsync(dir, ['-c', 'alias.slow=!sleep 5', 'slow'], { timeout: 100 });
