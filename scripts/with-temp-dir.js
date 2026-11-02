@@ -17,6 +17,7 @@ if (!command) {
 
 const dir = realpathSync(mkdtempSync(join(tmpdir(), 'tds-run-')));
 const remove = () => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+/** @type {Record<string, string | undefined>} */
 const env = { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir };
 if (process.platform === 'win32') {
   // Many tests use the POSIX commands true and false as their Verify command, and cmd.exe has neither.
