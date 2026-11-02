@@ -228,6 +228,8 @@
     }
   }
   * { box-sizing: border-box; }
+  /* Opening the compact detail locks the page scroll; a reserved gutter keeps a classic scrollbar (Windows) from shifting the layout behind it. */
+  html { scrollbar-gutter: stable; }
   body { margin: 0; font-family: var(--fontFamilyBase); font-size: var(--fontSizeBase300); line-height: var(--lineHeightBase300); background: var(--colorNeutralBackground2); color: var(--colorNeutralForeground1); -webkit-font-smoothing: antialiased; }
   a { color: var(--colorBrandForegroundLink); text-underline-offset: .15em; }
   a:hover { color: var(--colorBrandForegroundLinkHover); }

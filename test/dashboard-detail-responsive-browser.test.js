@@ -153,9 +153,12 @@ test('detail keeps its Back control and background position on a short screen', 
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=r4]')");
-    const before = await page.execute(
-      "const card=document.querySelector('[data-id=r4]'); card.scrollIntoView({block:'center'}); card.focus(); return window.scrollY",
+    await page.execute(
+      "const card=document.querySelector('[data-id=r4]'); card.scrollIntoView({block:'center'}); card.focus()",
     );
+    // Scrolling can be animated; read the position once it stops.
+    await page.waitFor('const y = window.scrollY, same = window.__y === y; window.__y = y; return same');
+    const before = await page.execute('return window.scrollY');
     await page.execute("document.querySelector('[data-id=r4]').click()");
     await page.waitFor("return document.querySelector('#detail h2') === document.activeElement");
     for (let i = 0; i < 4; i++) await page.key(PAGE_DOWN); // Page Down is handled by the open detail.

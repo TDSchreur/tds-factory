@@ -220,10 +220,11 @@ test('reduced motion switches the transitions off', async (t) => {
       page.execute(
         "return [getComputedStyle(document.querySelector('.card')).transitionDuration, getComputedStyle(document.querySelector('button')).transitionDuration]",
       );
-    assert.ok(
-      (await duration()).every((value) => value !== '0s'),
-      'transitions run by default',
-    );
+    // The operating system's own setting (animations off in Windows) must not decide the default.
+    await page.cdp('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+    });
+    assert.ok('transitions run by default');
     await page.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     assert.equal(await page.execute("return matchMedia('(prefers-reduced-motion: reduce)').matches"), true);
     assert.deepEqual(await duration(), ['0s', '0s']);
