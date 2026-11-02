@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { targets } from './flow.js';
+import { userDir } from './flow.js';
 
 const baseline = new Set(['standards', 'spec', 'security', 'infrastructure', 'constructor', 'prototype']);
 const validId = /^[a-z][a-z0-9-]{0,63}$/;
@@ -49,7 +49,7 @@ function safeDirectory(root, relative) {
   if (!inside(canonicalRoot, fs.realpathSync(current))) throw new Error('Skill path escapes its root');
   return current;
 }
-function skillDirectory(projectDir, agent, homeDir, skill) {
+function skillDirectory(projectDir, agent, homeDir, skill, env) {
   if (!plain(skill) || !ownKeys(skill, ['source', 'path', 'name']))
     throw new Error('Skill needs an explicit source and path or name');
   if (skill.source === 'project' && text(skill.path) && skill.name === undefined)
@@ -60,7 +60,7 @@ function skillDirectory(projectDir, agent, homeDir, skill) {
     /^[a-z0-9][a-z0-9-]*$/.test(skill.name) &&
     skill.path === undefined
   )
-    return safeDirectory(path.join(homeDir, targets[agent].global), skill.name);
+    return safeDirectory(userDir(agent, 'global', homeDir, env), skill.name);
   throw new Error('Skill must be {source: "project", path: "..."} or {source: "installed", name: "..."}');
 }
 function readProjectJson(projectDir, name) {
@@ -77,7 +77,7 @@ function readProjectJson(projectDir, name) {
   }
 }
 // .factory/reviews.json keeps working; the same reviews may also sit under "reviews" in .factory/config.json. IDs are unique across both.
-export function loadProjectReviews(projectDir, agent, homeDir = os.homedir()) {
+export function loadProjectReviews(projectDir, agent, homeDir = os.homedir(), env = process.env) {
   const legacy = readProjectJson(projectDir, 'reviews.json');
   if (legacy && (!plain(legacy.data) || !ownKeys(legacy.data, ['reviews']) || !Array.isArray(legacy.data.reviews)))
     throw new Error('reviews.json must contain a reviews array');
@@ -85,10 +85,10 @@ export function loadProjectReviews(projectDir, agent, homeDir = os.homedir()) {
   const configured = config && plain(config.data) && Array.isArray(config.data.reviews) ? config.data.reviews : [];
   const ids = new Set();
   return [...(legacy?.data.reviews ?? []), ...configured].map((review) =>
-    parseReview(review, ids, projectDir, agent, homeDir),
+    parseReview(review, ids, projectDir, agent, homeDir, env),
   );
 }
-function parseReview(review, ids, projectDir, agent, homeDir) {
+function parseReview(review, ids, projectDir, agent, homeDir, env) {
   if (!plain(review) || !ownKeys(review, ['id', 'name', 'mode', 'skill', 'patterns', 'runtime']))
     throw new Error('invalid project review fields');
   const { id, name, mode, skill, patterns, runtime } = review;
@@ -116,7 +116,7 @@ function parseReview(review, ids, projectDir, agent, homeDir) {
   if (mode === 'source' && runtime !== undefined) throw new Error(`${id}: runtime is only for interactive reviews`);
   let snapshot;
   try {
-    snapshot = regularTree(skillDirectory(projectDir, agent, homeDir, skill));
+    snapshot = regularTree(skillDirectory(projectDir, agent, homeDir, skill, env));
   } catch (err) {
     throw new Error(`${id}: cannot load Skill: ${err.message}`);
   }

@@ -2,7 +2,7 @@
 //   1. check the tools (node, git, npm) and the checkout
 //   2. initialise the vendor/ submodules
 //   3. install the CLI as it is on the default branch of origin (your checkout and working tree are not touched)
-//   4. register the Factory: `tds-factory install` puts its skills and agents in ~/.claude and ~/.agents
+//   4. register the Factory: `tds-factory install` puts its skills and agents in ~/.claude (or $CLAUDE_CONFIG_DIR) and ~/.agents
 //   5. check the result with `tds-factory doctor`
 //   6. register the developer skills (not shipped to users) from vendor/ in ~/.claude/skills and ~/.agents/skills
 // Every step is safe to re-run. A failing step skips the steps that depend on it; the others still run.
@@ -40,6 +40,11 @@ const DEV_SKILLS = [
   'vendor/pstack/skills/principle-test-behavior-not-implementation',
 ];
 const SKILL_TARGETS = ['.claude/skills', '.agents/skills'];
+// Claude Code reads ~/.claude, or the folder CLAUDE_CONFIG_DIR names when that is non-empty (same rule as src/flow.js).
+const userRoot = (target) =>
+  target === '.claude/skills' && process.env.CLAUDE_CONFIG_DIR
+    ? path.join(path.resolve(process.env.CLAUDE_CONFIG_DIR), 'skills')
+    : path.join(os.homedir(), target);
 const USAGE = 'Usage: node scripts/dev-install.js [--force] [--dry-run] [--skip-dev-skills]';
 
 const args = process.argv.slice(2);
@@ -196,7 +201,7 @@ else
       }
       for (const target of SKILL_TARGETS) {
         try {
-          const dest = path.join(os.homedir(), target, name);
+          const dest = path.join(userRoot(target), name);
           const stat = fs.lstatSync(dest, { throwIfNoEntry: false });
           // A symlink is another installer's link to the same skill; replace it, not its target.
           const replaceable = force || stat?.isSymbolicLink() || (stat && fs.existsSync(path.join(dest, MARKER)));

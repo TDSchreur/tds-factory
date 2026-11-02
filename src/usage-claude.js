@@ -1,6 +1,7 @@
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
+import { claudeHome } from './flow.js';
 import { count, keepLargest, mentionsRun, modelName, readLog } from './usage-parse.js';
 
 // Reads token Usage from the Claude Code session transcripts under ~/.claude/projects. Only the model, the token
@@ -42,10 +43,10 @@ function parse(text, subagent, seen) {
 }
 
 /**
- * @param {{ home: string, runId: string, sessions: string[], from: number, deadline: number }} input
+ * @param {{ home: string, env?: NodeJS.ProcessEnv, runId: string, sessions: string[], from: number, deadline: number }} input
  */
-export function readClaudeUsage({ home, runId, sessions, from, deadline }) {
-  const root = path.join(home, '.claude', 'projects');
+export function readClaudeUsage({ home, env = process.env, runId, sessions, from, deadline }) {
+  const root = path.join(claudeHome(home, env), 'projects');
   let slugs;
   try {
     slugs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());

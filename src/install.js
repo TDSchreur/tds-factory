@@ -3,7 +3,7 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { SKILLS_DIR, AGENTS_DIR, MARKER } from './paths.js';
-import { targets } from './flow.js';
+import { targets, userDir } from './flow.js';
 import { replaceDir } from './replace-dir.js';
 import { hashLine, modifiedLocally } from './tree-hash.js';
 
@@ -22,7 +22,7 @@ export function install({ agent, project, force, dryRun = false }) {
     .map((e) => e.name);
 
   for (const name of names) {
-    const targetDir = path.join(base, targets[name][project ? 'project' : 'global']);
+    const targetDir = project ? path.join(base, targets[name].project) : userDir(name, 'global', base);
     if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
     for (const skill of skills) {
       const dest = path.join(targetDir, skill);
@@ -55,7 +55,12 @@ export function install({ agent, project, force, dryRun = false }) {
   }
   // Stage agents carry per-target model choices, so Copilot gets its own even when its skills are shared.
   for (const name of agent === 'all' ? all : names) {
-    installAgents(name, path.join(base, targets[name][project ? 'projectAgents' : 'agents']), force, dryRun);
+    installAgents(
+      name,
+      project ? path.join(base, targets[name].projectAgents) : userDir(name, 'agents', base),
+      force,
+      dryRun,
+    );
   }
 }
 

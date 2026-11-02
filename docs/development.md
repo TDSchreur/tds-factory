@@ -9,7 +9,7 @@ To work on the Factory itself, clone with `--recurse-submodules` and run `node s
 1. checks Node, git, npm and the checkout;
 2. initialises the `vendor/` submodules;
 3. fetches `origin`, packs its default branch and installs that globally, so you use what is on `develop` instead of the last Release (your checkout and working tree are not touched);
-4. registers the Factory with `tds-factory install`, which puts the skills and agents in `~/.claude` and `~/.agents`;
+4. registers the Factory with `tds-factory install`, which puts the skills and agents in `~/.claude` (or `$CLAUDE_CONFIG_DIR`) and `~/.agents`;
 5. checks the result with `tds-factory doctor` (findings are warnings);
 6. registers the developer skills described below.
 
@@ -17,7 +17,7 @@ A failing step skips the steps that depend on it; the others still run, and the 
 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/
-node bin/tds-factory.js install    # install skills/ into ~/.claude/skills and ~/.agents/skills
+node bin/tds-factory.js install    # install skills/ into ~/.claude/skills ($CLAUDE_CONFIG_DIR/skills when set) and ~/.agents/skills
 node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo port (printed at start)
 ```
 
@@ -59,7 +59,7 @@ Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter b
 
 ## Switching between the Release and your checkout
 
-Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude`. You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
+Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude` (or `$CLAUDE_CONFIG_DIR`). You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
 
 ```sh
 sh scripts/use-official.sh   # the latest Release from GitHub
@@ -77,7 +77,7 @@ To see which one you use, run `tds-factory --version` and `which -a tds-factory`
 
 ## Developer skills
 
-Besides the skills the Factory ships, a few skills help while developing the Factory itself. They are not in `skills.manifest.json`, so users do not get them. `scripts/dev-install.js` (step 6) copies them from `vendor/` to `~/.claude/skills` and `~/.agents/skills`, which Claude, Codex and Copilot all read. It only replaces skills it installed earlier (marked `.tds-factory-dev`) and skips same-named skills from other tools. `docs-sync-audit` and `test-gap-audit` need `python3`; `webapp-testing` needs Playwright. To change the set, edit `DEV_SKILLS` in the script.
+Besides the skills the Factory ships, a few skills help while developing the Factory itself. They are not in `skills.manifest.json`, so users do not get them. `scripts/dev-install.js` (step 6) copies them from `vendor/` to `~/.claude/skills` (`$CLAUDE_CONFIG_DIR/skills` when set) and `~/.agents/skills`, which Claude, Codex and Copilot all read. It only replaces skills it installed earlier (marked `.tds-factory-dev`) and skips same-named skills from other tools. `docs-sync-audit` and `test-gap-audit` need `python3`; `webapp-testing` needs Playwright. To change the set, edit `DEV_SKILLS` in the script.
 
 | Skill                                                                    | Use it to                                                                                                                     |
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |

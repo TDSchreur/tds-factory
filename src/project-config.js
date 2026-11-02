@@ -67,7 +67,7 @@ export function configProblems(source, data) {
 }
 
 // Reads the project configuration from `projectDir`. Absent file: defaults. A bad file throws one message per problem with its line.
-export function loadProjectConfig(projectDir, agent, homeDir = os.homedir()) {
+export function loadProjectConfig(projectDir, agent, homeDir = os.homedir(), env = process.env) {
   const file = readProjectJson(projectDir, 'config.json');
   const config = { models: {}, max_check_loops: MAX_CHECK_LOOPS, labels: { ...defaultLabels }, usage: true };
   if (file) {
@@ -81,7 +81,7 @@ export function loadProjectConfig(projectDir, agent, homeDir = os.homedir()) {
   }
   let reviews;
   try {
-    reviews = loadProjectReviews(projectDir, agent, homeDir);
+    reviews = loadProjectReviews(projectDir, agent, homeDir, env);
   } catch (err) {
     const id = /^([a-z][a-z0-9-]*): /.exec(err.message)?.[1] ?? /review ID: (\S+)$/.exec(err.message)?.[1];
     const line = file && id ? lineOf(file.source, ['reviews', id]) : undefined;
