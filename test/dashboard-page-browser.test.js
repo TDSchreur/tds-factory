@@ -566,7 +566,8 @@ test('on a narrow screen the Run detail is a full-screen sheet with Back navigat
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
-    await page.waitFor("return !document.getElementById('detail').hidden");
+    // The dialog loses `hidden` when it renders and opens a moment later, so wait for it to be open.
+    await page.waitFor("return document.getElementById('detail').open");
     const box = await page.execute(
       "const d = document.getElementById('detail').getBoundingClientRect(); return { l: d.left, t: d.top, w: d.width, h: d.height, vw: innerWidth, vh: innerHeight }",
     );
@@ -613,7 +614,7 @@ test('the Run detail closes when its Run is no longer shown', async (t) => {
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
-    assert.equal(await page.execute("return document.getElementById('detail').hidden"), false);
+    await page.waitFor("return document.getElementById('detail').open");
     page.state.runs = [run({ id: 'r2', title: 'Staying' })];
     await page.wait(POLL_WAIT);
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
