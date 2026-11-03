@@ -78,17 +78,21 @@ test('registry and file modes are private on non-Windows hosts', { skip: platfor
   assert.equal(lstatSync(join(dir, 'dashboard.json')).mode & 0o777, 0o600);
 });
 
-test('a staging-path collision retries with wx and never follows a planted symlink', () => {
-  const { dir } = registry();
-  /** @type {string[]} */
-  const staging = ['trap', 'next'];
-  const reg = openProjectRegistry({ dir, stagingHex: () => staging.shift() ?? 'next' });
-  const target = join(tempDir('registry-target-'), 'written-by-link');
-  const trap = join(dir, `projects.json.${process.pid}.trap.tmp`);
-  symlinkSync(target, trap);
-  reg.join(repo());
-  assert.equal(existsSync(target), false);
-});
+test(
+  'a staging-path collision retries with wx and never follows a planted symlink',
+  { skip: platform() === 'win32' },
+  () => {
+    const { dir } = registry();
+    /** @type {string[]} */
+    const staging = ['trap', 'next'];
+    const reg = openProjectRegistry({ dir, stagingHex: () => staging.shift() ?? 'next' });
+    const target = join(tempDir('registry-target-'), 'written-by-link');
+    const trap = join(dir, `projects.json.${process.pid}.trap.tmp`);
+    symlinkSync(target, trap);
+    reg.join(repo());
+    assert.equal(existsSync(target), false);
+  },
+);
 
 test(
   'an existing config folder is tightened to private mode on non-Windows hosts',
