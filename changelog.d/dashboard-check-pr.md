@@ -25,3 +25,7 @@
   Stage, including a Follow-up Rework started from the Dashboard. `references/follow-up.md` documents the three scopes,
   the `run sync` step of a `conflicts` Rework and the rules of a `comments` Rework (list the comments judged to need no
   change; never reply to or resolve threads).
+- The Dashboard has a **Check PR** button on a Done Run with an open pull request and on a Run in Follow-up. It reads
+  the pull request fresh and opens the Run detail on a "Pull request" section: state and draft, merge conflicts,
+  failing checks (each with a link to its run), pending checks and unresolved review threads. A missing or signed-out
+  `gh` or `az` shows that host's setup steps. Host text is shown as plain text and only `https:` links are anchors.

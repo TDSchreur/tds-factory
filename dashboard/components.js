@@ -1,6 +1,6 @@
 // Presentational components of the Dashboard page. State, polling and actions live in app.js.
 /** @import { VNode } from 'preact' */
-/** @import { RunView, ProjectView, RowView } from './model.js' */
+/** @import { RunView, ProjectView, RowView, PrDetailsState } from './model.js' */
 /** @import { Span, ListItem } from './markdown.js' */
 import { Fragment, h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -12,6 +12,7 @@ import {
   STALE_MS,
   ageMs,
   ago,
+  canCheckPr,
   canGrantLoop,
   chipsOf,
   folderName,
@@ -152,6 +153,92 @@ function PrStatus({ run, onCheckPr, showLink = true }) {
   </div>`;
 }
 
+const COMMENT_MAX = 300;
+const THREADS_SHOWN = 50;
+
+// The text of a host answer: shown as text children only, never as HTML or Markdown, and cut to a fixed length.
+/** @param {unknown} v @param {number} [max] */
+const plain = (v, max = COMMENT_MAX) => {
+  const text = typeof v === 'string' ? v : '';
+  return text.length > max ? text.slice(0, max) + '...' : text;
+};
+
+// What the last Check PR found, in the Run detail. The live region is always present so a result is announced when it arrives.
+/** @param {{ run: RunView, state: PrDetailsState | null }} props */
+function PrDetails({ run, state }) {
+  const mine = state && state.key === runKey(run) ? state : null;
+  const data = mine?.data;
+  const announce = !mine
+    ? ''
+    : mine.loading
+      ? 'Checking the pull request...'
+      : mine.error
+        ? 'Could not check the pull request.'
+        : data?.unavailable
+          ? 'The pull request could not be read.'
+          : 'Pull request checked.';
+  const open = data?.state === 'open' || data?.state === undefined;
+  const yesNo = (/** @type {boolean | null | undefined} */ v) => (v === true ? 'yes' : v === false ? 'no' : 'unknown');
+  const failing = Array.isArray(data?.failing) ? data.failing : [];
+  const pending = Array.isArray(data?.pending) ? data.pending : [];
+  const threads = Array.isArray(data?.threads) ? data.threads.slice(0, THREADS_SHOWN) : [];
+  const total = Number.isSafeInteger(data?.threadsTotal) ? Number(data?.threadsTotal) : threads.length;
+  return html`<div class="pr-details-wrap"><div class="sr" role="status">${announce}</div>
+    ${
+      mine &&
+      html`<section class="pr-details" aria-label="Pull request" aria-busy=${String(mine.loading)}><h3>Pull request</h3>
+      ${mine.loading && html`<p>Checking the pull request...</p>`}
+      ${mine.error && html`<p class="bad">Could not check the pull request: ${plain(mine.error)}</p>`}
+      ${data?.unavailable && html`<p class="bad">The pull request could not be read: ${plain(data.unavailable)}.</p>`}
+      ${
+        data?.unavailable &&
+        Array.isArray(data.setup) &&
+        data.setup.length > 0 &&
+        html`<p>Set up the host's command line tool:</p><ol class="pr-setup">${data.setup.map((step, i) => html`<li key=${i}>${plain(step, 500)}</li>`)}</ol>`
+      }
+      ${
+        data &&
+        !data.unavailable &&
+        html`<ul class="pr-facts">
+        <li>State: ${plain(data.state, 40) || 'unknown'}${data.draft === true ? ' (draft)' : ''}</li>
+        ${open && html`<li>Merge conflicts: ${yesNo(data.conflicts)}</li>`}
+      </ul>`
+      }
+      ${
+        data &&
+        !data.unavailable &&
+        open &&
+        html`<h4>Failing checks</h4>${
+          failing.length
+            ? html`<ul class="pr-failing">${failing.map((c, i) => html`<li key=${i}><${Link} href=${c.url}>${plain(c.name, 200)}<//></li>`)}</ul>`
+            : html`<p>None.</p>`
+        }
+        <h4>Pending checks</h4>${
+          pending.length
+            ? html`<ul class="pr-pending">${pending.map((name, i) => html`<li key=${i}>${plain(name, 200)}</li>`)}</ul>`
+            : html`<p>None.</p>`
+        }
+        <h4>Unresolved review threads</h4>${
+          threads.length
+            ? html`<ul class="pr-threads">${threads.map((t, i) => html`<li key=${i}><code>${plain(t.path, 200)}</code>: ${plain(t.comment)} <${Link} href=${t.url}>Open the thread<//></li>`)}</ul>${total > threads.length ? html`<p>${total - threads.length} more not shown.</p>` : ''}`
+            : html`<p>None.</p>`
+        }`
+      }
+    </section>`
+    }</div>`;
+}
+
+// The button that reads the pull request fresh and opens the Run detail on it.
+/** @param {{ run: RunView, onCheck: (run: RunView) => void, stopClick?: boolean }} props */
+function CheckPrButton({ run, onCheck, stopClick = true }) {
+  return html`<button type="button" aria-label=${'Check the pull request of ' + run.title} onClick=${(
+    /** @type {Event} */ e,
+  ) => {
+    if (stopClick) stop(e);
+    onCheck(run);
+  }} onKeyDown=${stopClick ? stop : undefined}>Check PR</button>`;
+}
+
 /** @param {{ run: RunView }} props */
 function Tickets({ run }) {
   const tickets = ticketTilesOf(run);
@@ -195,6 +282,7 @@ const pauseLabel = (run) => {
  * @param {(run: RunView) => void} props.onSelect
  * @param {(run: RunView) => void} props.onToggle
  * @param {(run: RunView) => void} props.onCheckPr
+ * @param {(run: RunView) => void} props.onCheckDetails
  * @param {(run: RunView) => void} props.onGrant
  * @param {(run: RunView) => void} props.onSync
  * @param {(run: RunView) => void} props.onClean
@@ -208,6 +296,7 @@ export function Card({
   onSelect,
   onToggle,
   onCheckPr,
+  onCheckDetails,
   onGrant,
   onSync,
   onClean,
@@ -245,6 +334,7 @@ export function Card({
           onSync(run);
         }} onKeyDown=${stop}>Sync</button>`
       }
+      ${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} />`}
       ${
         canGrantLoop(run) &&
         html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(
@@ -335,6 +425,7 @@ export function Welcome({ onHelp }) {
  * @property {(run: RunView) => void} select
  * @property {(run: RunView) => void} toggle
  * @property {(run: RunView) => Promise<void>} checkPr
+ * @property {(run: RunView) => Promise<void>} checkDetails
  * @property {(run: RunView) => Promise<void>} sync
  * @property {(run: RunView) => Promise<void>} clean
  * @property {(run: RunView) => Promise<void>} accept
@@ -403,7 +494,7 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
         return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>
         <div class="column-name" aria-hidden="true">${c.label}</div>
         ${c.key === 'done' && doneCount > 0 && html`<button type="button" aria-label=${'Delete all Done Runs of ' + project.name} onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
-        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} onGrant=${actions.grant} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
         ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
       </div>`;
       })}</div>`
@@ -609,9 +700,11 @@ const labelSegments = (label) =>
  * @param {string} props.projectName the name of the Project of the Run
  * @param {() => void} props.onClose
  * @param {(run: RunView) => void} props.onCheckPr
+ * @param {(run: RunView) => void} props.onCheckDetails
+ * @param {PrDetailsState | null} props.prDetails
  * @param {(run: RunView) => void} props.onGrant
  */
-export function Detail({ run, projectName, onClose, onCheckPr, onGrant }) {
+export function Detail({ run, projectName, onClose, onCheckPr, onCheckDetails, prDetails, onGrant }) {
   const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ key: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
@@ -678,8 +771,9 @@ export function Detail({ run, projectName, onClose, onCheckPr, onGrant }) {
       <div class="meta"><span>Project: ${projectName}</span><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${updatedAge === null ? 'unknown' : ago(updatedAge)}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
-      ${canGrantLoop(run) && html`<div class="actions"><button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button></div>`}
+      ${(canGrantLoop(run) || canCheckPr(run)) && html`<div class="actions">${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} stopClick=${false} />`}${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button>`}</div>`}
     </header>
+    <${PrDetails} run=${run} state=${prDetails} />
     <${Timeline} run=${run} />
     ${
       run.metrics &&

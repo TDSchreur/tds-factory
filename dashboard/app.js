@@ -1,5 +1,5 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
-/** @import { RunView, ProjectView } from './model.js' */
+/** @import { RunView, ProjectView, PrDetailsState } from './model.js' */
 /** @import { ConfirmRequest, Actions } from './components.js' */
 import { render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
@@ -48,6 +48,8 @@ function App() {
   const [opened, setOpened] = useState(() => new Set(linked ? [linked] : []));
   const [request, setRequest] = useState(/** @type {ConfirmRequest | null} */ (null));
   const [helpOpen, setHelpOpen] = useState(false);
+  const [prDetails, setPrDetails] = useState(/** @type {PrDetailsState | null} */ (null)); // the last Check PR answer
+  const detailsCall = useRef(0); // a slow answer of an earlier Check PR never replaces a later one
   const [onlyWaiting, setOnlyWaiting] = useState(false); // the Needs you filter; not saved
   const queue = useRef(Promise.resolve());
   /** @type {{ current: ConfirmRequest | null }} */
@@ -461,6 +463,24 @@ function App() {
       } catch {}
       poll();
     },
+    checkDetails: async (run) => {
+      const key = runKey(run);
+      const call = ++detailsCall.current;
+      const settle = (/** @type {Omit<PrDetailsState, 'key'>} */ next) => {
+        if (call === detailsCall.current) setPrDetails({ key, ...next });
+      };
+      setSelectedStage(run.column);
+      setSelectedKey(key); // opens the Run detail on the Pull request section
+      setPrDetails({ key, loading: true });
+      try {
+        const response = await fetch(runPath(run) + '/pr-details', { cache: 'no-store' });
+        const text = await response.text();
+        if (!response.ok) return settle({ loading: false, error: text || 'HTTP ' + response.status });
+        settle({ loading: false, data: JSON.parse(text) });
+      } catch (err) {
+        settle({ loading: false, error: err instanceof Error ? err.message : 'the server cannot be reached' });
+      }
+    },
     sync: syncRun,
     clean: cleanRun,
     accept: acceptRun,
@@ -497,7 +517,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onGrant=${actions.grant} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

@@ -310,6 +310,9 @@
   .badge.open { color: var(--colorBrandForegroundLink); border-color: var(--colorBrandStroke1); }
   .badge.merged { color: var(--colorPaletteGreenForeground1); border-color: var(--colorPaletteGreenBorder2); }
   .badge.closed { color: var(--colorPaletteRedForeground1); border-color: var(--colorPaletteRedBorder2); }
+  .pr-details h4 { margin: var(--spacingVerticalS) 0 var(--spacingVerticalXS); }
+  .pr-details ul, .pr-details ol { margin: 0; padding-left: var(--spacingHorizontalXL); overflow-wrap: anywhere; }
+  .pr-details .bad { color: var(--colorPaletteRedForeground1); }
   .actions { display: flex; flex-wrap: wrap; gap: var(--spacingHorizontalS); margin-top: var(--spacingVerticalM); }
   .actions button { padding: var(--spacingVerticalXS) var(--spacingHorizontalL); }
   .actions .primary { background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); border-color: transparent; }

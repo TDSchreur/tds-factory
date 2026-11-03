@@ -75,6 +75,22 @@
  * @property {PrStatusData | null} [prStatus]
  * @property {string} [prHost]
  */
+/** @typedef {{ name: string, url: string }} FailingCheckView */
+/** @typedef {{ path: string, comment: string, url: string }} ThreadView */
+/**
+ * The answer of the pr-details route: the details of a pull request, or why they are unavailable (with the host's setup steps).
+ * @typedef {object} PrDetailsData
+ * @property {string} [unavailable]
+ * @property {string[]} [setup]
+ * @property {string} [state]
+ * @property {boolean} [draft]
+ * @property {boolean | null} [conflicts]
+ * @property {FailingCheckView[]} [failing]
+ * @property {string[]} [pending]
+ * @property {ThreadView[]} [threads]
+ * @property {number} [threadsTotal]
+ */
+/** @typedef {{ key: string, loading: boolean, data?: PrDetailsData, error?: string }} PrDetailsState The Check PR result of the Run whose key it holds. */
 /** @type {{ key: string, label: string, help: string }[]} */
 export const COLUMNS = [
   {
@@ -405,6 +421,15 @@ export function waitAgeOf(run, now = Date.now()) {
     text: `waiting ${m < 1 ? 'less than a minute' : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)} h` : `${Math.floor(m / 1440)} d`}`,
   };
 }
+
+// Whether Check PR is offered: a Done Run with an open pull request, or a Run in Follow-up (ADR 0034).
+/** @param {RunView} run */
+export const canCheckPr = (run) =>
+  !run.unreadable &&
+  run.status !== 'abandoned' &&
+  !!safeUrl(run.pr) &&
+  !!run.prHost &&
+  ((run.column === 'done' && run.prState === 'open') || run.column === 'follow-up');
 
 // Whether the Run waits on the user in Check at its loop limit, so that the user may grant an extra loop (ADR 0024).
 /** @param {RunView} run */
