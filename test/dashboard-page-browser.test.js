@@ -387,7 +387,9 @@ test('selecting a Run shows its Markdown files as text, never as markup', async 
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
-    await page.waitFor("return document.querySelectorAll('#detail table td').length === 2");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail table td').length === 2",
+    );
     assert.equal(await page.execute("return document.querySelector('#detail h4').textContent"), 'Plan');
     assert.equal(await page.execute("return document.querySelectorAll('#detail li').length"), 2);
     assert.equal(
@@ -437,14 +439,16 @@ test('the Run detail opens as a drawer over a board that keeps its width', async
     await page.execute(
       "document.querySelector('[data-id=b11]').scrollIntoView(); document.querySelector('[data-id=b11]').click()",
     );
-    await page.waitFor("return document.querySelector('#detail h4') !== null");
+    await page.waitFor(
+      "return document.querySelector('#detail h4') !== null && document.getElementById('detail').open",
+    );
     assert.deepEqual(await columns(), before, 'the board does not move or shrink');
     const box = await page.execute(
       "const d = document.getElementById('detail').getBoundingClientRect(); return { open: document.getElementById('detail').open, dRight: d.right, vw: document.documentElement.clientWidth, dTop: d.top, dBottom: d.bottom, w: innerWidth, h: innerHeight, dWidth: d.width }",
     );
     assert.equal(box.open, true);
     assert.ok(box.dRight >= box.vw - 1, 'the drawer sits on the right edge');
-    assert.ok(box.dWidth <= 640 + 1 && box.dWidth < box.w, 'the drawer is a sheet, not the whole screen');
+    assert.ok(box.dWidth <= 896 + 1 && box.dWidth < box.w, 'the drawer is a sheet, not the whole screen');
     assert.ok(box.dTop >= 0 && box.dBottom <= box.h + 1, 'the drawer is in view');
     assert.equal(
       await page.execute("return document.querySelector('[data-id=b11]').classList.contains('selected')"),
@@ -462,7 +466,9 @@ test('the Run detail opens as a drawer over a board that keeps its width', async
     assert.equal(await page.execute("return document.querySelector('.card.selected')"), null);
     // Another card opens its own detail once the first is closed.
     await page.execute("document.querySelector('[data-id=b0]').click()");
-    await page.waitFor("return document.querySelector('#detail h4')?.textContent === 'First'");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail h4')?.textContent === 'First'",
+    );
     assert.equal(await page.execute("return document.querySelector('#detail h2').textContent"), 'Run 0');
   } finally {
     await page.close();
@@ -492,7 +498,9 @@ test('the Run detail header shows the Run state and stays in view while the summ
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=w]').click()");
-    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail li').length > 100",
+    );
     const head = await page.execute("return document.querySelector('#detail header').textContent");
     for (const part of [
       'Waiting run',
@@ -566,7 +574,8 @@ test('on a narrow screen the Run detail is a full-screen sheet with Back navigat
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
-    await page.waitFor("return !document.getElementById('detail').hidden");
+    // The dialog loses `hidden` when it renders and opens a moment later, so wait for it to be open.
+    await page.waitFor("return document.getElementById('detail').open");
     const box = await page.execute(
       "const d = document.getElementById('detail').getBoundingClientRect(); return { l: d.left, t: d.top, w: d.width, h: d.height, vw: innerWidth, vh: innerHeight }",
     );
@@ -598,10 +607,14 @@ test('switching to another Run opens its detail at the top', async (t) => {
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=a]').click()");
-    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail li').length > 100",
+    );
     await page.execute("document.getElementById('detail').scrollTop = 800");
     await page.execute("document.querySelector('[data-id=b]').click()");
-    await page.waitFor("return document.querySelector('#detail h2').textContent === 'B'");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail h2').textContent === 'B'",
+    );
     assert.equal(await page.execute("return document.getElementById('detail').scrollTop"), 0);
   } finally {
     await page.close();
@@ -613,7 +626,7 @@ test('the Run detail closes when its Run is no longer shown', async (t) => {
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
-    assert.equal(await page.execute("return document.getElementById('detail').hidden"), false);
+    await page.waitFor("return document.getElementById('detail').open");
     page.state.runs = [run({ id: 'r2', title: 'Staying' })];
     await page.wait(POLL_WAIT);
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);

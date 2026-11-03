@@ -537,6 +537,13 @@ const USAGE_COLUMNS = [
 
 /** @typedef {{ name: string, text?: string, error?: string }} LoadedFile */
 
+/**
+ * A usage row label as segments split on its " · " separators: a segment stays whole, the separators may break.
+ * @param {string} label
+ */
+const labelSegments = (label) =>
+  label.split(' · ').map((part, i) => html`${i > 0 ? ' · ' : ''}<span class="seg">${part}</span>`);
+
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
 /**
@@ -569,9 +576,13 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
     if (closing.current) closing.current = false;
     else onClose();
   };
-  // A click on the dialog itself, not on its content, is a click on the backdrop.
+  const pressedOnBackdrop = useRef(false); // a selection dragged out of the content ends on the backdrop and must not close
+  const press = (/** @type {PointerEvent} */ event) => {
+    pressedOnBackdrop.current = event.target === dialog.current;
+  };
+  // A press and a click both on the dialog itself, not on its content, are a click on the backdrop.
   const backdrop = (/** @type {MouseEvent} */ event) => {
-    if (event.target === dialog.current) dialog.current?.close();
+    if (event.target === dialog.current && pressedOnBackdrop.current) dialog.current?.close();
   };
   useEffect(() => {
     if (!run) return undefined;
@@ -600,7 +611,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
   const reviews = run.projectReviews ?? [];
   /** @type {LoadedFile[]} */
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onClick=${backdrop}>
+  return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onPointerDown=${press} onClick=${backdrop}>
     <div class="detail-body">
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
@@ -625,7 +636,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
         <thead role="rowgroup"><tr role="row">${USAGE_COLUMNS.map(([, label]) => html`<th key=${label} scope="col" role="columnheader">${label}</th>`)}</tr></thead>
         <tbody role="rowgroup">${run.metrics.usage.rows.map(
           (r) =>
-            html`<tr key=${r.label} role="row"><th scope="row" role="rowheader">${r.label}</th>${USAGE_COLUMNS.slice(1).map(([field, label]) => html`<td key=${label} role="cell" data-label=${label}>${r[field] ?? 'n/a'}</td>`)}</tr>`,
+            html`<tr key=${r.label} role="row"><th scope="row" role="rowheader">${labelSegments(r.label)}</th>${USAGE_COLUMNS.slice(1).map(([field, label]) => html`<td key=${label} role="cell" data-label=${label}>${r[field] ?? 'n/a'}</td>`)}</tr>`,
         )}</tbody></table></div>`
       }
       ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label} · no data</div>`)}

@@ -54,6 +54,31 @@ function trackerCheck(projectDir) {
     : ['pass', 'issue tracker and domain docs are configured'];
 }
 
+// A remote tracker named anywhere in the file wins, even when `.scratch/` is mentioned in passing. The tracker is local when
+// the file names none (the default of to-tickets); local Markdown or `.scratch/` is how a local file names itself.
+const REMOTE_TRACKER =
+  /\b(github|gitlab|gitea|forgejo|codeberg|bitbucket|azure[ -]*(devops|boards)|jira|linear|redmine|youtrack|trello|asana|shortcut|clickup|phabricator|bugzilla)\b|https?:\/\/|\bgh\s+issue\b|\baz\s+boards\b|\bglab\b/i;
+/** @param {string} text */
+const isLocalTracker = (text) => !REMOTE_TRACKER.test(text);
+
+// Read-only: reports whether git ignores `.scratch/` for a local tracker; the factory Skill's Preflight makes the fix.
+/**
+ * @param {string} projectDir
+ * @returns {Result}
+ */
+function scratchIgnoreCheck(projectDir) {
+  const file = path.join(projectDir, 'docs', 'agents', 'issue-tracker.md');
+  if (!fs.existsSync(file)) return ['pass', 'no tracker file; the tracker check reports that'];
+  if (!isLocalTracker(read(file))) return ['pass', 'the issue tracker is not local; .scratch/ is not used'];
+  const probe = runGit(projectDir, ['check-ignore', '-q', '--no-index', '--', '.scratch/x']);
+  if (probe.status === 0) return ['pass', '.scratch/ is ignored by git'];
+  if (probe.status !== 1) return ['pass', 'cannot ask git whether .scratch/ is ignored; the git check reports that'];
+  return [
+    'missing',
+    'the issue tracker is local but git does not ignore .scratch/; add ".scratch/" to .gitignore and .git/info/exclude (the factory Skill does this in Preflight)',
+  ];
+}
+
 /**
  * @param {string} projectDir
  * @returns {Result}
@@ -264,6 +289,7 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState, env
     ['git', () => gitCheck(projectDir)],
     ['verify-command', () => verifyCommandCheck(projectDir)],
     ['verify-fast', () => verifyFastCheck(projectDir)],
+    ['scratch-ignore', () => scratchIgnoreCheck(projectDir)],
     ['guides', () => guidesCheck(projectDir)],
   ];
   const checks = planned.map(attempt);
@@ -279,8 +305,8 @@ export function doctor({ projectDir, agent, homeDir = os.homedir(), prState, env
     const list = perAgent.map(attempt);
     return { id, usable: list.every((c) => c.status === 'pass'), checks: list };
   });
-  // The optional Verify-fast command is shown when unusable but never fails the report.
-  let ok = checks.every((c) => c.status === 'pass' || c.id === 'verify-fast');
+  // The optional Verify-fast command and the scratch-ignore check are shown but never fail the report.
+  let ok = checks.every((c) => c.status === 'pass' || c.id === 'verify-fast' || c.id === 'scratch-ignore');
   if (agent === undefined) {
     const anyUsable = agents.some((a) => a.usable);
     if (!anyUsable) checks.push({ id: 'agents', status: 'fail', message: NO_AGENT });

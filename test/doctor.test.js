@@ -14,7 +14,17 @@ import {
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { repo, git } from './git-repo.js';
+import { repo, git, tempDir } from './git-repo.js';
+
+// Git reads no config of the developer's machine: its global and system files are replaced by ones inside the home.
+/** @param {string} home */
+const isolated = (home) => ({
+  HOME: home,
+  USERPROFILE: home,
+  XDG_CONFIG_HOME: join(home, '.config'),
+  GIT_CONFIG_GLOBAL: join(home, '.gitconfig'),
+  GIT_CONFIG_NOSYSTEM: '1',
+});
 import { SKILLS_DIR, AGENTS_DIR } from '../src/paths.js';
 import { targets, agentNames } from '../src/flow.js';
 import { defined } from './run-view.js';
@@ -36,7 +46,7 @@ function project(agents = AGENTS) {
  * @param {string} dir
  * @param {...string} args
  */
-const doctor = (dir, ...args) => doctorAt(mkdtempSync(join(tmpdir(), 'doctor-home-')), dir, ...args);
+const doctor = (dir, ...args) => doctorAt(tempDir('doctor-home-'), dir, ...args);
 /**
  * @param {string} home
  * @param {string} dir
@@ -46,7 +56,7 @@ function doctorAt(home, dir, ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home, USERPROFILE: home },
+    env: { ...process.env, ...isolated(home) },
   });
   /** @type {Report} */
   const report = result.stdout ? JSON.parse(result.stdout) : null;
@@ -58,10 +68,10 @@ function doctorAt(home, dir, ...args) {
  * @param {...string} args
  */
 async function doctorAsync(dir, ...args) {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   const child = spawn(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
-    env: { ...process.env, HOME: home, USERPROFILE: home },
+    env: { ...process.env, ...isolated(home) },
   });
   let stdout = '';
   child.stdout.on('data', (/** @type {Buffer} */ d) => (stdout += d));
@@ -112,11 +122,11 @@ function pathWith(...commands) {
  * @param {string} dir
  * @param {...string} args
  */
-function doctorOn(path, dir, home = mkdtempSync(join(tmpdir(), 'doctor-home-')), ...args) {
+function doctorOn(path, dir, home = tempDir('doctor-home-'), ...args) {
   const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home, USERPROFILE: home, PATH: path, Path: path },
+    env: { ...process.env, ...isolated(home), PATH: path, Path: path },
   });
   /** @type {Report} */
   const report = result.stdout ? JSON.parse(result.stdout) : null;
@@ -137,7 +147,7 @@ test('doctor discovers the project from a nested directory', () => {
   const nested = join(dir, 'deep', 'nested');
   mkdirSync(nested, { recursive: true });
   install(dir, 'codex');
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   const root = doctorAt(home, dir, '--agent', 'codex');
   const child = doctorAt(home, nested, '--agent', 'codex');
   assert.deepEqual(child, root);
@@ -152,7 +162,7 @@ test('doctor uses the linked worktree rather than the main checkout', () => {
   writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
   const nested = join(linked, 'nested');
   mkdirSync(nested);
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   assert.deepEqual(doctorAt(home, nested, '--agent', 'codex'), doctorAt(home, linked, '--agent', 'codex'));
   assert.equal(check(doctorAt(home, nested, '--agent', 'codex').report, 'tracker').status, 'pass');
 });
@@ -338,14 +348,14 @@ test('doctor lists every required Skill that is not installed', () => {
     'unslop',
   ])
     assert.ok(none.message.includes(name), name);
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'claude', ['tdd']);
   assert.match(check(doctorAt(home, project()).report, 'skills').message, /: tdd$/);
 });
 
 test('doctor passes skills and review for every Agent target once the Factory is installed, globally or in the project', () => {
   for (const agent of agentNames) {
-    const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+    const home = tempDir('doctor-home-');
     install(home, agent);
     const { report } = doctorAt(home, project(), '--agent', agent);
     assert.equal(check(report, 'skills').status, 'pass', agent);
@@ -358,7 +368,7 @@ test('doctor passes skills and review for every Agent target once the Factory is
 
 test('doctor for Copilot finds Skills in the Claude and Codex folders, where the default install puts them', () => {
   for (const skillsFrom of /** @type {const} */ (['claude', 'codex'])) {
-    const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+    const home = tempDir('doctor-home-');
     install(home, skillsFrom);
     install(home, 'copilot'); // Copilot's own folders hold the Stage agents, not the Skills
     rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
@@ -371,7 +381,7 @@ test('doctor for Copilot finds Skills in the Claude and Codex folders, where the
 test('doctor for Copilot also finds Skills in the project Claude and Codex folders', () => {
   for (const skillsFrom of /** @type {const} */ (['claude', 'codex'])) {
     const dir = project(),
-      home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+      home = tempDir('doctor-home-');
     install(dir, skillsFrom);
     install(home, 'copilot');
     rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
@@ -382,7 +392,7 @@ test('doctor for Copilot also finds Skills in the project Claude and Codex folde
 });
 
 test('doctor for Claude and Codex ignores Skills that are only in another Agent target folder', () => {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'claude');
   install(home, 'codex');
   install(home, 'copilot');
@@ -394,16 +404,16 @@ test('doctor for Claude and Codex ignores Skills that are only in another Agent 
     assert.equal(check(doctorAt(home, project(), '--agent', agent).report, 'skills').status, 'fail', agent);
   // And the Copilot folder alone does satisfy Copilot itself.
   assert.equal(check(doctorAt(home, project(), '--agent', 'copilot').report, 'skills').status, 'pass');
-  const other = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const other = tempDir('doctor-home-');
   install(other, 'claude');
   assert.equal(check(doctorAt(other, project(), '--agent', 'codex').report, 'skills').status, 'fail');
 });
 
 test('doctor reports review as unavailable without the review Skills or the factory-check agent', () => {
-  const skills = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const skills = tempDir('doctor-home-');
   install(skills, 'claude', ['code-review']);
   assert.match(check(doctorAt(skills, project()).report, 'review').message, /code-review/);
-  const agent = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const agent = tempDir('doctor-home-');
   install(agent, 'claude', ['factory-check']);
   const review = check(doctorAt(agent, project()).report, 'review');
   assert.equal(review.status, 'fail');
@@ -419,7 +429,7 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   const { status, report } = doctor(huge);
   assert.equal(status, 1);
   assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
-  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 6);
+  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 7);
   for (const a of report.agents) assert.equal(a.checks.length, 4, a.id);
   // A link to a regular file is fine.
   const shared = project();
@@ -448,7 +458,7 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   const file = join(dir, '.factory', 'runs', merged, 'run.json');
   writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), status: 'done' }));
   store.update(open, { pr: 'https://github.com/o/r/pull/2' });
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   const head = git(join(dir, '.factory', 'worktrees', merged), 'rev-parse', 'HEAD');
   /** @param {string} url */
   const prState = (url) => ({ state: url.endsWith('/1') ? 'MERGED' : 'OPEN', head });
@@ -473,7 +483,7 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
 });
 
 test('Doctor requires an interactive review agent when an interactive project review is configured', () => {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'codex', ['factory-interactive-check']);
   const dir = project();
   mkdirSync(join(dir, '.factory'), { recursive: true });
@@ -508,7 +518,7 @@ test('doctor reports claude, codex and copilot in that order by default, shared 
   );
   assert.deepEqual(
     report.checks.map((c) => c.id).filter((id) => id !== 'agents'),
-    ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'guides'],
+    ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'scratch-ignore', 'guides'],
   );
   for (const a of report.agents)
     assert.deepEqual(
@@ -519,7 +529,7 @@ test('doctor reports claude, codex and copilot in that order by default, shared 
 });
 
 test('a missing agent binary is missing, never fail, and a usable agent keeps the report ok', () => {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'codex');
   const { report, status } = doctorOn(pathWith('codex'), project(), home);
   assert.equal(entry(report, 'codex').usable, true);
@@ -555,7 +565,7 @@ test('doctor fails when no agent is usable and says what to do', () => {
 });
 
 test('doctor fails when a shared check fails even though an agent is usable', () => {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'claude');
   const { report, status } = doctorOn(pathWith('claude'), project('# A\n'), home);
   assert.equal(entry(report, 'claude').usable, true);
@@ -564,7 +574,7 @@ test('doctor fails when a shared check fails even though an agent is usable', ()
 });
 
 test('doctor --agent reports only that agent and ignores its missing binary', () => {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'copilot');
   const { report, status } = doctorOn(pathWith(), project(), home, '--agent', 'copilot');
   assert.deepEqual(
@@ -615,9 +625,8 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
     Object.defineProperty(process, 'platform', { value: 'win32' });
     /** @param {string} agent */
     const binary = (agent) =>
-      run({ projectDir: dir, agent, homeDir: mkdtempSync(join(tmpdir(), 'doctor-home-')) }).agents[0].checks.find(
-        (c) => c.id === 'binary',
-      )?.status;
+      run({ projectDir: dir, agent, homeDir: tempDir('doctor-home-') }).agents[0].checks.find((c) => c.id === 'binary')
+        ?.status;
     assert.equal(binary('claude'), 'pass');
     assert.equal(binary('codex'), 'missing');
     Object.defineProperty(process, 'platform', saved.platform);
@@ -645,7 +654,7 @@ test('doctor reports the optional Verify-fast command like the Verify command', 
   assert.equal(missing.status, 'fail');
   assert.match(missing.message, /no-such-tool-xyz.*not found/);
   // An unusable optional command is shown but never fails the report.
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'claude');
   const shown = doctorOn(pathWith('claude'), project_('- Verify-fast: `no-such-tool-xyz --quick`\n'), home);
   assert.equal(check(shown.report, 'verify-fast').status, 'fail');
@@ -659,7 +668,7 @@ test('doctor reports the optional Verify-fast command like the Verify command', 
 });
 
 test('doctor fails the skills check when the installed factory Skill lacks its reference files', () => {
-  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  const home = tempDir('doctor-home-');
   install(home, 'claude');
   assert.equal(check(doctorAt(home, project(), '--agent', 'claude').report, 'skills').status, 'pass');
   rmSync(join(home, targets.claude.global, 'factory', 'references', 'check.md'));
@@ -667,4 +676,100 @@ test('doctor fails the skills check when the installed factory Skill lacks its r
   assert.equal(skills.status, 'fail');
   assert.match(skills.message, /factory Skill is missing its reference files: check\.md/);
   assert.match(skills.message, /tds-factory install/);
+});
+
+// Tracker kinds and ignore rules for the scratch-ignore check, against real temporary git repositories.
+/**
+ * @param {string} tracker
+ * @param {(dir: string) => void} [prepare]
+ */
+function scratchReport(tracker, prepare) {
+  const dir = project();
+  if (tracker === null) rmSync(join(dir, 'docs', 'agents', 'issue-tracker.md'));
+  else writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), tracker);
+  prepare?.(dir);
+  return doctor(dir).report;
+}
+
+test('scratch-ignore is missing for a local tracker without an ignore, and never changes ok or the files', () => {
+  const dir = project();
+  writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), '# Tracker\n\nLocal Markdown in `.scratch/`.\n');
+  const { report } = doctor(dir);
+  const found = check(report, 'scratch-ignore');
+  assert.equal(found.status, 'missing');
+  assert.match(found.message, /\.gitignore/);
+  assert.equal(existsSync(join(dir, '.gitignore')), false);
+  const home = tempDir('doctor-home-');
+  install(home, 'claude');
+  const ready = doctorOn(pathWith('claude'), dir, home);
+  assert.equal(check(ready.report, 'scratch-ignore').status, 'missing');
+  assert.equal(ready.report.ok, true);
+  assert.equal(ready.status, 0);
+});
+
+test('scratch-ignore passes when any rule ignores .scratch/', () => {
+  const tracker = '# Tracker\n\nIssues are local Markdown files.\n';
+  for (const rule of ['.scratch', '/.scratch/', '.scratch/'])
+    assert.equal(
+      check(
+        scratchReport(tracker, (d) => writeFileSync(join(d, '.gitignore'), `${rule}\n`)),
+        'scratch-ignore',
+      ).status,
+      'pass',
+      rule,
+    );
+  assert.equal(
+    check(
+      scratchReport(tracker, (d) => writeFileSync(join(d, '.git', 'info', 'exclude'), '.scratch/\n')),
+      'scratch-ignore',
+    ).status,
+    'pass',
+  );
+});
+
+test('scratch-ignore honours a global excludes file', () => {
+  const dir = project();
+  writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), '# Tracker\n\nLocal Markdown.\n');
+  const home = tempDir('doctor-home-');
+  mkdirSync(join(home, '.config', 'git'), { recursive: true });
+  writeFileSync(join(home, '.config', 'git', 'ignore'), '.scratch/\n');
+  const result = spawnSync(process.execPath, [cli, 'doctor', '--json'], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, ...isolated(home) },
+  });
+  assert.equal(check(JSON.parse(result.stdout), 'scratch-ignore').status, 'pass');
+});
+
+test('scratch-ignore passes for a remote tracker, a missing tracker file and an unnamed tracker is local', () => {
+  for (const text of ['# Tracker\n\nGitHub Issues.\n', 'Azure DevOps boards', 'Jira', 'Linear']) {
+    const found = check(scratchReport(text), 'scratch-ignore');
+    assert.equal(found.status, 'pass', text);
+  }
+  assert.equal(check(scratchReport(/** @type {any} */ (null)), 'scratch-ignore').status, 'pass');
+  assert.equal(check(scratchReport('# x\n'), 'scratch-ignore').status, 'missing');
+});
+
+test('scratch-ignore reads hostile tracker text safely', () => {
+  // A remote tracker named next to .scratch/ wins; control bytes and huge files do not crash the report.
+  assert.equal(check(scratchReport('Use .scratch/ files, not an online board.\n'), 'scratch-ignore').status, 'missing');
+  assert.equal(check(scratchReport('\u0000\u001b[31mx\n'), 'scratch-ignore').status, 'missing');
+  assert.equal(check(scratchReport('x'.repeat((1 << 20) + 1)), 'scratch-ignore').status, 'fail');
+});
+
+test('scratch-ignore decides the tracker kind: a named remote tracker wins, an unnamed one is local', () => {
+  /** @type {[string, string][]} */
+  const cases = [
+    ['# Tracker\n\nGitHub Issues. Scratch notes may live in .scratch/ for now.\n', 'pass'],
+    ['Issues live in Gitea.\n', 'pass'],
+    ['Forgejo', 'pass'],
+    ['Redmine', 'pass'],
+    ['Azure Boards', 'pass'],
+    ['Use `az boards work-item create` or `glab issue list`.\n', 'pass'],
+    ['See https://tracker.example.com/issues for the board.\n', 'pass'],
+    ['# Tracker\n\nLocal Markdown files in `.scratch/`.\n', 'missing'],
+    ['', 'missing'],
+    ['# Issue tracker\n\nNo tracker is named here.\n', 'missing'],
+  ];
+  for (const [text, status] of cases) assert.equal(check(scratchReport(text), 'scratch-ignore').status, status, text);
 });

@@ -21,7 +21,7 @@ The Run detail becomes a modal drawer on the right (ADR 0031, which supersedes A
 9. As a screen reader user, I want the board behind the drawer to be unavailable, so that I do not read it by accident.
 10. As a Dashboard user, I want the Grant extra loop confirmation to appear above the drawer, and Escape to close only that confirmation first, so that nested dialogs behave.
 11. As a Dashboard user, I want the open detail to survive the Dashboard's refresh without flicker, scroll reset or reopening, so that reading is not interrupted.
-12. As a Dashboard user, I want the drawer to close when its Run disappears, so that I am not left with a stale panel.
+12. As a Dashboard user, I want the drawer to close when its Run disappears, so that I am not left with a stale drawer.
 13. As a phone or tablet user, I want the detail to stay a full-screen sheet with a Back control through 1024 CSS pixels, so that summaries stay readable.
 14. As a Dashboard user on a small laptop (1025 to 1300 pixels), I want all six Stage columns to fit without a horizontal scrollbar, so that I see the whole board.
 15. As a Dashboard user, I want the token usage table to fit the drawer, so that I can read every column without sideways scrolling.
@@ -39,11 +39,11 @@ The Run detail becomes a modal drawer on the right (ADR 0031, which supersedes A
 
 - The Run detail is a native modal dialog opened imperatively when a Run is selected; a Dashboard refresh must not reopen or reset it. Its closing paths (Escape, backdrop click, the close button, Back, the Run disappearing) all end in the same close operation, which returns focus to the card.
 - The hand-written background inerting, Tab trap, body scroll lock and sticky-position measuring are removed; the native dialog provides them. The global Escape handler no longer closes the detail itself and must not close it while another dialog is on top.
-- The board has no column for the detail and no open-state layout; it keeps its full width. The sheet is about min(40rem, 100vw - 4rem) wide and full height, with a light backdrop.
+- The board has no column for the detail and no open-state layout; it keeps its full width. The sheet is about min(56rem, 100vw - 4rem) wide and full height, with a light backdrop.
 - At and below the compact breakpoint (1024 CSS pixels) the same dialog is full-screen with the Back control and no close button, as in ADR 0008.
 - No slide animation; honour the existing reduced-motion rule. No URL or hash state for the open Run.
 - Board columns use a smaller minimum width (9rem) so six columns fit at 1025 pixels. The compact breakpoint does not move.
-- Token usage table: figures stay on one line, labels and headers wrap, the table fills the panel width. When the panel's own width (container query, below about 32rem) is narrow, each row stacks, with the row label first and each figure labelled by its column header, while the roles of table, caption, header, row header and cell stay in the accessibility tree. The inner horizontal scroll wrapper is removed.
+- Token usage table: figures stay on one line, headers never break inside a word and row labels break at the " · " separators first, the table fills the drawer width. When the drawer's own width (container query, below 35rem) is narrow, each row stacks, with the row label first and each figure labelled by its column header, while the roles of table, caption, header, row header and cell stay in the accessibility tree. The inner horizontal scroll wrapper is removed.
 - Long text (titles, labels, links) wraps anywhere in the drawer and on cards.
 - Markdown tables keep their focusable scroll area and are the only allowed horizontal overflow.
 - ADR 0031 records the decision; ADR 0004 is marked superseded and ADR 0008 partly superseded; the glossary entry for Run detail drops the "Avoid: Modal" and describes the drawer over the board.
