@@ -4,6 +4,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
+import { readFileSync } from 'node:fs';
+import { details } from '../src/pr-azure.js';
 import './git-repo.js';
 
 /** @import { Run } from '../src/run-record.js' */
@@ -109,6 +111,39 @@ test('hostile text from the host is passed on as plain JSON strings', async () =
       const res = await get(0);
       assert.match(res.headers.get('content-type') ?? '', /^application\/json/);
       assert.deepEqual(await res.json(), hostile);
+    },
+  );
+});
+
+test('pr-details of an Azure DevOps PR answers failing and pending checks and threads read through the adapter', async () => {
+  const dir = new URL('./fixtures/pr-status/azure/', import.meta.url);
+  /** @param {string} file */
+  const json = (file) => JSON.parse(readFileSync(new URL(file, dir), 'utf8'));
+  const link = 'https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/533';
+  /** @param {string[]} argv */
+  const run = async (argv) => {
+    if (argv[2] === 'show') return { stdout: JSON.stringify(json('sandbox.pr.json')) };
+    if (argv[2] === 'policy') return { stdout: '[]' };
+    const resource = argv[argv.indexOf('--resource') + 1];
+    return {
+      stdout: JSON.stringify(
+        json(resource === 'pullRequestThreads' ? 'sandbox.threads.json' : 'sandbox.statuses.json'),
+      ),
+    };
+  };
+  await withDashboard(
+    [{ ...done, pr: link }],
+    (url) => details(url, { run }),
+    async (get) => {
+      const body = /** @type {any} */ (await (await get(0)).json());
+      assert.equal(body.state, 'open');
+      assert.deepEqual(
+        body.failing.map((/** @type {{ name: string }} */ c) => c.name),
+        ['fixture/failed-check', 'fixture/error-check'],
+      );
+      assert.deepEqual(body.pending, ['fixture/pending-check']);
+      assert.equal(body.threadsTotal, 4);
+      assert.equal(body.threads[0].url, `${link}?discussionId=1879`);
     },
   );
 });

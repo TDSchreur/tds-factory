@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { details } from '../src/pr-azure.js';
 import { openPage, run } from './browser.js';
 
 /** @import { Page } from './browser.js' */
@@ -177,6 +179,46 @@ test('hostile PR text renders as text and a javascript: link is not an anchor', 
     assert.equal(await page.execute('return window.pwned === undefined'), true);
     assert.match(await drawer(page), /<img src=x/);
     assert.ok((await drawer(page)).length < 1200);
+  } finally {
+    await page.close();
+  }
+});
+
+test('the drawer shows the failing and pending checks and the threads of an Azure DevOps PR as text', async (t) => {
+  const dir = new URL('./fixtures/pr-status/azure/', import.meta.url);
+  /** @param {string} file */
+  const json = (file) => JSON.parse(readFileSync(new URL(file, dir), 'utf8'));
+  const link = 'https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/533';
+  const body = await details(link, {
+    /** @param {string[]} argv */
+    run: async (argv) => {
+      if (argv[2] === 'show') return { stdout: JSON.stringify(json('sandbox.pr.json')) };
+      if (argv[2] === 'policy') return { stdout: '[]' };
+      const resource = argv[argv.indexOf('--resource') + 1];
+      return {
+        stdout: JSON.stringify(
+          json(resource === 'pullRequestThreads' ? 'sandbox.threads.json' : 'sandbox.statuses.json'),
+        ),
+      };
+    },
+  });
+  const page = await openPage(t, {
+    runs: [doneRun({ pr: link, prHost: 'azure-devops' })],
+    detailsBody: body,
+  });
+  if (!page) return;
+  try {
+    await check(page, 'd');
+    const text = await drawer(page);
+    for (const part of [
+      'fixture/failed-check',
+      'fixture/error-check',
+      'fixture/pending-check',
+      'Thread with status active',
+      'Whole-PR thread, active',
+    ])
+      assert.ok(text.includes(part), part);
+    assert.equal(await page.execute("return document.querySelectorAll('#detail .pr-details a').length > 0"), true);
   } finally {
     await page.close();
   }

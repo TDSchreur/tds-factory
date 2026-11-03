@@ -51,6 +51,7 @@ const az =
     const f = fixture(key);
     if (args[2] === 'show') return { stdout: JSON.stringify({ ...f.pr, ...pr }) };
     if (args[2] === 'policy') return { stdout: JSON.stringify(policies ?? f.policies) };
+    if (args[0] === 'devops') return { stdout: JSON.stringify({ count: 0, value: [] }) };
     throw new Error('unexpected ' + args.join(' '));
   };
 
@@ -228,12 +229,13 @@ test('statusAsync asks az for the pull request and its policies, read-only, and 
     return az('passing')(args);
   };
   assert.equal((await statusAsync(link('passing'), { run })).state, 'open');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(
     calls.map((c) => c.slice(0, 3)),
     [
       ['repos', 'pr', 'show'],
       ['repos', 'pr', 'policy'],
+      ['devops', 'invoke', '--area'],
     ],
   );
   for (const call of calls) {
@@ -241,7 +243,7 @@ test('statusAsync asks az for the pull request and its policies, read-only, and 
       call.includes('--organization') &&
         call[call.indexOf('--organization') + 1] === 'https://dev.azure.com/example-org',
     );
-    assert.equal(call[call.indexOf('--id') + 1], '525');
+    if (call[0] === 'repos') assert.equal(call[call.indexOf('--id') + 1], '525');
     assert.ok(call.includes('--only-show-errors'));
   }
 });
@@ -435,12 +437,12 @@ test('viewAsync gives the same state and head as view, from the injected run', a
   await assert.rejects(viewAsync(link('passing'), { run: az('passing', { pr: { status: 'weird' } }) }), /incomplete/);
 });
 
-test('details gives state, draft and conflicts from the status read, and a merged PR only its state', async () => {
+test('details gives state, draft and conflicts, the lists of Check PR, and the setup steps', async () => {
   const d = await details(link('passing'), { run: az('passing') });
   assert.equal(d.state, 'open');
   assert.equal(typeof d.draft, 'boolean');
   assert.ok(d.conflicts === true || d.conflicts === false || d.conflicts === null);
-  assert.equal(Object.hasOwn(d, 'threads'), false);
+  assert.deepEqual([d.threads, d.failing, d.pending], [[], [], []]);
   assert.ok(setup.steps.some((s) => s.includes('az extension add --name azure-devops')));
   assert.ok(setup.steps.some((s) => s.includes('az login')));
   assert.ok(setup.steps.some((s) => s.includes('az devops configure')));

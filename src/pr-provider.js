@@ -28,7 +28,7 @@ import * as azure from './pr-azure.js';
  * @property {(url: string, options?: { run?: any }) => Promise<string>} stateAsync
  * @property {(url: string, options?: { cwd?: string, timeout?: number, run?: any }) => PrView} view
  * @property {(url: string, options?: { run?: any }) => Promise<PrView>} [viewAsync] `run` is the adapter's own test seam, like the other `run` options above.
- * @property {(url: string, options?: { run?: any }) => Promise<import('./pr-github.js').PrDetails>} details A fresh read of the PR for Check PR; GitHub has all of it, Azure DevOps state, draft and conflicts only.
+ * @property {(url: string, options?: { run?: any }) => Promise<import('./pr-github.js').PrDetails>} details A fresh read of the PR for Check PR; GitHub has all of it, Azure DevOps the same shape.
  * @property {{ reasons: string[], steps: string[] }} setup The failure reasons the host's setup steps help with, and the steps.
  * @property {(url: string, cwd?: string) => PrView & { headRefOid: string }} [strictView]
  * @property {(url: string, cwd?: string) => import('./git.js').Flow} [strictViewFlow] The same as a flow of steps for the Dashboard (ADR 0030).
