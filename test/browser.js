@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { createServer as createPortServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { waitUntil } from './wait-until.js';
 
 /** @import { IncomingMessage } from 'node:http' */
 /** @import { AddressInfo } from 'node:net' */
@@ -288,14 +289,16 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       }
     })());
   try {
-    for (let i = 0; i < 50; i++) {
-      try {
-        await request('GET', '/status');
-        break;
-      } catch {
-        await delay(100);
-      }
-    }
+    await waitUntil(
+      () =>
+        request('GET', '/status').then(
+          () => true,
+          () => false,
+        ),
+      {
+        message: 'the driver answers /status',
+      },
+    );
     session = (
       await request('POST', '/session', {
         capabilities: {
@@ -342,11 +345,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       // Resolves when the script returns something truthy; fails with the script after five seconds.
       /** @param {string} script */
       async waitFor(script) {
-        for (let i = 0; i < 50; i++) {
-          if (await execute(script)) return;
-          await delay(100);
-        }
-        throw new Error('Timed out waiting for: ' + script);
+        await waitUntil(() => execute(script), { intervalMs: 100, message: script });
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${portOf(server)}/${query}` }),
       /**
