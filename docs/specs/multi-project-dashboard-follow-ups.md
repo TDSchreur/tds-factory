@@ -24,7 +24,7 @@ Stop tests from polluting the real registry, show missing Projects as one summar
 
 ## Implementation Decisions
 
-- **Lock.** The lock file holds a unique token (random, with the pid). A stale lock (older than the existing limit) is taken over by an atomic rename to a unique name, then deleted; only one process wins the rename. Release deletes the lock only when it still holds our token. The lock wait, stale limit and the warning on timeout stay as they are.
+- **Lock.** The lock file holds a unique token (random, with the pid). A stale lock (older than the existing limit) is taken over only while a process holds a separate guard lock (`projects.json.lock.takeover`) created with `wx`; under that guard it re-checks that the stale lock is still the same one before removing it and then claims it with `wx`. Release deletes the lock only when it still holds our token. The lock wait, stale limit and the warning on timeout stay as they are.
 - **Files.** The registry folder is created with mode 0700 and the registry, state and lock files with 0600. The staging file has an unpredictable name (random suffix) and is written with flag `wx`, so an existing file or link is never followed or overwritten. Modes are best-effort on Windows.
 - **Project id.** The id is 12 hex characters of the hash instead of 8 (ADR 0033 and the guide say "short hash" and stay true). `join` refuses to add a path whose id already exists for another path: it warns, returns no Project and never overwrites. Ids of an existing registry are computed, not stored, so no migration is needed; a bookmarked `?project=` link with an 8-character id stops matching and the page falls back to its normal order.
 - **`join` and `mainCheckout`.** The `mainCheckout` call moves inside the try block so that no registry or Git problem fails `run start` (the warning names the folder given). The fallback of `mainCheckout` in `src/run-folder.js` (Git failed, or a bare repository) returns `path.normalize(dir)`, like the normal path.
@@ -66,7 +66,7 @@ Documents: `GLOSSARY.md` (Project row and missing Project wording), `dashboard/h
 
 This is cut into five Tickets:
 
-1. **Registry hardening**: lock token and atomic takeover, file modes and `wx` staging, 12-character id with collision handling, `join` and `mainCheckout` changes, async removal in the registry. Blocked by none.
+1. **Registry hardening**: lock token and guarded stale-lock takeover, file modes and `wx` staging, 12-character id with collision handling, `join` and `mainCheckout` changes, async removal in the registry. Blocked by none.
 2. **Launch and server**: the URL after a failed write, the version check, the own-Project 409 and the non-blocking `hub.remove` and DELETE. Blocked by Ticket 1.
 3. **Test isolation**: `test/git-repo.js` default config folder, the guard test. Blocked by none.
 4. **Missing Projects summary row and cleanup**: the route and the page (needs Ticket 1's async removal). Blocked by Ticket 1.
@@ -75,3 +75,7 @@ This is cut into five Tickets:
 ## Update 2026-11-03 (Rework 1)
 
 `/api/views` is not byte-for-byte unchanged: each Project entry includes `path` (main checkout path). The top-level response shape and semantics stay the same.
+
+## Update 2026-11-03 (Rework 2)
+
+The stale-lock takeover no longer uses rename-and-restore. It now uses a guarded takeover (`projects.json.lock.takeover`): under that guard, a process re-verifies that the lock is still the same stale lock before removing it and claiming it with `wx`.

@@ -28,7 +28,10 @@ async function readLimitedText(res, maxBytes) {
     const { done, value } = await reader.read();
     if (done) break;
     seen += value.byteLength;
-    if (seen > maxBytes) throw new Error('response too large');
+    if (seen > maxBytes) {
+      await reader.cancel('response too large');
+      throw new Error('response too large');
+    }
     text += decoder.decode(value, { stream: true });
   }
   return text + decoder.decode();

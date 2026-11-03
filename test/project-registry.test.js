@@ -102,6 +102,18 @@ test(
   },
 );
 
+test('a symlinked config folder is not chmodded by ensurePrivateDir', { skip: platform() === 'win32' }, () => {
+  const root = tempDir('registry-symlink-mode-');
+  const target = join(root, 'target');
+  const dir = join(root, 'link');
+  mkdirSync(target, { recursive: true });
+  chmodSync(target, 0o755);
+  symlinkSync(target, dir);
+  const reg = openProjectRegistry({ dir });
+  reg.join(repo());
+  assert.equal(lstatSync(target).mode & 0o777, 0o755);
+});
+
 test('a corrupt registry reads as empty with a warning and is kept aside when a Project joins', () => {
   const { registry: reg, dir, warnings } = registry();
   writeFileSync(join(dir, 'projects.json'), '{ not json');
@@ -212,26 +224,46 @@ test('a stale lock left by a dead process does not block a join', () => {
   assert.equal(existsSync(lock), false);
 });
 
-test('a stale-lock takeover retries when the lock changed before rename', () => {
+test('a stale guard left by a dead process does not block a join forever', () => {
+  const { registry: reg, dir } = registry();
+  const lock = join(dir, 'projects.json.lock');
+  const guard = `${lock}.takeover`;
+  writeFileSync(lock, 'stale-token');
+  writeFileSync(guard, 'dead-guard');
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lock, old, old);
+  utimesSync(guard, old, old);
+  const joined = reg.join(repo());
+  assert.equal(typeof joined?.path, 'string');
+  assert.equal(existsSync(lock), false);
+  assert.equal(existsSync(guard), false);
+});
+
+test('a stale-lock takeover does not remove a live lock replaced before stale removal', () => {
   const dir = tempDir('registry-stale-race-');
   const lock = join(dir, 'projects.json.lock');
   writeFileSync(lock, 'stale-token');
   const old = new Date(Date.now() - 60_000);
   utimesSync(lock, old, old);
-  let injected = false;
+  const fresh = new Date();
+  let replaced = false;
+  /** @type {string[]} */
+  const warnings = [];
   const reg = openProjectRegistry({
     dir,
-    onBeforeStaleTakeover: () => {
-      if (injected) return;
-      injected = true;
-      writeFileSync(lock, 'replacement-token');
-      utimesSync(lock, old, old);
+    warn: (m) => warnings.push(m),
+    lockWaitMs: 50,
+    onBeforeStaleTakeover: ({ lockFile }) => {
+      if (replaced) return;
+      replaced = true;
+      writeFileSync(lockFile, 'replacement-token');
+      utimesSync(lockFile, fresh, fresh);
     },
   });
-  const main = repo();
-  assert.equal(reg.join(main)?.path, main);
-  assert.equal(injected, true);
-  assert.equal(existsSync(lock), false);
+  assert.equal(reg.join(repo()), undefined);
+  assert.equal(replaced, true);
+  assert.equal(readFileSync(lock, 'utf8'), 'replacement-token');
+  assert.match(warnings[0] ?? '', /locked/);
 });
 
 test('a lock that stays held is a warning and the join gives up without throwing', () => {
@@ -240,7 +272,7 @@ test('a lock that stays held is a warning and the join gives up without throwing
   const reg = openProjectRegistry({ dir, warn: (m) => warnings.push(m), lockWaitMs: 50 });
   assert.equal(reg.join(repo()), undefined);
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /locked/);
+  assert.match(warnings[0] ?? '', /locked/);
 });
 
 test('a lock that changed owners while held is not removed on release', () => {
@@ -252,6 +284,55 @@ test('a lock that changed owners while held is not removed on release', () => {
   });
   reg.join(main);
   assert.equal(readFileSync(join(dir, 'projects.json.lock'), 'utf8'), 'other-owner');
+});
+
+test('two racing stale-lock takeovers end with one winner', async () => {
+  const dir = tempDir('registry-takeover-race-');
+  const lock = join(dir, 'projects.json.lock');
+  writeFileSync(lock, 'stale-token');
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lock, old, old);
+  const barrier = join(dir, 'barrier');
+  const readyA = join(dir, 'ready-a');
+  const readyB = join(dir, 'ready-b');
+  const won = join(dir, 'won.log');
+  const script = `import { openProjectRegistry } from ${JSON.stringify(new URL('../src/project-registry.js', import.meta.url).href)};
+  import { writeFileSync, appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const [dir, label, project] = process.argv.slice(1);
+const wait = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const reg = openProjectRegistry({
+  dir,
+  lockWaitMs: 80,
+  onBeforeStaleTakeover: () => {
+    writeFileSync(join(dir, 'ready-' + label), label);
+    while (!existsSync(join(dir, 'barrier'))) wait(2);
+  },
+  onLockAcquired: ({ lockFile }) => {
+    if (readFileSync(lockFile, 'utf8').includes('projects.json.lock')) appendFileSync(join(dir, 'won.log'), label + '\\n');
+    wait(120);
+  },
+});
+process.exit(reg.join(project) ? 0 : 7);`;
+  const a = repo();
+  const b = repo();
+  /** @param {'a'|'b'} label @param {string} project */
+  const spawnOne = (label, project) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, ['--input-type=module', '-e', script, dir, label, project], {
+        stdio: 'ignore',
+      });
+      child.on('close', (code) => resolve(code));
+    });
+  const pa = spawnOne('a', a);
+  const pb = spawnOne('b', b);
+  for (let i = 0; i < 300 && (!existsSync(readyA) || !existsSync(readyB)); i += 1)
+    await new Promise((r) => setTimeout(r, 5));
+  writeFileSync(barrier, 'go');
+  const [ca, cb] = await Promise.all([pa, pb]);
+  const winners = existsSync(won) ? readFileSync(won, 'utf8').trim().split('\n').filter(Boolean) : [];
+  assert.deepEqual([ca, cb].sort(), [0, 7]);
+  assert.equal(winners.length, 1);
 });
 
 test('join warns and keeps the first path when another path has the same id', () => {

@@ -28,7 +28,9 @@ function ensurePrivateDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
   if (process.platform === 'win32') return;
   try {
-    const mode = fs.statSync(dir).mode & 0o777;
+    const stat = fs.lstatSync(dir);
+    if (stat.isSymbolicLink()) return;
+    const mode = stat.mode & 0o777;
     if ((mode & 0o077) !== 0) fs.chmodSync(dir, DIR_MODE);
   } catch {
     // best effort on hosts that do not apply POSIX modes
@@ -78,42 +80,84 @@ const sleepAsync = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const lockToken = (lockFile) => `${process.pid}:${randomBytes(16).toString('hex')}:${path.basename(lockFile)}`;
 
 /** @param {string} lockFile */
-const takeoverLockName = (lockFile) => `${lockFile}.stale-${process.pid}-${randomBytes(8).toString('hex')}`;
+const takeoverGuard = (lockFile) => `${lockFile}.takeover`;
+
+/**
+ * @param {string} file
+ * @returns {{ token: string, mtimeMs: number } | undefined}
+ */
+function readLockSnapshot(file) {
+  try {
+    return {
+      token: fs.readFileSync(file, 'utf8'),
+      mtimeMs: fs.statSync(file).mtimeMs,
+    };
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+    return undefined;
+  }
+}
+
+/**
+ * @param {string} file
+ * @param {string} token
+ * @param {number} mtimeMs
+ */
+function removeIfMatches(file, token, mtimeMs) {
+  const seen = readLockSnapshot(file);
+  if (!seen || seen.token !== token || seen.mtimeMs !== mtimeMs) return false;
+  fs.rmSync(file, { force: true });
+  return true;
+}
+
+/** @param {string} guardFile */
+function acquireTakeoverGuard(guardFile) {
+  const token = lockToken(guardFile);
+  try {
+    fs.writeFileSync(guardFile, token, { flag: 'wx', mode: FILE_MODE });
+    return token;
+  } catch (err) {
+    if (codeOf(err) !== 'EEXIST') throw err;
+  }
+  const seen = readLockSnapshot(guardFile);
+  if (!seen) return undefined;
+  if (Date.now() - seen.mtimeMs > LOCK_STALE_MS) removeIfMatches(guardFile, seen.token, seen.mtimeMs);
+  return undefined;
+}
 
 /**
  * @param {string} lockFile
+ * @param {string} token
  * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
  */
-function tryTakeOverStaleLock(lockFile, onBeforeStaleTakeover) {
-  const staleStat = fs.statSync(lockFile);
-  const age = Date.now() - staleStat.mtimeMs;
-  if (age <= LOCK_STALE_MS) return false;
-  const staleToken = fs.readFileSync(lockFile, 'utf8');
-  onBeforeStaleTakeover({ lockFile, staleToken, staleMtimeMs: staleStat.mtimeMs });
-  const takeover = takeoverLockName(lockFile);
-  fs.renameSync(lockFile, takeover);
-  let keep = false;
+function tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover) {
+  const stale = readLockSnapshot(lockFile);
+  if (!stale) return false;
+  if (Date.now() - stale.mtimeMs <= LOCK_STALE_MS) return false;
+  const guardFile = takeoverGuard(lockFile);
+  const guardToken = acquireTakeoverGuard(guardFile);
+  if (!guardToken) return false;
   try {
-    const movedToken = fs.readFileSync(takeover, 'utf8');
-    const movedMtimeMs = fs.statSync(takeover).mtimeMs;
-    if (movedToken !== staleToken || movedMtimeMs !== staleStat.mtimeMs) keep = true;
-  } catch (err) {
-    if (!isMissing(err)) throw err;
-    return false;
-  }
-  if (!keep) {
-    fs.rmSync(takeover, { force: true });
-    return true;
-  }
-  if (!fs.existsSync(lockFile)) {
+    const current = readLockSnapshot(lockFile);
+    if (!current) return false;
+    if (Date.now() - current.mtimeMs <= LOCK_STALE_MS) return false;
+    if (current.token !== stale.token || current.mtimeMs !== stale.mtimeMs) return false;
+    onBeforeStaleTakeover({
+      lockFile,
+      staleToken: current.token,
+      staleMtimeMs: current.mtimeMs,
+    });
+    if (!removeIfMatches(lockFile, current.token, current.mtimeMs)) return false;
     try {
-      fs.renameSync(takeover, lockFile);
-      return false;
+      fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
+      return true;
     } catch (err) {
-      if (!isMissing(err) && codeOf(err) !== 'EEXIST') throw err;
+      if (codeOf(err) === 'EEXIST') return false;
+      throw err;
     }
+  } finally {
+    releaseLock(guardFile, guardToken);
   }
-  return false;
 }
 
 /**
@@ -132,13 +176,13 @@ function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
       return token;
     } catch (err) {
       if (codeOf(err) !== 'EEXIST') throw err;
-      let tookStale = false;
+      const now = Date.now();
       try {
-        tookStale = tryTakeOverStaleLock(lockFile, onBeforeStaleTakeover);
+        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover)) return token;
       } catch (inner) {
         if (!isMissing(inner)) throw inner;
       }
-      if (!tookStale && Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
+      if (now >= deadline) throw new Error(`${lockFile} is locked by another process`);
       wait(LOCK_RETRY_MS);
     }
   }
@@ -160,13 +204,13 @@ async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
       return token;
     } catch (err) {
       if (codeOf(err) !== 'EEXIST') throw err;
-      let tookStale = false;
+      const now = Date.now();
       try {
-        tookStale = tryTakeOverStaleLock(lockFile, onBeforeStaleTakeover);
+        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover)) return token;
       } catch (inner) {
         if (!isMissing(inner)) throw inner;
       }
-      if (!tookStale && Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
+      if (now >= deadline) throw new Error(`${lockFile} is locked by another process`);
       await wait(LOCK_RETRY_MS);
     }
   }

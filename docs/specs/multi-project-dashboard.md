@@ -52,10 +52,6 @@ One Dashboard serves every Project in a per-user Project registry. The Dashboard
 - Server tests: two Projects with the same Run id stay apart, a write reaches only a registered Project, the ADR 0017 guard still refuses a bad Origin, Host or token, remove works by id only, state file reuse, stale state file, older version warning, explicit `--port` stays standalone.
 - Browser tests: Project rows under shared Stage headers, collapse and persistence, no auto-expand on a new waiting Run, `?project=` order, missing and empty Project rows, compact view, keyboard operation of the toggle. Browser test names follow the repository's rule for names.
 
-## Update 2026-11-03 (follow-up Spec)
-
-Follow-up Spec [multi-project-dashboard-follow-ups.md](multi-project-dashboard-follow-ups.md) keeps active Projects in normal rows and groups missing Projects in one summary row with bulk cleanup (`DELETE /api/projects/missing`).
-
 - Verify with `npm test`, `npm run check`, `npm run test:browser` and `npm run test:package`.
 
 ## Out of Scope
@@ -65,6 +61,10 @@ Follow-up Spec [multi-project-dashboard-follow-ups.md](multi-project-dashboard-f
 - Starting or advancing a Run from the Dashboard.
 - Remote or multi-user access; the server stays on 127.0.0.1.
 - Changing Run records, PR providers or the Stage columns.
+
+## Update 2026-11-03 (follow-up Spec)
+
+Follow-up Spec [multi-project-dashboard-follow-ups.md](multi-project-dashboard-follow-ups.md) keeps active Projects in normal rows and groups missing Projects in one summary row with bulk cleanup (`DELETE /api/projects/missing`).
 
 ## Further Notes
 
