@@ -22,7 +22,7 @@ export const HELP_SECTIONS = [
         text: 'Each Project has its own row under the same Stage columns. The button with the Project name collapses the row to one line with its Runs per Stage and a waiting badge, and the page remembers it.',
       },
       {
-        text: 'A new waiting Run never opens a collapsed row. Opening a Run from a notification does. A Project whose folder is missing has a Remove button.',
+        text: 'A new waiting Run never opens a collapsed row. Opening a Run from a notification does. Missing Projects are grouped in one summary row with Remove and Remove all missing.',
       },
     ],
   },

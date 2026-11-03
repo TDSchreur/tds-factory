@@ -216,13 +216,18 @@ test('Project rows are in stable alphabetical order, and ?project= puts its row 
   }
 });
 
-test('an empty Project is a collapsed row saying No Runs, and a missing Project has a warning and a Remove button that asks first', async (t) => {
+test('missing Projects appear in one collapsed summary row with per-Project Remove and Remove all missing', async (t) => {
   const page = await openPage(t, {
-    projects: [{ id: 'e1', name: 'empty-one', runs: [] }, { id: 'm1', name: 'gone', missing: true }, ...two()],
+    projects: [
+      { id: 'e1', name: 'empty-one', path: '/tmp/empty-one', runs: [] },
+      { id: 'm1', name: 'gone', path: '/tmp/gone', missing: true },
+      { id: 'm2', name: 'gone-too', path: '/tmp/gone-too', missing: true },
+      ...two(),
+    ],
   });
   if (!page) return;
   try {
-    assert.deepEqual(await rowNames(page), ['alpha', 'beta', 'empty-one', 'gone']);
+    assert.deepEqual(await rowNames(page), ['alpha', 'beta', 'empty-one', '2 missing Projects']);
     const text = (/** @type {string} */ name) =>
       run$(
         page,
@@ -233,7 +238,7 @@ test('an empty Project is a collapsed row saying No Runs, and a missing Project 
       await run$(page, "return [...document.querySelectorAll('.project-row')][2].querySelectorAll('.column').length"),
       0,
     );
-    assert.match(await text('gone'), /folder.*(missing|cannot be found)/i);
+    assert.match(await text('2 missing Projects'), /Expand to review and remove missing Projects/i);
     assert.equal(
       await run$(
         page,
@@ -241,9 +246,24 @@ test('an empty Project is a collapsed row saying No Runs, and a missing Project 
       ),
       0,
     );
+    await clickToggle(page, '2 missing Projects');
+    assert.equal(
+      await run$(
+        page,
+        "return [...document.querySelectorAll('.project-row')][3].querySelector('[role=region][aria-label=\"Missing Projects\"]') !== null",
+      ),
+      true,
+    );
+    assert.deepEqual(
+      await run$(
+        page,
+        "return [...document.querySelectorAll('.missing-list li strong')].map(s => s.textContent.trim())",
+      ),
+      ['gone', 'gone-too'],
+    );
     await run$(
       page,
-      "[...document.querySelectorAll('.project-row button')].find(b => b.textContent === 'Remove').click()",
+      "[...document.querySelectorAll('.missing-list button')].find(b => b.textContent === 'Remove').click()",
     );
     await page.waitFor("return document.getElementById('dialog').open");
     assert.match(await run$(page, "return document.getElementById('dialog-message').textContent"), /gone/);
@@ -253,12 +273,38 @@ test('an empty Project is a collapsed row saying No Runs, and a missing Project 
     assert.deepEqual(page.calls, []);
     await run$(
       page,
-      "[...document.querySelectorAll('.project-row button')].find(b => b.textContent === 'Remove').click()",
+      "[...document.querySelectorAll('.missing-list button')].find(b => b.textContent === 'Remove').click()",
     );
     await page.waitFor("return document.getElementById('dialog').open");
     await run$(page, "document.getElementById('dialog-confirm').click()");
     for (let i = 0; i < 40 && !page.calls.length; i++) await page.wait(50);
     assert.deepEqual(page.calls, ['DELETE /api/projects/m1']);
+    assert.deepEqual(page.tokens, ['test-token']);
+    page.calls.length = 0;
+    page.tokens.length = 0;
+    assert.equal(
+      await run$(
+        page,
+        "return [...document.querySelectorAll('.project-row button')].find(b => b.textContent === 'Remove all missing').getAttribute('aria-label')",
+      ),
+      'Remove all missing, 2 Projects',
+    );
+    await run$(
+      page,
+      "[...document.querySelectorAll('.project-row button')].find(b => b.textContent === 'Remove all missing').click()",
+    );
+    await page.waitFor("return document.getElementById('dialog').open");
+    assert.match(
+      await run$(page, "return document.getElementById('dialog-message').textContent"),
+      /No folder or Run is touched/i,
+    );
+    assert.match(
+      await run$(page, "return document.getElementById('dialog-message').textContent"),
+      /missing at that moment/i,
+    );
+    await run$(page, "document.getElementById('dialog-confirm').click()");
+    for (let i = 0; i < 40 && !page.calls.length; i++) await page.wait(50);
+    assert.deepEqual(page.calls, ['DELETE /api/projects/missing']);
     assert.deepEqual(page.tokens, ['test-token']);
   } finally {
     await page.close();

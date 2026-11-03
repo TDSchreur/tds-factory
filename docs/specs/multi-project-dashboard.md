@@ -4,7 +4,7 @@ A user who works on several repositories at once starts one Dashboard per reposi
 
 ## Solution
 
-One Dashboard serves every Project in a per-user Project registry. The board has a Project row per Project under shared Stage columns, so Runs of different Projects never mix, and the user can collapse a Project row they are not interested in. `tds-factory dashboard` in any repository registers that repository and opens the one Dashboard. See [ADR 0033](../adr/0033-one-dashboard-serves-every-registered-project.md).
+One Dashboard serves every Project in a per-user Project registry. The Dashboard has a Project row per Project under shared Stage columns, so Runs of different Projects never mix, and the user can collapse a Project row they are not interested in. `tds-factory dashboard` in any repository registers that repository and opens the one Dashboard. See [ADR 0033](../adr/0033-one-dashboard-serves-every-registered-project.md).
 
 ## User Stories
 
@@ -18,7 +18,7 @@ One Dashboard serves every Project in a per-user Project registry. The board has
 8. As a Factory user, I want `tds-factory dashboard` in a repository to put that Project's Project row first and expanded, so that I land where I am working.
 9. As a Factory user, I want notifications for every Project, naming the Project, so that I notice a Run that needs me in any repository.
 10. As a Factory user, I want PR status for GitHub and Azure DevOps Projects side by side, so that mixed repositories work.
-11. As a Factory user, I want a Project whose folder is gone to show as missing with a Remove button, so that an unmounted drive loses nothing and I can still clean up.
+11. As a Factory user, I want a Project whose folder is gone to show as missing and removable, so that an unmounted drive loses nothing and I can still clean up.
 12. As a Factory user, I want a warning when the running Dashboard is an older Factory version than my CLI, so that I know to restart it without anything being killed.
 13. As a Factory user on a narrow screen, I want the one-Stage navigation to apply to every Project row, so that the compact view still works.
 14. As a keyboard and screen reader user, I want each Project row to be a labelled region with a real toggle button, so that I can move through and collapse Project rows.
@@ -40,7 +40,7 @@ One Dashboard serves every Project in a per-user Project registry. The board has
 - Project rows are in stable alphabetical order, except the `?project=<id>` Project row, which comes first and expanded. Cards inside a Project row keep the waiting-first order.
 - "Needs you", the older-Runs toggle and Done-card expansion stay global; Done-card expansion is keyed by Project and Run id. "Needs you" never expands a collapsed Project row.
 - Compact view (up to 1024 CSS pixels): the selected Stage applies to every Project row, Project rows stack and collapse, and the navigation counts and waiting markers sum over all Projects.
-- A Project with no Runs is a collapsed Project row saying "No Runs". A missing Project is a Project row with a warning and a Remove button, with no columns.
+- A Project with no Runs is a collapsed Project row saying "No Runs". Missing Projects are grouped in one summary row with a warning and per-Project Remove actions.
 - The Run detail drawer stays single and names the Project; a Run is always shown with its Project.
 - Notifications cover every Project and name the Project.
 - Update `docs/dashboard.md`, the README, the Dashboard help text and `docs/usage.md`, and add a changelog fragment.
@@ -51,6 +51,7 @@ One Dashboard serves every Project in a per-user Project registry. The board has
 - Registry tests: join, remove, atomic write, corrupt file treated as empty, failed write is a warning, worktree registers the main checkout.
 - Server tests: two Projects with the same Run id stay apart, a write reaches only a registered Project, the ADR 0017 guard still refuses a bad Origin, Host or token, remove works by id only, state file reuse, stale state file, older version warning, explicit `--port` stays standalone.
 - Browser tests: Project rows under shared Stage headers, collapse and persistence, no auto-expand on a new waiting Run, `?project=` order, missing and empty Project rows, compact view, keyboard operation of the toggle. Browser test names follow the repository's rule for names.
+
 - Verify with `npm test`, `npm run check`, `npm run test:browser` and `npm run test:package`.
 
 ## Out of Scope
@@ -60,6 +61,10 @@ One Dashboard serves every Project in a per-user Project registry. The board has
 - Starting or advancing a Run from the Dashboard.
 - Remote or multi-user access; the server stays on 127.0.0.1.
 - Changing Run records, PR providers or the Stage columns.
+
+## Update 2026-11-03 (follow-up Spec)
+
+Follow-up Spec [multi-project-dashboard-follow-ups.md](multi-project-dashboard-follow-ups.md) keeps active Projects in normal rows and groups missing Projects in one summary row with bulk cleanup (`DELETE /api/projects/missing`).
 
 ## Further Notes
 

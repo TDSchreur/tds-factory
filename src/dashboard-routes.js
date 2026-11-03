@@ -12,6 +12,7 @@ import * as h from './dashboard-handlers.js';
 // The first route whose method and pattern match answers, so the order is part of the contract.
 /** @type {Route[]} */
 export const ROUTES = [
+  { methods: ['DELETE'], pattern: /^\/api\/projects\/missing$/, handler: h.removeMissingProjects },
   { methods: ['DELETE'], pattern: /^\/api\/projects\/([^/]+)$/, handler: h.removeProject },
   { methods: ['DELETE'], pattern: /^\/api\/projects\/([^/]+)\/runs\/([\s\S]*)$/, handler: h.deleteRun, scoped: true },
   { methods: ['POST'], pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/merge$/, handler: h.mergeRun, scoped: true },

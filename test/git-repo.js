@@ -16,6 +16,8 @@ export function tempDir(prefix) {
   return dir;
 }
 
+if (!process.env.TDS_FACTORY_CONFIG_DIR) process.env.TDS_FACTORY_CONFIG_DIR = tempDir('factory-config-');
+
 /**
  * @param {string} cwd
  * @param {...string} args

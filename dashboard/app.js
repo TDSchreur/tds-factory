@@ -345,6 +345,27 @@ function App() {
     poll();
   };
 
+  const removeMissing = async (/** @type {ProjectView[]} */ targets) => {
+    const count = targets.length;
+    if (!count) return;
+    if (
+      !(await ask(
+        'Remove all missing Projects?',
+        `Remove ${count} missing Project${count === 1 ? '' : 's'} from the Dashboard? This removes every Project that is missing at that moment. No folder or Run is touched.`,
+        'Remove all missing',
+        true,
+      ))
+    )
+      return;
+    try {
+      const response = await write('DELETE', '/api/projects/missing');
+      if (!response.ok) await ask('Could not remove missing Projects', await response.text(), 'Close', false, true);
+    } catch {
+      await ask('Could not remove missing Projects', 'Try again.', 'Close', false, true);
+    }
+    poll();
+  };
+
   const mergeRun = async (/** @type {RunView} */ run) => {
     let checks = 'GitHub checks: unavailable';
     try {
@@ -489,11 +510,13 @@ function App() {
         true,
       );
     },
+    removeMissing,
   };
   const olderLabel = olderRuns.length ? (showOlder ? 'Hide older runs' : 'Show older (' + olderRuns.length + ')') : '';
 
   // Without any Run the page welcomes the user, unless a Project needs its row (several Projects, or one that is missing).
-  const welcome = loaded && !allRuns.length && projects.length <= 1 && !projects.some((p) => p.missing);
+  const welcome =
+    loaded && !allRuns.length && projects.filter((p) => !p.missing).length <= 1 && !projects.some((p) => p.missing);
   const showsBoard = !welcome;
 
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />

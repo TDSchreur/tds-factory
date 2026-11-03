@@ -92,13 +92,26 @@ export function createProjectHub({
       }
       return made;
     },
-    /** Removes a Project the registry holds. Resolves to false for any other id. @param {string} id */
-    remove(id) {
-      const project = registry?.list().find((p) => p.id === id);
-      if (!project || !registry?.remove(id)) return false;
+    /** Removes a Project the registry holds. @param {string} id */
+    async remove(id) {
+      const activeRegistry = registry;
+      if (!activeRegistry) return id === ownId ? 'own-not-registered' : 'not-found';
+      const project = activeRegistry.list().find((p) => p.id === id);
+      if (!project) return id === ownId ? 'own-not-registered' : 'not-found';
+      const removedById = await activeRegistry.removeAsync(id);
+      if (!removedById) return 'not-found';
       services.delete(project.path);
       if (id === ownId) removed.add(id);
-      return true;
+      return 'removed';
+    },
+    /** Removes every missing Project from the registry and returns how many were removed. */
+    async removeMissing() {
+      const activeRegistry = registry;
+      if (!activeRegistry) return 0;
+      const removedPaths = await activeRegistry.removeMissingAsync();
+      for (const gone of removedPaths) services.delete(gone);
+      if (removedPaths.includes(own)) removed.add(ownId);
+      return removedPaths.length;
     },
     /** True when a registry backs this server, so it serves every registered Project. */
     shared: registry !== undefined,

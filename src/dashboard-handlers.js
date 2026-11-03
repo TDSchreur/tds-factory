@@ -354,10 +354,10 @@ export async function info({ send, token, projectDir, hub }) {
 export async function views({ send, hub }) {
   const projects = await Promise.all(
     hub.list().map(async ({ id, name, missing, path }) => {
-      if (missing) return { id, name, missing, runs: [] };
+      if (missing) return { id, name, path, missing, runs: [] };
       const { store, prViews } = hub.servicesOf({ id, path });
       const viewed = await Promise.all((await store.list()).map(prViews.view));
-      return { id, name, missing, runs: viewed.map((view) => ({ ...view, projectId: id })) };
+      return { id, name, path, missing, runs: viewed.map((view) => ({ ...view, projectId: id })) };
     }),
   );
   send(200, 'application/json', JSON.stringify({ projects }));
@@ -377,9 +377,22 @@ export async function runFile({ send, store, match }) {
 
 // Removes a Project from the registry by an id the registry holds; the folder and its Runs stay.
 /** @type {Handler} */
-export function removeProject({ send, hub, match }) {
+export async function removeProject({ send, hub, match }) {
   const id = decodeId({ send }, match[1]);
   if (id === undefined) return;
-  if (!hub.remove(id)) return send(404, 'text/plain', 'not found');
+  const removed = await hub.remove(id);
+  if (removed === 'not-found') return send(404, 'text/plain', 'not found');
+  if (removed === 'own-not-registered')
+    return send(
+      409,
+      'text/plain',
+      'this Project is not in the registry, so there is nothing to remove; it is still served because the Dashboard was started in it',
+    );
   send(200, 'text/plain', 'removed');
+}
+
+/** @type {Handler} */
+export async function removeMissingProjects({ send, hub }) {
+  const removed = await hub.removeMissing();
+  send(200, 'application/json', JSON.stringify({ removed }));
 }

@@ -5,6 +5,7 @@ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
+import './git-repo.js';
 
 /**
  * @param {number} port
@@ -43,7 +44,7 @@ test(
       assert.equal(answer.body, 'internal error');
       assert.equal(logged.mock.callCount(), 1);
       const line = String(logged.mock.calls[0].arguments[0]);
-      assert.match(line, /^dashboard: GET \/files\/[0-9a-f]{8}\/2026-01-01-good\/define\.md: .*EACCES/s);
+      assert.match(line, /^dashboard: GET \/files\/[0-9a-f]{12}\/2026-01-01-good\/define\.md: .*EACCES/s);
       assert.doesNotMatch(line, /secret/);
       assert.doesNotMatch(line.split(':')[1], /[\x00-\x1f]/);
     } finally {

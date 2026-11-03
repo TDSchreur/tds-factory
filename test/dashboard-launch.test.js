@@ -1,12 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import net from 'node:net';
+import { readFileSync } from 'node:fs';
 import { startDashboard } from '../src/dashboard.js';
 import { launchDashboard } from '../src/dashboard-launch.js';
 import { openProjectRegistry, projectId } from '../src/project-registry.js';
+import { mainCheckout } from '../src/run-folder.js';
 import { repo, tempDir } from './git-repo.js';
 
-const FACTORY = '2.0.0';
+const FACTORY = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+/** @param {string} text */
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 async function freePort() {
   const probe = net.createServer();
@@ -127,17 +132,38 @@ test('a busy preferred port that is not a Dashboard falls back to a free port', 
 });
 
 test('a running Dashboard of an older Factory version is reported and left running', async () => {
-  const { launch, warnings } = await setup();
-  const old = await launch(repo(), { version: '1.0.0' });
+  /** @type {string[]} */
+  const warnings = [];
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/api/info') return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ token: 't', project: '/tmp/p', shared: true, pid: 123, version: '0.0.1' }));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
   try {
-    const next = await launch(repo());
+    const next = await launchDashboard({
+      projectDir: repo(),
+      version: FACTORY,
+      warn: (m) => warnings.push(m),
+      registry: {
+        dir: tempDir('launch-'),
+        join: (projectPath) => ({ id: projectId(projectPath), path: projectPath }),
+        list: () => [],
+        remove: () => false,
+        removeAsync: async () => false,
+        removeMissingAsync: async () => [],
+        readState: () => ({ pid: 123, port, version: '0.0.1' }),
+        writeState: () => {},
+        clearState: () => {},
+      },
+    });
     assert.equal(next.reused, true);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /1\.0\.0/);
-    assert.match(warnings[0], /2\.0\.0/);
-    assert.equal((await fetch(`http://127.0.0.1:${old.port}/api/info`)).status, 200);
+    assert.match(warnings[0], /0\.0\.1/);
+    assert.match(warnings[0], new RegExp(escapeRegex(FACTORY)));
   } finally {
-    await old.close();
+    await new Promise((ok) => server.close(() => ok(undefined)));
   }
 });
 
@@ -163,14 +189,180 @@ test('an explicit port starts a standalone server that neither reads nor writes 
 
 test('a registry that cannot be written does not stop the Dashboard', async () => {
   const { launch } = await setup();
-  const first = await launch(repo(), {
+  const main = repo();
+  const first = await launch(main, {
     registry: { ...openProjectRegistry({ dir: tempDir('launch-') }), join: () => undefined },
   });
   try {
     assert.equal(first.reused, false);
-    assert.doesNotMatch(first.url, /project=/);
+    assert.equal(first.url, `http://127.0.0.1:${first.port}/?project=${projectId(mainCheckout(main).dir)}`);
   } finally {
     await first.close();
+  }
+});
+
+test('an id collision warns and keeps a plain URL without ?project=', async () => {
+  /** @type {string[]} */
+  const warnings = [];
+  const incoming = repo();
+  const main = mainCheckout(incoming).dir;
+  const collisionId = projectId(main);
+  const launched = await launchDashboard({
+    projectDir: incoming,
+    version: FACTORY,
+    preferredPort: 0,
+    registry: {
+      dir: tempDir('launch-collision-'),
+      join: () => undefined,
+      list: () => [{ id: collisionId, path: '/tmp/other-project' }],
+      remove: () => false,
+      removeAsync: async () => false,
+      removeMissingAsync: async () => [],
+      readState: () => undefined,
+      writeState: () => {},
+      clearState: () => {},
+    },
+    warn: (m) => warnings.push(m),
+  });
+  try {
+    assert.equal(launched.reused, false);
+    assert.equal(launched.url, `http://127.0.0.1:${launched.port}/`);
+  } finally {
+    await launched.close();
+  }
+});
+
+test('a non-semver dashboard version from state or /api/info is treated as unknown', async () => {
+  /** @type {string[]} */
+  const warnings = [];
+  const project = mainCheckout(repo()).dir;
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/api/info') return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ token: 't', project, shared: true, pid: 456, version: '1.0.0\n\x1b[31mforged' }));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
+  try {
+    const launched = await launchDashboard({
+      projectDir: project,
+      version: FACTORY,
+      preferredPort: 0,
+      warn: (m) => warnings.push(m),
+      registry: {
+        dir: tempDir('launch-'),
+        join: () => ({ id: projectId(project), path: project }),
+        list: () => [],
+        remove: () => false,
+        removeAsync: async () => false,
+        removeMissingAsync: async () => [],
+        readState: () => ({ pid: 456, port, version: '1.0.0\n\x1b[31mforged' }),
+        writeState: () => {},
+        clearState: () => {},
+      },
+    });
+    try {
+      assert.equal(launched.reused, true);
+    } finally {
+      await launched.close();
+    }
+    assert.equal(warnings.length, 0);
+  } finally {
+    await new Promise((ok) => server.close(() => ok(undefined)));
+  }
+});
+
+test('an oversized /api/info body is ignored as unknown and never warns about older version', async () => {
+  /** @type {string[]} */
+  const warnings = [];
+  const project = mainCheckout(repo()).dir;
+  const huge = 'x'.repeat(70_000);
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/api/info') return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ token: 't', project, shared: true, pid: 457, version: huge }));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
+  try {
+    const launched = await launchDashboard({
+      projectDir: project,
+      version: FACTORY,
+      preferredPort: 0,
+      warn: (m) => warnings.push(m),
+      registry: {
+        dir: tempDir('launch-'),
+        join: () => ({ id: projectId(project), path: project }),
+        list: () => [],
+        remove: () => false,
+        removeAsync: async () => false,
+        removeMissingAsync: async () => [],
+        readState: () => ({ pid: 457, port, version: huge }),
+        writeState: () => {},
+        clearState: () => {},
+      },
+    });
+    try {
+      assert.equal(launched.reused, false);
+    } finally {
+      await launched.close();
+    }
+    assert.equal(warnings.length, 0);
+  } finally {
+    await new Promise((ok) => server.close(() => ok(undefined)));
+  }
+});
+
+test('semver probe keeps strict semver and rejects malformed or pathological strings quickly', async () => {
+  const project = mainCheckout(repo()).dir;
+  const pathological = `0.0.0-0.${'--.'.repeat(20)}`;
+  const cases = [
+    { version: '1.2.3', warningExpected: true },
+    { version: '2.0.0', warningExpected: true },
+    { version: '1.2.3-rc.1+build.7' },
+    { version: '01.2.3', warningExpected: false },
+    { version: '1.2.3\nforged', warningExpected: false },
+    { version: pathological, warningExpected: false, assertFast: true },
+  ];
+  for (const { version, warningExpected, assertFast } of cases) {
+    /** @type {string[]} */
+    const warnings = [];
+    const server = http.createServer((req, res) => {
+      if (req.url !== '/api/info') return void res.writeHead(404).end();
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ token: 't', project, shared: true, pid: 458, version }));
+    });
+    await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+    const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
+    try {
+      const started = Date.now();
+      const launched = await launchDashboard({
+        projectDir: project,
+        version: '9.9.9',
+        preferredPort: 0,
+        warn: (m) => warnings.push(m),
+        registry: {
+          dir: tempDir('launch-semver-'),
+          join: () => ({ id: projectId(project), path: project }),
+          list: () => [],
+          remove: () => false,
+          removeAsync: async () => false,
+          removeMissingAsync: async () => [],
+          readState: () => ({ pid: 458, port, version }),
+          writeState: () => {},
+          clearState: () => {},
+        },
+      });
+      try {
+        assert.equal(launched.reused, true);
+      } finally {
+        await launched.close();
+      }
+      if (assertFast) assert.ok(Date.now() - started < 250, 'pathological semver probe should fail fast');
+      if (warningExpected !== undefined) assert.equal(warningExpected, warnings.length === 1, `version=${version}`);
+    } finally {
+      await new Promise((ok) => server.close(() => ok(undefined)));
+    }
   }
 });
 

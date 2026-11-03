@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mainCheckout } from './run-folder.js';
 import { codeOf, isMissing, messageOf } from './narrow.js';
 
@@ -18,18 +18,49 @@ export function factoryConfigDir({ env = process.env, platform = process.platfor
 }
 
 /** A short hash of the main checkout path. @param {string} projectPath */
-export const projectId = (projectPath) => createHash('sha1').update(projectPath).digest('hex').slice(0, 8);
+export const projectId = (projectPath) => createHash('sha1').update(projectPath).digest('hex').slice(0, 12);
 
-/** @param {string} file @param {unknown} value */
-function writeAtomic(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const staging = `${file}.${process.pid}.tmp`;
+const DIR_MODE = 0o700;
+const FILE_MODE = 0o600;
+
+/** @param {string} dir */
+function ensurePrivateDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  if (process.platform === 'win32') return;
   try {
-    fs.writeFileSync(staging, `${JSON.stringify(value, null, 2)}\n`);
-    fs.renameSync(staging, file);
-  } catch (err) {
-    fs.rmSync(staging, { force: true });
-    throw err;
+    const stat = fs.lstatSync(dir);
+    if (stat.isSymbolicLink()) return;
+    const mode = stat.mode & 0o777;
+    if ((mode & 0o077) !== 0) fs.chmodSync(dir, DIR_MODE);
+  } catch {
+    // best effort on hosts that do not apply POSIX modes
+  }
+}
+
+/**
+ * @param {string} file
+ * @param {unknown} value
+ * @param {() => string} stagingHex
+ */
+function writeAtomic(file, value, stagingHex) {
+  ensurePrivateDir(path.dirname(file));
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  for (;;) {
+    const staging = `${file}.${process.pid}.${stagingHex()}.tmp`;
+    try {
+      fs.writeFileSync(staging, text, { flag: 'wx', mode: FILE_MODE });
+      fs.renameSync(staging, file);
+      try {
+        fs.chmodSync(file, FILE_MODE);
+      } catch {
+        // best effort on hosts that do not apply POSIX modes
+      }
+      return;
+    } catch (err) {
+      fs.rmSync(staging, { force: true });
+      if (codeOf(err) === 'EEXIST') continue;
+      throw err;
+    }
   }
 }
 
@@ -42,37 +73,202 @@ const LOCK_RETRY_MS = 15;
 
 /** @param {number} ms */
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+/** @param {number} ms */
+const sleepAsync = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Runs fn while holding an exclusive lock file (created with `wx`) next to the registry, so two processes cannot both read the old list and drop each other's Project. A lock older than LOCK_STALE_MS belongs to a dead process and is taken over. Throws when the lock stays held for waitMs.
-/** @template T @param {string} lockFile @param {number} waitMs @param {() => T} fn @returns {T} */
-function withLock(lockFile, waitMs, fn) {
-  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+/** @param {string} lockFile */
+const lockToken = (lockFile) => `${process.pid}:${randomBytes(16).toString('hex')}:${path.basename(lockFile)}`;
+
+/** @param {string} lockFile */
+const takeoverGuard = (lockFile) => `${lockFile}.takeover`;
+
+/**
+ * @param {string} file
+ * @returns {{ token: string, mtimeMs: number } | undefined}
+ */
+function readLockSnapshot(file) {
+  try {
+    return {
+      token: fs.readFileSync(file, 'utf8'),
+      mtimeMs: fs.statSync(file).mtimeMs,
+    };
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+    return undefined;
+  }
+}
+
+/**
+ * @param {string} file
+ * @param {string} token
+ * @param {number} mtimeMs
+ */
+function removeIfMatches(file, token, mtimeMs) {
+  // The read-then-remove gap is inherent to filesystem locks; it is bounded here by matching the stale snapshot
+  // (token + mtime) and by only using this path for stale takeover.
+  const seen = readLockSnapshot(file);
+  if (!seen || seen.token !== token || seen.mtimeMs !== mtimeMs) return false;
+  fs.rmSync(file, { force: true });
+  return true;
+}
+
+/** @param {string} guardFile */
+function acquireTakeoverGuard(guardFile) {
+  const token = lockToken(guardFile);
+  try {
+    fs.writeFileSync(guardFile, token, { flag: 'wx', mode: FILE_MODE });
+    return token;
+  } catch (err) {
+    if (codeOf(err) !== 'EEXIST') throw err;
+  }
+  const seen = readLockSnapshot(guardFile);
+  if (!seen) return undefined;
+  if (Date.now() - seen.mtimeMs > LOCK_STALE_MS) removeIfMatches(guardFile, seen.token, seen.mtimeMs);
+  return undefined;
+}
+
+/**
+ * @param {string} lockFile
+ * @param {string} token
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ */
+function tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover) {
+  const stale = readLockSnapshot(lockFile);
+  if (!stale) return false;
+  if (Date.now() - stale.mtimeMs <= LOCK_STALE_MS) return false;
+  const guardFile = takeoverGuard(lockFile);
+  const guardToken = acquireTakeoverGuard(guardFile);
+  if (!guardToken) return false;
+  try {
+    const current = readLockSnapshot(lockFile);
+    if (!current) return false;
+    if (Date.now() - current.mtimeMs <= LOCK_STALE_MS) return false;
+    if (current.token !== stale.token || current.mtimeMs !== stale.mtimeMs) return false;
+    onBeforeStaleTakeover({
+      lockFile,
+      staleToken: current.token,
+      staleMtimeMs: current.mtimeMs,
+    });
+    if (!removeIfMatches(lockFile, current.token, current.mtimeMs)) return false;
+    try {
+      fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
+      return true;
+    } catch (err) {
+      if (codeOf(err) === 'EEXIST') return false;
+      throw err;
+    }
+  } finally {
+    releaseLock(guardFile, guardToken);
+  }
+}
+
+/**
+ * @param {string} lockFile
+ * @param {number} waitMs
+ * @param {(ms: number) => void} wait
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ */
+function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
+  ensurePrivateDir(path.dirname(lockFile));
+  const token = lockToken(lockFile);
   const deadline = Date.now() + waitMs;
   for (;;) {
     try {
-      fs.closeSync(fs.openSync(lockFile, 'wx'));
-      break;
+      fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
+      return token;
     } catch (err) {
       if (codeOf(err) !== 'EEXIST') throw err;
+      const now = Date.now();
       try {
-        if (Date.now() - fs.statSync(lockFile).mtimeMs > LOCK_STALE_MS) fs.rmSync(lockFile, { force: true });
-        else if (Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
-        else sleep(LOCK_RETRY_MS);
+        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover)) return token;
       } catch (inner) {
         if (!isMissing(inner)) throw inner;
       }
+      if (now >= deadline) throw new Error(`${lockFile} is locked by another process`);
+      wait(LOCK_RETRY_MS);
     }
   }
+}
+
+/**
+ * @param {string} lockFile
+ * @param {number} waitMs
+ * @param {(ms: number) => Promise<void>} wait
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ */
+async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
+  ensurePrivateDir(path.dirname(lockFile));
+  const token = lockToken(lockFile);
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
+      return token;
+    } catch (err) {
+      if (codeOf(err) !== 'EEXIST') throw err;
+      const now = Date.now();
+      try {
+        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover)) return token;
+      } catch (inner) {
+        if (!isMissing(inner)) throw inner;
+      }
+      if (now >= deadline) throw new Error(`${lockFile} is locked by another process`);
+      await wait(LOCK_RETRY_MS);
+    }
+  }
+}
+
+/** @param {string} lockFile @param {string} token */
+function releaseLock(lockFile, token) {
   try {
+    if (fs.readFileSync(lockFile, 'utf8') === token) fs.rmSync(lockFile, { force: true });
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+  }
+}
+
+// Runs fn while holding an exclusive lock file (created with `wx`) next to the registry, so two processes cannot both read the old list and drop each other's Project. A lock older than LOCK_STALE_MS belongs to a dead process and is taken over. Throws when the lock stays held for waitMs.
+/**
+ * @template T
+ * @param {string} lockFile
+ * @param {number} waitMs
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ * @param {(ctx: { lockFile: string, token: string }) => void} onLockAcquired
+ * @param {() => T} fn
+ * @returns {T}
+ */
+function withLock(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn) {
+  const token = acquireLockSync(lockFile, waitMs, sleep, onBeforeStaleTakeover);
+  try {
+    onLockAcquired({ lockFile, token });
     return fn();
   } finally {
-    fs.rmSync(lockFile, { force: true });
+    releaseLock(lockFile, token);
+  }
+}
+
+/** @template T @param {string} lockFile @param {number} waitMs @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover @param {(ctx: { lockFile: string, token: string }) => void | Promise<void>} onLockAcquired @param {() => Promise<T>} fn @returns {Promise<T>} */
+async function withLockAsync(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn) {
+  const token = await acquireLockAsync(lockFile, waitMs, sleepAsync, onBeforeStaleTakeover);
+  try {
+    await onLockAcquired({ lockFile, token });
+    return await fn();
+  } finally {
+    releaseLock(lockFile, token);
   }
 }
 
 // Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
-/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number }} [options] */
-export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {}, lockWaitMs = LOCK_WAIT_MS } = {}) {
+/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number, idOf?: (projectPath: string) => string, stagingHex?: () => string, onBeforeStaleTakeover?: (ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void, onLockAcquired?: (ctx: { lockFile: string, token: string }) => void | Promise<void> }} [options] */
+export function openProjectRegistry({
+  dir = factoryConfigDir(),
+  warn = () => {},
+  lockWaitMs = LOCK_WAIT_MS,
+  idOf = projectId,
+  stagingHex = () => randomBytes(8).toString('hex'),
+  onBeforeStaleTakeover = () => {},
+  onLockAcquired = () => {},
+} = {}) {
   const registryFile = path.join(dir, 'projects.json');
   const lockFile = `${registryFile}.lock`;
   const stateFile = path.join(dir, 'dashboard.json');
@@ -98,36 +294,43 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {},
   };
 
   /** @param {string[]} paths */
-  const save = (paths) => writeAtomic(registryFile, { projects: paths });
+  const save = (paths) => writeAtomic(registryFile, { projects: paths }, stagingHex);
 
   return {
     dir,
     /** @returns {Project[]} */
-    list: () => read().paths.map((p) => ({ id: projectId(p), path: p })),
+    list: () => read().paths.map((p) => ({ id: idOf(p), path: p })),
     /** Adds the main checkout of projectDir. @param {string} projectDir @returns {Project | undefined} */
     join(projectDir) {
-      const main = mainCheckout(projectDir).dir;
       try {
-        withLock(lockFile, lockWaitMs, () => {
+        const main = mainCheckout(projectDir).dir;
+        const id = idOf(main);
+        withLock(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, () => {
           const { paths, corrupt } = read();
           if (corrupt) {
             fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
             warn(`kept the unreadable registry as ${registryFile}.corrupt`);
           }
+          const collision = paths.find((p) => p !== main && idOf(p) === id);
+          if (collision) {
+            warn(`cannot register ${main} in ${registryFile}: ${collision} has the same id (${id})`);
+            return;
+          }
           if (!paths.includes(main)) save([...paths, main]);
         });
-        return { id: projectId(main), path: main };
+        if (read().paths.includes(main)) return { id, path: main };
+        return undefined;
       } catch (err) {
-        warn(`cannot register ${main} in ${registryFile}: ${messageOf(err)}`);
+        warn(`cannot register ${projectDir} in ${registryFile}: ${messageOf(err)}`);
         return undefined;
       }
     },
     /** @param {string} id */
     remove(id) {
       try {
-        return withLock(lockFile, lockWaitMs, () => {
+        return withLock(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, () => {
           const { paths } = read();
-          const kept = paths.filter((p) => projectId(p) !== id);
+          const kept = paths.filter((p) => idOf(p) !== id);
           if (kept.length === paths.length) return false;
           save(kept);
           return true;
@@ -135,6 +338,38 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {},
       } catch (err) {
         warn(`cannot update ${registryFile}: ${messageOf(err)}`);
         return false;
+      }
+    },
+    /** @param {string} id */
+    async removeAsync(id) {
+      try {
+        return await withLockAsync(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, async () => {
+          const { paths } = read();
+          const kept = paths.filter((p) => idOf(p) !== id);
+          if (kept.length === paths.length) return false;
+          save(kept);
+          return true;
+        });
+      } catch (err) {
+        warn(`cannot update ${registryFile}: ${messageOf(err)}`);
+        return false;
+      }
+    },
+    /** Removes every registry entry whose folder is currently missing. @returns {Promise<string[]>} */
+    async removeMissingAsync() {
+      try {
+        return await withLockAsync(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, async () => {
+          const { paths } = read();
+          const gone = new Set(paths.filter((p) => !fs.existsSync(p)));
+          const removed = paths.filter((p) => gone.has(p));
+          if (!removed.length) return [];
+          const kept = paths.filter((p) => !gone.has(p));
+          save(kept);
+          return removed;
+        });
+      } catch (err) {
+        warn(`cannot update ${registryFile}: ${messageOf(err)}`);
+        return [];
       }
     },
     /** @returns {DashboardState | undefined} */
@@ -156,7 +391,7 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {},
     /** @param {DashboardState} state */
     writeState(state) {
       try {
-        writeAtomic(stateFile, state);
+        writeAtomic(stateFile, state, stagingHex);
       } catch (err) {
         warn(`cannot write ${stateFile}: ${messageOf(err)}`);
       }

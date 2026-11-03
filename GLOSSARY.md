@@ -215,14 +215,14 @@ The per-user list of Projects the Dashboard shows. A Project joins it when a Run
 _Avoid_: Project list, Workspace file
 
 **Project row**:
-The row of the Dashboard that holds one Project's Runs under the shared Stage columns. The user can collapse it to a single line with the Project name, the Runs per Stage and a waiting badge; the choice is kept per Project in the browser.
+The row of the Dashboard that holds one Project's Runs under the shared Stage columns. The user can collapse it to a single line with the Project name, the Runs per Stage and a waiting badge; the choice is kept per Project in the browser. Missing Projects are grouped in one summary row with their cleanup actions.
 _Avoid_: Swimlane, Lane, Group
 
 **Factory version**:
 The version of the Factory installation serving a Dashboard, independent of the project or its Runs.
 
 **Run detail**:
-The drawer the Dashboard opens over the board when a Run's card is selected, showing its status, links and Stage summaries. The board stays visible behind it until it is closed.
+The drawer the Dashboard opens over the Dashboard when a Run's card is selected, showing its status, links and Stage summaries. The Dashboard stays visible behind it until it is closed.
 _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Panel
 
 **Release**:

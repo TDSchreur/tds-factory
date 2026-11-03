@@ -4,6 +4,7 @@
 
 ### Changed
 
-- Run routes name the Project: `/api/projects/<id>/runs/<run-id>...` and `/files/<id>/<run-id>/<name>`. `/api/views` answers `{ projects: [{ id, name, missing, runs }] }`, and every Run carries its `projectId`. `/api/runs` is now `/api/projects/<id>/runs`.
+- Run routes name the Project: `/api/projects/<id>/runs/<run-id>...` and `/files/<id>/<run-id>/<name>`. `/api/views` answers `{ projects: [{ id, name, path, missing, runs }] }`, and every Run carries its `projectId`. `/api/runs` is now `/api/projects/<id>/runs`.
 - `/api/info` also says whether the Dashboard is `shared` (backed by the registry). `tds-factory dashboard` reuses only a shared Dashboard on port 4300; a `--port` Dashboard there counts as a busy port.
+- `/api/info` reuse probing now reads at most 64 KiB and treats overlong (more than 64 chars) version strings as unknown.
 - The fallback page links to `/api/views` instead of the removed `/api/runs`.
