@@ -6,20 +6,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preac
 import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from './components.js';
 import {
   COLUMNS,
-  OLD_MS,
   POLL_MS,
-  ageMs,
   folderName,
   loadCollapsed,
   runKey,
   saveCollapsed,
-  sortProjects,
-  sortWaitingFirst,
+  projectRows,
+  runPath,
+  isOlder,
+  shownOf,
 } from './model.js';
 
 const BRAND = 'TDS Factory';
-/** @param {{ id: string, projectId: string }} run */
-const runPath = (run) => '/api/projects/' + encodeURIComponent(run.projectId) + '/runs/' + encodeURIComponent(run.id);
 const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media query in style.css
 
 // 'default' while the user can still be asked, 'unsupported' without the Notification API.
@@ -69,8 +67,12 @@ function App() {
   const stickBelowHeader = () => {
     const header = document.querySelector('#app > header');
     const stages = document.querySelector('.stage-headers');
-    if (header instanceof HTMLElement && stages instanceof HTMLElement)
-      stages.style.top = header.getBoundingClientRect().height + 'px';
+    if (!(header instanceof HTMLElement)) return;
+    const headerHeight = header.getBoundingClientRect().height;
+    if (stages instanceof HTMLElement) stages.style.top = headerHeight + 'px';
+    // Focused controls scroll to just below whatever sticks above them (scroll-padding-top of the page); the Stage headers are hidden on narrow screens.
+    const stagesHeight = stages instanceof HTMLElement ? stages.getBoundingClientRect().height : 0;
+    document.documentElement.style.scrollPaddingTop = headerHeight + stagesHeight + 8 + 'px';
   };
   useLayoutEffect(stickBelowHeader);
   useEffect(() => {
@@ -78,6 +80,8 @@ function App() {
     if (!header || typeof ResizeObserver !== 'function') return undefined;
     const observer = new ResizeObserver(stickBelowHeader);
     observer.observe(header);
+    const stages = document.querySelector('.stage-headers');
+    if (stages) observer.observe(stages);
     return () => observer.disconnect();
   }, []);
 
@@ -98,7 +102,7 @@ function App() {
         .then((data) => {
           setProjects(
             Array.isArray(data?.projects)
-              ? data.projects.map((/** @type {any} */ entry) => ({ ...entry, runs: entry.runs ?? [] }))
+              ? data.projects.map((/** @type {any} */ view) => ({ ...view, runs: view.runs ?? [] }))
               : [],
           );
           setLoaded(true);
@@ -129,13 +133,7 @@ function App() {
   // Closing the Run detail hands focus back to its card.
   const closeDetail = () => {
     const card = shown.current
-      ? document.querySelector(
-          '.card[data-id="' +
-            CSS.escape(shown.current.id) +
-            '"][data-project="' +
-            CSS.escape(shown.current.projectId) +
-            '"]',
-        )
+      ? document.querySelector('.card[data-key="' + CSS.escape(runKey(shown.current)) + '"]')
       : null;
     if (shown.current) setSelectedStage(shown.current.column); // the Run may have moved while its detail was open
     const target = card instanceof HTMLElement ? card : null;
@@ -290,15 +288,15 @@ function App() {
       '?updated=' + encodeURIComponent(run.updated),
     );
   /**
-   * @param {RunView[]} runs
+   * @param {RunView[]} doomed
    * @param {string} message
    * @param {boolean} [doneOnly]
    */
-  const removeRuns = async (runs, message, doneOnly = false) => {
-    if (!(await ask(runs.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true))) return;
+  const removeRuns = async (doomed, message, doneOnly = false) => {
+    if (!(await ask(doomed.length === 1 ? 'Delete Run?' : 'Delete all Done Runs?', message, 'Delete', true))) return;
     /** @type {string[]} */
     const failed = [];
-    for (const run of runs) {
+    for (const run of doomed) {
       try {
         const url = runPath(run);
         const query = doneOnly ? '?doneOnly=true' : '';
@@ -371,44 +369,20 @@ function App() {
     poll();
   };
 
-  const entries = projects.flatMap((p) => p.runs);
-  // Runs waiting on the user are never hidden.
-  const isOlder = (/** @type {RunView} */ r) => {
-    const a = ageMs(r.updated);
-    return a !== null && a > OLD_MS && !r.waiting;
-  };
-  const older = entries.filter(isOlder);
-  // Newest first within a column; unreadable and undated records sort last. Waiting Runs first in every Stage.
-  const shownOf = (/** @type {ProjectView} */ p) =>
-    sortWaitingFirst(
-      p.runs
-        .filter((r) => showOlder || !isOlder(r))
-        .sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id)),
-    );
-  const collapsedOf = (/** @type {ProjectView} */ p) =>
-    !p.missing && (p.runs.length === 0 || (!opened.has(p.id) && saved[p.id] === true));
-  // Needs you only filters the Runs of a row; it never expands one.
-  const rows = sortProjects(projects, linked).map((entry) => {
-    const shownRuns = shownOf(entry);
-    return {
-      project: entry,
-      runs: onlyWaiting ? shownRuns.filter((r) => r.waiting) : shownRuns,
-      empty: !entry.missing && entry.runs.length === 0,
-      collapsed: collapsedOf(entry),
-      doneCount: entry.runs.filter((r) => r.column === 'done').length,
-    };
-  });
-  const runs = projects.flatMap(shownOf);
+  const allRuns = projects.flatMap((p) => p.runs);
+  const olderRuns = allRuns.filter(isOlder);
+  const rows = projectRows(projects, { linked, showOlder, onlyWaiting, opened, saved });
+  const shownRuns = projects.flatMap((p) => shownOf(p, showOlder));
   const defaultStage =
-    COLUMNS.find((c) => runs.some((r) => r.column === c.key && r.waiting))?.key ??
-    COLUMNS.find((c) => runs.some((r) => r.column === c.key))?.key ??
+    COLUMNS.find((c) => shownRuns.some((r) => r.column === c.key && r.waiting))?.key ??
+    COLUMNS.find((c) => shownRuns.some((r) => r.column === c.key))?.key ??
     COLUMNS[0].key;
   const stage = selectedStage ?? defaultStage;
   // The first view picks a Stage once and keeps it, so polling never moves the user to another Stage.
   useEffect(() => {
     if (selectedStage === null && loaded) setSelectedStage(defaultStage);
   }, [selectedStage, loaded, defaultStage]);
-  const openRun = runs.find((r) => runKey(r) === selectedKey) || null; // the Run whose detail is shown
+  const openRun = shownRuns.find((r) => runKey(r) === selectedKey) || null; // the Run whose detail is shown
   shown.current = openRun;
   useEffect(() => {
     if (selectedKey && !openRun) setSelectedKey(null);
@@ -421,11 +395,11 @@ function App() {
       returnFocus.current = null;
     }
   }, [!!openRun]);
-  const waiting = entries.filter((r) => r.waiting).length;
+  const waiting = allRuns.filter((r) => r.waiting).length;
   // A browser notification for each Run that starts waiting on the user while the page is open, in any Project; Runs already waiting at the first poll only count in the title.
   useEffect(() => {
     if (!loaded) return;
-    const now = new Set(entries.filter((r) => r.waiting).map(runKey));
+    const now = new Set(allRuns.filter((r) => r.waiting).map(runKey));
     if (known.current && notifyPermission() === 'granted') {
       for (const p of projects)
         for (const r of p.runs)
@@ -471,9 +445,7 @@ function App() {
         return next;
       }),
     toggleRow: (id) => {
-      const row = projects.find((p) => p.id === id);
-      if (!row) return;
-      const collapse = !collapsedOf(row);
+      const collapse = rows.find((r) => r.project.id === id)?.kind === 'open';
       setOpened((now) => {
         const next = new Set(now);
         next.delete(id);
@@ -518,10 +490,10 @@ function App() {
       );
     },
   };
-  const olderLabel = older.length ? (showOlder ? 'Hide older runs' : 'Show older (' + older.length + ')') : '';
+  const olderLabel = olderRuns.length ? (showOlder ? 'Hide older runs' : 'Show older (' + olderRuns.length + ')') : '';
 
   // Without any Run the page welcomes the user, unless a Project needs its row (several Projects, or one that is missing).
-  const welcome = loaded && !entries.length && projects.length <= 1 && !projects.some((p) => p.missing);
+  const welcome = loaded && !allRuns.length && projects.length <= 1 && !projects.some((p) => p.missing);
   const showsBoard = !welcome;
 
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />

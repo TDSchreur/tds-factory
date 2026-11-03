@@ -376,3 +376,68 @@ test('the Done expansion belongs to one Project when two Runs share an id', asyn
     await page.close();
   }
 });
+
+test('the Needs you filter never changes the Stage counts or the waiting badge of a collapsed row', async (t) => {
+  const projects = two();
+  projects[0].runs.push(
+    run({ id: 'w', title: 'Needs answer', column: 'build', waiting: true, status: 'waiting', reason: 'answer' }),
+  );
+  const page = await openPage(t, { projects });
+  if (!page) return;
+  const summary = () =>
+    run$(page, "return document.querySelector('.project-row .row-summary').innerText.replace(/\\s+/g, ' ').trim()");
+  try {
+    await clickToggle(page, 'alpha');
+    const before = await summary();
+    assert.equal(before, 'Define 0 Build 2 Check 0 Finish 0 Follow-up 0 Done 0 1 waiting');
+    await run$(page, "document.getElementById('needs-you').click()");
+    await page.waitFor("return document.getElementById('needs-you').getAttribute('aria-pressed') === 'true'");
+    assert.equal(await summary(), before);
+  } finally {
+    await page.close();
+  }
+});
+
+test('the Delete all button names its Project', async (t) => {
+  const done = (/** @type {string} */ id) => run({ id, title: 'Done ' + id, column: 'done', status: 'done' });
+  const page = await openPage(t, {
+    projects: [
+      { id: 'a1', name: 'alpha', runs: [done('x')] },
+      { id: 'b2', name: 'beta', runs: [done('y')] },
+    ],
+  });
+  if (!page) return;
+  try {
+    assert.deepEqual(
+      await run$(
+        page,
+        "return [...document.querySelectorAll('.project-row')].map(r => r.querySelector('.column[data-stage=done] > button').getAttribute('aria-label'))",
+      ),
+      ['Delete all Done Runs of alpha', 'Delete all Done Runs of beta'],
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test('a focused card is not hidden under the sticky page and Stage headers', async (t) => {
+  const projects = Array.from({ length: 6 }, (_, i) => ({
+    id: 'p' + i,
+    name: 'project' + i,
+    runs: [run({ id: 'r', title: 'Run ' + i, column: 'build' })],
+  }));
+  const page = await openPage(t, { projects }, { height: 500 });
+  if (!page) return;
+  try {
+    const clearance = await run$(
+      page,
+      `window.scrollTo(0, document.body.scrollHeight);
+       document.querySelector('.project-row .card').scrollIntoView({ block: 'nearest' });
+       const stages = document.querySelector('.stage-headers').getBoundingClientRect();
+       return document.querySelector('.project-row .card').getBoundingClientRect().top - stages.bottom;`,
+    );
+    assert.ok(clearance >= 0, 'the focused card starts below the Stage headers, not under them: ' + clearance);
+  } finally {
+    await page.close();
+  }
+});

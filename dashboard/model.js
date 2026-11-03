@@ -483,6 +483,14 @@ export function prStatusOf(run) {
 /** @param {{ id: string, projectId: string }} run */
 export const runKey = (run) => run.projectId + '/' + run.id;
 
+// The routes of one Run and of one of its files; they name the Project, since a Run id is only unique within one.
+/** @param {{ id: string, projectId: string }} run */
+export const runPath = (run) =>
+  '/api/projects/' + encodeURIComponent(run.projectId) + '/runs/' + encodeURIComponent(run.id);
+/** @param {{ id: string, projectId: string }} run @param {string} name */
+export const filePath = (run, name) =>
+  '/files/' + encodeURIComponent(run.projectId) + '/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name);
+
 // The Project rows in a stable alphabetical order, the linked Project first. Returns a new list.
 /**
  * @param {ProjectView[]} projects
@@ -496,6 +504,59 @@ export const sortProjects = (projects, first = '') =>
       a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id),
   );
+
+/** @param {RunView} run A Run that has not been touched for a week and waits on nobody. */
+export const isOlder = (run) => {
+  const age = ageMs(run.updated);
+  return age !== null && age > OLD_MS && !run.waiting;
+};
+
+// The Runs of one Project the page shows: older ones only with showOlder, newest first, waiting Runs first.
+/** @param {ProjectView} project @param {boolean} showOlder */
+export const shownOf = (project, showOlder) =>
+  sortWaitingFirst(
+    project.runs
+      .filter((r) => showOlder || !isOlder(r))
+      .sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id)),
+  );
+
+/** @typedef {'missing' | 'empty' | 'collapsed' | 'open'} RowKind */
+/**
+ * @typedef {object} RowView One Project row as the page shows it.
+ * @property {ProjectView} project
+ * @property {RowKind} kind A missing Project has no Runs to show, an empty one has none at all, a collapsed one shows only its summary.
+ * @property {RunView[]} cards The Runs of the open row, in order, narrowed by Needs you.
+ * @property {RunView[]} counted The Runs the collapsed summary counts: the shown Runs, never narrowed by Needs you.
+ * @property {number} doneCount The Done Runs of the Project, for Delete all.
+ */
+
+// The rows of the page, in order. Needs you narrows the cards of a row; it never expands a row or changes what its summary counts.
+/**
+ * @param {ProjectView[]} projects
+ * @param {object} view
+ * @param {string} view.linked the id of the Project that comes first
+ * @param {boolean} view.showOlder
+ * @param {boolean} view.onlyWaiting
+ * @param {Set<string>} view.opened ids of Projects the user expanded on this page
+ * @param {Record<string, boolean>} view.saved the saved collapse choices
+ * @returns {RowView[]}
+ */
+export const projectRows = (projects, { linked, showOlder, onlyWaiting, opened, saved }) =>
+  sortProjects(projects, linked).map((project) => {
+    const counted = shownOf(project, showOlder);
+    /** @type {RowKind} */
+    let kind = 'open';
+    if (project.missing) kind = 'missing';
+    else if (project.runs.length === 0) kind = 'empty';
+    else if (!opened.has(project.id) && saved[project.id] === true) kind = 'collapsed';
+    return {
+      project,
+      kind,
+      cards: onlyWaiting ? counted.filter((r) => r.waiting) : counted,
+      counted,
+      doneCount: project.runs.filter((r) => r.column === 'done').length,
+    };
+  });
 
 export const COLLAPSE_KEY = 'dashboard-collapsed-projects';
 

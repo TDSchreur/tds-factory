@@ -1,6 +1,6 @@
 // Presentational components of the Dashboard page. State, polling and actions live in app.js.
 /** @import { VNode } from 'preact' */
-/** @import { RunView, ProjectView } from './model.js' */
+/** @import { RunView, ProjectView, RowView } from './model.js' */
 /** @import { Span, ListItem } from './markdown.js' */
 import { Fragment, h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -19,6 +19,7 @@ import {
   modelOf,
   prStatusOf,
   progressOf,
+  filePath,
   runKey,
   safeUrl,
   ticketTilesOf,
@@ -308,7 +309,7 @@ export function Card({
   ]
     .filter(Boolean)
     .join(' ');
-  return html`<li class=${classes} data-id=${run.id} data-project=${run.projectId} tabindex="0" onClick=${() => onSelect(run)} onKeyDown=${(
+  return html`<li class=${classes} data-id=${run.id} data-project=${run.projectId} data-key=${runKey(run)} tabindex="0" onClick=${() => onSelect(run)} onKeyDown=${(
     /** @type {KeyboardEvent} */ e,
   ) => {
     if (e.key === 'Enter') onSelect(run);
@@ -358,15 +359,6 @@ export function Welcome({ onHelp }) {
  * @property {(projectId: string) => void} toggleRow
  * @property {(project: ProjectView) => Promise<void>} removeProject
  */
-/**
- * @typedef {object} RowView One Project row as the page shows it.
- * @property {ProjectView} project
- * @property {RunView[]} runs The Runs to show, already filtered and in order.
- * @property {boolean} empty The Project has no Run at all.
- * @property {boolean} collapsed
- * @property {number} doneCount The Done Runs of the Project, for Delete all.
- */
-
 // The id of an element made from a Project id.
 /** @param {string} projectId */
 const domId = (projectId) => 'project-' + projectId.replace(/[^A-Za-z0-9_-]/g, '-');
@@ -381,36 +373,33 @@ const domId = (projectId) => 'project-' + projectId.replace(/[^A-Za-z0-9_-]/g, '
  * @param {Actions} props.actions
  */
 function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, actions }) {
-  const { project, runs, empty, collapsed, doneCount } = row;
+  const { project, kind, cards, counted, doneCount } = row;
   const heading = domId(project.id);
-  const waiting = runs.filter((r) => r.waiting).length;
-  const showsColumns = !project.missing && !empty && !collapsed;
-  const name =
-    project.missing || empty
-      ? project.name
-      : html`<button type="button" class="row-toggle" aria-expanded=${String(!collapsed)} onClick=${() => actions.toggleRow(project.id)}>${project.name}</button>`;
-  return html`<section class=${'project-row' + (collapsed ? ' collapsed' : '')} data-project=${project.id} aria-labelledby=${heading}>
+  const waiting = counted.filter((r) => r.waiting).length;
+  const toggles = kind === 'open' || kind === 'collapsed';
+  const name = toggles
+    ? html`<button type="button" class="row-toggle" aria-expanded=${String(kind === 'open')} onClick=${() => actions.toggleRow(project.id)}>${project.name}</button>`
+    : project.name;
+  return html`<section class=${'project-row' + (kind === 'open' ? '' : ' collapsed')} data-project=${project.id} aria-labelledby=${heading}>
     <div class="project-head">
       <h2 id=${heading}>${name}</h2>
-      ${empty && !project.missing && html`<span class="row-note">No Runs</span>`}
+      ${kind === 'empty' && html`<span class="row-note">No Runs</span>`}
       ${
-        project.missing &&
+        kind === 'missing' &&
         html`<span class="row-warning"><span aria-hidden="true">⚠ </span>The folder of this Project is missing. Nothing was deleted.</span><button type="button" onClick=${() => actions.removeProject(project)} aria-label=${'Remove the Project ' + project.name + ' from the Dashboard'}>Remove</button>`
       }
       ${
-        !project.missing &&
-        !empty &&
-        collapsed &&
-        html`<ul class="row-summary" aria-label="Runs per Stage">${COLUMNS.map((c) => html`<li key=${c.key}>${c.label} <span class="stage-count">${runs.filter((r) => r.column === c.key).length}</span></li>`)}${waiting > 0 && html`<li class="row-waiting">${waiting} waiting</li>`}</ul>`
+        kind === 'collapsed' &&
+        html`<ul class="row-summary" aria-label="Runs per Stage">${COLUMNS.map((c) => html`<li key=${c.key}>${c.label} <span class="stage-count">${counted.filter((r) => r.column === c.key).length}</span></li>`)}${waiting > 0 && html`<li class="row-waiting">${waiting} waiting</li>`}</ul>`
       }
     </div>
     ${
-      showsColumns &&
+      kind === 'open' &&
       html`<div class="project-columns">${COLUMNS.map((c) => {
-        const mine = runs.filter((r) => r.column === c.key);
+        const mine = cards.filter((r) => r.column === c.key);
         return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>
         <div class="column-name" aria-hidden="true">${c.label}</div>
-        ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
+        ${c.key === 'done' && doneCount > 0 && html`<button type="button" aria-label=${'Delete all Done Runs of ' + project.name} onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
         <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
         ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
       </div>`;
@@ -430,10 +419,10 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
  * @param {Actions} props.actions
  */
 export function Board({ rows, onlyWaiting, stage, onStage, selectedKey, expandedKeys, actions }) {
-  const all = rows.flatMap((row) => row.runs);
+  const visibleRuns = rows.flatMap((row) => row.cards);
   return html`<div class="board-wrap">
   <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
-    const mine = all.filter((r) => r.column === c.key);
+    const mine = visibleRuns.filter((r) => r.column === c.key);
     return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
       <span>${c.label} <span class="stage-count">(${mine.length})</span></span>${' '}
       ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
@@ -655,15 +644,7 @@ export function Detail({ run, projectName, onClose, onCheckPr, onGrant }) {
     let live = true;
     Promise.all(
       run.files.map((/** @type {string} */ name) =>
-        fetch(
-          '/files/' +
-            encodeURIComponent(run.projectId) +
-            '/' +
-            encodeURIComponent(run.id) +
-            '/' +
-            encodeURIComponent(name),
-          { cache: 'no-store' },
-        )
+        fetch(filePath(run, name), { cache: 'no-store' })
           .then((res) => {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.text();
