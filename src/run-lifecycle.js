@@ -143,9 +143,28 @@ export function updateRun(projectDir, id, data) {
     if (data.status === 'done') throw new Error('a Run is completed with run complete');
     if ('status' in data && oneOf(['done', 'abandoned'], old.status))
       throw new Error(`a ${old.status} Run cannot change status`);
-    const next = apply(old, data);
+    const next = apply(old, ticketCount(old, data));
     return data.status === 'abandoned' ? moveVisit(next, null) : next;
   });
+}
+
+// The count of Tickets follows the Ticket links: a new list sets it, and a count that disagrees with the list is refused.
+/**
+ * @param {Run} old
+ * @param {Record<string, any>} data
+ * @returns {Record<string, any>}
+ */
+function ticketCount(old, data) {
+  const list = 'tickets' in data ? data.tickets : old.tickets;
+  const links = Array.isArray(list) ? list.length : 0;
+  if ('tickets' in data || (links > 0 && 'tickets_total' in data)) {
+    if ('tickets_total' in data && data.tickets_total !== links)
+      throw new Error(`tickets_total (${data.tickets_total}) does not match the ${links} Tickets`);
+    const done = data.tickets_done ?? old.tickets_done ?? 0;
+    if ('tickets' in data && links < done) throw new Error(`tickets_done (${done}) is more than the ${links} Tickets`);
+    return { ...data, tickets_total: links };
+  }
+  return data;
 }
 
 /**
