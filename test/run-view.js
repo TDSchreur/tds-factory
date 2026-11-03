@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
  */
 export const runView = (fields = {}) => ({
   id: 'r',
+  projectId: 'p',
   unreadable: false,
   title: 'r',
   activity: '',
@@ -60,9 +61,11 @@ export const strayView = (fields) => JSON.parse(JSON.stringify(fields));
  * @returns {Promise<RunView[]>}
  */
 export async function viewsOf(dash) {
-  const body = await (await fetch(`${dash.url}/api/views`)).json();
-  assert.ok(Array.isArray(body), '/api/views answers with a list');
-  return body;
+  const body = /** @type {{ projects?: { runs: RunView[] }[] }} */ (
+    await (await fetch(`${dash.url}/api/views`)).json()
+  );
+  assert.ok(body.projects, '/api/views answers with the Projects');
+  return body.projects.flatMap((project) => project.runs);
 }
 
 /**

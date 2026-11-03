@@ -79,7 +79,7 @@ const review = (cwd, id, security = 'pass') => {
 const waiting = (cwd, id) =>
   ok(run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
 /**
- * @param {{ url: string }} dash
+ * @param {{ url: string, projectId: string }} dash
  * @param {string} id
  * @param {string} action
  * @param {string} [updated]
@@ -89,7 +89,7 @@ async function post(dash, id, action, updated) {
   if (action === 'accept' && updated === undefined)
     stamp = (await viewsOf(dash)).find((r) => r.id === id)?.updated ?? '';
   const query = action === 'accept' ? `?updated=${encodeURIComponent(stamp)}` : '';
-  const response = await fetch(`${dash.url}/api/runs/${id}/${action}${query}`, {
+  const response = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}/${action}${query}`, {
     method: 'POST',
     headers: await writeHeaders(dash),
   });
@@ -263,14 +263,14 @@ function atLimit() {
  */
 const updatedOf = async (dash, id) => (await viewsOf(dash)).find((r) => r.id === id)?.updated ?? '';
 /**
- * @param {{ url: string }} dash
+ * @param {{ url: string, projectId: string }} dash
  * @param {string} id
  * @param {string} [query]
  * @param {Record<string, string>} [headers]
  */
 const grant = async (dash, id, query, headers) => {
   const response = await fetch(
-    `${dash.url}/api/runs/${id}/extra-loop${query ?? `?updated=${encodeURIComponent(await updatedOf(dash, id))}`}`,
+    `${dash.url}/api/projects/${dash.projectId}/runs/${id}/extra-loop${query ?? `?updated=${encodeURIComponent(await updatedOf(dash, id))}`}`,
     { method: 'POST', headers: headers ?? (await writeHeaders(dash)) },
   );
   return { status: response.status, text: await response.text() };
@@ -379,7 +379,7 @@ while (!fs.existsSync(${JSON.stringify(release)}) && Date.now() < end) Atomics.w
     const syncing = post(dash, id, 'sync').finally(() => (settled = true));
     for (let i = 0; i < 250 && !existsSync(started); i++) await sleep(20);
     assert.ok(existsSync(started), 'the git call is running');
-    const other = await fetch(`${dash.url}/api/runs`);
+    const other = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs`);
     assert.equal(other.status, 200);
     assert.equal(settled, false, 'sync is still waiting for git when the other request is answered');
     writeFileSync(release, '');
@@ -437,13 +437,16 @@ test('a second action on a busy Run is answered 409 and the Run is released afte
       const busy = await post(dash, id, action, 'x');
       assert.deepEqual(busy, { status: 409, text: 'another action on this Run is already running' }, action);
     }
-    const merge = await fetch(`${dash.url}/api/runs/${id}/merge`, {
+    const merge = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}/merge`, {
       method: 'POST',
       headers: await writeHeaders(dash),
     });
     assert.equal(merge.status, 409);
     assert.equal(await merge.text(), 'another action on this Run is already running');
-    const del = await fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
+    const del = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}`, {
+      method: 'DELETE',
+      headers: await writeHeaders(dash),
+    });
     assert.equal(del.status, 409);
     assert.equal(await del.text(), 'another action on this Run is already running');
     held.open();

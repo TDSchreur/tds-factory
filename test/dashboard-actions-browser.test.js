@@ -53,7 +53,7 @@ test('Sync asks first, then posts with the session token and reports the result'
     assert.deepEqual(page.calls, []);
     await confirmed(page, '[aria-label="Sync Building with origin"]', 'Sync with origin?');
     assert.deepEqual(await answer(page, 'Synced'), ['Synced', 'Synced.']);
-    assert.deepEqual(page.calls, ['POST /api/runs/b/sync']);
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/b/sync']);
     assert.deepEqual(page.tokens, ['test-token']);
   } finally {
     await page.close();
@@ -107,7 +107,7 @@ test('Accept Check is offered only to a Check that waits on you, and names the v
     assert.match((await dialog(page))[1], /Security: fail/);
     assert.deepEqual(await answer(page, 'Accepted'), ['Accepted', 'Accepted.']);
     assert.equal(page.calls.length, 1);
-    assert.match(page.calls[0], /^POST \/api\/runs\/w\/accept\?updated=/);
+    assert.match(page.calls[0], /^POST \/api\/projects\/p\/runs\/w\/accept\?updated=/);
     assert.equal(await page.execute('return document.querySelectorAll(\'[aria-label$="with origin"]\').length'), 1);
   } finally {
     await page.close();
@@ -127,14 +127,14 @@ test('Clean up is offered for a merged Done Run and shows why a clean-up is refu
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelectorAll('[aria-expanded]').forEach(b => b.click())");
+    await page.execute("document.querySelectorAll('.card [aria-expanded]').forEach(b => b.click())");
     assert.equal(await page.execute('return document.querySelectorAll(\'[aria-label^="Clean up"]\').length'), 1);
     await confirmed(page, '[aria-label="Clean up merged"]', 'Clean up Run?');
     assert.deepEqual(await answer(page, 'Could not clean up the Run'), [
       'Could not clean up the Run',
       'kept: the branch has commits that are not in the merged PR',
     ]);
-    assert.deepEqual(page.calls, ['POST /api/runs/merged/clean']);
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/merged/clean']);
   } finally {
     await page.close();
   }
@@ -171,7 +171,7 @@ test('Needs you: a Run that starts waiting raises a browser notification, and on
     ];
     await page.waitFor('return window.__notes.length === 1');
     assert.deepEqual(await page.execute('return window.__notes'), [
-      ['Needs you: Now waiting', 'confirm the shared understanding', 'new'],
+      ['Needs you in p: Now waiting', 'confirm the shared understanding', 'p/new'],
     ]);
     await page.wait(2500);
     assert.equal(await page.execute('return window.__notes.length'), 1);

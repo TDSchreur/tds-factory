@@ -78,7 +78,7 @@ after(async () => {
  * @param {Dash} [d]
  * @returns {Promise<Listed[]>}
  */
-const list = async (d = dash) => JSON.parse((await get(d, '/api/runs')).body);
+const list = async (d = dash) => JSON.parse((await get(d, `/api/projects/${d.projectId}/runs`)).body);
 /**
  * @template {{ id: string }} T
  * @param {T[]} items
@@ -107,13 +107,13 @@ test('record with missing or unknown fields is returned as is', async () => {
 });
 
 test('missing .factory/ gives an empty list', async () => {
-  const res = await get(emptyDash, '/api/runs');
+  const res = await get(emptyDash, `/api/projects/${emptyDash.projectId}/runs`);
   assert.equal(res.status, 200);
   assert.deepEqual(JSON.parse(res.body), []);
 });
 
 test('file route returns a Markdown file of a Run', async () => {
-  const res = await get(dash, '/files/2026-01-01-good/define.md');
+  const res = await get(dash, `/files/${dash.projectId}/2026-01-01-good/define.md`);
   assert.equal(res.status, 200);
   assert.equal(res.body, '# Define summary\n');
 });
@@ -127,18 +127,18 @@ test('list names the Markdown files of each Run, sorted, without run.json', asyn
 
 test('file route rejects traversal and anything outside a Run', async () => {
   const bad = [
-    '/files/2026-01-01-good/../../../secret.md',
-    '/files/..%2F..%2F..%2Fsecret.md',
-    '/files/2026-01-01-good/..%2F..%2F..%2Fsecret.md',
-    '/files/2026-01-01-good/%2e%2e%2f%2e%2e%2f%2e%2e%2fsecret.md',
-    '/files/2026-01-01-good/%2Fetc%2Fpasswd',
-    '/files//etc/passwd',
-    '/files/2026-01-01-good/..%5C..%5Csecret.md',
-    '/files/2026-01-01-good/define.md%00.txt',
-    '/files/../../secret.md',
-    '/files/2026-01-01-good/run.json',
-    '/files/2026-01-01-good/nope.md',
-    '/files/%E0%A4%A',
+    `/files/${dash.projectId}/2026-01-01-good/../../../secret.md`,
+    `/files/${dash.projectId}/..%2F..%2F..%2Fsecret.md`,
+    `/files/${dash.projectId}/2026-01-01-good/..%2F..%2F..%2Fsecret.md`,
+    `/files/${dash.projectId}/2026-01-01-good/%2e%2e%2f%2e%2e%2f%2e%2e%2fsecret.md`,
+    `/files/${dash.projectId}/2026-01-01-good/%2Fetc%2Fpasswd`,
+    `/files/${dash.projectId}//etc/passwd`,
+    `/files/${dash.projectId}/2026-01-01-good/..%5C..%5Csecret.md`,
+    `/files/${dash.projectId}/2026-01-01-good/define.md%00.txt`,
+    `/files/${dash.projectId}/../../secret.md`,
+    `/files/${dash.projectId}/2026-01-01-good/run.json`,
+    `/files/${dash.projectId}/2026-01-01-good/nope.md`,
+    `/files/${dash.projectId}/%E0%A4%A`,
   ];
   for (const p of bad) {
     const res = await get(dash, p);
@@ -169,11 +169,14 @@ test('info route names the project directory the Dashboard serves', async () => 
   const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
   const info = JSON.parse(res.body);
   assert.match(info.token, /^[0-9a-f]{64}$/);
-  assert.deepEqual({ ...info, token: undefined }, { project, version, token: undefined });
+  assert.deepEqual(
+    { ...info, token: undefined },
+    { project, version, pid: process.pid, shared: false, token: undefined },
+  );
   assert.notEqual(version, '99.88.77');
   assert.deepEqual(
     { ...JSON.parse((await get(emptyDash, '/api/info')).body), token: undefined },
-    { project: empty, version, token: undefined },
+    { project: empty, version, pid: process.pid, shared: false, token: undefined },
   );
 });
 
@@ -195,7 +198,13 @@ const getAs = (d, path, host) =>
 test('a non-GET with a foreign Host is still rejected', async () => {
   const status = await new Promise((resolve, reject) => {
     const req = http.request(
-      { host: '127.0.0.1', port: dash.port, path: '/api/runs', method: 'POST', headers: { host: 'evil.example' } },
+      {
+        host: '127.0.0.1',
+        port: dash.port,
+        path: `/api/projects/${dash.projectId}/runs`,
+        method: 'POST',
+        headers: { host: 'evil.example' },
+      },
       (res) => {
         res.resume();
         resolve(res.statusCode);
@@ -208,7 +217,12 @@ test('a non-GET with a foreign Host is still rejected', async () => {
 });
 
 test('a foreign Host header gets 403 on every route; loopback names still work', async () => {
-  const routes = ['/', '/api/runs', '/api/info', '/files/2026-01-01-good/define.md'];
+  const routes = [
+    '/',
+    `/api/projects/${dash.projectId}/runs`,
+    '/api/info',
+    `/files/${dash.projectId}/2026-01-01-good/define.md`,
+  ];
   for (const path of routes) {
     assert.equal(await getAs(dash, path, 'evil.example'), 403, path);
     assert.equal(await getAs(dash, path, `evil.example:${dash.port}`), 403, path);
@@ -225,7 +239,7 @@ test('server listens on loopback only', () => {
 });
 
 test('unsupported methods are rejected', async () => {
-  for (const path of ['/api/runs', '/api/info']) {
+  for (const path of [`/api/projects/${dash.projectId}/runs`, '/api/info']) {
     assert.equal(
       (await fetch(`${dash.url}${path}`, { method: 'POST', headers: await writeHeaders(dash) })).status,
       405,
@@ -236,12 +250,12 @@ test('unsupported methods are rejected', async () => {
 
 test('every write needs the same Origin and the session token', async () => {
   const paths = [
-    ['DELETE', '/api/runs/x'],
-    ['POST', '/api/runs/x/merge'],
-    ['POST', '/api/runs/x/sync'],
-    ['POST', '/api/runs/x/clean'],
-    ['POST', '/api/runs/x/accept'],
-    ['POST', '/api/runs'],
+    ['DELETE', `/api/projects/${dash.projectId}/runs/x`],
+    ['POST', `/api/projects/${dash.projectId}/runs/x/merge`],
+    ['POST', `/api/projects/${dash.projectId}/runs/x/sync`],
+    ['POST', `/api/projects/${dash.projectId}/runs/x/clean`],
+    ['POST', `/api/projects/${dash.projectId}/runs/x/accept`],
+    ['POST', `/api/projects/${dash.projectId}/runs`],
   ];
   const good = await writeHeaders(dash);
   for (const [method, path] of paths) {
@@ -261,7 +275,10 @@ test('every write needs the same Origin and the session token', async () => {
       );
     }
   }
-  assert.equal((await fetch(`${dash.url}/api/runs/x/sync`, { method: 'POST', headers: good })).status, 404);
+  assert.equal(
+    (await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/x/sync`, { method: 'POST', headers: good })).status,
+    404,
+  );
 });
 
 test('the server sends no CORS headers and does not answer a preflight', async () => {
@@ -270,7 +287,7 @@ test('the server sends no CORS headers and does not answer a preflight', async (
     [...info.headers.keys()].some((name) => name.startsWith('access-control-')),
     false,
   );
-  const options = await fetch(`${dash.url}/api/runs/x/sync`, {
+  const options = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/x/sync`, {
     method: 'OPTIONS',
     headers: { Origin: 'http://evil.example', 'Access-Control-Request-Method': 'POST' },
   });
@@ -293,7 +310,7 @@ test('a token header of the right length in other bytes is refused without crash
     socket.write(
       Buffer.concat([
         Buffer.from(
-          `POST /api/runs/x/sync HTTP/1.1\r\nHost: 127.0.0.1:${dash.port}\r\nOrigin: ${dash.url}\r\nConnection: close\r\nX-Factory-Token: `,
+          `POST /api/projects/${dash.projectId}/runs/x/sync HTTP/1.1\r\nHost: 127.0.0.1:${dash.port}\r\nOrigin: ${dash.url}\r\nConnection: close\r\nX-Factory-Token: `,
         ),
         Buffer.alloc(64, 0xe9),
         Buffer.from('\r\n\r\n'),
@@ -301,7 +318,10 @@ test('a token header of the right length in other bytes is refused without crash
     );
   });
   assert.equal(status, '403');
-  assert.equal((await fetch(`${dash.url}/api/runs/x/sync`, { method: 'POST', headers: good })).status, 404);
+  assert.equal(
+    (await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/x/sync`, { method: 'POST', headers: good })).status,
+    404,
+  );
 });
 
 test('the session token differs between servers and stays the same within one', async () => {
@@ -322,10 +342,13 @@ test('deletion removes completed and active Runs', async () => {
   run('active-to-delete', { 'run.json': JSON.stringify({ status: 'running' }) });
   /** @param {string} id */
   const request = async (id) =>
-    fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
+    fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}`, {
+      method: 'DELETE',
+      headers: await writeHeaders(dash),
+    });
   assert.equal((await request('2026-02-01-finished')).status, 200);
   assert.equal((await request('active-to-delete')).status, 200);
-  assert.equal((await get(dash, '/files/2026-02-01-finished/finish.md')).status, 404);
+  assert.equal((await get(dash, `/files/${dash.projectId}/2026-02-01-finished/finish.md`)).status, 404);
   assert.ok((await list()).some((r) => r.id === '2026-01-01-good'));
 });
 
@@ -337,17 +360,23 @@ test('deletion rejects foreign origins and traversal', async () => {
    */
   const request = async (path, origin = dash.url) =>
     fetch(`${dash.url}${path}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
-  assert.equal((await request('/api/runs/2026-02-02-abandoned', 'http://evil.example')).status, 403);
-  assert.equal((await request('/api/runs/%2e%2e%2fsecret')).status, 400);
-  assert.equal((await request('/api/runs/2026-02-02-abandoned')).status, 200);
+  assert.equal(
+    (await request(`/api/projects/${dash.projectId}/runs/2026-02-02-abandoned`, 'http://evil.example')).status,
+    403,
+  );
+  assert.equal((await request(`/api/projects/${dash.projectId}/runs/%2e%2e%2fsecret`)).status, 400);
+  assert.equal((await request(`/api/projects/${dash.projectId}/runs/2026-02-02-abandoned`)).status, 200);
 });
 
 test('terminal Runs with older directory names can be deleted', async () => {
   run('2026-02-03_Ünicode legacy!.run', { 'run.json': JSON.stringify({ status: 'done' }) });
-  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`, {
-    method: 'DELETE',
-    headers: await writeHeaders(dash),
-  });
+  const response = await fetch(
+    `${dash.url}/api/projects/${dash.projectId}/runs/${encodeURIComponent('2026-02-03_Ünicode legacy!.run')}`,
+    {
+      method: 'DELETE',
+      headers: await writeHeaders(dash),
+    },
+  );
   assert.equal(response.status, 200);
 });
 
@@ -357,7 +386,7 @@ test('deleting a Run with a whitespace-padded ID preserves the similarly named R
   const padded = (await viewsOf(dash)).find((r) => r.title === 'Padded');
   assert.ok(padded, 'the padded Run has a view');
   assert.equal(padded.id, ' padded ');
-  const response = await fetch(`${dash.url}/api/runs/${encodeURIComponent(padded.id)}`, {
+  const response = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${encodeURIComponent(padded.id)}`, {
     method: 'DELETE',
     headers: await writeHeaders(dash),
   });

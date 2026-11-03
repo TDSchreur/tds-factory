@@ -18,7 +18,7 @@ if (!command) {
 const dir = realpathSync(mkdtempSync(join(tmpdir(), 'tds-run-')));
 const remove = () => rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 /** @type {Record<string, string | undefined>} */
-const env = { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir };
+const env = { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir, TDS_FACTORY_CONFIG_DIR: join(dir, 'factory-config') };
 // The tests set up their own home folders; a developer's CLAUDE_CONFIG_DIR must not leak into them.
 delete env.CLAUDE_CONFIG_DIR;
 if (process.platform === 'win32') {
