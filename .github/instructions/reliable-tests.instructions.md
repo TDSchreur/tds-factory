@@ -19,6 +19,7 @@ A test that passes on Linux and fails once in twenty runs on Windows costs more 
 
 - Ask the OS for a free port (port 0) and read the port back; never hard-code one.
 - Give every test its own temporary folder through the helpers in `test/git-repo.js`; never share a fixed path, file name or environment variable between tests, and restore what you change in `process.env`.
+- Do not inherit the environment of the machine: `test/git-repo.js` removes the `GIT_CONFIG_*` variables, so a setting injected by an agent host or CI cannot override a test repository's own config. Set what a test needs explicitly.
 - Do not depend on test order or on a file another test leaves behind. Tests in one file may run in any order.
 - A process or server a test starts is stopped in `finally` or `t.after`, and the test waits for it to exit before it removes its files.
 
