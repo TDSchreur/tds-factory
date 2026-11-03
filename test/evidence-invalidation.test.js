@@ -21,7 +21,16 @@ const record = () => ({
   accepted: { head: 'h' },
   project_results: { a11y: { verdict: 'pass', head: 'h', attempt: 1 } },
   metrics: { version: 1, visits: [], verdicts: [{ axis: 'standards', value: 'pass', head: 'h', at: '' }] },
-  follow_up: { pr: '', head: 'h', observed: '', checks: [], failures: [], pending: false, threads: [] },
+  follow_up: {
+    pr: '',
+    head: 'h',
+    observed: '',
+    conflicts: false,
+    checks: [],
+    failures: [],
+    pending: false,
+    threads: [],
+  },
 });
 
 test('clearEvidence drops every current Evidence field and keeps the rest, including history', () => {

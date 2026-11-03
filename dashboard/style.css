@@ -310,9 +310,14 @@
   .badge.open { color: var(--colorBrandForegroundLink); border-color: var(--colorBrandStroke1); }
   .badge.merged { color: var(--colorPaletteGreenForeground1); border-color: var(--colorPaletteGreenBorder2); }
   .badge.closed { color: var(--colorPaletteRedForeground1); border-color: var(--colorPaletteRedBorder2); }
+  .pr-details h4 { margin: var(--spacingVerticalS) 0 var(--spacingVerticalXS); }
+  .pr-details ul, .pr-details ol { margin: 0; padding-left: var(--spacingHorizontalXL); overflow-wrap: anywhere; }
+  .pr-details .fix { margin: var(--spacingVerticalXS) 0; }
+  .fix-reason, .copy-status { color: var(--colorNeutralForeground2); }
+  .copy-field { max-width: 100%; }
+  .pr-details .bad { color: var(--colorPaletteRedForeground1); }
   .actions { display: flex; flex-wrap: wrap; gap: var(--spacingHorizontalS); margin-top: var(--spacingVerticalM); }
   .actions button { padding: var(--spacingVerticalXS) var(--spacingHorizontalL); }
-  .merge-note { align-self: center; font-size: var(--fontSizeBase200); color: var(--colorNeutralForeground2); }
   .actions .primary { background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); border-color: transparent; }
   .actions .primary:hover { background: var(--colorBrandBackgroundHover); }
   .actions .primary:active { background: var(--colorBrandBackgroundPressed); }

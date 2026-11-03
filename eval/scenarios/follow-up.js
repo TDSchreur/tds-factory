@@ -38,6 +38,7 @@ export function setup(fx) {
           repository: {
             pullRequest: {
               headRefOid: head,
+              mergeable: 'MERGEABLE',
               commits: {
                 nodes: [
                   {
@@ -84,7 +85,7 @@ export function setup(fx) {
   };
   writeFileSync(fx.env.EVAL_GH_STATE, JSON.stringify(state));
   return {
-    prompt: `Use Follow-up on Factory Run ${id}, then stop once the scoped Rework has started. Do not open a new PR.`,
+    prompt: `Use Follow-up on Factory Run ${id} for the failing check (scope checks), then stop once the scoped Rework has started. Do not open a new PR.`,
   };
 }
 

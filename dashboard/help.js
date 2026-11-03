@@ -61,10 +61,6 @@ export const HELP_SECTIONS = [
     title: 'Actions',
     items: [
       {
-        term: 'Merge',
-        text: 'squash and merge the open pull request of a Done Run. Shown on a Done Run with an open pull request.',
-      },
-      {
         term: 'Sync',
         text: 'rebase the Run branch onto the default branch of origin. Shown while a Run is running in Build or Check.',
       },
@@ -74,6 +70,14 @@ export const HELP_SECTIONS = [
         text: 'continue to Finish with a Check that is not clean. Shown while a Run waits in Check.',
       },
       { term: 'Grant extra loop', text: 'allow one more Check loop. Shown while a Run waits at the Check loop limit.' },
+      {
+        term: 'Check PR',
+        text: 'read the pull request now and list its problems in the Run detail. Shown on a Done Run with an open pull request and on a Run in Follow-up.',
+      },
+      {
+        term: 'Fix',
+        text: 'send the Run back to Build for one problem (conflicts, checks or comments), then Copy agent prompt hands it to an agent. Shown next to the problem in the Run detail of a GitHub pull request; at the Check loop limit it grants an extra loop first.',
+      },
     ],
   },
 ];

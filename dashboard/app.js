@@ -1,11 +1,12 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
-/** @import { RunView, ProjectView } from './model.js' */
+/** @import { RunView, ProjectView, PrDetailsState } from './model.js' */
 /** @import { ConfirmRequest, Actions } from './components.js' */
 import { render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from './components.js';
 import {
   COLUMNS,
+  atLoopCap,
   POLL_MS,
   folderName,
   loadCollapsed,
@@ -48,6 +49,8 @@ function App() {
   const [opened, setOpened] = useState(() => new Set(linked ? [linked] : []));
   const [request, setRequest] = useState(/** @type {ConfirmRequest | null} */ (null));
   const [helpOpen, setHelpOpen] = useState(false);
+  const [prDetails, setPrDetails] = useState(/** @type {PrDetailsState | null} */ (null)); // the last Check PR answer
+  const detailsCall = useRef(0); // a slow answer of an earlier Check PR never replaces a later one
   const [onlyWaiting, setOnlyWaiting] = useState(false); // the Needs you filter; not saved
   const queue = useRef(Promise.resolve());
   /** @type {{ current: ConfirmRequest | null }} */
@@ -271,6 +274,50 @@ function App() {
     );
   };
 
+  // Fix: starts a Follow-up scoped to one problem of the pull request; at the Check loop limit the click also grants an extra loop.
+  const fixRun = async (/** @type {RunView} */ run, /** @type {string} */ scope) => {
+    const grant = atLoopCap(run);
+    const what = { conflicts: 'merge conflicts', checks: 'failing checks', comments: 'unresolved review comments' }[
+      /** @type {'conflicts' | 'checks' | 'comments'} */ (scope)
+    ];
+    if (
+      !(await ask(
+        grant ? 'Grant an extra loop and fix?' : 'Fix ' + scope + '?',
+        '"' +
+          run.title +
+          '" goes back to Build as a Rework for the ' +
+          what +
+          ' only; other problems stay on the pull request.' +
+          (grant
+            ? ' It has used its ' +
+              run.loopCap +
+              ' Check loops, so this first raises the limit to ' +
+              ((run.loopCap ?? 0) + 1) +
+              '.'
+            : '') +
+          ' Then hand it to an agent with the prompt the card offers.',
+        grant ? 'Grant extra loop and fix' : 'Fix ' + scope,
+        false,
+      ))
+    )
+      return;
+    const query =
+      '?scope=' +
+      encodeURIComponent(scope) +
+      '&updated=' +
+      encodeURIComponent(run.updated) +
+      (grant ? '&grant=true' : '');
+    try {
+      const response = await write('POST', runPath(run) + '/follow-up' + query);
+      const text = await response.text();
+      await ask(response.ok ? 'Fix started' : 'Could not start the Fix', text, 'Close', false, true);
+      if (response.ok) setPrDetails(null); // what was shown is out of date now
+    } catch {
+      await ask('Could not start the Fix', run.title, 'Close', false, true);
+    }
+    poll();
+  };
+
   const grantRun = (/** @type {RunView} */ run) =>
     runAction(
       run,
@@ -362,30 +409,6 @@ function App() {
       if (!response.ok) await ask('Could not remove missing Projects', await response.text(), 'Close', false, true);
     } catch {
       await ask('Could not remove missing Projects', 'Try again.', 'Close', false, true);
-    }
-    poll();
-  };
-
-  const mergeRun = async (/** @type {RunView} */ run) => {
-    let checks = 'GitHub checks: unavailable';
-    try {
-      const response = await fetch(runPath(run) + '/merge-checks', { cache: 'no-store' });
-      if (response.ok) checks = await response.text();
-    } catch {}
-    if (
-      !(await ask(
-        'Squash and merge?',
-        'Merge the pull request for "' + run.title + '"?\n' + run.pr + '\n\n' + checks,
-        'Squash and merge',
-        false,
-      ))
-    )
-      return;
-    try {
-      const response = await write('POST', runPath(run) + '/merge');
-      if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
-    } catch {
-      await ask('Could not merge', run.title, 'Close', false, true);
     }
     poll();
   };
@@ -485,7 +508,25 @@ function App() {
       } catch {}
       poll();
     },
-    merge: mergeRun,
+    checkDetails: async (run) => {
+      const key = runKey(run);
+      const call = ++detailsCall.current;
+      const settle = (/** @type {Omit<PrDetailsState, 'key'>} */ next) => {
+        if (call === detailsCall.current) setPrDetails({ key, ...next });
+      };
+      setSelectedStage(run.column);
+      setSelectedKey(key); // opens the Run detail on the Pull request section
+      setPrDetails({ key, loading: true });
+      try {
+        const response = await fetch(runPath(run) + '/pr-details', { cache: 'no-store' });
+        const text = await response.text();
+        if (!response.ok) return settle({ loading: false, error: text || 'HTTP ' + response.status });
+        settle({ loading: false, data: JSON.parse(text) });
+      } catch (err) {
+        settle({ loading: false, error: err instanceof Error ? err.message : 'the server cannot be reached' });
+      }
+    },
+    fix: fixRun,
     sync: syncRun,
     clean: cleanRun,
     accept: acceptRun,
@@ -522,7 +563,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

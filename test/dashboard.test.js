@@ -252,7 +252,6 @@ test('unsupported methods are rejected', async () => {
 test('every write needs the same Origin and the session token', async () => {
   const paths = [
     ['DELETE', `/api/projects/${dash.projectId}/runs/x`],
-    ['POST', `/api/projects/${dash.projectId}/runs/x/merge`],
     ['POST', `/api/projects/${dash.projectId}/runs/x/sync`],
     ['POST', `/api/projects/${dash.projectId}/runs/x/clean`],
     ['POST', `/api/projects/${dash.projectId}/runs/x/accept`],

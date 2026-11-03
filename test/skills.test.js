@@ -436,7 +436,9 @@ test('the main file stays small and names every reference file where it is neede
   assert.ok(Buffer.byteLength(main) < 18_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`);
   assert.deepEqual(Object.keys(references), [
     'check.md',
+    'continue.md',
     'define.md',
+    'doctor-checks.md',
     'exit-checklist.md',
     'fast-track.md',
     'finish.md',
@@ -558,4 +560,18 @@ test('the scratch-ignore procedure is exact about line endings, symlinks and the
   assert.match(fix, /does not end with a newline, add one first/);
   assert.match(fix, /is a symlink, do not write it/);
   assert.doesNotMatch(references['finish.md'], /In the PR body, name a Local tracker/);
+});
+
+test('/factory continue resumes a Run and the scoped Follow-up rules are in the Skill', () => {
+  assert.match(main, /\/factory continue <run id>/);
+  assert.ok(main.includes('references/continue.md'), 'continue.md is linked from SKILL.md');
+  const cont = references['continue.md'];
+  assert.match(cont, /Follow-up Rework ready for an agent/);
+  assert.match(cont, /`status` back to `running`/);
+  assert.match(cont, /references\/follow-up\.md/);
+  const followUp = references['follow-up.md'];
+  assert.match(followUp, /--scope conflicts\|checks\|comments/);
+  assert.match(followUp, /`conflicts` Rework start with `tds-factory run sync/);
+  assert.match(followUp, /every comment you did not act on, with the reason/);
+  assert.match(followUp, /never post replies or resolve threads/i);
 });

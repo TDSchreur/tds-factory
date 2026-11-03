@@ -17,7 +17,6 @@ test('the help text names every Stage, both tracks, the Check verdicts and the a
     'fail',
     'skipped',
     'Left open',
-    'Merge',
     'Sync',
     'Clean up',
     'Accept Check',
@@ -43,17 +42,28 @@ test('the help text uses no Avoid term of the glossary and asks for no external 
   assert.doesNotMatch(text, /https?:\/\//);
 });
 
+test('the help has no Merge entry, because the Dashboard never merges', () => {
+  const section = HELP_SECTIONS.find((s) => s.id === 'actions');
+  assert.ok(section, 'the help has an actions section');
+  assert.equal(
+    section.items.some((item) => /merge$/i.test(String(item.term))),
+    false,
+  );
+  assert.doesNotMatch(String(text), /Squash and merge/i);
+});
+
 test('each action says when its button appears', () => {
   const section = HELP_SECTIONS.find((s) => s.id === 'actions');
   assert.ok(section, 'the help has an actions section');
   const actions = section.items;
   /** @type {Record<string, RegExp>} */
   const when = {
-    Merge: /open pull request/,
     Sync: /Build or Check/,
     'Clean up': /merged/,
     'Accept Check': /waits in Check/,
     'Grant extra loop': /limit/,
+    'Check PR': /open pull request/,
+    Fix: /Run detail/,
   };
   assert.deepEqual(
     actions.map((item) => item.term),

@@ -1,7 +1,7 @@
 /** @import { RunView } from '../dashboard/model.js' */
 /** @import { ProjectResult } from './run-record.js' */
 /** @import { ReadableEntry, UnreadableEntry } from './run-folder.js' */
-import { summarizeMetrics, formatMetrics, trackOf, loopCap } from './run-store.js';
+import { summarizeMetrics, formatMetrics, trackOf, loopCap, reworkInProgress } from './run-store.js';
 import { isStage } from './flow.js';
 
 /** @param {unknown} v */
@@ -10,7 +10,7 @@ export const str = (v) => (typeof v === 'string' ? v.trim() : '');
 const strList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 /**
  * @param {ReadableEntry | UnreadableEntry} entry An entry of the Run store. Its record is read from disk and may have any shape, so every field is checked as it is read.
- * @returns {Omit<RunView, 'projectId' | 'prState' | 'prStatus' | 'prHost' | 'prCanMerge'>}
+ * @returns {Omit<RunView, 'projectId' | 'prState' | 'prStatus' | 'prHost'>}
  */
 export function interpretRun(entry) {
   const id = typeof entry?.id === 'string' ? entry.id : '',
@@ -130,6 +130,7 @@ export function interpretRun(entry) {
     infrastructure: verdict(r.infrastructure, true),
     loops: num(r.check_loops),
     loopCap: loopCap(r),
+    reworkInProgress: reworkInProgress(r),
     waiting: !['done', 'abandoned'].includes(status) && (r.waiting_on_human === true || status === 'waiting'),
     reason: str(['verification-unavailable', 'interrupted'].includes(status) ? r.status_reason : r.waiting_reason),
     title: str(r.title) || id || 'Untitled run',

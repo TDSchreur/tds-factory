@@ -80,6 +80,8 @@ import { stages, targets, isStage } from './flow.js';
  * @property {string} pr
  * @property {string} head
  * @property {string} observed
+ * @property {boolean} conflicts Whether the PR has merge conflicts with its base branch.
+ * @property {'conflicts' | 'checks' | 'comments'} [scope] The scope of the Rework this observation started; absent when none started.
  * @property {Check[]} checks
  * @property {Check[]} failures
  * @property {boolean} pending
@@ -376,3 +378,8 @@ export const loopCap = (record) =>
   Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS) + extraLoops(record);
 /** @param {Run} record */
 export const attempt = (record) => loops(record) + 1;
+
+// Whether a Follow-up Rework is under way: a Run back in Build or Check with the Follow-up snapshot it started from.
+/** @param {Pick<Run, 'stage' | 'follow_up'>} record */
+export const reworkInProgress = (record) =>
+  ['build', 'check'].includes(String(record.stage)) && !!record.follow_up && typeof record.follow_up === 'object';
