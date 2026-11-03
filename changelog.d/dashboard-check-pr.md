@@ -34,3 +34,5 @@
   refusal is shown with how to resolve it. The buttons are disabled with a visible reason while a Rework is in
   progress, and read "Grant extra loop and fix" at the Check loop limit. A Run that waits with "Follow-up Rework ready
   for an agent" has a **Copy agent prompt** button that copies `/factory continue <run id>`.
+- The help panel, the Dashboard guide, the glossary (Check PR, Fix) and the affected ADRs and Specs describe Check PR,
+  Fix and Copy agent prompt.

@@ -163,7 +163,7 @@ The agent opens the pull request but does not merge it. Before you merge:
 4. Open `check-1.md` (or the highest `check-N.md`) in the Run folder to see the baseline and project verdicts and any finding left open.
 5. Look at the diff yourself, like any other pull request.
 
-Merge in your host (GitHub or Azure DevOps); the Dashboard never merges. The `Closes #N` lines close the Tickets. Then [clean up the Run's worktree and branch](#clean-up-after-a-merge). Maintainers who publish the merged work as a Release follow the [release guide](releasing.md).
+Merge in your host (GitHub or Azure DevOps); the Dashboard never merges, but its **Check PR** button shows what blocks the pull request and **Fix** sends the Run back to Build for one problem (see the [Dashboard guide](dashboard.md#check-pr-and-fix)). The `Closes #N` lines close the Tickets. Then [clean up the Run's worktree and branch](#clean-up-after-a-merge). Maintainers who publish the merged work as a Release follow the [release guide](releasing.md).
 
 ## Words you will see
 

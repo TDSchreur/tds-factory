@@ -24,7 +24,7 @@ Three things make a failure of the `tds-factory` CLI hard to see or hard to end.
 6. As a Dashboard user, I want an unexpected handler exception logged to stderr with the method, path and stack, so that I can find out why I saw `internal error`.
 7. As a Dashboard user, I want the response to stay `internal error`, so that no stack reaches the browser.
 8. As a Dashboard user, I want the log line to leave out the query string, so that tokens in a URL never reach a log.
-9. As a Dashboard user, I want a failed GitHub PR lookup, merge or checks call logged as well as answered with its 502 or 'unavailable' text, so that the cause is not lost.
+9. As a Dashboard user, I want a failed GitHub PR lookup or checks call logged as well as answered with its 502 or 'unavailable' text, so that the cause is not lost.
 10. As a user with a corrupt install record, I want `install` to say so instead of quietly starting from an empty record, so that I do not lose the record by accident.
 11. As a contributor, I want every ignored error to say why in a comment, so that the next reader does not have to guess.
 12. As a contributor, I want a filesystem "missing" catch to check for a missing path (`ENOENT`, `ENOTDIR`, `ELOOP`, `ENAMETOOLONG` or `EISDIR`) and rethrow anything else, so that a permission error or a bug is not mistaken for an absent file.

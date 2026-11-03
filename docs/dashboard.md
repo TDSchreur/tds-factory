@@ -79,6 +79,12 @@ An Azure DevOps link has the form `https://dev.azure.com/<organisation>/<project
 
 The Factory never writes to Azure DevOps. The tests use output recorded from the sandbox repository `Kahoot` (`test/fixtures/pr-status/azure/`) and never call `az`.
 
+## Check PR and Fix
+
+**Check PR** appears on a Done Run with an open pull request and on a Run in Follow-up, on its card and in its detail. A click reads the pull request fresh (never from the status cache) and opens the Run detail on a "Pull request" section: its state and whether it is a draft, whether it has merge conflicts, each failing check by name with a link to its run, the pending checks and each unresolved review thread (file path, a shortened first comment and a link). A merged or closed pull request shows its state only. Azure DevOps shows state, draft and conflicts. When `gh` or `az` is missing or not signed in, the section shows the setup steps for that host (the same steps are in [Install](install.md)). Review text and check names are shown as plain text, and only `https:` links become links.
+
+For a GitHub pull request the section has one **Fix conflicts**, **Fix checks** and **Fix comments** button next to the matching problem. A click asks first, then starts a Follow-up scoped to that one problem: the Run goes back to Build as a Rework and waits with "Follow-up Rework ready for an agent". The card then offers **Copy agent prompt**, which copies `/factory continue <run id>` for you to paste into the agent. Only one Rework runs at a time: while one is in progress the Fix buttons are disabled and say why. When Follow-up refuses (the Run worktree is cleaned up or has uncommitted changes, or its head differs from the pull request head) the button stays clickable and the dialog shows the reason and how to resolve it. At the Check loop limit the button reads **Grant extra loop and fix**: one click raises the limit by one (recorded as an `extra-loop` event) and then starts the Fix. The Dashboard never merges ([ADR 0034](adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md)).
+
 ## Progress on cards and in the Run detail
 
 A card that is not Done shows how far the Run is, from the data in `/api/views` ([ADR 0021](adr/0021-run-record-model-last-seen-and-event-log.md)):
@@ -118,9 +124,10 @@ Cards carry buttons for the Dashboard actions. Each asks for confirmation, then 
 - **Sync** appears on running Runs in Build and Check (a Run waiting on you, or paused, cannot change until it runs again). It rebases the Run branch onto the current default branch of `origin`. If the code or the base changes, the Evidence is cleared.
 - **Accept Check** appears on a Check that waits on you. The confirmation lists the four verdicts. It records that you continue to Finish with a Check that is not clean, for the current code only; a new commit voids it. The Run is released from waiting. Then tell the agent in its chat that you accepted: it finds the decision recorded for the current head and moves on to Finish.
 - **Grant extra loop** appears on a Run in Check that waits on you after it has used all its Check loops (four, or the lower cap the project set). The confirmation says what it does. One click allows one more Rework and raises the limit by one (the Check loops row then reads, for example, "4/5"); there is no ceiling, and you can grant another loop each time the Run waits at its limit again. The Run is released from waiting. Then tell the agent in its chat that you granted it: it sees the raised limit as your decision to go back to Build and does not ask again about Finish. The grant is in the Run record (`extra_loops`) and in the timeline. Only this button grants a loop: there is no command-line equivalent, and an agent cannot raise the limit with `run update`. As with Accept Check, the session token keeps other web pages out, but cannot stop an agent that reads the token from `/api/info` ([ADR 0024](adr/0024-the-user-can-grant-an-extra-check-loop.md)).
+- **Check PR**, **Fix** and **Copy agent prompt** are described in [Check PR and Fix](#check-pr-and-fix).
 - **Clean up** appears on a Done Run whose pull request is merged. It removes the Run worktree and branch and keeps the Run record.
 
-Starting a Run stays in the agent: the Dashboard cannot start, resume, rework or complete a Run.
+Starting a Run stays in the agent: the Dashboard cannot start, resume or complete a Run. The one Rework it can start is a Fix, which an agent then takes over.
 
 ### Needs you notification
 

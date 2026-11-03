@@ -1,5 +1,7 @@
 # Dashboard: pull request status
 
+> Extended by [ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md): the Check PR button reads the pull request fresh (`GET .../pr-details`, never from or into this cache) and lists failing checks and review threads. The "Check again" button of this Spec keeps its behaviour.
+
 ## Problem Statement
 
 The Dashboard shows a pull request's state only on Done cards, and only as open, merged or closed. A user cannot see whether the checks pass, whether the PR conflicts with the base or whether it is approved without opening GitHub. This is the third item of the Dashboard work in milestone v0.6.0.

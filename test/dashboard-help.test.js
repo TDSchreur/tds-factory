@@ -62,6 +62,8 @@ test('each action says when its button appears', () => {
     'Clean up': /merged/,
     'Accept Check': /waits in Check/,
     'Grant extra loop': /limit/,
+    'Check PR': /open pull request/,
+    Fix: /Run detail/,
   };
   assert.deepEqual(
     actions.map((item) => item.term),

@@ -1,5 +1,7 @@
 # Dashboard: grant an extra Check loop
 
+> Extended by [ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md): a Follow-up Fix at the Check loop limit grants an extra loop in the same click ("Grant extra loop and fix"). This Spec's own grant still works in Check only.
+
 ## Problem Statement
 
 A Run that has used up its Check loops (four by default) and still has Blocking findings stops and waits for permission to continue to Finish. The only other choice is to abandon it. A user who wants one more Rework has no way to give it. This is the fourth item of the Dashboard work in milestone v0.6.0.

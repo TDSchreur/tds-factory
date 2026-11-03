@@ -35,6 +35,13 @@ The default Track: the full Define interview, a Spec and as many Tickets as the 
 **Follow-up**:
 The Stage after Finish that observes the Run's pull request and scopes Rework to one Follow-up scope. It is entered explicitly, from the agent or from the Dashboard, and can reopen a delivered Run.
 
+**Check PR**:
+The Dashboard button that reads a Run's pull request fresh and shows its state, merge conflicts, failing and pending checks and unresolved review threads in the Run detail. Shown on a Done Run with an open pull request and on a Run in Follow-up. Read-only; the name avoids a clash with the Check Stage. See ADR 0034.
+_Avoid_: Merge check
+
+**Fix**:
+The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
+
 **Follow-up scope**:
 The one kind of pull request problem a Follow-up Rework fixes: `conflicts` with the base branch, failing `checks` or unresolved review `comments`. Problems outside the scope stay on the pull request for a later Follow-up.
 _Avoid_: Fix type, Problem category
