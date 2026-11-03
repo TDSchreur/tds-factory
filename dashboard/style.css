@@ -317,9 +317,11 @@
   .usage-table caption { text-align: left; color: var(--colorNeutralForeground3); padding-bottom: var(--spacingVerticalXS); }
   .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; overflow-wrap: normal; word-break: normal; }
   .usage-table th[scope="row"] { overflow-wrap: anywhere; }
+  .usage-table .seg { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
   .usage-table td { white-space: nowrap; }
   .usage-table th[scope="col"]:first-child, .usage-table th[scope="row"] { text-align: left; }
-  @container (max-width: 44rem) {
+  /* 35rem: the wide table's measured minimum width with unbroken headers and labels (about 33.5rem) plus about 1rem of slack. */
+  @container (max-width: 35rem) {
     .usage-table, .usage-table tbody, .usage-table tr { display: block; }
     .usage-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .usage-table tr { padding: var(--spacingVerticalXS) 0; border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); }

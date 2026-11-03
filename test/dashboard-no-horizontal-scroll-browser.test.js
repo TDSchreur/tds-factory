@@ -149,7 +149,31 @@ test('the usage table has no inner scroll area and keeps its table roles wide an
       assert.deepEqual(broken, [], 'headers broken at ' + width);
       assert.equal((await layout('table-row')).fits, true, 'fits at ' + width);
     }
-    // Below about 44rem of drawer width every row stacks.
+    // The compact sheet is as wide as the viewport, so it puts the table container just above and below the 35rem threshold.
+    const WORDS = `return [...document.querySelectorAll('.usage-table thead th')].filter((th) => { const n = th.firstChild; return th.textContent.trim().split(/\\s+/).some((w) => { const r = document.createRange(); const i = th.textContent.indexOf(w); r.setStart(n, i); r.setEnd(n, i + w.length); return r.getClientRects().length > 1; }); }).map((th) => th.textContent)`;
+    await page.resize(700, 800);
+    const above = await layout('table-row');
+    assert.equal(above.display, 'table-row');
+    assert.equal(above.fits, true);
+    assert.deepEqual(await page.execute(WORDS), []);
+    assert.deepEqual((await page.execute(MEASURE)).overflowing, []);
+    // A label breaks at its separators first and never inside a short segment.
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('.usage-table th[scope=row] .seg')].filter((e) => e.textContent.length < 40 && e.getClientRects().length !== 1).map((e) => e.textContent)",
+      ),
+      [],
+    );
+    assert.equal(
+      await page.execute(
+        "return [...document.querySelectorAll('.usage-table th[scope=row]')].some((e) => e.textContent === 'Build · Ticket 1 · claude-opus-5-5')",
+      ),
+      true,
+    );
+    await page.resize(580, 800);
+    const below = await layout('block');
+    assert.equal(below.display, 'block');
+    assert.equal(below.fits, true);
     await page.resize(375, 800);
     const narrow = await layout('block');
     assert.equal(narrow.display, 'block');

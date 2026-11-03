@@ -537,6 +537,13 @@ const USAGE_COLUMNS = [
 
 /** @typedef {{ name: string, text?: string, error?: string }} LoadedFile */
 
+/**
+ * A usage row label as segments split on its " · " separators: a segment stays whole, the separators may break.
+ * @param {string} label
+ */
+const labelSegments = (label) =>
+  label.split(' · ').map((part, i) => html`${i > 0 ? ' · ' : ''}<span class="seg">${part}</span>`);
+
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
 // because showing the Loading placeholders again would shrink the panel and the browser would scroll it back to the top.
 /**
@@ -629,7 +636,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
         <thead role="rowgroup"><tr role="row">${USAGE_COLUMNS.map(([, label]) => html`<th key=${label} scope="col" role="columnheader">${label}</th>`)}</tr></thead>
         <tbody role="rowgroup">${run.metrics.usage.rows.map(
           (r) =>
-            html`<tr key=${r.label} role="row"><th scope="row" role="rowheader">${r.label}</th>${USAGE_COLUMNS.slice(1).map(([field, label]) => html`<td key=${label} role="cell" data-label=${label}>${r[field] ?? 'n/a'}</td>`)}</tr>`,
+            html`<tr key=${r.label} role="row"><th scope="row" role="rowheader">${labelSegments(r.label)}</th>${USAGE_COLUMNS.slice(1).map(([field, label]) => html`<td key=${label} role="cell" data-label=${label}>${r[field] ?? 'n/a'}</td>`)}</tr>`,
         )}</tbody></table></div>`
       }
       ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label} · no data</div>`)}
