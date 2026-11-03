@@ -132,14 +132,14 @@ test('a scope without findings and an unknown scope start nothing', async () => 
   }
 });
 
-test('an Azure DevOps pull request is refused', async () => {
+test('a pull request of a host without an adapter is refused', async () => {
   const f = fixture();
-  writeFileSync(f.file, JSON.stringify({ ...f.read(), pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/7' }));
+  writeFileSync(f.file, JSON.stringify({ ...f.read(), pr: 'https://gitlab.example/o/r/-/merge_requests/7' }));
   const { dash, fix } = await withFix(f);
   try {
     const answer = await fix();
     assert.equal(answer.status, 409);
-    assert.match(answer.text, /GitHub pull requests only/);
+    assert.match(answer.text, /GitHub and Azure DevOps pull requests only/);
   } finally {
     await dash.close();
   }

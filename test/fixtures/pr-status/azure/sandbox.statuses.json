@@ -1,0 +1,175 @@
+{
+  "continuation_token": null,
+  "count": 7,
+  "value": [
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "pending-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:19.6841348Z",
+      "description": "Fixture status pending",
+      "id": 1,
+      "state": "pending",
+      "updatedDate": "2026-11-03T18:08:19.6841348Z"
+    },
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "failed-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:22.0197867Z",
+      "description": "Fixture status failed",
+      "id": 2,
+      "state": "failed",
+      "targetUrl": "https://ci.example.test/builds/42",
+      "updatedDate": "2026-11-03T18:08:22.0197867Z"
+    },
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "error-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:24.1733197Z",
+      "description": "Fixture status error",
+      "id": 3,
+      "state": "error",
+      "updatedDate": "2026-11-03T18:08:24.1733197Z"
+    },
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "ok-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:26.4485487Z",
+      "description": "Fixture status succeeded",
+      "id": 4,
+      "state": "succeeded",
+      "updatedDate": "2026-11-03T18:08:26.4485487Z"
+    },
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "na-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:28.7591374Z",
+      "description": "Fixture status notApplicable",
+      "id": 5,
+      "state": "notApplicable",
+      "updatedDate": "2026-11-03T18:08:28.7591374Z"
+    },
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "twice-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:31.2864866Z",
+      "description": "First post: failed",
+      "id": 6,
+      "state": "failed",
+      "updatedDate": "2026-11-03T18:08:31.2864866Z"
+    },
+    {
+      "context": {
+        "genre": "fixture",
+        "name": "twice-check"
+      },
+      "createdBy": {
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+          }
+        },
+        "descriptor": "aad.REDACTED",
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "creationDate": "2026-11-03T18:08:34.0278123Z",
+      "description": "Second post: succeeded, replaces the first",
+      "id": 7,
+      "state": "succeeded",
+      "updatedDate": "2026-11-03T18:08:34.0278123Z"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ The Dashboard offers a Merge button on Done cards. Real pull requests are blocke
 
 Remove every way to merge from the Dashboard. Add a **Check PR** button (the name avoids a clash with the Check Stage) that reads the pull request fresh and shows its problems in the Run detail drawer. For GitHub, the drawer has one **Fix** button per Follow-up scope (conflicts, checks, comments). A click starts Follow-up scoped to that one problem, the Run goes back to Build as a Rework, and the card offers "Copy agent prompt" (`/factory continue <run id>`) so the user hands the Rework to an agent. At the Check loop limit the button reads "Grant extra loop and fix" and one click grants the loop and starts the Fix. The decisions are in [ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md), which extends [ADR 0024](../adr/0024-the-user-can-grant-an-extra-check-loop.md).
 
-Azure DevOps gets only setup help in this Run; its detail reads and Fix follow in a second Run.
+Azure DevOps got only setup help in this Run; its detail reads and Fix are in [Azure DevOps: Check PR details and Follow-up Fix](azure-devops-details-and-follow-up.md).
 
 ## User Stories
 
@@ -23,7 +23,7 @@ Azure DevOps gets only setup help in this Run; its detail reads and Fix follow i
 9. As a user, I want a merged or closed pull request to show its state and nothing else new, so that the drawer does not suggest work that cannot be done.
 10. As a user, I want review text and check names shown as plain text, so that a hostile comment cannot inject markup or script into the Dashboard.
 11. As a user, when `gh` or `az` is missing or not signed in, I want the drawer to show the setup steps for that host, so that I can fix it myself; the same steps are in `docs/install.md`.
-12. As a user, I want a **Fix conflicts**, **Fix checks** and **Fix comments** button next to the matching problem for a GitHub pull request, so that I choose what the agent works on.
+12. As a user, I want a **Fix conflicts**, **Fix checks** and **Fix comments** button next to the matching problem for a GitHub or Azure DevOps pull request, so that I choose what the agent works on.
 13. As a user, I want a Fix click to start Follow-up scoped to that one problem and move the Run to Build as a Rework, so that the agent changes only what I chose; problems outside the scope stay on the pull request for a later Fix.
 14. As a user, I want the Run to wait with the reason "Follow-up Rework ready for an agent" and a **Copy agent prompt** button on the card that copies `/factory continue <run id>`, so that I hand it to an agent in one paste.
 15. As a user, I want the other Fix buttons disabled, with that reason shown, while a Follow-up Rework is in progress, so that there is one Rework at a time.
@@ -63,4 +63,4 @@ Test seams: the PR provider (`gh` is faked with `test/fake-command.js`, as in `t
 
 ## Out of Scope
 
-Merging from the Dashboard in any form; Azure DevOps thread and failing build policy reads and Azure DevOps Follow-up (a second Run); replying to or resolving review threads on the host; Fix from a Run whose pull request is merged or closed; running several scoped Reworks at once; a ceiling on extra loops; a bypass of a Follow-up refusal.
+Merging from the Dashboard in any form; replying to or resolving review threads on the host; Fix from a Run whose pull request is merged or closed; running several scoped Reworks at once; a ceiling on extra loops; a bypass of a Follow-up refusal.

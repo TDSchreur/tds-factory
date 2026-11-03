@@ -13,7 +13,7 @@ import { can, providerFor, providerWith } from './pr-provider.js';
 /** @param {string | undefined} url */
 function providerOrThrow(url) {
   const provider = typeof url === 'string' && providerFor(url);
-  if (!provider) throw new Error('Follow-up needs a GitHub PR URL');
+  if (!provider) throw new Error('Follow-up needs the URL of a PR on a supported host');
   if (!can(url, 'strictViewFlow')) throw new Error(`Follow-up does not support ${provider.title} yet`);
   return { pr: url, provider: providerWith(url, 'strictViewFlow', 'observeFlow') };
 }
@@ -50,8 +50,10 @@ function* followUpChange(projectDir, runId, old, scope) {
   if (!oneOf(['finish', 'follow-up'], old.stage) || !oneOf(['running', 'done'], old.status))
     throw new Error('Follow-up needs a running or done Run in Finish or Follow-up');
   const { pr, provider } = providerOrThrow(old.pr);
+  // The link of every host ends in the PR number; the adapter has already matched the whole link.
   const number = Number(pr.split('/').at(-1));
-  if (!Number.isSafeInteger(number) || number < 1) throw new Error('Follow-up needs a GitHub PR URL');
+  if (!Number.isSafeInteger(number) || number < 1)
+    throw new Error('Follow-up needs the URL of a PR on a supported host');
   const state = yield* provider.strictViewFlow(pr, projectDir);
   if (state.state === 'CLOSED') throw new Error('the PR is closed without a merge');
   if (state.state === 'MERGED') {

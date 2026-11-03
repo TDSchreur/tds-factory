@@ -75,7 +75,7 @@ import { stages, targets, isStage } from './flow.js';
  */
 
 /**
- * The latest GitHub observation of the PR, set by `run follow-up`.
+ * The latest observation of the PR on its host (GitHub or Azure DevOps), set by `run follow-up`.
  * @typedef {object} FollowUp
  * @property {string} pr
  * @property {string} head

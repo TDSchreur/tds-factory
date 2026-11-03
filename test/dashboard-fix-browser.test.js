@@ -43,7 +43,7 @@ const dialogOpen = (page, title) =>
     `return document.getElementById('dialog').open && document.getElementById('dialog-title').textContent === ${JSON.stringify(title)}`,
   );
 
-test('one Fix button per problem of a GitHub pull request, none for Azure DevOps', async (t) => {
+test('one Fix button per problem of a GitHub and of an Azure DevOps pull request, none for a Run without a host', async (t) => {
   const page = await openPage(t, { runs: [followUp()], detailsBody: DETAILS });
   if (!page) return;
   try {
@@ -60,7 +60,11 @@ test('one Fix button per problem of a GitHub pull request, none for Azure DevOps
   if (!azure) return;
   try {
     await open(azure);
-    assert.deepEqual(await fixes(azure), []);
+    assert.deepEqual(await fixes(azure), [
+      ['Fix conflicts', false, 'conflicts'],
+      ['Fix checks', false, 'checks'],
+      ['Fix comments', false, 'comments'],
+    ]);
   } finally {
     await azure.close();
   }

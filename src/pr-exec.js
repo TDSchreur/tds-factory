@@ -1,6 +1,10 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { FactoryError } from './errors.js';
+import { cut } from './pr-text.js';
+
+// The most of a host command's stderr that goes into an error, and so to the Dashboard; control characters become spaces.
+const STDERR_MAX = 500;
 
 // The plumbing the PR provider adapters (see ADR 0020) share. The adapters name the command; only they ever run `gh` or `az`.
 
@@ -24,7 +28,7 @@ export const spawnText = (file, args, options) => spawnSync(file, args, { encodi
  * @param {{ stderr?: string | null, error?: Error }} out
  * @param {string} fallback
  */
-export const failureText = (out, fallback) => (out.stderr || out.error?.message || fallback).trim();
+export const failureText = (out, fallback) => cut(out.stderr || out.error?.message || fallback, STDERR_MAX).trim();
 
 /**
  * An error a caller can tell apart by its `code`, the reason.

@@ -4,7 +4,7 @@ import * as azure from './pr-azure.js';
 
 // The PR provider seam (ADR 0020): the rest of the Factory asks this module about a PR link and never calls a hosting CLI itself.
 // An adapter exports `name`, `title`, `matches(url)`, `repoOfRemote(remote)` and the operations its callers use. GitHub (the `gh` command) has all of them;
-// Azure DevOps (the `az` command) only reads: PR status, state and head. A caller asks `can(url, operation)` before it uses an operation not every adapter has.
+// Azure DevOps (the `az` command) reads status, state, head, details and Follow-up observations, and has no write operation. A caller asks `can(url, operation)` before it uses an operation not every adapter has.
 
 /**
  * The status of a PR for the Dashboard.
@@ -28,7 +28,7 @@ import * as azure from './pr-azure.js';
  * @property {(url: string, options?: { run?: any }) => Promise<string>} stateAsync
  * @property {(url: string, options?: { cwd?: string, timeout?: number, run?: any }) => PrView} view
  * @property {(url: string, options?: { run?: any }) => Promise<PrView>} [viewAsync] `run` is the adapter's own test seam, like the other `run` options above.
- * @property {(url: string, options?: { run?: any }) => Promise<import('./pr-github.js').PrDetails>} details A fresh read of the PR for Check PR; GitHub has all of it, Azure DevOps state, draft and conflicts only.
+ * @property {(url: string, options?: { run?: any }) => Promise<import('./pr-github.js').PrDetails>} details A fresh read of the PR for Check PR; GitHub has all of it, Azure DevOps the same shape.
  * @property {{ reasons: string[], steps: string[] }} setup The failure reasons the host's setup steps help with, and the steps.
  * @property {(url: string, cwd?: string) => PrView & { headRefOid: string }} [strictView]
  * @property {(url: string, cwd?: string) => import('./git.js').Flow} [strictViewFlow] The same as a flow of steps for the Dashboard (ADR 0030).

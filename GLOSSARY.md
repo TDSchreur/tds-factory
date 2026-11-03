@@ -40,7 +40,7 @@ The Dashboard button that reads a Run's pull request fresh and shows its state, 
 _Avoid_: Merge check
 
 **Fix**:
-The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
+The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub or Azure DevOps pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
 
 **Follow-up scope**:
 The one kind of pull request problem a Follow-up Rework fixes: `conflicts` with the base branch, failing `checks` or unresolved review `comments`. Problems outside the scope stay on the pull request for a later Follow-up.
@@ -194,7 +194,7 @@ The Usage of Build visits after a Rework. It belongs to the Run, not to a Ticket
 The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.
 
 **PR provider**:
-The module that handles a pull request link for a hosting service: it reads a PR's state, head, checks and review threads and finds a Run's PR, so no other module runs a hosting command. It never merges a PR. GitHub, through the `gh` command, does all of that. Azure DevOps, through the `az` command, only reads a PR's status, state and head; it cannot follow up yet. See ADR 0020.
+The module that handles a pull request link for a hosting service: it reads a PR's state, head, checks and review threads and finds a Run's PR, so no other module runs a hosting command. It never merges a PR. GitHub through the `gh` command and Azure DevOps through the `az` command both do all of that; for Azure DevOps the checks are its blocking policies and the statuses that outside CI posts to the PR. See ADR 0020.
 _Avoid_: PR backend, Host adapter
 
 **PR status**:
