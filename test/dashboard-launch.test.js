@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import { startDashboard } from '../src/dashboard.js';
 import { launchDashboard } from '../src/dashboard-launch.js';
 import { openProjectRegistry, projectId } from '../src/project-registry.js';
 import { repo, tempDir } from './git-repo.js';
@@ -170,5 +171,30 @@ test('a registry that cannot be written does not stop the Dashboard', async () =
     assert.doesNotMatch(first.url, /project=/);
   } finally {
     await first.close();
+  }
+});
+
+test('a standalone Dashboard on the preferred port is a busy port, not a Dashboard to reuse', async () => {
+  const { registry, launch, preferredPort } = await setup();
+  const standalone = await startDashboard({ projectDir: repo(), port: preferredPort });
+  try {
+    const main = repo();
+    const second = await launch(main);
+    try {
+      assert.equal(second.reused, false);
+      assert.notEqual(second.port, preferredPort);
+      assert.deepEqual(
+        registry.list().map((p) => p.path),
+        [main],
+      );
+      const info = /** @type {{ shared?: boolean }} */ (
+        await (await fetch(`http://127.0.0.1:${second.port}/api/info`)).json()
+      );
+      assert.equal(info.shared, true);
+    } finally {
+      await second.close();
+    }
+  } finally {
+    await standalone.close();
   }
 });

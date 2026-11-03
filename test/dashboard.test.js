@@ -169,11 +169,14 @@ test('info route names the project directory the Dashboard serves', async () => 
   const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
   const info = JSON.parse(res.body);
   assert.match(info.token, /^[0-9a-f]{64}$/);
-  assert.deepEqual({ ...info, token: undefined }, { project, version, pid: process.pid, token: undefined });
+  assert.deepEqual(
+    { ...info, token: undefined },
+    { project, version, pid: process.pid, shared: false, token: undefined },
+  );
   assert.notEqual(version, '99.88.77');
   assert.deepEqual(
     { ...JSON.parse((await get(emptyDash, '/api/info')).body), token: undefined },
-    { project: empty, version, pid: process.pid, token: undefined },
+    { project: empty, version, pid: process.pid, shared: false, token: undefined },
   );
 });
 

@@ -332,14 +332,20 @@ export async function prStatus(ctx) {
 }
 
 /** @type {Handler} */
-export async function info({ send, token, projectDir }) {
+export async function info({ send, token, projectDir, hub }) {
   const version = await readFile(new URL('../package.json', import.meta.url), 'utf8')
     .then((data) => str(JSON.parse(data).version))
     .catch(() => '');
   send(
     200,
     'application/json',
-    JSON.stringify({ project: resolve(projectDir), token, pid: process.pid, ...(version ? { version } : {}) }),
+    JSON.stringify({
+      project: resolve(projectDir),
+      token,
+      pid: process.pid,
+      shared: hub.shared,
+      ...(version ? { version } : {}),
+    }),
   );
 }
 

@@ -100,6 +100,8 @@ export function createProjectHub({
       if (id === ownId) removed.add(id);
       return true;
     },
+    /** True when a registry backs this server, so it serves every registered Project. */
+    shared: registry !== undefined,
     projectId: ownId,
     projectDir: own,
   };

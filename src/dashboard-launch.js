@@ -7,15 +7,16 @@ import { codeOf } from './narrow.js';
 const HOST = '127.0.0.1';
 const PROBE_TIMEOUT_MS = 1500;
 
-/** The pid and Factory version of the Dashboard that answers /api/info on a port, or undefined when nothing that looks like one does. @param {number} port */
+/** The pid and Factory version of the Dashboard that answers /api/info on a port, or undefined when nothing that looks like a shared (registry-backed) one does; a standalone --port server is a busy port. @param {number} port */
 async function probe(port) {
   try {
     const res = await fetch(`http://${HOST}:${port}/api/info`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     if (res.status !== 200) return undefined;
-    const info = /** @type {{ token?: unknown, project?: unknown, pid?: unknown, version?: unknown } | null} */ (
-      await res.json()
-    );
-    if (typeof info?.token !== 'string' || typeof info?.project !== 'string') return undefined;
+    const info =
+      /** @type {{ token?: unknown, project?: unknown, shared?: unknown, pid?: unknown, version?: unknown } | null} */ (
+        await res.json()
+      );
+    if (typeof info?.token !== 'string' || typeof info?.project !== 'string' || info.shared !== true) return undefined;
     return {
       pid: typeof info?.pid === 'number' ? info.pid : undefined,
       version: typeof info?.version === 'string' ? info.version : undefined,
