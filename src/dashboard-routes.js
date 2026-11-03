@@ -27,6 +27,12 @@ export const ROUTES = [
     handler: h.prStatus,
     scoped: true,
   },
+  {
+    methods: ['GET'],
+    pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/pr-details$/,
+    handler: h.prDetails,
+    scoped: true,
+  },
   { methods: ['GET', 'HEAD'], pattern: /^\/api\/info$/, handler: h.info },
   { methods: ['GET', 'HEAD'], pattern: /^\/api\/views$/, handler: h.views },
   { methods: ['GET', 'HEAD'], pattern: /^\/api\/projects\/([^/]+)\/runs$/, handler: h.runs, scoped: true },

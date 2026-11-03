@@ -28,7 +28,8 @@ import * as azure from './pr-azure.js';
  * @property {(url: string, options?: { run?: any }) => Promise<string>} stateAsync
  * @property {(url: string, options?: { cwd?: string, timeout?: number, run?: any }) => PrView} view
  * @property {(url: string, options?: { run?: any }) => Promise<PrView>} [viewAsync] `run` is the adapter's own test seam, like the other `run` options above.
- * @property {(url: string) => Promise<string>} [checksSummary]
+ * @property {(url: string, options?: { run?: any }) => Promise<import('./pr-github.js').PrDetails>} details A fresh read of the PR for Check PR; GitHub has all of it, Azure DevOps state, draft and conflicts only.
+ * @property {{ reasons: string[], steps: string[] }} setup The failure reasons the host's setup steps help with, and the steps.
  * @property {(url: string, cwd?: string) => PrView & { headRefOid: string }} [strictView]
  * @property {(url: string, head: string, cwd?: string) => import('./run-record.js').FollowUp} [observe]
  * @property {(repo: string, branch: string, cwd?: string) => { url: string, headRefName: string, headRepository: { name: string }, headRepositoryOwner: { login: string } }[]} [listByHead]
@@ -36,23 +37,14 @@ import * as azure from './pr-azure.js';
 
 /** @type {PrProvider[]} */
 const providers = [github, azure];
-const OPERATIONS = [
-  'statusAsync',
-  'stateAsync',
-  'view',
-  'viewAsync',
-  'checksSummary',
-  'strictView',
-  'observe',
-  'listByHead',
-];
+const OPERATIONS = ['statusAsync', 'stateAsync', 'view', 'viewAsync', 'details', 'strictView', 'observe', 'listByHead'];
 
 // The adapter that handles this PR link, or undefined when no adapter does.
 /** @param {string} url */
 export const providerFor = (url) => providers.find((p) => p.matches(url));
 // The adapter that handles this PR link, checked to have this optional operation; throws when it does not.
 /**
- * @template {Exclude<keyof PrProvider, 'name' | 'title' | 'matches' | 'repoOfRemote'>} K
+ * @template {Exclude<keyof PrProvider, 'name' | 'title' | 'matches' | 'repoOfRemote' | 'setup'>} K
  * @param {string} url
  * @param {K[]} operations
  * @returns {PrProvider & Required<Pick<PrProvider, K>>}

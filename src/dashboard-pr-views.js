@@ -25,13 +25,17 @@ export const ghPrState = (url) => providerWith(url, 'statusAsync').stateAsync(ur
 /** @param {string} url */
 export const ghPrStatus = (url) => providerWith(url, 'statusAsync').statusAsync(url);
 
+/** @param {string} url */
+export const ghPrDetails = (url) => providerWith(url, 'details').details(url);
+
 /**
  * The PR state and status caches of one Dashboard.
  * @param {object} options
  * @param {(url: string) => Promise<string>} options.prState
  * @param {(url: string) => Promise<PrStatus>} options.prStatus
+ * @param {(url: string) => Promise<unknown>} [options.prDetails]
  */
-export function createPrViews({ prState, prStatus }) {
+export function createPrViews({ prState, prStatus, prDetails = ghPrDetails }) {
   /** @type {Map<string, { at: number, state: Promise<string> }>} */
   const prCache = new Map();
   /** @param {string} url */
@@ -98,5 +102,16 @@ export function createPrViews({ prState, prStatus }) {
       prHost: providerFor(v.pr)?.name ?? '',
     };
   };
-  return { prCache, statusCache, fetchStatus, statusOf, hasStatus, view };
+  // Check PR: a fresh read that never touches the status cache. A failure is an answer, with the host's setup steps when they help.
+  /** @param {string} url */
+  const details = async (url) => {
+    try {
+      return await prDetails(url);
+    } catch (err) {
+      const reason = oneOf(STATUS_REASONS, codeOf(err)) ? codeOf(err) : 'error';
+      const setup = providerFor(url)?.setup;
+      return { unavailable: reason, ...(setup && oneOf(setup.reasons, reason) ? { setup: setup.steps } : {}) };
+    }
+  };
+  return { prCache, statusCache, fetchStatus, statusOf, hasStatus, details, view };
 }

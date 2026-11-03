@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { messageOf } from './narrow.js';
 import { interpretRun, str } from './dashboard-view.js';
+import { providerFor } from './pr-provider.js';
 
 /**
  * What every handler gets: the Dashboard's token and Projects and the request being answered. A handler of a Project route also gets that Project's services (`store` and the fields after it).
@@ -218,6 +219,17 @@ export async function prStatus(ctx) {
     'application/json',
     JSON.stringify(refresh && !fresh ? await prViews.fetchStatus(v.pr) : prViews.statusOf(v.pr)),
   );
+}
+
+// Check PR: a fresh read of the PR of a Done or Follow-up Run, never from or into the status cache.
+/** @type {Handler} */
+export async function prDetails(ctx) {
+  const run = await findRun(ctx);
+  if (!run) return;
+  const v = run.view;
+  if (v.unreadable || v.status === 'abandoned' || !['follow-up', 'done'].includes(v.column) || !providerFor(v.pr))
+    return ctx.send(409, 'text/plain', 'only a Done or Follow-up Run with a pull request can be checked');
+  ctx.send(200, 'application/json', JSON.stringify(await ctx.prViews.details(v.pr)));
 }
 
 /** @type {Handler} */

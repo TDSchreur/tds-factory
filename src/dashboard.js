@@ -83,6 +83,7 @@ async function serveStatic(dashboardDir, path, send) {
  * @param {(url: string) => Promise<string>} [options.prState]
  * @param {PrLookup} [options.prInfo]
  * @param {(url: string) => Promise<PrStatus>} [options.prStatus]
+ * @param {(url: string) => Promise<unknown>} [options.prDetails]
  * @param {number} [options.statusRefreshMs]
  * @param {string} [options.dashboardDir]
  * @param {ReturnType<typeof openProjectRegistry>} [options.registry] The Project registry to serve; read on every request.
@@ -94,6 +95,7 @@ export async function startDashboard({
   prState = ghPrState,
   prInfo,
   prStatus = ghPrStatus,
+  prDetails,
   statusRefreshMs = PR_STATUS_REFRESH_MS,
   dashboardDir = DASHBOARD_DIR,
   registry,
@@ -109,7 +111,7 @@ export async function startDashboard({
     registry,
     prFor,
     statusRefreshMs,
-    defaults: { prState, prStatus, prInfo },
+    defaults: { prState, prStatus, prInfo, prDetails },
   });
   const base = { token, projectDir, hub };
 

@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { openRunStore } from './run-store.js';
 import { projectId } from './project-registry.js';
-import { createPrViews, ghPrState, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
+import { createPrViews, ghPrDetails, ghPrState, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
 
 /**
  * The PR operations of one Project; what a Project leaves out comes from the server's defaults.
@@ -13,11 +13,15 @@ import { createPrViews, ghPrState, ghPrStatus, PR_STATUS_REFRESH_MS } from './da
  * @property {(url: string) => Promise<string>} [prState]
  * @property {PrLookup} [prInfo]
  * @property {(url: string) => Promise<PrStatus>} [prStatus]
+ * @property {(url: string) => Promise<unknown>} [prDetails]
  */
 /** @typedef {ReturnType<typeof createServices>} ProjectServices */
 
 /** @param {string} dir @param {PrSeams & { statusRefreshMs: number }} seams */
-function createServices(dir, { prState = ghPrState, prInfo, prStatus = ghPrStatus, statusRefreshMs }) {
+function createServices(
+  dir,
+  { prState = ghPrState, prInfo, prStatus = ghPrStatus, prDetails = ghPrDetails, statusRefreshMs },
+) {
   const store = openRunStore(dir);
   return {
     store,
@@ -27,7 +31,7 @@ function createServices(dir, { prState = ghPrState, prInfo, prStatus = ghPrStatu
     inFlight: new Set(),
     prInfo,
     statusRefreshMs,
-    prViews: createPrViews({ prState, prStatus }),
+    prViews: createPrViews({ prState, prStatus, prDetails }),
   };
 }
 

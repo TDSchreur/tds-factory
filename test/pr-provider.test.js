@@ -59,19 +59,11 @@ test('an Azure DevOps link and remote have the Azure DevOps adapter', () => {
 test('can tells which operations the adapter of a link has: Azure DevOps reads only', () => {
   const github = 'https://github.com/o/r/pull/1',
     azure = 'https://dev.azure.com/o/p/_git/r/pullrequest/1';
-  for (const op of [
-    'statusAsync',
-    'stateAsync',
-    'view',
-    'viewAsync',
-    'checksSummary',
-    'strictView',
-    'observe',
-    'listByHead',
-  ])
+  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync', 'details', 'strictView', 'observe', 'listByHead'])
     assert.equal(can(github, op), true, op);
-  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync']) assert.equal(can(azure, op), true, op);
-  for (const op of ['checksSummary', 'strictView', 'observe', 'listByHead']) assert.equal(can(azure, op), false, op);
+  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync', 'details'])
+    assert.equal(can(azure, op), true, op);
+  for (const op of ['strictView', 'observe', 'listByHead']) assert.equal(can(azure, op), false, op);
   for (const url of ['https://example.com/pr/1', '', undefined, null])
     assert.equal(Reflect.apply(can, undefined, [url, 'statusAsync']), false);
   assert.equal(can(github, 'toString'), false, 'only exported operations count');

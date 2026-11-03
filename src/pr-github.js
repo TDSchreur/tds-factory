@@ -263,35 +263,6 @@ export const viewAsync = async (
 /** @param {string} url @returns {Promise<string>} */
 export const stateAsync = async (url) =>
   JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
-// A one-line summary of the PR's checks.
-/** @param {string} url */
-export async function checksSummary(url) {
-  /** @type {string} */
-  let stdout;
-  try {
-    ({ stdout } = await exec('gh', ['pr', 'checks', url, '--json', 'name,bucket,state'], { timeout: 10_000 }));
-  } catch (err) {
-    const out = err instanceof Error && 'stdout' in err ? err.stdout : undefined;
-    if (typeof out !== 'string' || !out) throw err;
-    stdout = out;
-  }
-  const checks = JSON.parse(stdout);
-  if (
-    !Array.isArray(checks) ||
-    checks.some(
-      (c) => !c || typeof c.name !== 'string' || !['pass', 'fail', 'pending', 'skipping', 'cancel'].includes(c.bucket),
-    )
-  )
-    throw new Error('invalid check data');
-  const problems = checks
-    .filter((c) => ['fail', 'pending', 'cancel'].includes(c.bucket))
-    .map((c) => `${c.name}: ${c.bucket === 'fail' ? 'failing' : c.bucket === 'cancel' ? 'cancelled' : 'pending'}`);
-  return problems.length
-    ? `GitHub checks: ${problems.join('; ')}`
-    : checks.length
-      ? 'GitHub checks: passing'
-      : 'GitHub checks: none reported';
-}
 // The PRs whose head branch is `branch` in `repo` (owner/name), validated; throws when gh cannot say.
 /**
  * @param {string} repo
@@ -339,7 +310,7 @@ const bad = () => new Error('incomplete GitHub PR status');
 /** @param {unknown} v */
 const label = (v) => String(v).slice(0, 80);
 
-// One entry of statusCheckRollup: { name, failing, pending }.
+// One entry of statusCheckRollup: { name, url, failing, pending }.
 /** @param {any} c Parsed JSON from gh, checked field by field. */
 function rollupEntry(c) {
   if (!c || typeof c !== 'object') throw bad();
@@ -352,6 +323,7 @@ function rollupEntry(c) {
       throw bad();
     return {
       name: label(c.context),
+      url: c.targetUrl,
       failing: ['ERROR', 'FAILURE'].includes(c.state),
       pending: ['PENDING', 'EXPECTED'].includes(c.state),
     };
@@ -360,6 +332,7 @@ function rollupEntry(c) {
     if (typeof c.name !== 'string' || !c.name || typeof c.status !== 'string') throw bad();
     return {
       name: label(c.name),
+      url: c.detailsUrl,
       failing: c.status === 'COMPLETED' && FAILED.includes(c.conclusion),
       pending: c.status !== 'COMPLETED',
     };
@@ -439,4 +412,114 @@ export async function statusAsync(
   } catch (err) {
     throw reasonError('malformed GitHub PR status', 'error', err);
   }
+}
+
+// What the user sees after Check PR (ADR 0034): a fresh read of the PR's state, conflicts, checks and unresolved review threads.
+// Every text comes from GitHub and is untrusted: it is returned as a plain string cut to a fixed length, and a link only when it is https.
+export const setup = {
+  reasons: ['gh-missing', 'not-signed-in'],
+  steps: ['Install the GitHub CLI from https://cli.github.com', 'Run `gh auth login`'],
+};
+const NAME_MAX = 120,
+  PATH_MAX = 300,
+  COMMENT_MAX = 300,
+  LINK_MAX = 500,
+  THREADS_MAX = 50,
+  THREAD_PAGES = 10;
+/** @param {unknown} v @param {number} max */
+const cut = (v, max) => (typeof v === 'string' ? v : '').slice(0, max);
+/** @param {unknown} v @returns {string | null} */
+const link = (v) => (typeof v === 'string' && /^https:\/\/\S+$/.test(v) && v.length <= LINK_MAX ? v : null);
+const reviewThreadsQuery = `query PrThreads($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { reviewThreads(first:100,after:$cursor) { nodes { isResolved path comments(first:1) { nodes { body url } } } pageInfo { hasNextPage endCursor } } } } }`;
+/**
+ * @typedef {object} PrDetails
+ * @property {'open' | 'merged' | 'closed'} state
+ * @property {boolean} [draft]
+ * @property {boolean | null} [conflicts] null when the host has not computed it yet.
+ * @property {{ name: string, url: string | null }[]} [failing]
+ * @property {string[]} [pending]
+ * @property {{ path: string, comment: string, url: string | null }[]} [threads]
+ * @property {number} [threadsTotal]
+ */
+/**
+ * A fresh read of a PR, never from a cache. `run` is the injection point for tests. A failure is a FactoryError whose `code` is gh-missing, not-signed-in, rate-limited or error.
+ * @param {string} url
+ * @param {{ run?: (args: string[]) => Promise<{ stdout: string }> }} [options]
+ * @returns {Promise<PrDetails>}
+ */
+export async function details(
+  url,
+  {
+    run = (args) =>
+      exec('gh', args, { timeout: 20_000, maxBuffer: MAX_BUFFER, env: { ...process.env, GH_PROMPT_DISABLED: '1' } }),
+  } = {},
+) {
+  const match = PR.exec(url);
+  if (!match) throw reasonError('not a GitHub pull request', 'error');
+  /** @param {string[]} args */
+  const read = async (args) => {
+    try {
+      return JSON.parse((await run(args)).stdout);
+    } catch (err) {
+      throw reasonError('cannot read GitHub PR details', err instanceof SyntaxError ? 'error' : failure(err), err);
+    }
+  };
+  const pr = await read(['pr', 'view', url, '--json', 'state,mergeable,isDraft,statusCheckRollup']);
+  if (!pr || typeof pr !== 'object' || Array.isArray(pr)) throw reasonError('incomplete GitHub PR details', 'error');
+  const state = /** @type {Record<string, PrDetails['state']>} */ ({
+    OPEN: 'open',
+    MERGED: 'merged',
+    CLOSED: 'closed',
+  })[pr.state];
+  if (!state) throw reasonError('incomplete GitHub PR details', 'error');
+  if (state !== 'open') return { state };
+  const rollup = pr.statusCheckRollup ?? [];
+  if (!Array.isArray(rollup)) throw reasonError('incomplete GitHub PR details', 'error');
+  let entries;
+  try {
+    entries = rollup.map(rollupEntry);
+  } catch (err) {
+    throw reasonError('incomplete GitHub PR details', 'error', err);
+  }
+  /** @type {NonNullable<PrDetails['threads']>} */
+  const threads = [];
+  let total = 0,
+    cursor;
+  for (let page = 0; page < THREAD_PAGES; page++) {
+    const args = [
+      'api',
+      'graphql',
+      '-f',
+      `query=${reviewThreadsQuery}`,
+      '-f',
+      `owner=${match[1]}`,
+      '-f',
+      `repo=${match[2]}`,
+      '-F',
+      `number=${match[3]}`,
+    ];
+    if (cursor) args.push('-f', `cursor=${cursor}`);
+    const connection = (await read(args))?.data?.repository?.pullRequest?.reviewThreads;
+    if (!connection || !Array.isArray(connection.nodes) || typeof connection.pageInfo?.hasNextPage !== 'boolean')
+      throw reasonError('incomplete GitHub review threads', 'error');
+    for (const t of connection.nodes) {
+      if (!t || typeof t.isResolved !== 'boolean') throw reasonError('incomplete GitHub review threads', 'error');
+      if (t.isResolved) continue;
+      total++;
+      const first = t.comments?.nodes?.[0];
+      if (threads.length < THREADS_MAX)
+        threads.push({ path: cut(t.path, PATH_MAX), comment: cut(first?.body, COMMENT_MAX), url: link(first?.url) });
+    }
+    cursor = connection.pageInfo.endCursor;
+    if (!connection.pageInfo.hasNextPage || typeof cursor !== 'string') break;
+  }
+  return {
+    state,
+    draft: pr.isDraft === true,
+    conflicts: pr.mergeable === 'CONFLICTING' ? true : pr.mergeable === 'MERGEABLE' ? false : null,
+    failing: entries.filter((e) => e.failing).map((e) => ({ name: cut(e.name, NAME_MAX), url: link(e.url) })),
+    pending: entries.filter((e) => e.pending && !e.failing).map((e) => cut(e.name, NAME_MAX)),
+    threads,
+    threadsTotal: total,
+  };
 }
