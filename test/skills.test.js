@@ -590,3 +590,14 @@ test('Define estimates the Run size against two thirds of the limit, proposes th
   assert.match(fast, /passes the limit, say so in the confirmation and propose the Full track/);
   assert.match(fast, /the user chooses/);
 });
+
+test('the Waiting section says what follows a Run size wait, and continue never answers it for the user', () => {
+  const waiting = section('Waiting on the user');
+  assert.match(waiting, /Build: the Run outgrew the size limit/);
+  assert.match(
+    waiting,
+    /After split: run `tds-factory run split --id <id>`.*take the Run to Check, then start a new Run at once with `\/factory` and the links/,
+  );
+  assert.match(waiting, /After accept: run `tds-factory run size --id <id> --accept` and Build goes on/);
+  assert.match(references['continue.md'], /A Run waiting for the size answer stays waiting until the user answers/);
+});
