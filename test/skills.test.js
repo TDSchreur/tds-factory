@@ -444,6 +444,7 @@ test('the main file stays small and names every reference file where it is neede
     'invoked-skills.md',
     'progress-commands.md',
     'run-schema.md',
+    'scratch-ignore.md',
     'stage-agents.md',
   ]);
   for (const name of Object.keys(references))
@@ -538,4 +539,15 @@ test('Check passes the cause of each Blocking finding to run rework, and the com
   assert.match(references['check.md'], /passing `--cause <cause>` for each cause of the Blocking findings/);
   assert.match(references['progress-commands.md'], /`tds-factory run rework --id <id> \[--cause <cause>\]\.\.\.`/);
   assert.match(references['run-schema.md'], /`rework_causes`/);
+});
+
+test('Preflight fixes a missing scratch-ignore for a Local tracker without ever stopping the Run', () => {
+  assert.match(main, /A `missing` `scratch-ignore` never stops the Run/);
+  assert.match(main, /`\.factory\/` is only reported/);
+  assert.match(main, /`\.scratch\/` for a Local tracker is the one case you edit/);
+  const fix = references['scratch-ignore.md'];
+  assert.match(fix, /`git rev-parse --git-common-dir`/);
+  assert.match(fix, /uncommitted and should be committed to the default branch/);
+  assert.match(references['define.md'], /Do not commit or force-add `\.scratch\/`/);
+  assert.match(references['finish.md'], /"local, not committed"/);
 });
