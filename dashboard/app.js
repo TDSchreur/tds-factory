@@ -152,13 +152,14 @@ function App() {
    * @param {string} action
    * @param {boolean} [danger]
    * @param {boolean} [notice]
+   * @param {string[]} [links]
    * @returns {Promise<boolean>}
    */
-  const ask = (title, message, action, danger, notice) => {
+  const ask = (title, message, action, danger, notice, links) => {
     const result = queue.current.then(
       () =>
         new Promise((/** @type {(confirmed: boolean) => void} */ resolve) =>
-          setRequest({ title, message, action, danger, notice, resolve }),
+          setRequest({ title, message, action, danger, notice, links, resolve }),
         ),
     );
     queue.current = result.then(() => {});
@@ -191,40 +192,44 @@ function App() {
    */
   const runAction = async (run, name, title, message, action, done, query = '') => {
     if (!(await ask(title, message, action, false))) return;
+    const failed =
+      'Could not ' +
+      ({
+        sync: 'sync the Run',
+        clean: 'clean up the Run',
+        'extra-loop': 'grant the extra loop',
+        split: 'split the Run',
+        continue: 'continue the Run',
+      }[/** @type {'sync' | 'clean' | 'extra-loop' | 'split' | 'continue'} */ (name)] ?? 'accept the Check');
     try {
       const response = await write('POST', runPath(run) + '/' + name + query);
       const text = await response.text();
+      // A split answers with the moved links, one per line; they show as links only when they are safe URLs.
+      const links =
+        name === 'split' && response.ok
+          ? text
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .filter(Boolean)
+          : undefined;
       await ask(
-        response.ok
-          ? done
-          : 'Could not ' +
-              (name === 'sync'
-                ? 'sync the Run'
-                : name === 'clean'
-                  ? 'clean up the Run'
-                  : name === 'extra-loop'
-                    ? 'grant the extra loop'
-                    : 'accept the Check'),
-        response.ok ? (name === 'clean' ? text : done + '.') : text,
+        response.ok ? done : failed,
+        !response.ok
+          ? text
+          : name === 'clean'
+            ? text
+            : links
+              ? links.length
+                ? 'Moved to a new Run:'
+                : 'Nothing was left to move.'
+              : done + (name === 'continue' ? '. The agent picks it up on its next step.' : '.'),
         'Close',
         false,
         true,
+        links,
       );
     } catch {
-      await ask(
-        'Could not ' +
-          (name === 'sync'
-            ? 'sync the Run'
-            : name === 'clean'
-              ? 'clean up the Run'
-              : name === 'extra-loop'
-                ? 'grant the extra loop'
-                : 'accept the Check'),
-        run.title,
-        'Close',
-        false,
-        true,
-      );
+      await ask(failed, run.title, 'Close', false, true);
     }
     poll();
   };
@@ -334,6 +339,33 @@ function App() {
       'Extra loop granted',
       '?updated=' + encodeURIComponent(run.updated),
     );
+  // The answers to the Run size question (ADR 0035); the server refuses a Run that changed since the page showed it.
+  const continueRun = (/** @type {RunView} */ run) =>
+    runAction(
+      run,
+      'continue',
+      'Accept the size and continue Build?',
+      '"' + run.title + '" goes on in this Run; the size question is not asked again.',
+      'Continue',
+      'Continued',
+      '?updated=' + encodeURIComponent(run.updated),
+    );
+  const splitRun = (/** @type {RunView} */ run) => {
+    const total = Math.max(0, run.ticketsTotal ?? 0);
+    const done = Math.min(Math.max(0, run.ticketsDone ?? 0), total);
+    return runAction(
+      run,
+      'split',
+      'Split the Run?',
+      (total
+        ? done + ' of ' + total + ' Tickets are done and stay; the other ' + (total - done) + ' move to a new Run.'
+        : 'The Tickets that are done stay; the others move to a new Run.') +
+        ' The Run then waits for an agent; hand it over with Copy agent prompt.',
+      'Split',
+      'Run split',
+      '?updated=' + encodeURIComponent(run.updated),
+    );
+  };
   /**
    * @param {RunView[]} doomed
    * @param {string} message
@@ -531,6 +563,8 @@ function App() {
     clean: cleanRun,
     accept: acceptRun,
     grant: grantRun,
+    split: splitRun,
+    continueRun,
     remove: (run) =>
       removeRuns(
         [run],
@@ -563,7 +597,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

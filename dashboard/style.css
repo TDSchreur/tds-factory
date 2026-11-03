@@ -419,6 +419,7 @@
   .help-section h3 { font-size: var(--fontSizeBase300); line-height: var(--lineHeightBase300); font-weight: var(--fontWeightSemibold); margin: var(--spacingVerticalL) 0 var(--spacingVerticalXS); }
   .help-section ul { margin: 0; padding-left: var(--spacingHorizontalXL); color: var(--colorNeutralForeground2); }
   .help-section li { padding: var(--spacingVerticalXXS) 0; }
+  .dialog-links { overflow-wrap: anywhere; }
   .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--spacingHorizontalS); margin-top: var(--spacingVerticalXXL); }
   .dialog-actions .primary { background: var(--colorBrandBackground); color: var(--colorNeutralForegroundOnBrand); border-color: transparent; }
   .dialog-actions .primary:hover { background: var(--colorBrandBackgroundHover); }

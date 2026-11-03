@@ -105,4 +105,4 @@ When asked to address PR feedback after Finish, read `references/follow-up.md` a
 
 ## Continue
 
-`/factory continue <run id>` resumes that Run from its current Stage, also a Follow-up Rework started from the Dashboard (waiting with "Follow-up Rework ready for an agent"). Read `references/continue.md` and follow it.
+`/factory continue <run id>` resumes that Run from its current Stage, also a Follow-up Rework started from the Dashboard (waiting with "Follow-up Rework ready for an agent") or a Dashboard Split. Read `references/continue.md` and follow it.
