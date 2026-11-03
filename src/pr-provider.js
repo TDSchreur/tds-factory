@@ -31,13 +31,26 @@ import * as azure from './pr-azure.js';
  * @property {(url: string, options?: { run?: any }) => Promise<import('./pr-github.js').PrDetails>} details A fresh read of the PR for Check PR; GitHub has all of it, Azure DevOps state, draft and conflicts only.
  * @property {{ reasons: string[], steps: string[] }} setup The failure reasons the host's setup steps help with, and the steps.
  * @property {(url: string, cwd?: string) => PrView & { headRefOid: string }} [strictView]
+ * @property {(url: string, cwd?: string) => import('./git.js').Flow} [strictViewFlow] The same as a flow of steps for the Dashboard (ADR 0030).
+ * @property {(url: string, head: string, cwd?: string) => import('./git.js').Flow} [observeFlow]
  * @property {(url: string, head: string, cwd?: string) => import('./run-record.js').FollowUp} [observe]
  * @property {(repo: string, branch: string, cwd?: string) => { url: string, headRefName: string, headRepository: { name: string }, headRepositoryOwner: { login: string } }[]} [listByHead]
  */
 
 /** @type {PrProvider[]} */
 const providers = [github, azure];
-const OPERATIONS = ['statusAsync', 'stateAsync', 'view', 'viewAsync', 'details', 'strictView', 'observe', 'listByHead'];
+const OPERATIONS = [
+  'statusAsync',
+  'stateAsync',
+  'view',
+  'viewAsync',
+  'details',
+  'strictView',
+  'strictViewFlow',
+  'observe',
+  'observeFlow',
+  'listByHead',
+];
 
 // The adapter that handles this PR link, or undefined when no adapter does.
 /** @param {string} url */

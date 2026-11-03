@@ -1,7 +1,7 @@
 /** @import { Run } from './run-record.js' */
 /** @import { PrLookup, SyncPrLookup } from './run-clean.js' */
 import path from 'node:path';
-import { followUpRun } from './run-follow-up.js';
+import { followUpRun, fixRunFlow } from './run-follow-up.js';
 import { summarizeMetrics, totalMetrics } from './run-metrics.js';
 import { totalUsage } from './run-usage.js';
 import { reviewPlan } from './project-reviews.js';
@@ -30,7 +30,14 @@ import { guidesRun } from './guides.js';
 import { sizeWarnings } from './run-size.js';
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
-export { MAX_CHECK_LOOPS, loopCap, verifyCommandProblem, fastCommandProblem, trackOf } from './run-record.js';
+export {
+  MAX_CHECK_LOOPS,
+  loopCap,
+  reworkInProgress,
+  verifyCommandProblem,
+  fastCommandProblem,
+  trackOf,
+} from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
 
 /** @param {Run} record @param {{ head: string, dirty: boolean }} state */
@@ -60,6 +67,8 @@ export function openRunStore(callerDir) {
       followUpRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] @param {string[]} [causes] */
     rework: (id, data, causes) => reworkRun(projectDir, id, data, causes),
+    /** @param {string | undefined} id @param {{ scope?: string, updated?: string, grant?: boolean }} [options] */
+    fixAsync: (id, options) => runAsync(fixRunFlow(projectDir, id, options)),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] */
     sync: (id, data) => syncRun(projectDir, id, data),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] */

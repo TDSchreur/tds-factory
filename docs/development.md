@@ -69,7 +69,7 @@ The multi-Project Dashboard launch flow is split too: `src/project-registry.js` 
 
 ## Git
 
-Every plain `git` call in `src/` goes through `git` (sync) or `gitAsync` (async) in `src/git.js`; `gitAsync` marks a real timeout with `timedOut` and gives a `maxBuffer` overflow its own code; only `src/sync.js` keeps its own `execFileSync` with `-C`. Run operations that the CLI and the Dashboard both use are written once as a flow of git steps and run sync or async ([ADR 0030](adr/0030-one-flow-of-git-steps-runs-sync-for-the-cli-and-async-for-the-dashboard.md)).
+Every plain `git` call in `src/` goes through `git` (sync) or `gitAsync` (async) in `src/git.js`; `gitAsync` marks a real timeout with `timedOut` and gives a `maxBuffer` overflow its own code; only `src/sync.js` keeps its own `execFileSync` with `-C`. Run operations that the CLI and the Dashboard both use are written once as a flow of git steps and run sync or async ([ADR 0030](adr/0030-one-flow-of-git-steps-runs-sync-for-the-cli-and-async-for-the-dashboard.md)). The `gh` reads of Follow-up are steps of the same flow (`commandStep`; the adapter names the command), so the Dashboard's Fix does not block on them either.
 
 ## PR providers
 

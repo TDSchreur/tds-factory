@@ -1,5 +1,6 @@
 /** @import { PrStatus, PrView } from './pr-provider.js' */
 /** @import { FollowUp, Check } from './run-record.js' */
+import { runSync, commandStep } from './git.js';
 import { exec, failureText, MAX_BUFFER, reasonError, remoteText, spawnText } from './pr-exec.js';
 
 // The GitHub adapter of the PR provider seam (see ADR 0020): every call of the `gh` command lives here.
@@ -24,11 +25,10 @@ export function repoOfRemote(remote) {
 /**
  * @param {string[]} args
  * @param {string} [cwd]
- * @returns {any} The parsed JSON of gh; its shape is checked by each caller.
+ * @returns {Generator<import('./git.js').Step, any, any>} The parsed JSON of gh; its shape is checked by each caller.
  */
-function gh(args, cwd) {
-  const out = spawnText('gh', args, {
-    cwd,
+function* gh(args, cwd) {
+  const out = yield* commandStep('gh', cwd, args, {
     timeout: 20000,
     maxBuffer: MAX_BUFFER,
     env: { ...process.env, GH_PROMPT_DISABLED: '1' },
@@ -48,31 +48,31 @@ const commentsQuery = `query FollowUpComments($thread:ID!, $cursor:String) { nod
  * @param {Record<string, string>} fields
  * @param {string | undefined} cwd
  * @param {string} [cursor]
- * @returns {any} The data of the GraphQL response; its shape is checked by each caller.
+ * @returns {Generator<import('./git.js').Step, any, any>} The data of the GraphQL response; its shape is checked by each caller.
  */
-function graph(query, fields, cwd, cursor) {
+function* graph(query, fields, cwd, cursor) {
   const args = ['api', 'graphql', '-f', `query=${query}`];
   for (const [key, value] of Object.entries(fields)) args.push(key === 'number' ? '-F' : '-f', `${key}=${value}`);
   if (cursor) args.push('-f', `cursor=${cursor}`);
-  const response = gh(args, cwd);
+  const response = yield* gh(args, cwd);
   if (!response || typeof response !== 'object' || response.errors || !response.data)
     throw new Error('incomplete GitHub response');
   return response.data;
 }
 /**
  * The nodes of every page of a GraphQL connection. Its data is parsed JSON, checked field by field by the callers.
- * @param {(cursor?: string) => any} fetch
+ * @param {(cursor?: string) => Generator<import('./git.js').Step, any, any>} fetch
  * @param {(data: any) => any} select
- * @returns {any[]}
+ * @returns {Generator<import('./git.js').Step, any[], any>}
  */
-function pages(fetch, select) {
+function* pages(fetch, select) {
   /** @type {any[]} Parsed JSON, checked by the callers. */
   const all = [],
     seen = new Set();
   /** @type {string | undefined} */
   let cursor;
   while (true) {
-    const connection = select(fetch(cursor));
+    const connection = select(yield* fetch(cursor));
     if (
       !connection ||
       !Array.isArray(connection.nodes) ||
@@ -135,14 +135,14 @@ function checkState(check) {
     pending: check.status !== 'COMPLETED',
   };
 }
-// State and head of a PR for Follow-up: strict, and throws when GitHub cannot say.
+// State and head of a PR for Follow-up: strict, and throws when GitHub cannot say. A flow, so the Dashboard can run it without blocking (ADR 0030).
 /**
  * @param {string} url
  * @param {string} [cwd]
- * @returns {PrView & { headRefOid: string }}
+ * @returns {Generator<import('./git.js').Step, PrView & { headRefOid: string }, any>}
  */
-export function strictView(url, cwd) {
-  const value = gh(['pr', 'view', url, '--json', 'state,headRefOid'], cwd);
+export function* strictViewFlow(url, cwd) {
+  const value = yield* gh(['pr', 'view', url, '--json', 'state,headRefOid'], cwd);
   if (
     !value ||
     !['OPEN', 'CLOSED', 'MERGED'].includes(value.state) ||
@@ -152,15 +152,17 @@ export function strictView(url, cwd) {
     throw new Error('incomplete GitHub PR state');
   return value;
 }
+/** @param {string} url @param {string} [cwd] */
+export const strictView = (url, cwd) => runSync(strictViewFlow(url, cwd));
 // What Follow-up observes at the PR head: merge conflicts, current checks and unresolved review threads.
 // GitHub computes `mergeable` lazily; UNKNOWN is no finding, the next Follow-up reads it again.
 /**
  * @param {string} url
  * @param {string} head
  * @param {string} [cwd]
- * @returns {FollowUp}
+ * @returns {Generator<import('./git.js').Step, FollowUp, any>}
  */
-export function observe(url, head, cwd) {
+export function* observeFlow(url, head, cwd) {
   const match = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)$/.exec(url);
   if (!match || !Number.isSafeInteger(Number(match[3])) || Number(match[3]) < 1)
     throw new Error('Follow-up needs a GitHub PR URL');
@@ -173,7 +175,7 @@ export function observe(url, head, cwd) {
   };
   /** @type {unknown} */
   let mergeable;
-  const checks = pages(
+  const checks = (yield* pages(
     (cursor) => graph(checksQuery, fields, cwd, cursor),
     (data) => {
       const value = pr(data);
@@ -189,10 +191,10 @@ export function observe(url, head, cwd) {
       const rollup = commits[0].commit.statusCheckRollup;
       return rollup === null ? { nodes: [], pageInfo: { hasNextPage: false } } : rollup?.contexts;
     },
-  ).map(checkState);
+  )).map(checkState);
   if (!['MERGEABLE', 'CONFLICTING', 'UNKNOWN'].includes(String(mergeable)))
     throw new Error('incomplete GitHub merge state');
-  const rawThreads = pages(
+  const rawThreads = yield* pages(
     (cursor) => graph(threadsQuery, fields, cwd, cursor),
     (data) => pr(data).reviewThreads,
   );
@@ -209,16 +211,16 @@ export function observe(url, head, cwd) {
       throw new Error('incomplete GitHub review thread');
     if (thread.isResolved) continue;
     let first = true;
-    const comments = pages(
-      (cursor) => {
+    const comments = (yield* pages(
+      function* (cursor) {
         if (first) {
           first = false;
           return thread.comments;
         }
-        return graph(commentsQuery, { thread: thread.id }, cwd, cursor).node;
+        return (yield* graph(commentsQuery, { thread: thread.id }, cwd, cursor)).node;
       },
       (value) => (value === thread.comments ? value : value?.id === thread.id ? value.comments : null),
-    ).map(validComment);
+    )).map(validComment);
     if (!comments.length) throw new Error('incomplete GitHub review thread');
     threads.push({ id: thread.id, path: thread.path, comments });
   }
@@ -233,6 +235,8 @@ export function observe(url, head, cwd) {
     threads,
   };
 }
+/** @param {string} url @param {string} head @param {string} [cwd] */
+export const observe = (url, head, cwd) => runSync(observeFlow(url, head, cwd));
 
 const VIEW_ARGS = ['pr', 'view'];
 // The state and head `gh pr view --json state,headRefOid` printed; the sync and async variants share it.

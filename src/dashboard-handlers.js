@@ -5,9 +5,10 @@
 /** @import { createProjectHub } from './dashboard-projects.js' */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { messageOf } from './narrow.js';
+import { messageOf, oneOf } from './narrow.js';
 import { interpretRun, str } from './dashboard-view.js';
-import { providerFor } from './pr-provider.js';
+import { can, providerFor } from './pr-provider.js';
+import { FOLLOW_UP_SCOPES } from './run-follow-up.js';
 
 /**
  * What every handler gets: the Dashboard's token and Projects and the request being answered. A handler of a Project route also gets that Project's services (`store` and the fields after it).
@@ -152,6 +153,28 @@ function grantExtraLoop(ctx, id, v) {
   send(200, 'text/plain', 'granted');
 }
 
+// ADR 0034: the user's Fix starts a Follow-up scoped to one problem and leaves the Run waiting for an agent. The store refuses everything the Run's state does not allow, with how to resolve it; nothing bypasses that.
+/** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
+async function fixRun(ctx, id, v) {
+  const { send, store } = ctx;
+  const params = query(ctx);
+  const [scope, updated, grant] = [params.get('scope'), params.get('updated'), params.get('grant')];
+  if (!oneOf(FOLLOW_UP_SCOPES, scope))
+    return send(400, 'text/plain', `invalid scope: use ${FOLLOW_UP_SCOPES.join(', ')}`);
+  if (grant !== null && grant !== 'true') return send(400, 'text/plain', 'invalid grant option');
+  if (updated === null) return send(409, 'text/plain', 'the request must name the Run record time you looked at');
+  if (!can(v.pr, 'strictViewFlow'))
+    return send(409, 'text/plain', 'Fix works for GitHub pull requests only; make the change in a new Run');
+  const outcome = await store.fixAsync(id, { scope: scope ?? undefined, updated: updated, grant: grant === 'true' });
+  if (!outcome.started)
+    return send(
+      409,
+      'text/plain',
+      `${outcome.result}; there is nothing to fix for ${scope}, so the Run stays as it was`,
+    );
+  send(200, 'text/plain', outcome.result);
+}
+
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
 async function acceptCheck(ctx, id, v) {
   const { send, store } = ctx;
@@ -197,6 +220,7 @@ export async function runAction(ctx) {
       if (action === 'sync') return await syncRun(ctx, id);
       if (action === 'clean') return await cleanRun(ctx, id);
       if (action === 'extra-loop') return grantExtraLoop(ctx, id, v);
+      if (action === 'follow-up') return await fixRun(ctx, id, v);
       return await acceptCheck(ctx, id, v);
     } catch (err) {
       ctx.send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));

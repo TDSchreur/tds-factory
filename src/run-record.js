@@ -378,3 +378,8 @@ export const loopCap = (record) =>
   Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS) + extraLoops(record);
 /** @param {Run} record */
 export const attempt = (record) => loops(record) + 1;
+
+// Whether a Follow-up Rework is under way: a Run back in Build or Check with the Follow-up snapshot it started from.
+/** @param {Pick<Run, 'stage' | 'follow_up'>} record */
+export const reworkInProgress = (record) =>
+  ['build', 'check'].includes(String(record.stage)) && !!record.follow_up && typeof record.follow_up === 'object';

@@ -70,6 +70,7 @@
  * @property {string} [infrastructure]
  * @property {number | null} [loops]
  * @property {number} [loopCap]
+ * @property {boolean} [reworkInProgress] A Follow-up Rework is under way (Build or Check after a Follow-up); only one runs at a time.
  * @property {string} [prState]
  * @property {PrStatusData | null} [prStatus]
  * @property {string} [prHost]
