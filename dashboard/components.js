@@ -396,7 +396,7 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
       }
       ${
         summaryOpen &&
-        html`<button type="button" class="danger" onClick=${() => actions.removeMissing(missingProjects)} aria-label=${'Remove all ' + missingProjects.length + ' missing Projects from the Dashboard'}>Remove all missing</button>`
+        html`<button type="button" class="danger" onClick=${() => actions.removeMissing(missingProjects)} aria-label=${'Remove all missing, ' + missingProjects.length + ' Project' + (missingProjects.length === 1 ? '' : 's')}>Remove all missing</button>`
       }
     </div>
     ${
@@ -405,7 +405,7 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
         <ul class="missing-list">${missingProjects.map(
           (missing) => html`<li key=${missing.id}>
             <div><strong>${missing.name}</strong></div>
-            <div>${missing.path}</div>
+            <div><code>${missing.path}</code></div>
             <button type="button" onClick=${() => actions.removeProject(missing)} aria-label=${'Remove the Project ' + missing.name + ' from the Dashboard'}>Remove</button>
           </li>`,
         )}</ul>

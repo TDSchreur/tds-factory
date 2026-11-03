@@ -1,27 +1,48 @@
 // @ts-check
 import { DEFAULT_PORT, startDashboard } from './dashboard.js';
-import { openProjectRegistry } from './project-registry.js';
+import { openProjectRegistry, projectId } from './project-registry.js';
 import { mainCheckout } from './run-folder.js';
 import { compareVersions } from './update.js';
 import { codeOf } from './narrow.js';
-import { projectId } from './project-registry.js';
 
 const HOST = '127.0.0.1';
 const PROBE_TIMEOUT_MS = 1500;
+const INFO_MAX_BYTES = 64 * 1024;
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 /** @param {unknown} value */
-const semver = (value) => (typeof value === 'string' && SEMVER.test(value) ? value : undefined);
+const semver = (value) => (typeof value === 'string' && value.length <= 64 && SEMVER.test(value) ? value : undefined);
+
+/**
+ * @param {Response} res
+ * @param {number} maxBytes
+ */
+async function readLimitedText(res, maxBytes) {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let seen = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    seen += value.byteLength;
+    if (seen > maxBytes) throw new Error('response too large');
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
 
 /** The pid and Factory version of the Dashboard that answers /api/info on a port, or undefined when nothing that looks like a shared (registry-backed) one does; a standalone --port server is a busy port. @param {number} port */
 async function probe(port) {
   try {
     const res = await fetch(`http://${HOST}:${port}/api/info`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     if (res.status !== 200) return undefined;
+    const body = await readLimitedText(res, INFO_MAX_BYTES);
     const info =
       /** @type {{ token?: unknown, project?: unknown, shared?: unknown, pid?: unknown, version?: unknown } | null} */ (
-        await res.json()
+        JSON.parse(body)
       );
     if (typeof info?.token !== 'string' || typeof info?.project !== 'string' || info.shared !== true) return undefined;
     return {
@@ -67,10 +88,12 @@ export async function launchDashboard({
     const standalone = await startDashboard({ projectDir, port });
     return { url: standalone.url, port: standalone.port, reused: false, close: standalone.close };
   }
+  const main = mainCheckout(projectDir).dir;
   const project = registry.join(projectDir);
-  const id = project?.id ?? projectId(mainCheckout(projectDir).dir);
+  const id = project?.id ?? projectId(main);
+  const collision = !project && registry.list().some((p) => p.path !== main && p.id === id);
   /** @param {number} onPort */
-  const urlOn = (onPort) => `http://${HOST}:${onPort}/?project=${id}`;
+  const urlOn = (onPort) => `http://${HOST}:${onPort}/${collision ? '' : `?project=${id}`}`;
   /** @param {number} onPort @param {string | undefined} running */
   const reuse = (onPort, running) => {
     if (running && isOlder(running, version))

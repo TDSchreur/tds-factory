@@ -25,21 +25,26 @@ const FILE_MODE = 0o600;
 
 /** @param {string} dir */
 function ensurePrivateDir(dir) {
-  if (fs.existsSync(dir)) return;
-  fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  if (process.platform === 'win32') return;
   try {
-    fs.chmodSync(dir, DIR_MODE);
+    const mode = fs.statSync(dir).mode & 0o777;
+    if ((mode & 0o077) !== 0) fs.chmodSync(dir, DIR_MODE);
   } catch {
     // best effort on hosts that do not apply POSIX modes
   }
 }
 
-/** @param {string} file @param {unknown} value */
-function writeAtomic(file, value) {
+/**
+ * @param {string} file
+ * @param {unknown} value
+ * @param {() => string} stagingHex
+ */
+function writeAtomic(file, value, stagingHex) {
   ensurePrivateDir(path.dirname(file));
   const text = `${JSON.stringify(value, null, 2)}\n`;
   for (;;) {
-    const staging = `${file}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`;
+    const staging = `${file}.${process.pid}.${stagingHex()}.tmp`;
     try {
       fs.writeFileSync(staging, text, { flag: 'wx', mode: FILE_MODE });
       fs.renameSync(staging, file);
@@ -75,22 +80,49 @@ const lockToken = (lockFile) => `${process.pid}:${randomBytes(16).toString('hex'
 /** @param {string} lockFile */
 const takeoverLockName = (lockFile) => `${lockFile}.stale-${process.pid}-${randomBytes(8).toString('hex')}`;
 
-/** @param {string} lockFile */
-function tryTakeOverStaleLock(lockFile) {
-  const age = Date.now() - fs.statSync(lockFile).mtimeMs;
+/**
+ * @param {string} lockFile
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ */
+function tryTakeOverStaleLock(lockFile, onBeforeStaleTakeover) {
+  const staleStat = fs.statSync(lockFile);
+  const age = Date.now() - staleStat.mtimeMs;
   if (age <= LOCK_STALE_MS) return false;
+  const staleToken = fs.readFileSync(lockFile, 'utf8');
+  onBeforeStaleTakeover({ lockFile, staleToken, staleMtimeMs: staleStat.mtimeMs });
   const takeover = takeoverLockName(lockFile);
   fs.renameSync(lockFile, takeover);
-  fs.rmSync(takeover, { force: true });
-  return true;
+  let keep = false;
+  try {
+    const movedToken = fs.readFileSync(takeover, 'utf8');
+    const movedMtimeMs = fs.statSync(takeover).mtimeMs;
+    if (movedToken !== staleToken || movedMtimeMs !== staleStat.mtimeMs) keep = true;
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+    return false;
+  }
+  if (!keep) {
+    fs.rmSync(takeover, { force: true });
+    return true;
+  }
+  if (!fs.existsSync(lockFile)) {
+    try {
+      fs.renameSync(takeover, lockFile);
+      return false;
+    } catch (err) {
+      if (!isMissing(err) && codeOf(err) !== 'EEXIST') throw err;
+    }
+  }
+  return false;
 }
 
 /**
  * @param {string} lockFile
  * @param {number} waitMs
  * @param {(ms: number) => void} wait
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
  */
-function acquireLockSync(lockFile, waitMs, wait) {
+function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
   ensurePrivateDir(path.dirname(lockFile));
   const token = lockToken(lockFile);
   const deadline = Date.now() + waitMs;
@@ -100,12 +132,13 @@ function acquireLockSync(lockFile, waitMs, wait) {
       return token;
     } catch (err) {
       if (codeOf(err) !== 'EEXIST') throw err;
+      let tookStale = false;
       try {
-        if (!tryTakeOverStaleLock(lockFile) && Date.now() >= deadline)
-          throw new Error(`${lockFile} is locked by another process`);
+        tookStale = tryTakeOverStaleLock(lockFile, onBeforeStaleTakeover);
       } catch (inner) {
         if (!isMissing(inner)) throw inner;
       }
+      if (!tookStale && Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
       wait(LOCK_RETRY_MS);
     }
   }
@@ -115,8 +148,9 @@ function acquireLockSync(lockFile, waitMs, wait) {
  * @param {string} lockFile
  * @param {number} waitMs
  * @param {(ms: number) => Promise<void>} wait
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
  */
-async function acquireLockAsync(lockFile, waitMs, wait) {
+async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
   ensurePrivateDir(path.dirname(lockFile));
   const token = lockToken(lockFile);
   const deadline = Date.now() + waitMs;
@@ -126,12 +160,13 @@ async function acquireLockAsync(lockFile, waitMs, wait) {
       return token;
     } catch (err) {
       if (codeOf(err) !== 'EEXIST') throw err;
+      let tookStale = false;
       try {
-        if (!tryTakeOverStaleLock(lockFile) && Date.now() >= deadline)
-          throw new Error(`${lockFile} is locked by another process`);
+        tookStale = tryTakeOverStaleLock(lockFile, onBeforeStaleTakeover);
       } catch (inner) {
         if (!isMissing(inner)) throw inner;
       }
+      if (!tookStale && Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
       await wait(LOCK_RETRY_MS);
     }
   }
@@ -147,21 +182,30 @@ function releaseLock(lockFile, token) {
 }
 
 // Runs fn while holding an exclusive lock file (created with `wx`) next to the registry, so two processes cannot both read the old list and drop each other's Project. A lock older than LOCK_STALE_MS belongs to a dead process and is taken over. Throws when the lock stays held for waitMs.
-/** @template T @param {string} lockFile @param {number} waitMs @param {() => T} fn @returns {T} */
-function withLock(lockFile, waitMs, fn) {
-  const token = acquireLockSync(lockFile, waitMs, sleep);
+/**
+ * @template T
+ * @param {string} lockFile
+ * @param {number} waitMs
+ * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ * @param {(ctx: { lockFile: string, token: string }) => void} onLockAcquired
+ * @param {() => T} fn
+ * @returns {T}
+ */
+function withLock(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn) {
+  const token = acquireLockSync(lockFile, waitMs, sleep, onBeforeStaleTakeover);
   try {
+    onLockAcquired({ lockFile, token });
     return fn();
   } finally {
     releaseLock(lockFile, token);
   }
 }
 
-// Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
-/** @template T @param {string} lockFile @param {number} waitMs @param {() => Promise<T>} fn @returns {Promise<T>} */
-async function withLockAsync(lockFile, waitMs, fn) {
-  const token = await acquireLockAsync(lockFile, waitMs, sleepAsync);
+/** @template T @param {string} lockFile @param {number} waitMs @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover @param {(ctx: { lockFile: string, token: string }) => void | Promise<void>} onLockAcquired @param {() => Promise<T>} fn @returns {Promise<T>} */
+async function withLockAsync(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn) {
+  const token = await acquireLockAsync(lockFile, waitMs, sleepAsync, onBeforeStaleTakeover);
   try {
+    await onLockAcquired({ lockFile, token });
     return await fn();
   } finally {
     releaseLock(lockFile, token);
@@ -169,12 +213,15 @@ async function withLockAsync(lockFile, waitMs, fn) {
 }
 
 // Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
-/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number, idOf?: (projectPath: string) => string }} [options] */
+/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number, idOf?: (projectPath: string) => string, stagingHex?: () => string, onBeforeStaleTakeover?: (ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void, onLockAcquired?: (ctx: { lockFile: string, token: string }) => void | Promise<void> }} [options] */
 export function openProjectRegistry({
   dir = factoryConfigDir(),
   warn = () => {},
   lockWaitMs = LOCK_WAIT_MS,
   idOf = projectId,
+  stagingHex = () => randomBytes(8).toString('hex'),
+  onBeforeStaleTakeover = () => {},
+  onLockAcquired = () => {},
 } = {}) {
   const registryFile = path.join(dir, 'projects.json');
   const lockFile = `${registryFile}.lock`;
@@ -201,7 +248,7 @@ export function openProjectRegistry({
   };
 
   /** @param {string[]} paths */
-  const save = (paths) => writeAtomic(registryFile, { projects: paths });
+  const save = (paths) => writeAtomic(registryFile, { projects: paths }, stagingHex);
 
   return {
     dir,
@@ -212,7 +259,7 @@ export function openProjectRegistry({
       try {
         const main = mainCheckout(projectDir).dir;
         const id = idOf(main);
-        withLock(lockFile, lockWaitMs, () => {
+        withLock(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, () => {
           const { paths, corrupt } = read();
           if (corrupt) {
             fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
@@ -235,7 +282,7 @@ export function openProjectRegistry({
     /** @param {string} id */
     remove(id) {
       try {
-        return withLock(lockFile, lockWaitMs, () => {
+        return withLock(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, () => {
           const { paths } = read();
           const kept = paths.filter((p) => idOf(p) !== id);
           if (kept.length === paths.length) return false;
@@ -250,7 +297,7 @@ export function openProjectRegistry({
     /** @param {string} id */
     async removeAsync(id) {
       try {
-        return await withLockAsync(lockFile, lockWaitMs, async () => {
+        return await withLockAsync(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, async () => {
           const { paths } = read();
           const kept = paths.filter((p) => idOf(p) !== id);
           if (kept.length === paths.length) return false;
@@ -265,11 +312,12 @@ export function openProjectRegistry({
     /** Removes every registry entry whose folder is currently missing. @returns {Promise<string[]>} */
     async removeMissingAsync() {
       try {
-        return await withLockAsync(lockFile, lockWaitMs, async () => {
+        return await withLockAsync(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, async () => {
           const { paths } = read();
-          const removed = paths.filter((p) => !fs.existsSync(p));
+          const gone = new Set(paths.filter((p) => !fs.existsSync(p)));
+          const removed = paths.filter((p) => gone.has(p));
           if (!removed.length) return [];
-          const kept = paths.filter((p) => fs.existsSync(p));
+          const kept = paths.filter((p) => !gone.has(p));
           save(kept);
           return removed;
         });
@@ -297,7 +345,7 @@ export function openProjectRegistry({
     /** @param {DashboardState} state */
     writeState(state) {
       try {
-        writeAtomic(stateFile, state);
+        writeAtomic(stateFile, state, stagingHex);
       } catch (err) {
         warn(`cannot write ${stateFile}: ${messageOf(err)}`);
       }

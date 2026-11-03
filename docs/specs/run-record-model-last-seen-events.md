@@ -9,6 +9,7 @@
 - `events.jsonl` in the Run folder is an append-only log, one JSON object per line with `at` and `type`: `stage` (from, to), `ticket-done`, `verify-start`, `verify` (finish, with `duration_ms`, `exit_code`, `head`, `fast`), `waiting` (reason), `released`, `status` (other status changes) and `rework`. Stage, Ticket, waiting, release, status and Rework events are derived by the Run store from the change it writes, so no operation can forget one. A failed append never fails the operation, because the Run record stays the source of truth.
 - Reading the log skips lines that cannot be parsed and counts them, refuses a symlinked log, and reads at most the last 256 KiB.
 - `/api/views` returns `model` (`requested`, `effort`, `observed`, each empty when unknown), `lastSeen`, `events` (the last 50) and `eventsDamaged` (the count of unreadable lines). No Dashboard UI changes.
+- `/api/views` returns one entry per Project (id, name, path, missing, runs), and each Run includes `model` (`requested`, `effort`, `observed`, each empty when unknown), `lastSeen`, `events` (the last 50) and `eventsDamaged` (the count of unreadable lines). No Dashboard UI changes.
 - Old Runs without the fields and without a log load; unknown values are empty, not zero or guessed.
 - The factory Skill tells agents to report model and effort once and to update `activity` more often; its field table lists the new fields.
 

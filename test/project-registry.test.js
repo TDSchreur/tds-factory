@@ -78,14 +78,29 @@ test('registry and file modes are private on non-Windows hosts', { skip: platfor
   assert.equal(lstatSync(join(dir, 'dashboard.json')).mode & 0o777, 0o600);
 });
 
-test('an existing staging path is never followed', () => {
-  const { registry: reg } = registry();
+test('a staging-path collision retries with wx and never follows a planted symlink', () => {
+  const { dir } = registry();
+  /** @type {string[]} */
+  const staging = ['trap', 'next'];
+  const reg = openProjectRegistry({ dir, stagingHex: () => staging.shift() ?? 'next' });
   const target = join(tempDir('registry-target-'), 'written-by-link');
-  const trap = join(reg.dir, `projects.json.${process.pid}.tmp`);
+  const trap = join(dir, `projects.json.${process.pid}.trap.tmp`);
   symlinkSync(target, trap);
   reg.join(repo());
   assert.equal(existsSync(target), false);
 });
+
+test(
+  'an existing config folder is tightened to private mode on non-Windows hosts',
+  { skip: platform() === 'win32' },
+  () => {
+    const dir = tempDir('registry-private-');
+    chmodSync(dir, 0o755);
+    const reg = openProjectRegistry({ dir });
+    reg.join(repo());
+    assert.equal(lstatSync(dir).mode & 0o777, 0o700);
+  },
+);
 
 test('a corrupt registry reads as empty with a warning and is kept aside when a Project joins', () => {
   const { registry: reg, dir, warnings } = registry();
@@ -113,13 +128,15 @@ test(
   'a failed write is a warning and never throws',
   { skip: process.platform === 'win32' || process.getuid?.() === 0 },
   () => {
-    const dir = tempDir('registry-ro-');
-    chmodSync(dir, 0o500);
+    const root = tempDir('registry-ro-');
+    const dir = join(root, 'locked', 'config');
+    mkdirSync(join(root, 'locked'), { recursive: true });
+    chmodSync(join(root, 'locked'), 0o500);
     const { registry: reg, warnings } = registry(dir);
     assert.equal(reg.join(repo()), undefined);
     assert.equal(warnings.length, 1);
     assert.equal(existsSync(join(dir, 'projects.json')), false);
-    chmodSync(dir, 0o700);
+    chmodSync(join(root, 'locked'), 0o700);
   },
 );
 
@@ -195,6 +212,28 @@ test('a stale lock left by a dead process does not block a join', () => {
   assert.equal(existsSync(lock), false);
 });
 
+test('a stale-lock takeover retries when the lock changed before rename', () => {
+  const dir = tempDir('registry-stale-race-');
+  const lock = join(dir, 'projects.json.lock');
+  writeFileSync(lock, 'stale-token');
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lock, old, old);
+  let injected = false;
+  const reg = openProjectRegistry({
+    dir,
+    onBeforeStaleTakeover: () => {
+      if (injected) return;
+      injected = true;
+      writeFileSync(lock, 'replacement-token');
+      utimesSync(lock, old, old);
+    },
+  });
+  const main = repo();
+  assert.equal(reg.join(main)?.path, main);
+  assert.equal(injected, true);
+  assert.equal(existsSync(lock), false);
+});
+
 test('a lock that stays held is a warning and the join gives up without throwing', () => {
   const { dir, warnings } = registry();
   writeFileSync(join(dir, 'projects.json.lock'), '1');
@@ -204,20 +243,14 @@ test('a lock that stays held is a warning and the join gives up without throwing
   assert.match(warnings[0], /locked/);
 });
 
-test('a lock that changed owners while held is not removed on release', async () => {
+test('a lock that changed owners while held is not removed on release', () => {
   const dir = tempDir('registry-lock-token-');
   const main = repo();
-  const script = `import { openProjectRegistry } from ${JSON.stringify(new URL('../src/project-registry.js', import.meta.url).href)};
-    const reg = openProjectRegistry({ dir: process.argv[1], lockWaitMs: 2000, warn: (m) => console.error(m) });
-    reg.join(process.argv[2]);`;
-  writeFileSync(join(dir, 'projects.json.lock'), 'foreign-token');
-  const old = new Date(Date.now() - 60_000);
-  utimesSync(join(dir, 'projects.json.lock'), old, old);
-  const child = spawn(process.execPath, ['--input-type=module', '-e', script, dir, main], { stdio: 'pipe' });
-  await new Promise((resolve) => setTimeout(resolve, 40));
-  writeFileSync(join(dir, 'projects.json.lock'), 'other-owner');
-  const code = await new Promise((resolve) => child.on('close', resolve));
-  assert.equal(code, 0);
+  const reg = openProjectRegistry({
+    dir,
+    onLockAcquired: ({ lockFile }) => writeFileSync(lockFile, 'other-owner'),
+  });
+  reg.join(main);
   assert.equal(readFileSync(join(dir, 'projects.json.lock'), 'utf8'), 'other-owner');
 });
 

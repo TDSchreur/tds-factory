@@ -293,6 +293,24 @@ test('DELETE /api/projects/missing removes only missing entries and reports how 
   });
 });
 
+test("DELETE /api/projects/missing can remove the Dashboard's own missing Project and keep it hidden", async () => {
+  await withRegistry(async ({ root, registry, start }) => {
+    const own = folder(root, 'own');
+    registry.join(own);
+    const dash = await start({ projectDir: own });
+    rmSync(own, { recursive: true, force: true });
+    const headers = await writeHeaders(dash);
+    const answer = await fetch(`${dash.url}/api/projects/missing`, { method: 'DELETE', headers });
+    assert.equal(answer.status, 200);
+    assert.deepEqual(await answer.json(), { removed: 1 });
+    const projects = await projectsOf(dash);
+    assert.equal(
+      projects.some((p) => p.name === 'own'),
+      false,
+    );
+  });
+});
+
 test('GitHub and Azure DevOps Projects sit side by side, each with its own PR provider and a lazy status', async () => {
   await withRegistry(async ({ root, registry, start }) => {
     const gh = folder(root, 'gh');

@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 /** @param {string} text */
 const importsGitRepo = (text) => /import\s+['"]\.\/git-repo\.js['"]|from\s+['"]\.\/git-repo\.js['"]/.test(text);
 /** @param {string} text */
-const setsFactoryConfigDir = (text) => /TDS_FACTORY_CONFIG_DIR/.test(text);
+const setsFactoryConfigDir = (text) => /TDS_FACTORY_CONFIG_DIR\s*[:=]/.test(text);
 /** @param {string} text */
 const usesCli = (text) => /bin\/tds-factory\.js/.test(text);
 /** @param {string} text */
@@ -17,6 +17,7 @@ const usesLaunch = (text) => /\blaunchDashboard\s*\(/.test(text);
 const usesStart = (text) => /\bstartDashboard\s*\(/.test(text);
 /** @param {string} text */
 function usesRegistryWithoutDir(text) {
+  if (/\bopenProjectRegistry\(\s*\)/.test(text)) return true;
   const calls = text.matchAll(/openProjectRegistry\(\s*\{([\s\S]*?)\}\s*\)/g);
   for (const call of calls) {
     if (!/dir\s*:/.test(call[1] ?? '')) return true;
@@ -61,15 +62,21 @@ test('a direct node --test run keeps the default config folder untouched', () =>
   const root = mkdtempSync(join(tmpdir(), 'tds-config-home-'));
   const home = join(root, 'home');
   const xdg = join(root, 'xdg');
+  const appdata = join(root, 'appdata');
   /** @type {NodeJS.ProcessEnv} */
-  const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: xdg };
+  const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: xdg, APPDATA: appdata };
   delete env.TDS_FACTORY_CONFIG_DIR;
-  const result = spawnSync(process.execPath, ['--test', 'test/project-registry.test.js'], {
-    cwd: resolve('.'),
-    env,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(existsSync(join(xdg, 'tds-factory')), false);
-  rmSync(root, { recursive: true, force: true });
+  try {
+    const result = spawnSync(process.execPath, ['--test', 'test/project-registry.test.js'], {
+      cwd: resolve('.'),
+      env,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(existsSync(join(xdg, 'tds-factory')), false);
+    assert.equal(existsSync(join(home, '.config', 'tds-factory')), false);
+    assert.equal(existsSync(join(appdata, 'tds-factory')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

@@ -282,6 +282,13 @@ test('missing Projects appear in one collapsed summary row with per-Project Remo
     assert.deepEqual(page.tokens, ['test-token']);
     page.calls.length = 0;
     page.tokens.length = 0;
+    assert.equal(
+      await run$(
+        page,
+        "return [...document.querySelectorAll('.project-row button')].find(b => b.textContent === 'Remove all missing').getAttribute('aria-label')",
+      ),
+      'Remove all missing, 2 Projects',
+    );
     await run$(
       page,
       "[...document.querySelectorAll('.project-row button')].find(b => b.textContent === 'Remove all missing').click()",
@@ -290,6 +297,10 @@ test('missing Projects appear in one collapsed summary row with per-Project Remo
     assert.match(
       await run$(page, "return document.getElementById('dialog-message').textContent"),
       /No folder or Run is touched/i,
+    );
+    assert.match(
+      await run$(page, "return document.getElementById('dialog-message').textContent"),
+      /missing at that moment/i,
     );
     await run$(page, "document.getElementById('dialog-confirm').click()");
     for (let i = 0; i < 40 && !page.calls.length; i++) await page.wait(50);

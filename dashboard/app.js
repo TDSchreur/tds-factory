@@ -351,7 +351,7 @@ function App() {
     if (
       !(await ask(
         'Remove all missing Projects?',
-        `Remove ${count} missing Project${count === 1 ? '' : 's'} from the Dashboard? No folder or Run is touched.`,
+        `Remove ${count} missing Project${count === 1 ? '' : 's'} from the Dashboard? This removes every Project that is missing at that moment. No folder or Run is touched.`,
         'Remove all missing',
         true,
       ))

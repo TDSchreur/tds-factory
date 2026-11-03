@@ -199,6 +199,37 @@ test('a registry that cannot be written does not stop the Dashboard', async () =
   }
 });
 
+test('an id collision warns and keeps a plain URL without ?project=', async () => {
+  /** @type {string[]} */
+  const warnings = [];
+  const incoming = repo();
+  const main = mainCheckout(incoming).dir;
+  const collisionId = projectId(main);
+  const launched = await launchDashboard({
+    projectDir: incoming,
+    version: FACTORY,
+    preferredPort: 0,
+    registry: {
+      dir: tempDir('launch-collision-'),
+      join: () => undefined,
+      list: () => [{ id: collisionId, path: '/tmp/other-project' }],
+      remove: () => false,
+      removeAsync: async () => false,
+      removeMissingAsync: async () => [],
+      readState: () => undefined,
+      writeState: () => {},
+      clearState: () => {},
+    },
+    warn: (m) => warnings.push(m),
+  });
+  try {
+    assert.equal(launched.reused, false);
+    assert.equal(launched.url, `http://127.0.0.1:${launched.port}/`);
+  } finally {
+    await launched.close();
+  }
+});
+
 test('a non-semver dashboard version from state or /api/info is treated as unknown', async () => {
   /** @type {string[]} */
   const warnings = [];
@@ -230,6 +261,47 @@ test('a non-semver dashboard version from state or /api/info is treated as unkno
     });
     try {
       assert.equal(launched.reused, true);
+    } finally {
+      await launched.close();
+    }
+    assert.equal(warnings.length, 0);
+  } finally {
+    await new Promise((ok) => server.close(() => ok(undefined)));
+  }
+});
+
+test('an oversized /api/info body is ignored as unknown and never warns about older version', async () => {
+  /** @type {string[]} */
+  const warnings = [];
+  const project = mainCheckout(repo()).dir;
+  const huge = 'x'.repeat(70_000);
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/api/info') return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ token: 't', project, shared: true, pid: 457, version: huge }));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
+  try {
+    const launched = await launchDashboard({
+      projectDir: project,
+      version: FACTORY,
+      preferredPort: 0,
+      warn: (m) => warnings.push(m),
+      registry: {
+        dir: tempDir('launch-'),
+        join: () => ({ id: projectId(project), path: project }),
+        list: () => [],
+        remove: () => false,
+        removeAsync: async () => false,
+        removeMissingAsync: async () => [],
+        readState: () => ({ pid: 457, port, version: huge }),
+        writeState: () => {},
+        clearState: () => {},
+      },
+    });
+    try {
+      assert.equal(launched.reused, false);
     } finally {
       await launched.close();
     }
