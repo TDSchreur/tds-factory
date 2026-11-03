@@ -101,9 +101,11 @@ test('origin lookup names a timeout, but not a maxBuffer overflow, as "did not a
   const answer = (extra) => {
     const flow = originDefaultBranchFlow(os.tmpdir());
     flow.next();
-    return flow.next({ status: null, stdout: '', stderr: '', error: Object.assign(new Error('boom'), extra) }).value;
+    return /** @type {{ error?: string }} */ (
+      flow.next({ status: null, stdout: '', stderr: '', error: Object.assign(new Error('boom'), extra) }).value
+    );
   };
-  assert.match(answer({ timedOut: true }).error, /did not answer within 20s/);
+  assert.match(answer({ timedOut: true }).error ?? '', /did not answer within 20s/);
   const overflow = answer({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', killed: true, signal: 'SIGTERM' });
   assert.equal(overflow.error, 'origin did not answer: boom');
 });

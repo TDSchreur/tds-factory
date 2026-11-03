@@ -64,8 +64,8 @@ test('can tells which operations the adapter of a link has: Azure DevOps reads o
     'listByHead',
   ])
     assert.equal(can(github, op), true, op);
-  for (const op of ['statusAsync', 'stateAsync', 'view']) assert.equal(can(azure, op), true, op);
-  for (const op of ['merge', 'viewAsync', 'checksSummary', 'strictView', 'observe', 'listByHead'])
+  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync']) assert.equal(can(azure, op), true, op);
+  for (const op of ['merge', 'checksSummary', 'strictView', 'observe', 'listByHead'])
     assert.equal(can(azure, op), false, op);
   for (const url of ['https://example.com/pr/1', '', undefined, null])
     assert.equal(Reflect.apply(can, undefined, [url, 'statusAsync']), false);

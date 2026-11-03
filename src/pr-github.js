@@ -226,6 +226,10 @@ export function observe(url, head, cwd) {
   };
 }
 
+const VIEW_ARGS = ['pr', 'view'];
+// The state and head `gh pr view --json state,headRefOid` printed; the sync and async variants share it.
+/** @param {string} stdout @returns {PrView} */
+const parseView = (stdout) => JSON.parse(stdout);
 // State and head of a PR, read without blocking the caller more than `timeout`; throws when gh cannot say.
 /**
  * @param {string} url
@@ -233,17 +237,18 @@ export function observe(url, head, cwd) {
  * @returns {PrView}
  */
 export function view(url, { cwd, timeout = 10000 } = {}) {
-  const out = spawnText('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { cwd, timeout });
+  const out = spawnText('gh', [...VIEW_ARGS, url, '--json', 'state,headRefOid'], { cwd, timeout });
   if (out.status !== 0) throw new Error(failureText(out, 'gh failed'));
-  return JSON.parse(out.stdout);
+  return parseView(out.stdout);
 }
-// The same, for a server that must not block: resolves to the parsed { state, headRefOid }.
+// The same, for a server that must not block: resolves to the parsed { state, headRefOid }. `run` is the injection point for tests.
 /**
  * @param {string} url
+ * @param {{ run?: (args: string[]) => Promise<{ stdout: string }> }} [options]
  * @returns {Promise<PrView>}
  */
-export const viewAsync = async (url) =>
-  JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state,headRefOid'], { timeout: 10_000 })).stdout);
+export const viewAsync = async (url, { run = (args) => exec('gh', args, { timeout: 10_000 }) } = {}) =>
+  parseView((await run([...VIEW_ARGS, url, '--json', 'state,headRefOid'])).stdout);
 // Only the state: OPEN, MERGED or CLOSED.
 /** @param {string} url @returns {Promise<string>} */
 export const stateAsync = async (url) =>

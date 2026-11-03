@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
 import { writeHeaders } from './dashboard-token.js';
 import { startDashboard } from '../src/dashboard.js';
+import { ghPrInfoAsync } from '../src/run-clean.js';
 import { viewsOf } from './run-view.js';
 
 /** @import { Run } from '../src/run-record.js' */
@@ -33,6 +34,7 @@ const data = (value) => JSON.stringify(value);
 const PR = 'https://github.com/o/r/pull/1';
 
 // A Run in Check on top of `origin` (the same repository).
+/** @param {string} [existing] @param {string} [title] */
 function checked(existing, title = 'Actions') {
   const cwd = existing ?? repo();
   if (!existing) {
@@ -402,7 +404,7 @@ function finished(cwd, title) {
 function gate() {
   /** @type {() => void} */
   let open = () => {};
-  const opened = new Promise((resolve) => (open = () => resolve(undefined)));
+  const opened = new Promise((done) => (open = () => done(undefined)));
   let entered = 0;
   return {
     opened,
@@ -519,3 +521,33 @@ if (JSON.parse(fs.readFileSync(${JSON.stringify(join(folder, 'run.json'))}, 'utf
     }
   },
 );
+
+test('the Dashboard answers another request while the PR lookup of a clean-up is pending', async () => {
+  const { cwd, id, tip } = finished();
+  const held = gate();
+  const dash = await startDashboard({
+    projectDir: cwd,
+    port: 0,
+    prInfo: async () => {
+      held.enter();
+      await held.opened;
+      return { state: 'MERGED', head: tip };
+    },
+  });
+  try {
+    let settled = false;
+    const cleaning = post(dash, id, 'clean').finally(() => (settled = true));
+    await held.reached(1);
+    assert.equal((await fetch(`${dash.url}/api/info`)).status, 200);
+    assert.equal(settled, false, 'the clean-up still waits for its lookup');
+    held.open();
+    assert.deepEqual(await cleaning, { status: 200, text: 'cleaned' });
+  } finally {
+    held.open();
+    await dash.close();
+  }
+});
+
+test('the default async lookup keeps the Run when no provider handles the link', async () => {
+  assert.equal(await ghPrInfoAsync('https://example.com/pr/1'), undefined);
+});
