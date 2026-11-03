@@ -23,6 +23,7 @@ Each guide declares the files it covers with `applyTo`. Claude Code loads the co
 - [markdown-accessibility](.github/instructions/markdown-accessibility.instructions.md): Accessibility rules for Markdown files.
 - [markdown](.github/instructions/markdown.instructions.md): CommonMark formatting rules for Markdown files.
 - [powershell](.github/instructions/powershell.instructions.md): PowerShell cmdlet and scripting practices.
+- [reliable-tests](.github/instructions/reliable-tests.instructions.md): Tests that give the same result on every run and platform (waiting, shared state, Windows).
 - [shell](.github/instructions/shell.instructions.md): Shell scripting practices for `*.sh` files.
 
 ## Changelog

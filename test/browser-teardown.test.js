@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { setTimeout as delay } from 'node:timers/promises';
 import { isRunning, killTree, portOf, stopDriver } from './browser.js';
+import { waitUntil } from './wait-until.js';
 
 /** @param {number} pid */
 const alive = (pid) => {
@@ -43,13 +43,11 @@ test('teardown kills a driver that ignores shutdown, with its children, within t
   assert.ok(Date.now() - started < 3000, 'teardown stayed bounded');
   assert.equal(isRunning(pid), false, 'the driver process group is gone');
   // The killed child is reaped by init asynchronously (macOS shows it as a zombie for a moment), so allow a short wait.
-  for (let i = 0; i < 40 && alive(child); i++) await delay(50);
-  assert.equal(alive(child), false, 'the child is gone');
+  await waitUntil(() => !alive(child), { message: 'the child is gone' });
 });
 
 test('teardown is a no-op for a driver that already exited', async () => {
   const driver = spawn(process.execPath, ['-e', ''], { stdio: 'ignore', detached: true });
   await new Promise((resolve) => driver.once('exit', resolve));
-  await delay(50);
   await stopDriver(driver, await freePort(), { graceMs: 300, killMs: 300 });
 });

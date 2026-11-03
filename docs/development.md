@@ -29,7 +29,7 @@ The `factory` Skill is `skills/factory/SKILL.md`, which holds what every Run nee
 
 `scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/develop` and is skipped, with a reason, when that ref does not exist or shares no history with your branch, as in a shallow CI checkout; any other git failure fails the test. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
 
-PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24.4 and the latest LTS. CI has no macOS jobs, because GitHub's macOS runners queue unreliably. A Windows job runs `npm run check` and `npm run test:unit` with the latest LTS; the unit tests run in two shards (`npm run test:unit -- --test-shard=1/2`) and the first shard also runs the check. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux and Windows. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on PowerShell 7 on Windows.
+PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24.4 and the latest LTS. CI has no macOS jobs, because GitHub's macOS runners queue unreliably. A Windows job runs `npm run check` and `npm run test:unit` with the latest LTS; the unit tests run in two shards (`npm run test:unit -- --test-shard=1/2`) and the first shard also runs the check, and on a pull request also runs each unit test file the PR changed three times (`scripts/repeat-changed-tests.js`), so a test that is only sometimes red fails the PR that adds it. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux and Windows. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer, and runs `install.ps1` against stub `node` and `npm` on PowerShell 7 on Windows.
 
 ## Working on Windows
 
@@ -42,6 +42,10 @@ The browser tests are not supported on Windows: every one of them skips there wi
 The `ci-ok` job succeeds only when all the other jobs do. The `develop` and `main` rulesets require it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
+
+## Flaky tests
+
+A test that fails now and then is a bug in the test, mostly because it sleeps a fixed time, shares a port, path or clock with another test, or assumes how Linux behaves. The rules are in the [reliable-tests guide](../.github/instructions/reliable-tests.instructions.md), and the `reliable-tests` Skill walks through diagnosing one. To reproduce a flake, run the file in a loop (`for i in $(seq 30); do node --test test/<file>.test.js || break; done`), again under CPU load and with `--test-concurrency=1`. Wait for a condition with `waitUntil` from `test/wait-until.js` instead of a sleep. Fix the cause: do not add a retry or raise a timeout without knowing why the old one was too short.
 
 ## JavaScript quality checks
 

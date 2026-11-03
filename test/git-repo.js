@@ -16,6 +16,11 @@ export function tempDir(prefix) {
   return dir;
 }
 
+// Git settings injected through the environment (GIT_CONFIG_COUNT and its KEY_n and VALUE_n, as some agent hosts and CI setups do) override the repository's own config, for example core.fsmonitor, so a test would give another result there than on a developer's machine.
+for (const name of Object.keys(process.env))
+  if (name === 'GIT_CONFIG_COUNT' || name === 'GIT_CONFIG_PARAMETERS' || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name))
+    delete process.env[name];
+
 if (!process.env.TDS_FACTORY_CONFIG_DIR) process.env.TDS_FACTORY_CONFIG_DIR = tempDir('factory-config-');
 
 /**

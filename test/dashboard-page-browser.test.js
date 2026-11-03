@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
+import { waitUntil } from './wait-until.js';
 
 /** @import { Page, RunStub } from './browser.js' */
 
@@ -13,7 +14,7 @@ const POLL_WAIT = 2400;
  * @param {number} count
  */
 async function waitForCalls(page, count) {
-  for (let i = 0; i < 50 && page.calls.length < count; i++) await new Promise((r) => setTimeout(r, 100));
+  await waitUntil(() => page.calls.length >= count, { message: `${count} calls recorded` });
 }
 
 test('the board explains itself and flags Runs that wait on the user', async (t) => {

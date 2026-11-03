@@ -7,6 +7,13 @@ import { readEvents } from '../src/run-events.js';
 import { interpretRun } from '../src/dashboard.js';
 import { repo } from './git-repo.js';
 import { defined, entryOf, fromJson } from './run-view.js';
+import { waitUntil } from './wait-until.js';
+
+// A timestamp has millisecond resolution; wait until the clock has moved so a later write gets a later time.
+const tick = async () => {
+  const now = Date.now();
+  await waitUntil(() => Date.now() > now, { intervalMs: 1, message: 'the clock advanced' });
+};
 
 /** @import { Run } from '../src/run-record.js' */
 
@@ -80,11 +87,11 @@ test('every write refreshes last_seen', async () => {
     id = begin(cwd);
   const first = defined(record(cwd, id).last_seen, 'a started Run has been seen');
   assert.ok(Date.parse(first));
-  await new Promise((r) => setTimeout(r, 5));
+  await tick();
   store.update(id, { activity: 'still here' });
   const second = defined(record(cwd, id).last_seen, 'an updated Run has been seen');
   assert.ok(Date.parse(second) > Date.parse(first));
-  await new Promise((r) => setTimeout(r, 5));
+  await tick();
   toBuild(store, id);
   assert.ok(Date.parse(defined(record(cwd, id).last_seen, 'a moved Run has been seen')) > Date.parse(second));
 });
