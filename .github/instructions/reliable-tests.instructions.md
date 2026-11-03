@@ -32,5 +32,5 @@ A test that passes on Linux and fails once in twenty runs on Windows costs more 
 
 ## Before you finish
 
-- Run the changed test file at least 20 times in a row (`for i in $(seq 20); do node --test test/<file>.test.js || break; done`), once more under load, and with `--test-concurrency=1`. A failure on any run is a bug in the test, not bad luck.
+- Run the changed test file at least 30 times in a row (`for i in $(seq 30); do node --test test/<file>.test.js || break; done`), once more under load, and with `--test-concurrency=1`. A failure on any run is a bug in the test, not bad luck.
 - CI runs each changed unit test file three times on Windows for a pull request. Treat a red repeat as a real failure.

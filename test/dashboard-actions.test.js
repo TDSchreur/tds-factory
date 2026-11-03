@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { git, repo } from './git-repo.js';
@@ -9,6 +8,7 @@ import { writeHeaders } from './dashboard-token.js';
 import { startDashboard } from '../src/dashboard.js';
 import { ghPrInfoAsync } from '../src/run-clean.js';
 import { viewsOf } from './run-view.js';
+import { waitUntil } from './wait-until.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
@@ -377,8 +377,7 @@ while (!fs.existsSync(${JSON.stringify(release)}) && Date.now() < end) Atomics.w
     git(cwd, 'config', 'core.hooksPath', hooks.replaceAll('\\', '/'));
     let settled = false;
     const syncing = post(dash, id, 'sync').finally(() => (settled = true));
-    for (let i = 0; i < 250 && !existsSync(started); i++) await sleep(20);
-    assert.ok(existsSync(started), 'the git call is running');
+    await waitUntil(() => existsSync(started), { message: 'the git call is running' });
     const other = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs`);
     assert.equal(other.status, 200);
     assert.equal(settled, false, 'sync is still waiting for git when the other request is answered');
@@ -412,8 +411,7 @@ function gate() {
     enter: () => entered++,
     /** @param {number} count */
     async reached(count) {
-      for (let i = 0; i < 250 && entered < count; i++) await sleep(20);
-      assert.ok(entered >= count, 'the held calls started');
+      await waitUntil(() => entered >= count, { message: 'the held calls started' });
     },
   };
 }

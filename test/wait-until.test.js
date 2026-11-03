@@ -21,7 +21,11 @@ test('waitUntil rejects with the message when the deadline passes', async () => 
   );
 });
 
-test('waitUntil checks once more at the deadline', async () => {
-  const start = Date.now();
-  assert.equal(await waitUntil(() => Date.now() - start >= 20, { timeoutMs: 20, intervalMs: 50 }), true);
+test('waitUntil checks once more at the deadline', async (t) => {
+  // The first clock reading starts the wait; the second leaves 10 ms of the 20 ms, so one more check runs.
+  const times = [0, 10];
+  t.mock.method(Date, 'now', () => times.shift() ?? 20);
+  let calls = 0;
+  assert.equal(await waitUntil(() => ++calls === 2, { timeoutMs: 20, intervalMs: 50 }), true);
+  assert.equal(calls, 2);
 });

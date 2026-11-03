@@ -28,4 +28,4 @@ A flaky test fails without a change in the code. Treat it as a bug in the test (
 
 ## Verify
 
-Run the loop from step 1 again: 20 passes in a row and the Verify command. Name the cause and the fix in the commit message.
+Run the loop from step 1 again: 30 passes in a row and the Verify command. Name the cause and the fix in the commit message.
