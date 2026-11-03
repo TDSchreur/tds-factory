@@ -40,7 +40,7 @@ export const gitAsync = (cwd, args, options = {}) =>
 // blocking for the CLI (runSync) or without blocking the event loop for the Dashboard (runAsync).
 /**
  * @typedef {{ git: [string, readonly string[], GitOptions] } | { call: () => unknown }} Step
- * @typedef {Generator<Step, any, any>} Flow The answers of a step differ per step, so a flow cannot type them.
+ * @typedef {Generator<Step, any, unknown>} Flow The answers of a step differ per step, so a flow cannot type them.
  */
 /**
  * @param {string} cwd
@@ -55,7 +55,7 @@ export function* gitStep(cwd, args, options = {}) {
 /**
  * @template T
  * @param {() => T} call
- * @returns {Generator<Step, Awaited<T>, any>}
+ * @returns {Generator<Step, Awaited<T>, any>} `any` is what a flow sends back in; the runner answers with the call's awaited result
  */
 export function* callStep(call) {
   return yield { call };
@@ -64,7 +64,7 @@ export function* callStep(call) {
 /**
  * @template T
  * @param {T} value
- * @returns {Generator<Step, T, any>}
+ * @returns {Generator<Step, T, unknown>}
  */
 // eslint-disable-next-line require-yield -- a flow with no steps still has to be a generator
 export function* immediate(value) {
@@ -77,7 +77,7 @@ const performAsync = async (step) => ('git' in step ? gitAsync(...step.git) : st
 
 /**
  * @template T
- * @param {Generator<Step, T, any>} flow
+ * @param {Generator<Step, T, unknown>} flow
  * @returns {T}
  */
 export function runSync(flow) {
@@ -96,7 +96,7 @@ export function runSync(flow) {
 }
 /**
  * @template T
- * @param {Generator<Step, T, any>} flow
+ * @param {Generator<Step, T, unknown>} flow
  * @returns {Promise<T>}
  */
 export async function runAsync(flow) {
