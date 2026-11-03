@@ -22,9 +22,7 @@ const addressPort = (server) => {
   if (address === null || typeof address === 'string') throw new Error('the Dashboard is not listening on a port');
   return address.port;
 };
-// Each repo gets its own stable port in 4300-4999, derived from its main checkout path.
-/** @param {string} dir */
-const repoPort = (dir) => 4300 + (createHash('sha1').update(dir).digest().readUInt32BE(0) % 700);
+export const DEFAULT_PORT = 4300;
 const DASHBOARD_DIR = join(import.meta.dirname, '..', 'dashboard') + sep;
 // The only files served besides the page; a request never picks a path, only one of these names.
 const JS = 'text/javascript';
@@ -60,7 +58,7 @@ async function serveStatic(dashboardDir, path, send) {
 }
 
 // Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
-// Without a port, uses the repo's own port and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
+// Without a port, uses 4300 and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
 // prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a FactoryError whose `code` is the reason when the provider fails.
 // statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
@@ -144,7 +142,7 @@ export async function startDashboard({
   };
   if (port !== undefined) await listen(port);
   else
-    await listen(repoPort(store.projectDir)).catch((err) => {
+    await listen(DEFAULT_PORT).catch((err) => {
       if (codeOf(err) !== 'EADDRINUSE') throw err;
       return listen(0);
     });

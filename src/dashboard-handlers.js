@@ -337,7 +337,7 @@ export async function info({ send, token, projectDir }) {
   send(
     200,
     'application/json',
-    JSON.stringify({ project: resolve(projectDir), token, ...(version ? { version } : {}) }),
+    JSON.stringify({ project: resolve(projectDir), token, pid: process.pid, ...(version ? { version } : {}) }),
   );
 }
 

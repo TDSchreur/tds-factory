@@ -125,7 +125,7 @@ Start the Dashboard from the project folder:
 tds-factory dashboard
 ```
 
-It prints an address such as `http://127.0.0.1:4521`. Each repository gets its own port, and normally keeps it; if that port is busy, the Dashboard takes a free one and prints it. Open the address in a browser.
+It prints an address such as `http://127.0.0.1:4300/?project=1a2b3c4d`. One Dashboard serves every repository: the first call runs it on port 4300 (a free port when that is busy) and keeps the terminal; calling it again in another repository registers that repository, prints its address and exits. `tds-factory dashboard --port N` starts a separate Dashboard on that port instead. Open the address in a browser.
 
 - Each **card** is one Run. It moves left to right through the columns Define, Build, Check, Finish, Follow-up and Done.
 - On screens up to 1024 CSS pixels wide, use the Stage buttons to show one column at a time. The buttons show visible Run counts and mark Stages with Runs that need you.
