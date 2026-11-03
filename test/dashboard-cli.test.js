@@ -67,5 +67,6 @@ test('the first dashboard call serves and a second one registers its Project, pr
     first.kill('SIGTERM');
     await new Promise((ok) => first.on('exit', ok));
   }
-  assert.equal(existsSync(join(config, 'dashboard.json')), false);
+  // Windows ends the process without running its exit handler; a stale state file is checked by pid.
+  if (process.platform !== 'win32') assert.equal(existsSync(join(config, 'dashboard.json')), false);
 });
