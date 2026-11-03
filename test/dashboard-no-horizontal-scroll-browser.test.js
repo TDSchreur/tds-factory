@@ -88,7 +88,7 @@ for (const width of [320, 375, 768, 1024, 1025, 1280, 1440]) {
       assert.deepEqual(closed.overflowing, []);
       await page.execute("document.querySelector('[data-id=r]').click()");
       await page.waitFor(
-        "return !!document.querySelector('#detail .md table') && !!document.querySelector('.usage-table')",
+        "return document.getElementById('detail').open && !!document.querySelector('#detail .md table') && !!document.querySelector('.usage-table')",
       );
       const open = await page.execute(MEASURE);
       assert.ok(open.scrollWidth <= open.clientWidth, 'detail: ' + JSON.stringify(open));

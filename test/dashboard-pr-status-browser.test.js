@@ -72,7 +72,9 @@ test('cards show the PR status of an open pull request', async (t) => {
     assert.equal(await page.execute("return document.querySelector('[data-id=merged] .pr-status')"), null);
     assert.equal(await page.execute("return document.querySelector('[data-id=none] .pr-status')"), null);
     await page.execute("document.querySelector('[data-id=good]').click()");
-    await page.waitFor("return !!document.querySelector('#detail .pr-status')");
+    await page.waitFor(
+      "return document.getElementById('detail').open && !!document.querySelector('#detail .pr-status')",
+    );
     assert.match(
       await page.execute("return document.querySelector('#detail .pr-status').textContent"),
       /Checks: passing/,

@@ -13,7 +13,9 @@ test('a refresh of the open Run keeps the scroll position of its detail', async 
   if (!page) return;
   try {
     await page.execute("document.querySelector('.card').click()");
-    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail li').length > 100",
+    );
     await page.execute("document.getElementById('detail').scrollTop = 800");
     for (let n = 1; n <= 3; n++) {
       page.state.runs = [record(n)];

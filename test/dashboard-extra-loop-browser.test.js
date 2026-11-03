@@ -127,7 +127,9 @@ test('the detail offers the grant too, and the chip and timeline show the new li
       /Check loops\s*5\/5/,
     );
     await page.execute("document.querySelector('[data-id=w]').click()");
-    await page.waitFor("return !!document.querySelector('#detail .timeline')");
+    await page.waitFor(
+      "return document.getElementById('detail').open && !!document.querySelector('#detail .timeline')",
+    );
     assert.match(
       await page.execute("return document.querySelector('#detail .timeline').textContent"),
       /Extra Check loop granted, limit now 5/,

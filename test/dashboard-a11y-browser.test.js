@@ -154,7 +154,9 @@ for (const theme of ['light', 'dark']) {
         'the sample holds an abandoned card',
       );
       await page.execute("document.querySelector('[data-id=w]').click()");
-      await page.waitFor("return !!document.querySelector('#detail .reason')");
+      await page.waitFor(
+        "return document.getElementById('detail').open && !!document.querySelector('#detail .reason')",
+      );
       /** @type {Sample[]} */
       const samples = await page.execute(SAMPLE);
       assert.ok(samples.length > 40, `many text nodes were sampled (${samples.length})`);

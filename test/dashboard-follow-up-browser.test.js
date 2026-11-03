@@ -18,7 +18,9 @@ test('Follow-up has its own column and opens its summary', async (t) => {
       'follow-up',
     );
     await page.execute("document.querySelector('[data-id=follow]').click()");
-    await page.waitFor("return document.querySelector('#detail')?.textContent.includes('CI failed')");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail')?.textContent.includes('CI failed')",
+    );
   } finally {
     await page.close();
   }

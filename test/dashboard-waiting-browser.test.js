@@ -55,7 +55,7 @@ test('a waiting card carries a Needs you banner with symbol, age and reason', as
     );
     assert.equal(await page.execute("return document.querySelector('[data-id=busy] .reason')"), null);
     await page.execute("document.querySelector('[data-id=aged]').click()");
-    await page.waitFor("return !!document.querySelector('#detail .reason')");
+    await page.waitFor("return document.getElementById('detail').open && !!document.querySelector('#detail .reason')");
     assert.equal(
       await page.execute("return document.querySelector('#detail .reason').textContent"),
       'Needs you, waiting 12 min: Question',

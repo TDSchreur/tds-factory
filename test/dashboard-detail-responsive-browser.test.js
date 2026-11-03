@@ -91,7 +91,9 @@ for (const width of [320, 375, 390, 768, 1024]) {
     try {
       await page.waitFor("return !!document.querySelector('[data-id=r]')");
       await page.execute("document.querySelector('[data-id=r]').click()");
-      await page.waitFor("return !!document.querySelector('#detail .md table')");
+      await page.waitFor(
+        "return document.getElementById('detail').open && !!document.querySelector('#detail .md table')",
+      );
       const result = await page.execute(
         "const d=document.getElementById('detail'), r=d.getBoundingClientRect(), b=document.querySelector('#detail .compact-back button').getBoundingClientRect(), t=document.querySelector('#detail .md .scroll'); return {left:r.left, top:r.top, width:r.width, height:r.height, panel:d.scrollWidth, client:d.clientWidth, viewport:document.documentElement.clientWidth, page:document.documentElement.scrollWidth, backHeight:b.height, table:t.scrollWidth, tableClient:t.clientWidth}",
       );
@@ -121,7 +123,9 @@ test('desktop drawer stays inside the viewport, makes the board unavailable and 
     await page.waitFor("return !!document.querySelector('[data-id=a]')");
     const board = await page.execute("return document.getElementById('board').getBoundingClientRect().width");
     await page.execute("document.querySelector('[data-id=a]').focus(); document.querySelector('[data-id=a]').click()");
-    await page.waitFor("return !!document.querySelector('#detail .md table')");
+    await page.waitFor(
+      "return document.getElementById('detail').open && !!document.querySelector('#detail .md table')",
+    );
     const result = await page.execute(
       "const d=document.getElementById('detail'), r=d.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,right:r.right,vw:document.documentElement.clientWidth,panel:d.scrollWidth,client:d.clientWidth,viewport:innerHeight,width:innerWidth,board:document.getElementById('board').getBoundingClientRect().width,modal:d.matches(':modal')}",
     );
@@ -411,7 +415,9 @@ test('a wide table in compact detail can be reached with the keyboard', async (t
   try {
     await page.waitFor("return !!document.querySelector('[data-id=r]')");
     await page.execute("document.querySelector('[data-id=r]').click()");
-    await page.waitFor("return !!document.querySelector('#detail .md .scroll')");
+    await page.waitFor(
+      "return document.getElementById('detail').open && !!document.querySelector('#detail .md .scroll')",
+    );
     await page.execute("document.querySelector('#detail .link a').focus()");
     await page.key(TAB);
     assert.equal(

@@ -387,7 +387,9 @@ test('selecting a Run shows its Markdown files as text, never as markup', async 
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
-    await page.waitFor("return document.querySelectorAll('#detail table td').length === 2");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail table td').length === 2",
+    );
     assert.equal(await page.execute("return document.querySelector('#detail h4').textContent"), 'Plan');
     assert.equal(await page.execute("return document.querySelectorAll('#detail li').length"), 2);
     assert.equal(
@@ -464,7 +466,9 @@ test('the Run detail opens as a drawer over a board that keeps its width', async
     assert.equal(await page.execute("return document.querySelector('.card.selected')"), null);
     // Another card opens its own detail once the first is closed.
     await page.execute("document.querySelector('[data-id=b0]').click()");
-    await page.waitFor("return document.querySelector('#detail h4')?.textContent === 'First'");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail h4')?.textContent === 'First'",
+    );
     assert.equal(await page.execute("return document.querySelector('#detail h2').textContent"), 'Run 0');
   } finally {
     await page.close();
@@ -494,7 +498,9 @@ test('the Run detail header shows the Run state and stays in view while the summ
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=w]').click()");
-    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail li').length > 100",
+    );
     const head = await page.execute("return document.querySelector('#detail header').textContent");
     for (const part of [
       'Waiting run',
@@ -601,10 +607,14 @@ test('switching to another Run opens its detail at the top', async (t) => {
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=a]').click()");
-    await page.waitFor("return document.querySelectorAll('#detail li').length > 100");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelectorAll('#detail li').length > 100",
+    );
     await page.execute("document.getElementById('detail').scrollTop = 800");
     await page.execute("document.querySelector('[data-id=b]').click()");
-    await page.waitFor("return document.querySelector('#detail h2').textContent === 'B'");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail h2').textContent === 'B'",
+    );
     assert.equal(await page.execute("return document.getElementById('detail').scrollTop"), 0);
   } finally {
     await page.close();

@@ -110,10 +110,14 @@ test('Run detail shows the event timeline and says when the log is damaged', asy
       /2 lines of the event log could not be read/,
     );
     await page.execute("document.querySelector('[data-id=b]').click()");
-    await page.waitFor("return document.querySelector('#detail h2').textContent === 'B'");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail h2').textContent === 'B'",
+    );
     assert.equal(await page.execute('return document.querySelector(\'[aria-label="Event timeline"]\')'), null);
     await page.execute("document.querySelector('[data-id=c]').click()");
-    await page.waitFor("return document.querySelector('#detail h2').textContent === 'C'");
+    await page.waitFor(
+      "return document.getElementById('detail').open && document.querySelector('#detail h2').textContent === 'C'",
+    );
     assert.equal(
       await page.execute(
         "return document.querySelectorAll('.timeline li').length + ':' + !!document.querySelector('.timeline-damaged')",
