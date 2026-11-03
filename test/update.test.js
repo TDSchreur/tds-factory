@@ -10,6 +10,7 @@ import http from 'node:http';
 import { update, compareVersions } from '../src/update.js';
 import { defined } from './run-view.js';
 import './git-repo.js';
+import { waitUntil } from './wait-until.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';
@@ -631,9 +632,12 @@ test('the download may take four times as long as the other requests', async () 
   };
   try {
     await update({ installed: '0.3.0', ...w.options, fetchFn, timeoutMs: 40 });
-    await new Promise((done) => setTimeout(done, 250));
+    const download = tgzUrl('v0.4.0');
+    await waitUntil(() => budgets[API] !== undefined && budgets[download] !== undefined, {
+      message: 'both requests timed out',
+    });
     assert.ok((budgets[API] ?? 0) < 100, `API budget ${budgets[API]}`);
-    assert.ok((budgets[tgzUrl('v0.4.0')] ?? 0) >= 120, `download budget ${budgets[tgzUrl('v0.4.0')]}`);
+    assert.ok((budgets[download] ?? 0) >= 120, `download budget ${budgets[download]}`);
   } finally {
     w.cleanup();
   }
