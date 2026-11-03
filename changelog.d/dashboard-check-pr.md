@@ -21,3 +21,7 @@
   Rework ready for an agent". With `grant=true` at the Check loop limit it raises `extra_loops` by one (with the
   `extra-loop` event) and then starts the Fix. The Run views carry `reworkInProgress`. Follow-up's `gh` reads now run
   as steps of the same flow as its git calls, so the Dashboard does not block on them.
+- The factory Skill has `/factory continue <run id>` (`references/continue.md`), which resumes a Run from its current
+  Stage, including a Follow-up Rework started from the Dashboard. `references/follow-up.md` documents the three scopes,
+  the `run sync` step of a `conflicts` Rework and the rules of a `comments` Rework (list the comments judged to need no
+  change; never reply to or resolve threads).
