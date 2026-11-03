@@ -12,7 +12,11 @@ import {
   STALE_MS,
   ageMs,
   ago,
+  agentPrompt,
+  atLoopCap,
   canCheckPr,
+  canCopyPrompt,
+  canFix,
   canGrantLoop,
   chipsOf,
   folderName,
@@ -163,9 +167,44 @@ const plain = (v, max = COMMENT_MAX) => {
   return text.length > max ? text.slice(0, max) + '...' : text;
 };
 
+// One Fix button for one problem of the pull request. While a Rework runs it is disabled and the reason stays visible.
+/** @param {{ run: RunView, scope: string, onFix: (run: RunView, scope: string) => void }} props */
+function FixButton({ run, scope, onFix }) {
+  if (!canFix(run)) return null;
+  const grant = atLoopCap(run);
+  const busy = run.reworkInProgress === true;
+  const reasonId = `fix-reason-${run.projectId}-${run.id}-${scope}`.replace(/[^A-Za-z0-9_-]/g, '-');
+  const label = grant ? 'Grant extra loop and fix' : 'Fix ' + scope;
+  return html`<p class="fix"><button type="button" class="fix-button" data-scope=${scope} disabled=${busy} aria-describedby=${busy ? reasonId : undefined} aria-label=${label + ' of ' + run.title + (grant ? ' (' + scope + ')' : '')} onClick=${() => onFix(run, scope)}>${label}</button>${busy ? html` <span id=${reasonId} class="fix-reason">A Follow-up Rework is in progress; only one Rework runs at a time.</span>` : ''}</p>`;
+}
+
+// A button that copies the prompt that hands the Run to an agent. Without the Clipboard API the text is shown selected.
+/** @param {{ run: RunView }} props */
+function CopyPrompt({ run }) {
+  const [state, setState] = useState(/** @type {'idle' | 'copied' | 'manual'} */ ('idle'));
+  const text = agentPrompt(run);
+  /** @type {{ current: HTMLInputElement | null }} */
+  const field = useRef(null);
+  useEffect(() => {
+    if (state === 'manual') field.current?.select();
+  }, [state]);
+  const copy = async (/** @type {Event} */ e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+    } catch {
+      setState('manual');
+    }
+  };
+  return html`<span class="copy-prompt"><button type="button" aria-label=${'Copy agent prompt for ' + run.title} onClick=${copy} onKeyDown=${stop}>Copy agent prompt</button>
+    <span role="status" class="copy-status">${state === 'copied' ? 'Copied: ' + text : state === 'manual' ? 'Copy this prompt:' : ''}</span>
+    ${state === 'manual' && html`<input ref=${field} class="copy-field" readonly value=${text} aria-label="Agent prompt" onClick=${stop} onKeyDown=${stop} />`}</span>`;
+}
+
 // What the last Check PR found, in the Run detail. The live region is always present so a result is announced when it arrives.
-/** @param {{ run: RunView, state: PrDetailsState | null }} props */
-function PrDetails({ run, state }) {
+/** @param {{ run: RunView, state: PrDetailsState | null, onFix: (run: RunView, scope: string) => void }} props */
+function PrDetails({ run, state, onFix }) {
   const mine = state && state.key === runKey(run) ? state : null;
   const data = mine?.data;
   const announce = !mine
@@ -202,7 +241,7 @@ function PrDetails({ run, state }) {
         html`<ul class="pr-facts">
         <li>State: ${plain(data.state, 40) || 'unknown'}${data.draft === true ? ' (draft)' : ''}</li>
         ${open && html`<li>Merge conflicts: ${yesNo(data.conflicts)}</li>`}
-      </ul>`
+      </ul>${open && data.conflicts === true && html`<${FixButton} run=${run} scope="conflicts" onFix=${onFix} />`}`
       }
       ${
         data &&
@@ -212,7 +251,7 @@ function PrDetails({ run, state }) {
           failing.length
             ? html`<ul class="pr-failing">${failing.map((c, i) => html`<li key=${i}><${Link} href=${c.url}>${plain(c.name, 200)}<//></li>`)}</ul>`
             : html`<p>None.</p>`
-        }
+        }${failing.length > 0 ? html`<${FixButton} run=${run} scope="checks" onFix=${onFix} />` : ''}
         <h4>Pending checks</h4>${
           pending.length
             ? html`<ul class="pr-pending">${pending.map((name, i) => html`<li key=${i}>${plain(name, 200)}</li>`)}</ul>`
@@ -222,7 +261,7 @@ function PrDetails({ run, state }) {
           threads.length
             ? html`<ul class="pr-threads">${threads.map((t, i) => html`<li key=${i}><code>${plain(t.path, 200)}</code>: ${plain(t.comment)} <${Link} href=${t.url}>Open the thread<//></li>`)}</ul>${total > threads.length ? html`<p>${total - threads.length} more not shown.</p>` : ''}`
             : html`<p>None.</p>`
-        }`
+        }${threads.length > 0 ? html`<${FixButton} run=${run} scope="comments" onFix=${onFix} />` : ''}`
       }
     </section>`
     }</div>`;
@@ -335,6 +374,7 @@ export function Card({
         }} onKeyDown=${stop}>Sync</button>`
       }
       ${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} />`}
+      ${canCopyPrompt(run) && html`<${CopyPrompt} run=${run} />`}
       ${
         canGrantLoop(run) &&
         html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(
@@ -426,6 +466,7 @@ export function Welcome({ onHelp }) {
  * @property {(run: RunView) => void} toggle
  * @property {(run: RunView) => Promise<void>} checkPr
  * @property {(run: RunView) => Promise<void>} checkDetails
+ * @property {(run: RunView, scope: string) => Promise<void>} fix
  * @property {(run: RunView) => Promise<void>} sync
  * @property {(run: RunView) => Promise<void>} clean
  * @property {(run: RunView) => Promise<void>} accept
@@ -702,9 +743,10 @@ const labelSegments = (label) =>
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onCheckDetails
  * @param {PrDetailsState | null} props.prDetails
+ * @param {(run: RunView, scope: string) => void} props.onFix
  * @param {(run: RunView) => void} props.onGrant
  */
-export function Detail({ run, projectName, onClose, onCheckPr, onCheckDetails, prDetails, onGrant }) {
+export function Detail({ run, projectName, onClose, onCheckPr, onCheckDetails, onFix, prDetails, onGrant }) {
   const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ key: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
@@ -771,9 +813,9 @@ export function Detail({ run, projectName, onClose, onCheckPr, onCheckDetails, p
       <div class="meta"><span>Project: ${projectName}</span><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${updatedAge === null ? 'unknown' : ago(updatedAge)}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
-      ${(canGrantLoop(run) || canCheckPr(run)) && html`<div class="actions">${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} stopClick=${false} />`}${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button>`}</div>`}
+      ${(canGrantLoop(run) || canCheckPr(run) || canCopyPrompt(run)) && html`<div class="actions">${canCopyPrompt(run) && html`<${CopyPrompt} run=${run} />`}${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} stopClick=${false} />`}${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button>`}</div>`}
     </header>
-    <${PrDetails} run=${run} state=${prDetails} />
+    <${PrDetails} run=${run} state=${prDetails} onFix=${onFix} />
     <${Timeline} run=${run} />
     ${
       run.metrics &&

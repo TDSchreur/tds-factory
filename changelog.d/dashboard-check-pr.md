@@ -29,3 +29,8 @@
   the pull request fresh and opens the Run detail on a "Pull request" section: state and draft, merge conflicts,
   failing checks (each with a link to its run), pending checks and unresolved review threads. A missing or signed-out
   `gh` or `az` shows that host's setup steps. Host text is shown as plain text and only `https:` links are anchors.
+- The "Pull request" section of the Run detail has one **Fix conflicts**, **Fix checks** and **Fix comments** button
+  next to the matching problem of a GitHub pull request. A click asks first, then starts the scoped Follow-up; a
+  refusal is shown with how to resolve it. The buttons are disabled with a visible reason while a Rework is in
+  progress, and read "Grant extra loop and fix" at the Check loop limit. A Run that waits with "Follow-up Rework ready
+  for an agent" has a **Copy agent prompt** button that copies `/factory continue <run id>`.

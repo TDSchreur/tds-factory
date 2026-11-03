@@ -12,7 +12,7 @@ const doneRun = (/** @type {Record<string, unknown>} */ over = {}) =>
     column: 'done',
     status: 'done',
     pr: PR,
-    prHost: 'GitHub',
+    prHost: 'github',
     prState: 'open',
     ...over,
   });
@@ -41,8 +41,8 @@ test('Check PR shows only for a Done Run with an open pull request and for a Run
       doneRun(),
       doneRun({ id: 'merged', title: 'Merged', prState: 'merged' }),
       doneRun({ id: 'nopr', title: 'No PR', pr: '', prHost: '' }),
-      run({ id: 'fu', title: 'Follow', column: 'follow-up', pr: PR, prHost: 'GitHub' }),
-      run({ id: 'b', title: 'Build', column: 'build', pr: PR, prHost: 'GitHub' }),
+      run({ id: 'fu', title: 'Follow', column: 'follow-up', pr: PR, prHost: 'github' }),
+      run({ id: 'b', title: 'Build', column: 'build', pr: PR, prHost: 'github' }),
     ],
   });
   if (!page) return;
@@ -100,7 +100,7 @@ test('the drawer lists state, conflicts, failing and pending checks and unresolv
 
 test('a merged pull request shows its state only', async (t) => {
   const page = await openPage(t, {
-    runs: [run({ id: 'fu', title: 'Follow', column: 'follow-up', pr: PR, prHost: 'GitHub' })],
+    runs: [run({ id: 'fu', title: 'Follow', column: 'follow-up', pr: PR, prHost: 'github' })],
     detailsBody: { state: 'merged' },
   });
   if (!page) return;
@@ -116,8 +116,8 @@ test('a merged pull request shows its state only', async (t) => {
 });
 
 for (const [host, steps] of [
-  ['GitHub', ['Install the GitHub CLI from https://cli.github.com', 'Run `gh auth login`']],
-  ['Azure DevOps', ['Install the Azure CLI', 'Run `az login`']],
+  ['github', ['Install the GitHub CLI from https://cli.github.com', 'Run `gh auth login`']],
+  ['azure-devops', ['Install the Azure CLI', 'Run `az login`']],
 ]) {
   test(`${host} setup steps are shown when the host tool is missing`, async (t) => {
     const page = await openPage(t, {

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preac
 import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from './components.js';
 import {
   COLUMNS,
+  atLoopCap,
   POLL_MS,
   folderName,
   loadCollapsed,
@@ -273,6 +274,50 @@ function App() {
     );
   };
 
+  // Fix: starts a Follow-up scoped to one problem of the pull request; at the Check loop limit the click also grants an extra loop.
+  const fixRun = async (/** @type {RunView} */ run, /** @type {string} */ scope) => {
+    const grant = atLoopCap(run);
+    const what = { conflicts: 'merge conflicts', checks: 'failing checks', comments: 'unresolved review comments' }[
+      /** @type {'conflicts' | 'checks' | 'comments'} */ (scope)
+    ];
+    if (
+      !(await ask(
+        grant ? 'Grant an extra loop and fix?' : 'Fix ' + scope + '?',
+        '"' +
+          run.title +
+          '" goes back to Build as a Rework for the ' +
+          what +
+          ' only; other problems stay on the pull request.' +
+          (grant
+            ? ' It has used its ' +
+              run.loopCap +
+              ' Check loops, so this first raises the limit to ' +
+              ((run.loopCap ?? 0) + 1) +
+              '.'
+            : '') +
+          ' Then hand it to an agent with the prompt the card offers.',
+        grant ? 'Grant extra loop and fix' : 'Fix ' + scope,
+        false,
+      ))
+    )
+      return;
+    const query =
+      '?scope=' +
+      encodeURIComponent(scope) +
+      '&updated=' +
+      encodeURIComponent(run.updated) +
+      (grant ? '&grant=true' : '');
+    try {
+      const response = await write('POST', runPath(run) + '/follow-up' + query);
+      const text = await response.text();
+      await ask(response.ok ? 'Fix started' : 'Could not start the Fix', text, 'Close', false, true);
+      if (response.ok) setPrDetails(null); // what was shown is out of date now
+    } catch {
+      await ask('Could not start the Fix', run.title, 'Close', false, true);
+    }
+    poll();
+  };
+
   const grantRun = (/** @type {RunView} */ run) =>
     runAction(
       run,
@@ -481,6 +526,7 @@ function App() {
         settle({ loading: false, error: err instanceof Error ? err.message : 'the server cannot be reached' });
       }
     },
+    fix: fixRun,
     sync: syncRun,
     clean: cleanRun,
     accept: acceptRun,
@@ -517,7 +563,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

@@ -431,6 +431,27 @@ export const canCheckPr = (run) =>
   !!run.prHost &&
   ((run.column === 'done' && run.prState === 'open') || run.column === 'follow-up');
 
+export const FIX_WAITING_REASON = 'Follow-up Rework ready for an agent';
+
+// The prompt that hands a Run to an agent.
+/** @param {RunView} run */
+export const agentPrompt = (run) => '/factory continue ' + run.id;
+
+// Whether the Run waits for an agent to take over a Follow-up Rework that a Fix started.
+/** @param {RunView} run */
+export const canCopyPrompt = (run) => !run.unreadable && run.waiting === true && run.reason === FIX_WAITING_REASON;
+
+// Whether a Fix would exceed the Check loop limit, so that it needs the grant of an extra loop (ADR 0034).
+/** @param {RunView} run */
+export const atLoopCap = (run) =>
+  Number.isSafeInteger(run.loops) && Number.isSafeInteger(run.loopCap) && Number(run.loops) >= Number(run.loopCap);
+
+export const FIX_SCOPES = /** @type {const} */ (['conflicts', 'checks', 'comments']);
+
+// Whether Fix is offered at all: GitHub pull requests only, and only while the pull request is open.
+/** @param {RunView} run */
+export const canFix = (run) => run.prHost === 'github' && !run.unreadable && run.status !== 'abandoned';
+
 // Whether the Run waits on the user in Check at its loop limit, so that the user may grant an extra loop (ADR 0024).
 /** @param {RunView} run */
 export const canGrantLoop = (run) =>
