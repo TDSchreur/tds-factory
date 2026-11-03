@@ -61,11 +61,15 @@ const entry = (id, title) => {
 };
 const markdown = `# Findings\n\n${long}\n\n| Header | Another |\n| --- | --- |\n| ${long} | ${long} |`;
 
-// The page's scroll width, and every element that scrolls sideways and actually overflows, except the Markdown tables' own scroll area.
+// The page's scroll width, and every element that scrolls sideways (or clips inside the drawer) and actually overflows, except the Markdown tables' own scroll area and the visually hidden stacked-table header.
 const MEASURE = `
   const root = document.scrollingElement;
   const overflowing = [...document.querySelectorAll('*')]
-    .filter((el) => /auto|scroll/.test(getComputedStyle(el).overflowX) && el.scrollWidth > el.clientWidth + 1 && !el.matches('.md .scroll'))
+    .filter((el) => {
+      const x = getComputedStyle(el).overflowX;
+      const clips = /auto|scroll/.test(x) || (/hidden|clip/.test(x) && (el.id === 'detail' || !!el.closest('#detail')));
+      return clips && el.scrollWidth > el.clientWidth + 1 && !el.matches('.md .scroll, .usage-table thead');
+    })
     .map((el) => el.tagName + '.' + el.className + '#' + el.id);
   return { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, overflowing };`;
 
@@ -84,7 +88,7 @@ for (const width of [320, 375, 768, 1024, 1025, 1280, 1440]) {
       assert.deepEqual(closed.overflowing, []);
       await page.execute("document.querySelector('[data-id=r]').click()");
       await page.waitFor(
-        "return !!document.querySelector('#detail .md table') && !!document.querySelector('.usage-table')",
+        "return document.getElementById('detail').open && !!document.querySelector('#detail .md table') && !!document.querySelector('.usage-table')",
       );
       const open = await page.execute(MEASURE);
       assert.ok(open.scrollWidth <= open.clientWidth, 'detail: ' + JSON.stringify(open));
@@ -132,7 +136,44 @@ test('the usage table has no inner scroll area and keeps its table roles wide an
     assert.equal(wideRoles.columnheader, 8);
     assert.equal(wideRoles.rowheader, 4);
     assert.equal(wideRoles.cell, 28);
-    // Below about 32rem of panel width every row stacks.
+    // No column header breaks inside a word at the drawer width of a desktop viewport.
+    for (const width of [1025, 1280, 1440]) {
+      await page.resize(width, 800);
+      const broken = await page.execute(
+        `return [...document.querySelectorAll('.usage-table thead th')].filter((th) => {
+          if (getComputedStyle(th.closest('tr')).display !== 'table-row') return false;
+          const words = th.textContent.trim().split(/\\s+/);
+          return words.some((w) => { const r = document.createRange(); const n = th.firstChild; const i = th.textContent.indexOf(w); r.setStart(n, i); r.setEnd(n, i + w.length); return r.getClientRects().length > 1; });
+        }).map((th) => th.textContent)`,
+      );
+      assert.deepEqual(broken, [], 'headers broken at ' + width);
+      assert.equal((await layout('table-row')).fits, true, 'fits at ' + width);
+    }
+    // The compact sheet is as wide as the viewport, so it puts the table container just above and below the 35rem threshold.
+    const WORDS = `return [...document.querySelectorAll('.usage-table thead th')].filter((th) => { const n = th.firstChild; return th.textContent.trim().split(/\\s+/).some((w) => { const r = document.createRange(); const i = th.textContent.indexOf(w); r.setStart(n, i); r.setEnd(n, i + w.length); return r.getClientRects().length > 1; }); }).map((th) => th.textContent)`;
+    await page.resize(700, 800);
+    const above = await layout('table-row');
+    assert.equal(above.display, 'table-row');
+    assert.equal(above.fits, true);
+    assert.deepEqual(await page.execute(WORDS), []);
+    assert.deepEqual((await page.execute(MEASURE)).overflowing, []);
+    // A label breaks at its separators first and never inside a short segment.
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('.usage-table th[scope=row] .seg')].filter((e) => e.textContent.length < 40 && e.getClientRects().length !== 1).map((e) => e.textContent)",
+      ),
+      [],
+    );
+    assert.equal(
+      await page.execute(
+        "return [...document.querySelectorAll('.usage-table th[scope=row]')].some((e) => e.textContent === 'Build · Ticket 1 · claude-opus-5-5')",
+      ),
+      true,
+    );
+    await page.resize(580, 800);
+    const below = await layout('block');
+    assert.equal(below.display, 'block');
+    assert.equal(below.fits, true);
     await page.resize(375, 800);
     const narrow = await layout('block');
     assert.equal(narrow.display, 'block');

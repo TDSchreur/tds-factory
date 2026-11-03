@@ -315,10 +315,13 @@
   .usage { container-type: inline-size; margin-top: var(--spacingVerticalS); }
   .usage-table { width: 100%; border-collapse: collapse; font-size: var(--fontSizeBase200); }
   .usage-table caption { text-align: left; color: var(--colorNeutralForeground3); padding-bottom: var(--spacingVerticalXS); }
-  .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; overflow-wrap: anywhere; }
+  .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; overflow-wrap: normal; word-break: normal; }
+  .usage-table th[scope="row"] { overflow-wrap: anywhere; }
+  .usage-table .seg { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
   .usage-table td { white-space: nowrap; }
   .usage-table th[scope="col"]:first-child, .usage-table th[scope="row"] { text-align: left; }
-  @container (max-width: 32rem) {
+  /* 35rem: the wide table's measured minimum width with unbroken headers and labels (about 33.5rem) plus about 1rem of slack. */
+  @container (max-width: 35rem) {
     .usage-table, .usage-table tbody, .usage-table tr { display: block; }
     .usage-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .usage-table tr { padding: var(--spacingVerticalXS) 0; border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); }
@@ -352,7 +355,7 @@
   .empty { color: var(--colorNeutralForeground3); padding: var(--spacingVerticalXS); }
 
   #layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
-  #detail { position: fixed; inset: 0 0 0 auto; width: min(40rem, calc(100vw - 4rem)); max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; overscroll-behavior: contain; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); border: 0; border-left: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: 0; box-shadow: var(--shadow16); }
+  #detail { position: fixed; inset: 0 0 0 auto; width: min(56rem, calc(100vw - 4rem)); max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; overscroll-behavior: contain; color: var(--colorNeutralForeground1); background: var(--colorNeutralBackground1); border: 0; border-left: var(--strokeWidthThin) solid var(--colorNeutralStroke2); border-radius: 0; box-shadow: var(--shadow16); }
   #detail::backdrop { background: color-mix(in srgb, var(--colorBackgroundOverlay) 45%, transparent); }
   #detail:focus-visible, #detail h2:focus-visible { outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2); outline-offset: 2px; }
   .detail-body { padding: 0 var(--spacingHorizontalXL) var(--spacingVerticalXL); }
