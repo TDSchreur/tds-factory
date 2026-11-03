@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { git } from './git-repo.js';
-import { fixture, page, run } from './follow-up-fixture.js';
+import { cli, fixture, page, run } from './follow-up-fixture.js';
+import { envWith, fakeCommand } from './fake-command.js';
+import { spawnSync } from 'node:child_process';
 import { defined, metricsOf } from './run-view.js';
 
 /** @import { Run } from '../src/run-record.js' */
@@ -236,16 +238,105 @@ test('a loop the user granted raises the shared limit for Follow-up too', () => 
   assert.match(again.stdout, /limit of 5/);
 });
 
-test('follow-up refuses an Azure DevOps PR and changes nothing, without calling gh or az', () => {
+/**
+ * A fake `az` that answers `repos pr show`, `repos pr policy list` and the two `devops invoke` reads from az.json.
+ * @param {ReturnType<typeof fixture>} f
+ * @param {string} head
+ */
+function azureFixture(f, head) {
+  const pr = 'https://dev.azure.com/o/p/_git/r/pullrequest/7';
+  writeFileSync(f.file, JSON.stringify({ ...f.read(), pr }));
+  const answers = {
+    show: {
+      status: 'active',
+      mergeStatus: 'succeeded',
+      lastMergeSourceCommit: { commitId: head },
+      repository: {
+        id: '00000000-0000-4000-8000-000000000002',
+        name: 'r',
+        project: { id: '00000000-0000-4000-8000-000000000001', name: 'p' },
+      },
+    },
+    policies: [],
+    pullRequestStatuses: {
+      value: [{ id: 1, state: 'failed', context: { name: 'ci', genre: 'g' }, targetUrl: 'https://ci.example/1' }],
+    },
+    pullRequestThreads: {
+      value: [
+        {
+          id: 3,
+          status: 'active',
+          comments: [{ id: 1, commentType: 'text', content: 'Fix this' }],
+          threadContext: { filePath: '/a.js' },
+        },
+      ],
+    },
+  };
+  const file = join(f.cwd, 'az.json');
+  writeFileSync(file, JSON.stringify(answers));
+  fakeCommand(
+    join(f.cwd, 'fake-bin'),
+    'az',
+    `const fs = require('fs');\nconst a = JSON.parse(fs.readFileSync(process.env.FAKE_AZ));\nconst args = process.argv.slice(2);\nfs.appendFileSync(process.env.FAKE_AZ + '.log', JSON.stringify(args) + '\\n');\nconst r = args.includes('--resource') ? args[args.indexOf('--resource') + 1] : null;\nconsole.log(JSON.stringify(r ? a[r] : args[2] === 'show' ? a.show : a.policies));\n`,
+  );
+  return { pr, file, answers };
+}
+/** @param {ReturnType<typeof fixture>} f @param {string[]} args */
+const runAzure = (f, ...args) =>
+  spawnSync(process.execPath, [cli, 'run', ...args], {
+    cwd: f.cwd,
+    encoding: 'utf8',
+    env: envWith(join(f.cwd, 'fake-bin'), { FAKE_AZ: join(f.cwd, 'az.json') }),
+  });
+const windows = { skip: process.platform === 'win32' && 'the fake az.exe cannot stand in for az.cmd behind cmd.exe' };
+
+test('follow-up works for an Azure DevOps PR: the scope sends only its findings to Build', windows, () => {
   const f = fixture();
-  const record = f.read();
-  record.pr = 'https://dev.azure.com/o/p/_git/r/pullrequest/7';
-  writeFileSync(f.file, JSON.stringify(record));
+  azureFixture(f, f.head);
+  const none = runAzure(f, 'follow-up', '--id', f.id);
+  assert.notEqual(none.status, 0);
+  assert.match(none.stderr, /choose what to work on with --scope/);
+  assert.doesNotMatch(none.stderr, /GitHub/);
+  const result = runAzure(f, 'follow-up', '--id', f.id, '--scope', 'comments');
+  assert.equal(result.status, 0, result.stderr);
+  const after = f.read();
+  assert.equal(after.stage, 'build');
+  const snapshot = defined(after.follow_up, 'the Run records its follow-up');
+  assert.equal(snapshot.scope, 'comments');
+  assert.equal(snapshot.head, f.head);
+  assert.deepEqual(snapshot.threads, [
+    {
+      id: '3',
+      path: '/a.js',
+      comments: [{ body: 'Fix this', url: 'https://dev.azure.com/o/p/_git/r/pullrequest/7?discussionId=3' }],
+    },
+  ]);
+  assert.equal(snapshot.failures[0].name, 'g/ci');
+  assert.equal(snapshot.conflicts, false);
+});
+
+test('follow-up for an Azure DevOps PR refuses a head that differs and a closed PR, changing nothing', windows, () => {
+  const f = fixture();
+  const { file, answers } = azureFixture(f, 'a'.repeat(40));
   const before = readFileSync(f.file, 'utf8');
-  const result = run(f.cwd, 'follow-up', '--id', f.id);
+  const result = runAzure(f, 'follow-up', '--id', f.id, '--scope', 'checks');
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Follow-up does not support Azure DevOps yet/);
+  assert.match(result.stderr, /worktree head differs from the PR head/);
   assert.equal(readFileSync(f.file, 'utf8'), before);
+  writeFileSync(file, JSON.stringify({ ...answers, show: { ...answers.show, status: 'abandoned' } }));
+  const closed = runAzure(f, 'follow-up', '--id', f.id);
+  assert.match(closed.stderr, /closed without a merge/);
+  assert.equal(readFileSync(f.file, 'utf8'), before);
+});
+
+test('follow-up for a completed Azure DevOps PR is Done', windows, () => {
+  const f = fixture();
+  const { file, answers } = azureFixture(f, f.head);
+  writeFileSync(file, JSON.stringify({ ...answers, show: { ...answers.show, status: 'completed' } }));
+  const result = runAzure(f, 'follow-up', '--id', f.id);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(f.read().status, 'done');
+  assert.match(result.stdout, /merged/);
 });
 
 /** @param {ReturnType<typeof fixture>} f */

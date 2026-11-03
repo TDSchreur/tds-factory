@@ -166,7 +166,11 @@ async function fixRun(ctx, id, v) {
   if (grant !== null && grant !== 'true') return send(400, 'text/plain', 'invalid grant option');
   if (updated === null) return send(409, 'text/plain', 'the request must name the Run record time you looked at');
   if (!can(v.pr, 'strictViewFlow'))
-    return send(409, 'text/plain', 'Fix works for GitHub pull requests only; make the change in a new Run');
+    return send(
+      409,
+      'text/plain',
+      'Fix works for GitHub and Azure DevOps pull requests only; make the change in a new Run',
+    );
   const outcome = await store.fixAsync(id, { scope: scope ?? undefined, updated: updated, grant: grant === 'true' });
   if (!outcome.started)
     return send(

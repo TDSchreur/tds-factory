@@ -1,5 +1,7 @@
 /** @import { PrStatus, PrView } from './pr-provider.js' */
 /** @import { PrDetails } from './pr-github.js' */
+/** @import { FollowUp } from './run-record.js' */
+import { commandStep } from './git.js';
 import { CHECKS_MAX, COMMENT_MAX, cut, link, NAME_MAX, PATH_MAX, THREADS_MAX } from './pr-text.js';
 import { exec, failureText, MAX_BUFFER, reasonError, remoteText, spawnText } from './pr-exec.js';
 
@@ -341,13 +343,14 @@ export async function details(url, { run = defaultRun } = {}) {
       readInvoke(run, target, guids, THREADS, 'details'),
       readInvoke(run, target, guids, STATUSES, 'details'),
     ]);
-    const entries = [...policyChecks(policies).checks, ...statusChecks(statusesAnswer)].map((c) => ({
-      ...c,
-      url: c.url ?? buildLink(target, c.buildId),
-    }));
+    const entries = checkEntries(target, policies, statusesAnswer);
     const failing = entries.filter((c) => FAILING.includes(c.status));
     const pending = entries.filter((c) => PENDING.includes(c.status));
-    const unresolved = unresolvedThreads(threadsAnswer, url);
+    const unresolved = openThreads(threadsAnswer).map((t) => ({
+      path: cut(t.path, PATH_MAX),
+      comment: cut(t.comments[0].content, COMMENT_MAX),
+      url: t.link(url),
+    }));
     return {
       state: status.state,
       draft: status.draft,
@@ -460,14 +463,24 @@ function buildLink({ organization, projectPath }, buildId) {
     ? `${organization}/${projectPath}/_build/results?buildId=${buildId}`
     : null;
 }
+// Policy and status checks together, each with its link: a build policy's from the PR link and the build id, a status's own `targetUrl`.
+/**
+ * @param {Target} target
+ * @param {any} policies parsed JSON from the CLI, checked field by field
+ * @param {any[]} statuses the `value` of the pullRequestStatuses answer
+ */
+const checkEntries = (target, policies, statuses) =>
+  [...policyChecks(policies).checks, ...statusChecks(statuses)].map((c) => ({
+    ...c,
+    url: c.url ?? buildLink(target, c.buildId),
+  }));
 // Threads a person left open: active or pending, not deleted, not made by Azure DevOps itself (vote, push, policy update) and with a comment that is not deleted.
+// The comments are the ones that are not deleted, with the text as Azure DevOps sent it (untrusted); `link` is the thread's link under the PR link.
 /**
  * @param {any[]} threads the `value` of the pullRequestThreads answer
- * @param {string} url the PR link
- * @returns {NonNullable<PrDetails['threads']>}
  */
-function unresolvedThreads(threads, url) {
-  /** @type {NonNullable<PrDetails['threads']>} */
+function openThreads(threads) {
+  /** @type {{ id: unknown, path: unknown, comments: { content: unknown, commentType: unknown }[], link: (url: string) => string | null }[]} */
   const list = [];
   for (const t of threads) {
     if (!t || typeof t !== 'object' || !Array.isArray(t.comments))
@@ -478,10 +491,113 @@ function unresolvedThreads(threads, url) {
     const comments = t.comments.filter(/** @param {any} c */ (c) => c && typeof c === 'object' && c.isDeleted !== true);
     if (!comments.some(/** @param {any} c */ (c) => c.commentType !== 'system')) continue;
     list.push({
-      path: cut(t.threadContext?.filePath, PATH_MAX),
-      comment: cut(comments[0].content, COMMENT_MAX),
-      url: Number.isSafeInteger(t.id) && t.id > 0 ? link(`${url}?discussionId=${t.id}`) : null,
+      id: t.id,
+      path: t.threadContext?.filePath,
+      comments,
+      link: (url) => (Number.isSafeInteger(t.id) && t.id > 0 ? link(`${url}?discussionId=${t.id}`) : null),
     });
   }
   return list;
+}
+
+// Follow-up (ADR 0034): the same flows as GitHub's, so the Run, the Dashboard Fix and `run follow-up` work for Azure DevOps. All reads, as a flow of steps.
+/**
+ * @param {string[]} argv
+ * @param {string | undefined} cwd
+ * @param {string} what
+ * @returns {Generator<import('./git.js').Step, any, any>} the parsed JSON of az; its shape is checked by each caller
+ */
+function* azFlow(argv, cwd, what) {
+  const [file, launched, options] = launch(argv);
+  const out = yield* commandStep(file, cwd, launched, { timeout: 20_000, maxBuffer: MAX_BUFFER, ...options });
+  if (out.status !== 0)
+    throw reasonError(
+      `cannot read Azure DevOps PR ${what}: ${failureText(out, 'az failed')}`,
+      failure({ stderr: out.stderr, code: /** @type {any} */ (out.error)?.code ?? out.status }),
+      out.error,
+    );
+  try {
+    return JSON.parse(out.stdout);
+  } catch (err) {
+    throw reasonError('malformed Azure DevOps response', 'error', err);
+  }
+}
+/**
+ * The PR as `az repos pr show` has it, checked to be the one the link names.
+ * @param {string} url
+ * @param {string | undefined} cwd
+ * @param {string} what
+ */
+function* showFlow(url, cwd, what) {
+  if (!matches(url)) throw new Error('not an Azure DevOps pull request');
+  const target = parts(url);
+  const pr = yield* azFlow(args(SHOW, target), cwd, what);
+  belongsTo(pr, target);
+  return { target, pr };
+}
+// State and head commit of a PR for Follow-up; the head must look like a commit id.
+/**
+ * @param {string} url
+ * @param {string} [cwd]
+ * @returns {Generator<import('./git.js').Step, PrView & { headRefOid: string }, any>}
+ */
+export function* strictViewFlow(url, cwd) {
+  const { target, pr } = yield* showFlow(url, cwd, 'state');
+  const current = viewOf(pr, target);
+  if (typeof current.headRefOid !== 'string' || !/^[a-f0-9]{40,64}$/i.test(current.headRefOid))
+    throw new Error('incomplete Azure DevOps PR state');
+  return { ...current, headRefOid: current.headRefOid };
+}
+// What Follow-up observes at the PR head (`lastMergeSourceCommit`): merge conflicts, current checks and unresolved review threads.
+// `mergeStatus` other than `conflicts` is no finding. The comments are untrusted text.
+/**
+ * @param {string} url
+ * @param {string} head
+ * @param {string} [cwd]
+ * @returns {Generator<import('./git.js').Step, FollowUp, any>}
+ */
+export function* observeFlow(url, head, cwd) {
+  const { target, pr } = yield* showFlow(url, cwd, 'follow-up');
+  if (pr.lastMergeSourceCommit?.commitId !== head) throw new Error('Azure DevOps PR head changed during Follow-up');
+  const policies = yield* azFlow(args(POLICIES, target), cwd, 'follow-up');
+  if (!Array.isArray(policies)) throw bad();
+  const guids = ids(pr);
+  /** @param {string} resource */
+  const value = function* (resource) {
+    const answer = yield* azFlow(invokeArgs(target, guids, resource), cwd, 'follow-up');
+    if (!answer || typeof answer !== 'object' || !Array.isArray(answer.value))
+      throw reasonError(`incomplete Azure DevOps ${resource}`, 'error');
+    return answer.value;
+  };
+  const statuses = yield* value(STATUSES);
+  const threadsAnswer = yield* value(THREADS);
+  const checks = checkEntries(target, policies, statuses).map((c) => ({
+    name: c.name,
+    state: c.status,
+    url: link(c.url),
+    description: null,
+    failing: FAILING.includes(c.status),
+    pending: PENDING.includes(c.status),
+  }));
+  const threads = openThreads(threadsAnswer).map((t) => {
+    if (!Number.isSafeInteger(t.id)) throw new Error('incomplete Azure DevOps review thread');
+    const href = /** @type {string} */ (t.link(url));
+    const comments = t.comments
+      .filter((c) => c.commentType !== 'system')
+      .map((c) => {
+        if (typeof c.content !== 'string') throw new Error('incomplete Azure DevOps review comment');
+        return { body: c.content, url: href };
+      });
+    return { id: String(t.id), path: typeof t.path === 'string' ? t.path : '', comments };
+  });
+  return {
+    pr: url,
+    head,
+    observed: new Date().toISOString(),
+    conflicts: pr.mergeStatus === 'conflicts',
+    checks,
+    failures: checks.filter((c) => c.failing),
+    pending: checks.some((c) => c.pending),
+    threads,
+  };
 }
