@@ -30,7 +30,7 @@ Stories 10, 11 and 13 of [Size gate](run-size-gate.md), made concrete:
 - **After a split.** Define cuts and publishes Tickets only for the first Run. Each later Run gets one issue on the tracker with its scope (what it carries, why it was cut, what it needs first) and no Ticket label, because it has no Tickets yet. The first Run's Spec names the issues. The later Run starts with `/factory` and its own Define.
 - **Fast track.** `references/fast-track.md` asks for an estimate before the confirmation. When it passes the limit the confirmation says so and proposes the Full track, like the existing advice for work bigger than a tiny change. The user chooses the track.
 - **Waiting.** `SKILL.md` gets one bullet for the Build wait with the reason of ADR 0035, saying what follows each answer: split runs `run split`, which prints the links of the moved Tickets, then the Run goes on to Check and the agent starts a new Run with those links; accept runs `run size --accept` and Build goes on. `references/continue.md` gets the case of a Run that still waits for the size answer. `SKILL.md` stays under its 18 KB limit.
-- **Documents.** From the Sweep: `references/define.md`, `references/fast-track.md`, `references/continue.md`, `SKILL.md`, the Fast track paragraphs in `README.md` and `docs/usage.md`, and the "Later" paragraph of ADR 0035 (Define's estimate is no longer later), plus a changelog fragment. No Glossary entry: **Run size** and **Split** already carry the meaning.
+- **Documents.** From the Sweep: `references/define.md`, `references/fast-track.md`, `references/continue.md`, `SKILL.md`, the Fast track paragraphs in `README.md` and `docs/usage.md`, and the "Later" paragraph of ADR 0035 (Define's estimate is no longer later), the first Spec `docs/specs/run-size-gate.md` (it no longer calls Run B one Run), `docs/specs/reduce-check-loops.md` (story 9), ADR 0023 (pointer), a test in `test/skills.test.js` and a changelog fragment. The **Run size** Glossary entry gains Define's estimate.
 
 ## Size estimate
 
@@ -43,11 +43,11 @@ The Run is held to its own rule: 10 files and 27 KB, without lockfiles and `test
 | Ticket 2: Waiting bullet, `continue.md`, ADR 0035                                    | 3     | 2      |
 | **Total**                                                                            | **9** | **14** |
 
-The Run fits the margin. What does not fit goes to a later Run (see Out of Scope): the Dashboard buttons alone are about 9 files and 20 KB (route, handlers, model, components, app, help, `docs/dashboard.md`, `docs/usage.md`, tests), and the leftovers of Run A add about 7 files.
+The table was the plan. In Define the user added the first Spec's update and a Skill-text test, and Check added `reduce-check-loops.md`, ADR 0023 and the Glossary: the Run as built is 14 files and about 30 KB, over the margin and under the limit, and the user accepted that. Twice now the estimate came in low by about half, so the margin is kept. What does not fit goes to a later Run (see Out of Scope): the Dashboard buttons alone are about 9 files and 20 KB (route, handlers, model, components, app, help, `docs/dashboard.md`, `docs/usage.md`, tests), and the leftovers of Run A add about 7 files.
 
 ## Testing Decisions
 
-The work is Skill text, so the existing checks of `npm test` are the seam: the Skill checks (the 18 KB limit of `SKILL.md`, links and references that resolve), the Markdown, link and glossary checks. No new test is added: a test that pins the wording of the Skill would break on every edit and prove nothing about behaviour. The reviewer reads the Skill text against the stories above.
+The work is Skill text, so the seam is `npm test`: the Skill checks (the 18 KB limit of `SKILL.md`, links and references that resolve), the Markdown, link and glossary checks, and two tests in `test/skills.test.js` that pin the rules, as the other Skill rules there are pinned: the Define estimate, margin, split proposal and later-Run issues with the Fast track move, and the Waiting answers in `SKILL.md` and `continue.md`. The reviewer reads the Skill text against the stories above.
 
 ## Out of Scope
 
@@ -59,4 +59,4 @@ Left to one later issue, [#530](https://github.com/TDSchreur/tds-factory/issues/
 
 ## Further Notes
 
-The first Spec still describes Run B as one Run; the later Run that does the Dashboard updates it. When this work is done the estimate has been tried once on itself: the table above is the first one that uses the margin.
+The table above is the first estimate that uses the margin. This Run updated the first Spec, so it no longer describes Run B as one Run.
