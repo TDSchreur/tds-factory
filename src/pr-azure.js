@@ -64,6 +64,9 @@ const STATE = { active: 'open', completed: 'merged', abandoned: 'closed' };
 /** @type {Record<string, string>} */
 const MERGE = { succeeded: 'mergeable', conflicts: 'conflicting' };
 const POLICY_STATUS = ['approved', 'rejected', 'running', 'queued', 'broken', 'notApplicable'];
+// "Require a merge strategy" judges the strategy chosen at completion, so it is rejected until then: a setting, not a check.
+// Matched by its type id, the same in every organisation, because the display name is localised.
+const MERGE_STRATEGY_POLICY = 'fa4e907d-c16b-4a4c-9dfa-4916e5d171ab';
 /**
  * @param {any} pr parsed JSON from the CLI, checked field by field
  * @param {any} policies parsed JSON from the CLI, checked field by field
@@ -83,6 +86,7 @@ export function parseStatus(pr, policies) {
     const kind = config?.type?.displayName;
     if (!config || typeof kind !== 'string' || !POLICY_STATUS.includes(policy.status)) throw bad();
     if (!config.isBlocking || config.isEnabled === false || policy.status === 'notApplicable') continue;
+    if (config.type.id === MERGE_STRATEGY_POLICY) continue;
     if (/reviewers?/i.test(kind)) reviewPolicies.push(policy.status);
     else checks.push({ name: label(config.settings?.displayName ?? kind), status: policy.status });
   }

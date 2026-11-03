@@ -1,0 +1,49 @@
+[
+  {
+    "artifactId": "vstfs:///CodeReview/CodeReviewId/00000000-0000-4000-8000-000000000001%2f531",
+    "completedDate": null,
+    "configuration": {
+      "createdBy": {
+        "descriptor": "aad.REDACTED",
+        "directoryAlias": null,
+        "displayName": "Fixture User",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "imageUrl": "https://dev.azure.com/example-org/_api/_common/identityImage?id=00000000-0000-4000-8000-000000000003",
+        "inactive": null,
+        "isAadIdentity": null,
+        "isContainer": null,
+        "isDeletedInOrigin": null,
+        "profileUrl": null,
+        "uniqueName": "fixture.user@example.test",
+        "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+      },
+      "createdDate": "2026-11-03T15:43:40.122705+00:00",
+      "id": 95,
+      "isBlocking": true,
+      "isDeleted": false,
+      "isEnabled": true,
+      "isEnterpriseManaged": false,
+      "revision": 1,
+      "settings": {
+        "allowSquash": true,
+        "scope": [
+          {
+            "matchKind": "Exact",
+            "refName": "refs/heads/factory-fixture/t-merge-strategy",
+            "repositoryId": "00000000-0000-4000-8000-000000000002"
+          }
+        ]
+      },
+      "type": {
+        "displayName": "Require a merge strategy",
+        "id": "fa4e907d-c16b-4a4c-9dfa-4916e5d171ab",
+        "url": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/policy/types/fa4e907d-c16b-4a4c-9dfa-4916e5d171ab"
+      },
+      "url": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/policy/configurations/95"
+    },
+    "context": null,
+    "evaluationId": "00000000-0000-4000-8000-000000000007",
+    "startedDate": "2026-11-03T15:43:45.342918+00:00",
+    "status": "rejected"
+  }
+]

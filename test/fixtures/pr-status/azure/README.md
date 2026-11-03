@@ -11,5 +11,6 @@ Recorded output of `az repos pr show` (`*.pr.json`) and `az repos pr policy list
 | `draft` | active, `isDraft` true |
 | `completed` | status `completed` |
 | `abandoned` | status `abandoned`, no `mergeStatus` |
+| `merge-strategy` | recorded on 2026-11-03: active, one blocking "Require a merge strategy" policy (squash only) `rejected` because no completion options are set; the policy turned `approved` once squash was chosen. Its policy type id `fa4e907d-c16b-4a4c-9dfa-4916e5d171ab` is the same in every organisation and is kept |
 
 Do not record fixtures from any other repository.

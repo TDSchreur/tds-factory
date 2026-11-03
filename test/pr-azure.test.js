@@ -112,6 +112,19 @@ test('a rejected blocking policy is a failing check named by its policy', () => 
   );
 });
 
+test('the merge strategy policy is a completion setting, not a check', () => {
+  // Recorded: Azure DevOps rejects it until an allowed merge strategy is chosen, which happens when the PR completes.
+  assert.deepEqual(status('merge-strategy').checks, { result: 'none', failing: [] });
+  const { policies } = fixture('passing');
+  const { pr, policies: strategy } = fixture('merge-strategy');
+  strategy[0].configuration.type.displayName = 'Zusammenführungsstrategie erforderlich';
+  assert.deepEqual(
+    parseStatus(pr, [...policies, ...strategy]).checks,
+    { result: 'passing', failing: [] },
+    'matched by its type id, not by its localised name',
+  );
+});
+
 test('reviewer votes: rejected or waiting for the author asks for changes, approvals approve', () => {
   const { pr, policies } = fixture('passing');
   /**
