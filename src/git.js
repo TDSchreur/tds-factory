@@ -55,7 +55,7 @@ export function* gitStep(cwd, args, options = {}) {
 /**
  * @template T
  * @param {() => T} call
- * @returns {Generator<Step, Awaited<T>, any>}
+ * @returns {Generator<Step, Awaited<T>, any>} `any` is what a flow sends back in; the runner answers with the call's awaited result
  */
 export function* callStep(call) {
   return yield { call };
