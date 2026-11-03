@@ -449,9 +449,10 @@ export const canAnswerSize = (run) =>
 /** @param {RunView} run */
 export const agentPrompt = (run) => '/factory continue ' + run.id;
 
-// Whether the Run waits for an agent to take over a Follow-up Rework that a Fix started.
+// Whether the Run waits for an agent to take over: a Follow-up Rework that a Fix started, or a split that was handed over.
 /** @param {RunView} run */
-export const canCopyPrompt = (run) => !run.unreadable && run.waiting === true && run.reason === FIX_WAITING_REASON;
+export const canCopyPrompt = (run) =>
+  !run.unreadable && run.waiting === true && (run.reason === FIX_WAITING_REASON || run.reason === SPLIT_DONE_REASON);
 
 // Whether a Fix would exceed the Check loop limit, so that it needs the grant of an extra loop (ADR 0034).
 /** @param {RunView} run */

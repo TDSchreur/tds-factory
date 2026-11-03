@@ -124,14 +124,105 @@ test('a refused Continue shows the server message', async (t) => {
   }
 });
 
-test('Split sends no request yet', async (t) => {
-  const page = await openPage(t, { runs: [waiting()] });
+/** @param {Page} page */
+const splitDialog = async (page) => {
+  await page.waitFor("return !!document.querySelector('[data-id=w]')");
+  await click(page, '[aria-label="Split Too big"]');
+  await titled(page, 'Split the Run?');
+};
+
+test('Split confirms with the counts, sends nothing on Cancel, then posts with the token and the Run time', async (t) => {
+  const page = await openPage(t, {
+    runs: [waiting({ ticketsDone: 2, ticketsTotal: 5 })],
+    respond: () => ({ status: 200, body: 'https://github.com/o/r/issues/7\njavascript:alert(1)' }),
+  });
+  if (!page) return;
+  try {
+    await splitDialog(page);
+    assert.equal(
+      (await dialog(page))[1],
+      '2 of 5 Tickets are done and stay; the other 3 move to a new Run. The Run then waits for an agent; hand it over with Copy agent prompt.',
+    );
+    assert.equal(
+      await page.execute("return document.getElementById('dialog-confirm').classList.contains('danger')"),
+      false,
+    );
+    await click(page, '#dialog-cancel');
+    await page.wait(200);
+    assert.deepEqual(page.calls, []);
+    await splitDialog(page);
+    await click(page, '#dialog-confirm');
+    await titled(page, 'Run split');
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('#dialog .dialog-links li')].map(li => [li.textContent, !!li.querySelector('a')])",
+      ),
+      [
+        ['https://github.com/o/r/issues/7', true],
+        ['javascript:alert(1)', false],
+      ],
+    );
+    assert.equal(await page.execute('return document.querySelectorAll(\'#dialog a[href^="javascript"]\').length'), 0);
+    assert.equal(
+      await page.execute("return document.getElementById('dialog-message').textContent"),
+      'Moved to a new Run:',
+    );
+    await click(page, '#dialog-confirm');
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/w/split?updated=2026-11-01T10%3A00%3A00.000Z']);
+    assert.deepEqual(page.tokens, ['test-token']);
+  } finally {
+    await page.close();
+  }
+});
+
+test('a split that moved nothing says so, and a refused split shows the server message', async (t) => {
+  const page = await openPage(t, { runs: [waiting()], respond: () => ({ status: 200, body: '' }) });
+  if (!page) return;
+  try {
+    await splitDialog(page);
+    assert.match((await dialog(page))[1], /^The Tickets that are done stay; the others move to a new Run\./);
+    await click(page, '#dialog-confirm');
+    assert.deepEqual(await closeAfter(page, 'Run split'), ['Run split', 'Nothing was left to move.']);
+  } finally {
+    await page.close();
+  }
+  const refused = await openPage(t, {
+    runs: [waiting()],
+    respond: () => ({ status: 409, body: 'the Run changed since you looked at it; reload and look again' }),
+  });
+  if (!refused) return;
+  try {
+    await splitDialog(refused);
+    await click(refused, '#dialog-confirm');
+    assert.deepEqual(await closeAfter(refused, 'Could not split the Run'), [
+      'Could not split the Run',
+      'the Run changed since you looked at it; reload and look again',
+    ]);
+  } finally {
+    await refused.close();
+  }
+});
+
+test('Copy agent prompt shows for the split-done reason and copies the continue prompt', async (t) => {
+  const page = await openPage(t, {
+    runs: [
+      waiting({ reason: 'Split done: ready for an agent', waiting: true }),
+      waiting({ id: 'q', title: 'Question' }),
+    ],
+  });
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=w]')");
-    await click(page, '[aria-label="Split Too big"]');
-    await page.wait(200);
-    assert.deepEqual(page.calls, []);
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('[aria-label^=\"Copy agent prompt\"]')].map(b => b.getAttribute('aria-label'))",
+      ),
+      ['Copy agent prompt for Too big'],
+    );
+    assert.deepEqual(await labels(page), ['Split Question', 'Continue Question']);
+    await page.execute('navigator.clipboard.writeText = async (text) => { window.copied = text; }');
+    await click(page, '[aria-label="Copy agent prompt for Too big"]');
+    await page.waitFor("return window.copied === '/factory continue w'");
   } finally {
     await page.close();
   }

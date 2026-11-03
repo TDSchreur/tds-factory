@@ -152,13 +152,14 @@ function App() {
    * @param {string} action
    * @param {boolean} [danger]
    * @param {boolean} [notice]
+   * @param {string[]} [links]
    * @returns {Promise<boolean>}
    */
-  const ask = (title, message, action, danger, notice) => {
+  const ask = (title, message, action, danger, notice, links) => {
     const result = queue.current.then(
       () =>
         new Promise((/** @type {(confirmed: boolean) => void} */ resolve) =>
-          setRequest({ title, message, action, danger, notice, resolve }),
+          setRequest({ title, message, action, danger, notice, links, resolve }),
         ),
     );
     queue.current = result.then(() => {});
@@ -191,48 +192,38 @@ function App() {
    */
   const runAction = async (run, name, title, message, action, done, query = '') => {
     if (!(await ask(title, message, action, false))) return;
+    const failed =
+      'Could not ' +
+      ({
+        sync: 'sync the Run',
+        clean: 'clean up the Run',
+        'extra-loop': 'grant the extra loop',
+        split: 'split the Run',
+        continue: 'continue the Run',
+      }[/** @type {'sync' | 'clean' | 'extra-loop' | 'split' | 'continue'} */ (name)] ?? 'accept the Check');
     try {
       const response = await write('POST', runPath(run) + '/' + name + query);
       const text = await response.text();
+      // A split answers with the moved links, one per line; they show as links only when they are safe URLs.
+      const links = name === 'split' && response.ok ? text.split('\n').filter(Boolean) : undefined;
       await ask(
-        response.ok
-          ? done
-          : 'Could not ' +
-              (name === 'sync'
-                ? 'sync the Run'
-                : name === 'clean'
-                  ? 'clean up the Run'
-                  : name === 'extra-loop'
-                    ? 'grant the extra loop'
-                    : name === 'continue'
-                      ? 'continue the Run'
-                      : 'accept the Check'),
-        response.ok
-          ? name === 'clean'
+        response.ok ? done : failed,
+        !response.ok
+          ? text
+          : name === 'clean'
             ? text
-            : done + (name === 'continue' ? '. The agent picks it up on its next step.' : '.')
-          : text,
+            : links
+              ? links.length
+                ? 'Moved to a new Run:'
+                : 'Nothing was left to move.'
+              : done + (name === 'continue' ? '. The agent picks it up on its next step.' : '.'),
         'Close',
         false,
         true,
+        links,
       );
     } catch {
-      await ask(
-        'Could not ' +
-          (name === 'sync'
-            ? 'sync the Run'
-            : name === 'clean'
-              ? 'clean up the Run'
-              : name === 'extra-loop'
-                ? 'grant the extra loop'
-                : name === 'continue'
-                  ? 'continue the Run'
-                  : 'accept the Check'),
-        run.title,
-        'Close',
-        false,
-        true,
-      );
+      await ask(failed, run.title, 'Close', false, true);
     }
     poll();
   };
@@ -353,7 +344,22 @@ function App() {
       'Continued',
       '?updated=' + encodeURIComponent(run.updated),
     );
-  const splitRun = async () => {}; // wired in the next Ticket
+  const splitRun = (/** @type {RunView} */ run) => {
+    const total = Math.max(0, run.ticketsTotal ?? 0);
+    const done = Math.min(Math.max(0, run.ticketsDone ?? 0), total);
+    return runAction(
+      run,
+      'split',
+      'Split the Run?',
+      (total
+        ? done + ' of ' + total + ' Tickets are done and stay; the other ' + (total - done) + ' move to a new Run.'
+        : 'The Tickets that are done stay; the others move to a new Run.') +
+        ' The Run then waits for an agent; hand it over with Copy agent prompt.',
+      'Split',
+      'Run split',
+      '?updated=' + encodeURIComponent(run.updated),
+    );
+  };
   /**
    * @param {RunView[]} doomed
    * @param {string} message

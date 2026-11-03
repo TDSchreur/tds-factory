@@ -892,7 +892,7 @@ export function Detail({
 
 // A native dialog driven by one request at a time: { title, message, action, danger, notice, resolve }, or null when closed.
 /**
- * @typedef {{ title: string, message: string, action: string, danger?: boolean, notice?: boolean, resolve: (confirmed: boolean) => void }} ConfirmRequest
+ * @typedef {{ title: string, message: string, action: string, danger?: boolean, notice?: boolean, links?: string[], resolve: (confirmed: boolean) => void }} ConfirmRequest
  */
 /** @param {{ request: ConfirmRequest | null, onClose: (confirmed: boolean) => void }} props */
 export function ConfirmDialog({ request, onClose }) {
@@ -913,6 +913,7 @@ export function ConfirmDialog({ request, onClose }) {
     <div class="dialog-content">
       <h2 id="dialog-title">${request ? request.title : ''}</h2>
       <p id="dialog-message">${request ? request.message : ''}</p>
+      ${request?.links?.length ? html`<ul class="dialog-links">${request.links.map((link, i) => html`<li key=${i}><${Link} href=${link}>${link}<//></li>`)}</ul>` : ''}
       <div class="dialog-actions">
         <button id="dialog-cancel" ref=${cancel} type="button" hidden=${!!(request && request.notice)} onClick=${() => dialog.current?.close('cancel')}>Cancel</button>
         <button id="dialog-confirm" ref=${confirm} type="button" class=${request && request.danger ? 'primary danger' : 'primary'} onClick=${() => dialog.current?.close('confirm')}>${request ? request.action : ''}</button>
