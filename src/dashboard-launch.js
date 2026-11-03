@@ -80,12 +80,12 @@ export async function launchDashboard({
   /** @type {Awaited<ReturnType<typeof startDashboard>>} */
   let server;
   try {
-    server = await startDashboard({ projectDir, port: preferredPort });
+    server = await startDashboard({ projectDir, port: preferredPort, registry });
   } catch (err) {
     if (codeOf(err) !== 'EADDRINUSE') throw err;
     const winner = await probe(preferredPort);
     if (winner) return reuse(preferredPort, winner.version);
-    server = await startDashboard({ projectDir, port: 0 });
+    server = await startDashboard({ projectDir, port: 0, registry });
   }
   registry.writeState({ pid: process.pid, port: server.port, version });
   return {

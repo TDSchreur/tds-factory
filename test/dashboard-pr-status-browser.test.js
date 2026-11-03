@@ -106,7 +106,7 @@ test('an unavailable PR status says why and Check again asks for it again', asyn
     };
     await page.execute("document.querySelector('[data-id=a] .pr-status button').click()");
     await page.waitFor("return /Checks: passing/.test(document.querySelector('[data-id=a]').textContent)");
-    assert.deepEqual(state.statusCalls, ['/api/runs/a/pr-status?refresh=1']);
+    assert.deepEqual(state.statusCalls, ['/api/projects/p/runs/a/pr-status?refresh=1']);
     assert.equal(
       await page.execute("return document.querySelector('#detail').hidden"),
       true,

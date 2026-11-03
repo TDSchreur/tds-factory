@@ -165,12 +165,12 @@ test('the CLI start in a non-git directory exits non-zero with the message', () 
 
 /**
  * The Run entries a Dashboard lists.
- * @param {{ url: string }} dashboard
+ * @param {{ url: string, projectId: string }} dashboard
  * @returns {Promise<{ id: string }[]>}
  */
 async function listed(dashboard) {
-  const body = await (await fetch(`${dashboard.url}/api/runs`)).json();
-  assert.ok(Array.isArray(body), '/api/runs answers with a list');
+  const body = await (await fetch(`${dashboard.url}/api/projects/${dashboard.projectId}/runs`)).json();
+  assert.ok(Array.isArray(body), `/api/projects/${dashboard.projectId}/runs answers with a list`);
   return body;
 }
 
@@ -304,7 +304,10 @@ test('Dashboard requires an explicit discard option before deleting dirty work',
   const dash = await startDashboard({ projectDir: main, port: 0 });
   /** @param {string} query */
   const request = async (query, origin = dash.url) =>
-    fetch(`${dash.url}/api/runs/${id}${query}`, { method: 'DELETE', headers: await writeHeaders(dash, origin) });
+    fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}${query}`, {
+      method: 'DELETE',
+      headers: await writeHeaders(dash, origin),
+    });
   try {
     const refused = await request('');
     assert.equal(refused.status, 409);
@@ -329,7 +332,7 @@ test('the Dashboard reports a refused worktree removal and keeps the Run', async
   finish(store, id);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const res = await fetch(`${dashboard.url}/api/runs/${id}`, {
+    const res = await fetch(`${dashboard.url}/api/projects/${dashboard.projectId}/runs/${id}`, {
       method: 'DELETE',
       headers: await writeHeaders(dashboard),
     });
@@ -352,7 +355,7 @@ test("the Dashboard shows git's error when it cannot remove a clean worktree", a
   finish(store, id);
   const dashboard = await startDashboard({ projectDir: main, port: 0 });
   try {
-    const res = await fetch(`${dashboard.url}/api/runs/${id}`, {
+    const res = await fetch(`${dashboard.url}/api/projects/${dashboard.projectId}/runs/${id}`, {
       method: 'DELETE',
       headers: await writeHeaders(dashboard),
     });
@@ -361,10 +364,13 @@ test("the Dashboard shows git's error when it cannot remove a clean worktree", a
     assert.match(body, /git could not remove the Run worktree: .*locked/);
     assert.doesNotMatch(body, /uncommitted changes/);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
-    const override = await fetch(`${dashboard.url}/api/runs/${id}?discardChanges=true`, {
-      method: 'DELETE',
-      headers: await writeHeaders(dashboard),
-    });
+    const override = await fetch(
+      `${dashboard.url}/api/projects/${dashboard.projectId}/runs/${id}?discardChanges=true`,
+      {
+        method: 'DELETE',
+        headers: await writeHeaders(dashboard),
+      },
+    );
     assert.equal(override.status, 409);
     assert.ok(existsSync(join(main, '.factory', 'runs', id, 'run.json')));
   } finally {

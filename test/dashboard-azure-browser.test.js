@@ -35,6 +35,7 @@ test('the unavailable texts of Azure DevOps name the fix and the host', () => {
     /** @type {RunView} */
     const view = {
       id: 'r',
+      projectId: 'p',
       unreadable: false,
       title: 'r',
       activity: '',

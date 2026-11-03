@@ -247,7 +247,7 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
     );
     await page.key(ESCAPE);
     await page.waitFor("return !document.querySelector('#dialog').open");
-    assert.deepEqual(page.calls, ['DELETE /api/runs/r']);
+    assert.deepEqual(page.calls, ['DELETE /api/projects/p/runs/r']);
   } finally {
     await page.close();
   }

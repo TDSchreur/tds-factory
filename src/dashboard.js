@@ -1,15 +1,17 @@
 /** @import { PrStatus } from './pr-provider.js' */
 /** @import { PrLookup } from './run-clean.js' */
 /** @import { DashboardContext } from './dashboard-handlers.js' */
+/** @import { openProjectRegistry } from './project-registry.js' */
+/** @import { PrSeams } from './dashboard-projects.js' */
 import http from 'node:http';
 import { once } from 'node:events';
-import { openRunStore } from './run-store.js';
 import { readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { codeOf, oneOf } from './narrow.js';
 import { interpretRun } from './dashboard-view.js';
-import { createPrViews, ghPrState, ghPrMerge, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
+import { ghPrState, ghPrMerge, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
+import { createProjectHub } from './dashboard-projects.js';
 import { logFailure } from './dashboard-handlers.js';
 import { matchRoute } from './dashboard-routes.js';
 
@@ -45,6 +47,15 @@ const FALLBACK_PAGE = `<!doctype html>
 <h1>TDS Factory</h1>
 <p>The Dashboard page is not installed. Run records are available at <a href="/api/runs">/api/runs</a>.</p>
 `;
+/** @param {string} raw */
+const decodeProjectId = (raw) => {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // an id that is not valid percent encoding names no Project
+    return undefined;
+  }
+};
 // The page, its files and the 404 for everything else; a request never picks a path, only one of the ASSETS.
 /** @param {string} dashboardDir @param {string} path @param {DashboardContext['send']} send */
 async function serveStatic(dashboardDir, path, send) {
@@ -57,10 +68,12 @@ async function serveStatic(dashboardDir, path, send) {
   send(404, 'text/plain', 'not found');
 }
 
-// Serves the .factory/runs folder of the main checkout of projectDir's repository on 127.0.0.1.
+// Serves the .factory/runs folder of every Project in the registry on 127.0.0.1, and of the main checkout of projectDir's repository while the registry does not hold it.
+// Without a registry only projectDir's Project is served (a standalone Dashboard).
 // Without a port, uses 4300 and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
 // prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
 // prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a FactoryError whose `code` is the reason when the provider fails.
+// prFor(project) returns the prState, prMerge, prInfo and prStatus of one Project; what it leaves out falls back to the options below.
 // statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
 // prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
 /**
@@ -73,6 +86,8 @@ async function serveStatic(dashboardDir, path, send) {
  * @param {(url: string) => Promise<PrStatus>} [options.prStatus]
  * @param {number} [options.statusRefreshMs]
  * @param {string} [options.dashboardDir]
+ * @param {ReturnType<typeof openProjectRegistry>} [options.registry] The Project registry to serve; read on every request.
+ * @param {(project: { id: string, path: string }) => PrSeams} [options.prFor]
  */
 export async function startDashboard({
   projectDir = process.cwd(),
@@ -83,26 +98,22 @@ export async function startDashboard({
   prStatus = ghPrStatus,
   statusRefreshMs = PR_STATUS_REFRESH_MS,
   dashboardDir = DASHBOARD_DIR,
+  registry,
+  prFor,
 } = {}) {
-  const store = openRunStore(projectDir);
   const token = randomBytes(32).toString('hex');
   /** @param {string} value */
   const digest = (value) => createHash('sha256').update(value).digest();
   /** @param {unknown} given */
   const tokenOk = (given) => typeof given === 'string' && timingSafeEqual(digest(given), digest(token)); // equal-length digests, so any header value compares safely
-  const services = {
-    store,
-    // Clean-up must run from the main checkout, also when the Dashboard was started inside a Run worktree.
-    mainStore: openRunStore(store.projectDir),
-    /** @type {Set<string>} */
-    inFlight: new Set(),
-    token,
+  const hub = createProjectHub({
     projectDir,
-    prMerge,
-    prInfo,
+    registry,
+    prFor,
     statusRefreshMs,
-    prViews: createPrViews({ prState, prStatus }),
-  };
+    defaults: { prState, prStatus, prMerge, prInfo },
+  });
+  const base = { token, projectDir, hub };
 
   const server = http.createServer(async (req, res) => {
     /** @param {number} status @param {string} type @param {string | undefined} body */
@@ -121,7 +132,18 @@ export async function startDashboard({
       return send(403, 'text/plain', 'forbidden');
     try {
       const route = matchRoute(req.method, path);
-      if (route) return await route.handler({ ...services, req, res, send, target, path, match: route.match });
+      if (route) {
+        const ctx = { ...base, req, res, send, target, path, match: route.match };
+        if (!route.scoped) return await route.handler(/** @type {DashboardContext} */ (ctx));
+        // The Project id picks one of the served Projects; it is never a path.
+        const id = decodeProjectId(route.match[1]);
+        const project = id === undefined ? undefined : hub.find(id);
+        if (!project) return send(404, 'text/plain', 'not found');
+        if (project.missing) return send(409, 'text/plain', 'the Project folder is missing');
+        // The handler's group 1 is the first group after the Project id.
+        const match = Object.assign([route.match[0], ...route.match.slice(2)], { index: 0, input: path });
+        return await route.handler(/** @type {DashboardContext} */ ({ ...ctx, ...hub.servicesOf(project), match }));
+      }
       if (!isRead) return send(405, 'text/plain', 'method not allowed');
       await serveStatic(dashboardDir, path, send);
     } catch (err) {
@@ -150,6 +172,7 @@ export async function startDashboard({
   return {
     server,
     port: actual,
+    projectId: hub.projectId,
     url: `http://${HOST}:${actual}`,
     close: async () => {
       const closed = once(server, 'close');

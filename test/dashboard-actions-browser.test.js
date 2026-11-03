@@ -53,7 +53,7 @@ test('Sync asks first, then posts with the session token and reports the result'
     assert.deepEqual(page.calls, []);
     await confirmed(page, '[aria-label="Sync Building with origin"]', 'Sync with origin?');
     assert.deepEqual(await answer(page, 'Synced'), ['Synced', 'Synced.']);
-    assert.deepEqual(page.calls, ['POST /api/runs/b/sync']);
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/b/sync']);
     assert.deepEqual(page.tokens, ['test-token']);
   } finally {
     await page.close();
@@ -107,7 +107,7 @@ test('Accept Check is offered only to a Check that waits on you, and names the v
     assert.match((await dialog(page))[1], /Security: fail/);
     assert.deepEqual(await answer(page, 'Accepted'), ['Accepted', 'Accepted.']);
     assert.equal(page.calls.length, 1);
-    assert.match(page.calls[0], /^POST \/api\/runs\/w\/accept\?updated=/);
+    assert.match(page.calls[0], /^POST \/api\/projects\/p\/runs\/w\/accept\?updated=/);
     assert.equal(await page.execute('return document.querySelectorAll(\'[aria-label$="with origin"]\').length'), 1);
   } finally {
     await page.close();
@@ -134,7 +134,7 @@ test('Clean up is offered for a merged Done Run and shows why a clean-up is refu
       'Could not clean up the Run',
       'kept: the branch has commits that are not in the merged PR',
     ]);
-    assert.deepEqual(page.calls, ['POST /api/runs/merged/clean']);
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/merged/clean']);
   } finally {
     await page.close();
   }

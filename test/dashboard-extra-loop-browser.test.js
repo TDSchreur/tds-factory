@@ -89,7 +89,7 @@ test('Grant extra loop asks first, posts with the token and the Run time, and re
     assert.deepEqual(page.calls, []);
     await confirmed(page, '[aria-label^="Grant an extra Check loop"]', 'Grant an extra Check loop?');
     assert.deepEqual(await answer(page, 'Extra loop granted'), ['Extra loop granted', 'Extra loop granted.']);
-    assert.deepEqual(page.calls, ['POST /api/runs/w/extra-loop?updated=2026-11-01T10%3A00%3A00.000Z']);
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/w/extra-loop?updated=2026-11-01T10%3A00%3A00.000Z']);
     assert.deepEqual(page.tokens, ['test-token']);
   } finally {
     await page.close();

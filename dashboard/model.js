@@ -41,6 +41,7 @@
 /**
  * @typedef {object} RunView
  * @property {string} id
+ * @property {string} projectId The id of the Project the Run belongs to; Run ids are only unique within a Project.
  * @property {boolean} unreadable
  * @property {string} title
  * @property {string} activity

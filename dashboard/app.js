@@ -7,6 +7,8 @@ import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from '
 import { COLUMNS, OLD_MS, POLL_MS, ageMs, folderName, sortWaitingFirst } from './model.js';
 
 const BRAND = 'TDS Factory';
+/** @param {{ id: string, projectId: string }} run */
+const runPath = (run) => '/api/projects/' + encodeURIComponent(run.projectId) + '/runs/' + encodeURIComponent(run.id);
 const COMPACT_QUERY = '(max-width: 1024px)'; // keep in step with the media query in style.css
 
 // 'default' while the user can still be asked, 'unsupported' without the Notification API.
@@ -63,7 +65,9 @@ function App() {
           return res.json();
         })
         .then((data) => {
-          setEntries(Array.isArray(data) ? data : []);
+          setEntries(
+            Array.isArray(data?.projects) ? data.projects.flatMap((/** @type {any} */ entry) => entry.runs) : [],
+          );
           setLoaded(true);
           setStatus({ error: false, text: 'Updated ' + new Date().toLocaleTimeString() });
         })
@@ -146,7 +150,7 @@ function App() {
   const runAction = async (run, name, title, message, action, done, query = '') => {
     if (!(await ask(title, message, action, false))) return;
     try {
-      const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/' + name + query);
+      const response = await write('POST', runPath(run) + '/' + name + query);
       const text = await response.text();
       await ask(
         response.ok
@@ -255,7 +259,7 @@ function App() {
     const failed = [];
     for (const run of runs) {
       try {
-        const url = '/api/runs/' + encodeURIComponent(run.id);
+        const url = runPath(run);
         const query = doneOnly ? '?doneOnly=true' : '';
         let response = await write('DELETE', url + query);
         if (response.status === 409 && response.headers.get('x-factory-error') === 'dirty-worktree') {
@@ -284,7 +288,7 @@ function App() {
   const mergeRun = async (/** @type {RunView} */ run) => {
     let checks = 'GitHub checks: unavailable';
     try {
-      const response = await fetch('/api/runs/' + encodeURIComponent(run.id) + '/merge-checks', { cache: 'no-store' });
+      const response = await fetch(runPath(run) + '/merge-checks', { cache: 'no-store' });
       if (response.ok) checks = await response.text();
     } catch {}
     if (
@@ -297,7 +301,7 @@ function App() {
     )
       return;
     try {
-      const response = await write('POST', '/api/runs/' + encodeURIComponent(run.id) + '/merge');
+      const response = await write('POST', runPath(run) + '/merge');
       if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
     } catch {
       await ask('Could not merge', run.title, 'Close', false, true);
@@ -380,7 +384,7 @@ function App() {
       }),
     checkPr: async (run) => {
       try {
-        await fetch('/api/runs/' + encodeURIComponent(run.id) + '/pr-status?refresh=1', { cache: 'no-store' });
+        await fetch(runPath(run) + '/pr-status?refresh=1', { cache: 'no-store' });
       } catch {}
       poll();
     },

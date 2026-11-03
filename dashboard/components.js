@@ -589,7 +589,15 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
     let live = true;
     Promise.all(
       run.files.map((/** @type {string} */ name) =>
-        fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+        fetch(
+          '/files/' +
+            encodeURIComponent(run.projectId) +
+            '/' +
+            encodeURIComponent(run.id) +
+            '/' +
+            encodeURIComponent(name),
+          { cache: 'no-store' },
+        )
           .then((res) => {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.text();
