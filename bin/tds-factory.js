@@ -1,18 +1,15 @@
 #!/usr/bin/env node
+import { enableCompileCache } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { install } from '../src/install.js';
-import { openRunStore, formatMetrics } from '../src/run-store.js';
-import { formatSweep } from '../src/run-sweep.js';
-import { formatGuides } from '../src/guides.js';
-import { rowLine } from '../src/run-usage.js';
-import { sync } from '../src/sync.js';
-import { syncRules } from '../src/rules.js';
-import { launchDashboard } from '../src/dashboard-launch.js';
-import { openProjectRegistry } from '../src/project-registry.js';
-import { doctor } from '../src/doctor.js';
-import { update } from '../src/update.js';
 import { messageOf } from '../src/narrow.js';
+
+// Compiled code is cached on disk for the next start. This has to run before the heavy modules are imported, which is why they are imported inside the commands that use them and not at the top.
+try {
+  enableCompileCache();
+} catch {
+  // a read-only or missing cache folder only costs the start-up time
+}
 
 const USAGE = `Usage:
   tds-factory --version
@@ -85,10 +82,12 @@ try {
   if (values.version) console.log(version);
   else if (command === 'run') {
     const data = values.data === undefined ? undefined : JSON.parse(values.data);
+    const { openRunStore, formatMetrics } = await import('../src/run-store.js');
     const store = openRunStore(process.cwd());
     const [, op] = positionals;
     if (op === 'start') {
       console.log(store.start(data));
+      const { openProjectRegistry } = await import('../src/project-registry.js');
       openProjectRegistry({ warn: (m) => console.error(`warning: ${m}`) }).join(store.projectDir);
     } else if (op === 'update') store.update(values.id, data);
     else if (op === 'track') store.track(values.id, values.value);
@@ -122,10 +121,11 @@ try {
         );
     } else if (op === 'stats') {
       if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
+      const { rowLine } = await import('../src/run-usage.js');
       const report = await store.stats(values.id);
       /**
        * @param {string} label
-       * @param {import('../src/run-metrics.js').MetricsSummary} summary
+       * @param {Parameters<typeof formatMetrics>[0]} summary
        */
       const print = (label, summary) => {
         const formatted = formatMetrics(summary);
@@ -199,10 +199,13 @@ try {
           `verify ${result.exit_code === 0 ? 'passed' : result.signal ? `interrupted (${result.signal})` : `failed (exit ${result.exit_code})`} at ${result.head}${result.dirty ? ' with uncommitted changes' : ''}; output in ${result.log}`,
         );
       if (result.exit_code !== 0) process.exitCode = 1;
-    } else if (op === 'sweep')
+    } else if (op === 'sweep') {
+      const { formatSweep } = await import('../src/run-sweep.js');
       console.log(formatSweep(store.sweep(values.id, values.term ?? []), { filesOnly: values.files }));
-    else if (op === 'guides') console.log(formatGuides(store.guides(values.id)));
-    else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
+    } else if (op === 'guides') {
+      const { formatGuides } = await import('../src/guides.js');
+      console.log(formatGuides(store.guides(values.id)));
+    } else if (op === 'materialize-review') console.log(store.materializeReview(values.id, values.axis));
     else if (op === 'review') store.review(values.id, values.axis, data);
     else if (op === 'config') console.log(JSON.stringify(store.config(values.id), null, 2));
     else if (op === 'reviews') console.log(JSON.stringify(store.reviews(values.id), null, 2));
@@ -211,11 +214,15 @@ try {
       throw new Error(
         'expected run start, update, transition, follow-up, rework, sync, complete, accept, verify, sweep, guides, verdict, inspect, repair or clean',
       );
-  } else if (command === 'update') await update({ installed: version, force: !values['no-force'] });
-  else if (command === 'sync') sync({ force: values.force });
-  else if (command === 'rules') syncRules({ force: values.force, dryRun: values['dry-run'] });
-  else if (command === 'install') install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
+  } else if (command === 'update')
+    await (await import('../src/update.js')).update({ installed: version, force: !values['no-force'] });
+  else if (command === 'sync') (await import('../src/sync.js')).sync({ force: values.force });
+  else if (command === 'rules')
+    (await import('../src/rules.js')).syncRules({ force: values.force, dryRun: values['dry-run'] });
+  else if (command === 'install')
+    (await import('../src/install.js')).install({ ...values, agent: values.agent ?? 'all', dryRun: values['dry-run'] });
   else if (command === 'doctor') {
+    const { doctor } = await import('../src/doctor.js');
     const report = doctor({ projectDir: process.cwd(), agent: values.agent });
     /** @param {string} text */
     const clean = (text) => text.replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '?');
@@ -233,6 +240,7 @@ try {
     const port = values.port === undefined ? undefined : Number(values.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535))
       throw new Error(`invalid port: ${values.port}`);
+    const { launchDashboard } = await import('../src/dashboard-launch.js');
     const dashboard = await launchDashboard({ projectDir: process.cwd(), port, version });
     const link =
       process.stdout.isTTY && !process.env.NO_COLOR
