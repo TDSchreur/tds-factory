@@ -24,3 +24,29 @@ test('a refresh of the open Run keeps the scroll position of its detail', async 
     await page.close();
   }
 });
+
+test('a refresh never opens the modal detail again or moves its focus', async (t) => {
+  /** @param {number} n */
+  const record = (n) => run({ id: 'r1', title: 'Open run', updated: new Date(Date.now() + n * 1000).toISOString() });
+  const page = await openPage(t, { runs: [record(0)] });
+  if (!page) return;
+  try {
+    await page.execute(
+      "window.__shown = 0; const show = HTMLDialogElement.prototype.showModal; HTMLDialogElement.prototype.showModal = function () { if (this.id === 'detail') window.__shown++; return show.call(this); }",
+    );
+    await page.execute("document.querySelector('.card').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    await page.execute("document.querySelector('#detail .close').focus()");
+    for (let n = 1; n <= 2; n++) {
+      page.state.runs = [record(n)];
+      await page.wait(2300);
+    }
+    assert.equal(await page.execute('return window.__shown'), 1);
+    assert.equal(
+      await page.execute("return document.activeElement === document.querySelector('#detail .close')"),
+      true,
+    );
+  } finally {
+    await page.close();
+  }
+});

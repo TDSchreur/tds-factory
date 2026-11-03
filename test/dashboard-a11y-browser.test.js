@@ -355,7 +355,12 @@ test('a hovered or selected card keeps its inner focus ring', async (t) => {
     await page.execute("document.querySelector('[data-id=b]').click()");
     await page.waitFor("return document.querySelector('[data-id=b]').classList.contains('selected')");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')"); // opening the detail takes the focus after the next frame; only then is the card ours to focus
-    await page.execute("document.querySelector('[data-id=b]').focus()");
+    // The open drawer makes the board inert, so close it and mark the card selected by hand to check the ring rule.
+    await page.execute("document.getElementById('detail').close()");
+    await page.waitFor("return document.getElementById('detail').hidden");
+    await page.execute(
+      "document.querySelector('[data-id=b]').classList.add('selected'); document.querySelector('[data-id=b]').focus({ focusVisible: true })",
+    );
     assert.equal(
       await page.execute("return document.querySelector('[data-id=b]').matches('.selected:focus-visible')"),
       true,

@@ -3,7 +3,7 @@
 /** @import { RunView } from './model.js' */
 /** @import { Span, ListItem } from './markdown.js' */
 import { Fragment, h } from 'preact';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
 import { HELP_SECTIONS } from './help.js';
@@ -529,87 +529,37 @@ export function Header({
 /**
  * @param {object} props
  * @param {RunView | null} props.run
- * @param {boolean} props.compact
  * @param {() => void} props.onClose
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onGrant
  */
-export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
+export function Detail({ run, onClose, onCheckPr, onGrant }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ id: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
   const heading = useRef(null);
+  /** @type {{ current: HTMLDialogElement | null }} */
+  const dialog = useRef(null);
+  const closing = useRef(false); // true while the page itself closes the dialog, so its close event is not a user's close
+  // The native modal dialog provides the focus trap, the inert board and Escape. It opens once per Run: a refresh never calls showModal again.
   useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (run && !element.open) element.showModal();
+    else if (!run && element.open) {
+      closing.current = true;
+      element.close();
+    }
     if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true });
   }, [run?.id]); // only a newly opened Run takes focus, never a refresh
-  // Compact detail covers the Dashboard: the background becomes inert and stops scrolling, and Tab stays inside the detail.
-  useLayoutEffect(() => {
-    if (!run || !compact) return undefined;
-    const detail = document.getElementById('detail');
-    if (!detail) return undefined;
-    const background = elementsOf(document, '#app > header, .board-wrap');
-    const previous = background.map((element) => element.inert);
-    const overflow = document.body.style.overflow;
-    background.forEach((element) => {
-      element.inert = true;
-    });
-    document.body.style.overflow = 'hidden';
-    if (!detail.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
-    const trap = (/** @type {KeyboardEvent} */ event) => {
-      if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
-      const targets = elementsOf(
-        detail,
-        'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ).filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
-      if (!targets.length) {
-        event.preventDefault();
-        return;
-      }
-      const first = targets[0],
-        last = targets[targets.length - 1],
-        active = document.activeElement;
-      const outside = !detail.contains(active);
-      if (event.shiftKey && (active === first || outside)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || outside)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', trap);
-    return () => {
-      document.removeEventListener('keydown', trap);
-      background.forEach((element, index) => {
-        element.inert = previous[index];
-      });
-      document.body.style.overflow = overflow;
-    };
-  }, [!!run, compact]);
-  // The desktop drawer starts below the header. Measure its actual top so its bottom stays in view.
-  useLayoutEffect(() => {
-    if (!run || compact) return undefined;
-    const detail = document.getElementById('detail');
-    const header = document.querySelector('#app > header');
-    if (!detail || !header) return undefined;
-    const fit = () => {
-      detail.style.top = header.getBoundingClientRect().height + 20 + 'px';
-      detail.style.maxHeight =
-        Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(header);
-    window.addEventListener('resize', fit);
-    window.addEventListener('scroll', fit, { passive: true });
-    fit();
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', fit);
-      window.removeEventListener('scroll', fit);
-      detail.style.removeProperty('top');
-      detail.style.removeProperty('max-height');
-    };
-  }, [!!run, compact]);
+  const closed = () => {
+    if (closing.current) closing.current = false;
+    else onClose();
+  };
+  // A click on the dialog itself, not on its content, is a click on the backdrop.
+  const backdrop = (/** @type {MouseEvent} */ event) => {
+    if (event.target === dialog.current) dialog.current?.close();
+  };
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
@@ -632,12 +582,13 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       live = false;
     };
   }, [key]);
-  if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
+  if (!run) return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} hidden></dialog>`;
   const updatedAge = ageMs(run.updated);
   const reviews = run.projectReviews ?? [];
   /** @type {LoadedFile[]} */
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
+  return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onClick=${backdrop}>
+    <div class="detail-body">
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
@@ -677,7 +628,8 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     <//>`,
       )
     }
-  </section>`;
+    </div>
+  </dialog>`;
 }
 
 // A native dialog driven by one request at a time: { title, message, action, danger, notice, resolve }, or null when closed.

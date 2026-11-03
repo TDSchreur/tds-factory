@@ -230,10 +230,10 @@ test('Escape cancels a confirmation, and the Merge button keeps keyboard focus a
     await page.execute(
       'document.querySelector(\'[aria-label^="Squash and merge"]\').focus(); document.activeElement.click();',
     );
-    await page.waitFor("return document.querySelector('dialog').open");
+    await page.waitFor("return document.querySelector('#dialog').open");
     assert.equal(
       await page.execute(
-        "return document.querySelector('dialog').open && document.activeElement.textContent === 'Cancel'",
+        "return document.querySelector('#dialog').open && document.activeElement.textContent === 'Cancel'",
       ),
       true,
     );
@@ -241,7 +241,7 @@ test('Escape cancels a confirmation, and the Merge button keeps keyboard focus a
     await page.wait(200);
     assert.equal(
       await page.execute(
-        "return !document.querySelector('dialog').open && document.activeElement.textContent === 'Merge'",
+        "return !document.querySelector('#dialog').open && document.activeElement.textContent === 'Merge'",
       ),
       true,
     );
@@ -413,7 +413,7 @@ test('selecting a Run shows its Markdown files as text, never as markup', async 
   }
 });
 
-test('the Run detail opens beside the board, not below the last card', async (t) => {
+test('the Run detail opens as a drawer over a board that keeps its width', async (t) => {
   const many = Array.from({ length: 12 }, (_, i) =>
     run({
       id: 'b' + i,
@@ -429,27 +429,41 @@ test('the Run detail opens beside the board, not below the last card', async (t)
   });
   if (!page) return;
   try {
+    const columns = () =>
+      page.execute(
+        "return [...document.querySelectorAll('.column')].map(c => { const r = c.getBoundingClientRect(); return [r.left, r.width]; })",
+      );
+    const before = await columns();
     await page.execute(
       "document.querySelector('[data-id=b11]').scrollIntoView(); document.querySelector('[data-id=b11]').click()",
     );
     await page.waitFor("return document.querySelector('#detail h4') !== null");
+    assert.deepEqual(await columns(), before, 'the board does not move or shrink');
     const box = await page.execute(
-      "const d = document.getElementById('detail').getBoundingClientRect(); const b = document.getElementById('board').getBoundingClientRect(); return { dLeft: d.left, bRight: b.right, dTop: d.top, dBottom: d.bottom, h: innerHeight }",
+      "const d = document.getElementById('detail').getBoundingClientRect(); return { open: document.getElementById('detail').open, dRight: d.right, vw: document.documentElement.clientWidth, dTop: d.top, dBottom: d.bottom, w: innerWidth, h: innerHeight, dWidth: d.width }",
     );
-    assert.ok(box.dLeft >= box.bRight - 1, 'the Run detail sits right of the board');
-    assert.ok(box.dTop >= 0 && box.dTop < box.h && box.dBottom <= box.h + 1, 'the Run detail is in view');
+    assert.equal(box.open, true);
+    assert.ok(box.dRight >= box.vw - 1, 'the drawer sits on the right edge');
+    assert.ok(box.dWidth <= 640 + 1 && box.dWidth < box.w, 'the drawer is a sheet, not the whole screen');
+    assert.ok(box.dTop >= 0 && box.dBottom <= box.h + 1, 'the drawer is in view');
     assert.equal(
       await page.execute("return document.querySelector('[data-id=b11]').classList.contains('selected')"),
       true,
     );
-    // The board stays clickable: another card switches the Run detail.
+    // The board behind the drawer is not reachable; the close button closes it and leaves only the board.
+    assert.equal(
+      await page.execute(
+        "const r = document.querySelector('[data-id=b0]').getBoundingClientRect(); return !!document.elementFromPoint(r.left + 5, r.top + 5)?.closest('.card')",
+      ),
+      false,
+    );
+    await page.execute('document.querySelector(\'#detail button[aria-label="Close Run detail"]\').click()');
+    await page.waitFor("return document.getElementById('detail').hidden");
+    assert.equal(await page.execute("return document.querySelector('.card.selected')"), null);
+    // Another card opens its own detail once the first is closed.
     await page.execute("document.querySelector('[data-id=b0]').click()");
     await page.waitFor("return document.querySelector('#detail h4')?.textContent === 'First'");
     assert.equal(await page.execute("return document.querySelector('#detail h2').textContent"), 'Run 0');
-    // The close button closes it and leaves only the board.
-    await page.execute('document.querySelector(\'#detail button[aria-label="Close Run detail"]\').click()');
-    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
-    assert.equal(await page.execute("return document.querySelector('.card.selected')"), null);
   } finally {
     await page.close();
   }
@@ -528,7 +542,7 @@ test('the Run detail is keyboard friendly: focus moves in, Escape closes it and 
     await page.wait(POLL_WAIT);
     assert.equal(await page.execute("return document.activeElement.closest('#detail') !== null"), true);
     await page.key(ESCAPE);
-    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+    await page.waitFor("return document.getElementById('detail').hidden");
     assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=r1]')"), true);
     // Escape with nothing open does nothing.
     await page.key(ESCAPE);
@@ -537,7 +551,7 @@ test('the Run detail is keyboard friendly: focus moves in, Escape closes it and 
     await page.execute("document.querySelector('[data-id=r1]').click()");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
     await page.execute('document.querySelector(\'#detail button[aria-label="Close Run detail"]\').click()');
-    assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=r1]')"), true);
+    await page.waitFor("return document.activeElement === document.querySelector('[data-id=r1]')");
   } finally {
     await page.close();
   }
@@ -563,7 +577,7 @@ test('on a narrow screen the Run detail is a full-screen sheet with Back navigat
     await page.execute(
       "[...document.querySelectorAll('#detail button')].find(b => /Back to stages/.test(b.textContent)).click()",
     );
-    assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
+    await page.waitFor("return document.getElementById('detail').hidden");
     assert.equal(
       await page.execute(
         "const c = document.querySelector('[data-id=r1]').getBoundingClientRect(); return c.width > 0 && c.top < innerHeight",
