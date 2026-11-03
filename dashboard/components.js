@@ -25,6 +25,7 @@ import {
   ticketTilesOf,
   timelineOf,
   waitAgeOf,
+  MISSING_SUMMARY_ID,
 } from './model.js';
 
 export const html = htm.bind(h);
@@ -358,6 +359,7 @@ export function Welcome({ onHelp }) {
  * @property {(project: ProjectView) => Promise<void>} deleteAll
  * @property {(projectId: string) => void} toggleRow
  * @property {(project: ProjectView) => Promise<void>} removeProject
+ * @property {(projects: ProjectView[]) => Promise<void>} removeMissing
  */
 // The id of an element made from a Project id.
 /** @param {string} projectId */
@@ -373,28 +375,45 @@ const domId = (projectId) => 'project-' + projectId.replace(/[^A-Za-z0-9_-]/g, '
  * @param {Actions} props.actions
  */
 function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, actions }) {
-  const { project, kind, cards, counted, doneCount } = row;
+  const { project, kind, cards, counted, doneCount, missingProjects = [] } = row;
   const heading = domId(project.id);
   const waiting = counted.filter((r) => r.waiting).length;
-  const toggles = kind === 'open' || kind === 'collapsed';
+  const toggles = kind === 'open' || kind === 'collapsed' || kind === 'missing-summary';
+  const summaryOpen = kind === 'open' && project.id === MISSING_SUMMARY_ID;
+  const summaryCollapsed = kind === 'collapsed' && project.id === MISSING_SUMMARY_ID;
   const name = toggles
     ? html`<button type="button" class="row-toggle" aria-expanded=${String(kind === 'open')} onClick=${() => actions.toggleRow(project.id)}>${project.name}</button>`
     : project.name;
-  return html`<section class=${'project-row' + (kind === 'open' ? '' : ' collapsed')} data-project=${project.id} aria-labelledby=${heading}>
+  return html`<section class=${'project-row' + (kind === 'open' ? '' : ' collapsed') + (project.id === MISSING_SUMMARY_ID ? ' missing-summary' : '')} data-project=${project.id} aria-labelledby=${heading}>
     <div class="project-head">
       <h2 id=${heading}>${name}</h2>
       ${kind === 'empty' && html`<span class="row-note">No Runs</span>`}
-      ${
-        kind === 'missing' &&
-        html`<span class="row-warning"><span aria-hidden="true">⚠ </span>The folder of this Project is missing. Nothing was deleted.</span><button type="button" onClick=${() => actions.removeProject(project)} aria-label=${'Remove the Project ' + project.name + ' from the Dashboard'}>Remove</button>`
-      }
+      ${summaryCollapsed && html`<span class="row-note">Expand to review and remove missing Projects.</span>`}
       ${
         kind === 'collapsed' &&
+        !summaryCollapsed &&
         html`<ul class="row-summary" aria-label="Runs per Stage">${COLUMNS.map((c) => html`<li key=${c.key}>${c.label} <span class="stage-count">${counted.filter((r) => r.column === c.key).length}</span></li>`)}${waiting > 0 && html`<li class="row-waiting">${waiting} waiting</li>`}</ul>`
+      }
+      ${
+        summaryOpen &&
+        html`<button type="button" class="danger" onClick=${() => actions.removeMissing(missingProjects)} aria-label=${'Remove all ' + missingProjects.length + ' missing Projects from the Dashboard'}>Remove all missing</button>`
       }
     </div>
     ${
+      summaryOpen &&
+      html`<div role="region" aria-label="Missing Projects">
+        <ul class="missing-list">${missingProjects.map(
+          (missing) => html`<li key=${missing.id}>
+            <div><strong>${missing.name}</strong></div>
+            <div>${missing.path}</div>
+            <button type="button" onClick=${() => actions.removeProject(missing)} aria-label=${'Remove the Project ' + missing.name + ' from the Dashboard'}>Remove</button>
+          </li>`,
+        )}</ul>
+      </div>`
+    }
+    ${
       kind === 'open' &&
+      project.id !== MISSING_SUMMARY_ID &&
       html`<div class="project-columns">${COLUMNS.map((c) => {
         const mine = cards.filter((r) => r.column === c.key);
         return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>

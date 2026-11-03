@@ -477,7 +477,7 @@ export function prStatusOf(run) {
   return { kind: 'open', lines, failing: checks.result === 'failing', conflicting: s.merge === 'conflicting' };
 }
 
-/** @typedef {{ id: string, name: string, missing: boolean, runs: RunView[] }} ProjectView */
+/** @typedef {{ id: string, name: string, path: string, missing: boolean, runs: RunView[] }} ProjectView */
 
 // A Run id is only unique within its Project, so everything the page remembers about a Run is keyed by both.
 /** @param {{ id: string, projectId: string }} run */
@@ -520,14 +520,17 @@ export const shownOf = (project, showOlder) =>
       .sort((a, b) => b.updated.localeCompare(a.updated) || a.id.localeCompare(b.id)),
   );
 
-/** @typedef {'missing' | 'empty' | 'collapsed' | 'open'} RowKind */
+export const MISSING_SUMMARY_ID = 'missing-projects';
+
+/** @typedef {'missing-summary' | 'empty' | 'collapsed' | 'open'} RowKind */
 /**
  * @typedef {object} RowView One Project row as the page shows it.
  * @property {ProjectView} project
- * @property {RowKind} kind A missing Project has no Runs to show, an empty one has none at all, a collapsed one shows only its summary.
+ * @property {RowKind} kind A missing-summary row groups all missing Projects; an empty one has no Runs at all, and a collapsed one shows only its summary.
  * @property {RunView[]} cards The Runs of the open row, in order, narrowed by Needs you.
  * @property {RunView[]} counted The Runs the collapsed summary counts: the shown Runs, never narrowed by Needs you.
  * @property {number} doneCount The Done Runs of the Project, for Delete all.
+ * @property {ProjectView[]} [missingProjects] The missing Projects listed by the summary row when it is expanded.
  */
 
 // The rows of the page, in order. Needs you narrows the cards of a row; it never expands a row or changes what its summary counts.
@@ -542,21 +545,45 @@ export const shownOf = (project, showOlder) =>
  * @returns {RowView[]}
  */
 export const projectRows = (projects, { linked, showOlder, onlyWaiting, opened, saved }) =>
-  sortProjects(projects, linked).map((project) => {
-    const counted = shownOf(project, showOlder);
-    /** @type {RowKind} */
-    let kind = 'open';
-    if (project.missing) kind = 'missing';
-    else if (project.runs.length === 0) kind = 'empty';
-    else if (!opened.has(project.id) && saved[project.id] === true) kind = 'collapsed';
-    return {
-      project,
-      kind,
-      cards: onlyWaiting ? counted.filter((r) => r.waiting) : counted,
-      counted,
-      doneCount: project.runs.filter((r) => r.column === 'done').length,
-    };
-  });
+  (() => {
+    const active = sortProjects(
+      projects.filter((project) => !project.missing),
+      linked,
+    ).map((project) => {
+      const counted = shownOf(project, showOlder);
+      /** @type {RowKind} */
+      let kind = 'open';
+      if (project.runs.length === 0) kind = 'empty';
+      else if (!opened.has(project.id) && saved[project.id] === true) kind = 'collapsed';
+      return {
+        project,
+        kind,
+        cards: onlyWaiting ? counted.filter((r) => r.waiting) : counted,
+        counted,
+        doneCount: project.runs.filter((r) => r.column === 'done').length,
+      };
+    });
+    const missingProjects = sortProjects(projects.filter((project) => project.missing));
+    if (!missingProjects.length) return active;
+    const count = missingProjects.length;
+    return [
+      ...active,
+      {
+        project: {
+          id: MISSING_SUMMARY_ID,
+          name: `${count} missing Project${count === 1 ? '' : 's'}`,
+          path: '',
+          missing: true,
+          runs: [],
+        },
+        kind: opened.has(MISSING_SUMMARY_ID) || saved[MISSING_SUMMARY_ID] === false ? 'open' : 'collapsed',
+        cards: [],
+        counted: [],
+        doneCount: 0,
+        missingProjects,
+      },
+    ];
+  })();
 
 export const COLLAPSE_KEY = 'dashboard-collapsed-projects';
 

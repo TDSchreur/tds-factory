@@ -132,6 +132,7 @@ test('every write on a Project route still needs the Host, the Origin and the to
     const good = await writeHeaders(dash);
     const targets = [
       ['DELETE', `/api/projects/${pa?.id}`],
+      ['DELETE', '/api/projects/missing'],
       ['DELETE', `/api/projects/${pa?.id}/runs/r`],
       ['POST', `/api/projects/${pa?.id}/runs/r/sync`],
     ];
@@ -262,6 +263,33 @@ test('removing a Project waits asynchronously for the lock and does not block /a
     assert.equal((await fetch(`${dash.url}/api/info`)).status, 200);
     rmSync(lock, { force: true });
     assert.equal((await removing).status, 200);
+  });
+});
+
+test('DELETE /api/projects/missing removes only missing entries and reports how many were removed', async () => {
+  await withRegistry(async ({ root, registry, start }) => {
+    const gone = folder(root, 'gone');
+    const back = folder(root, 'back');
+    const here = folder(root, 'here');
+    registry.join(gone);
+    registry.join(back);
+    registry.join(here);
+    rmSync(gone, { recursive: true, force: true });
+    rmSync(back, { recursive: true, force: true });
+    mkdirSync(back, { recursive: true });
+    const dash = await start();
+    const headers = await writeHeaders(dash);
+    const answer = await fetch(`${dash.url}/api/projects/missing`, { method: 'DELETE', headers });
+    assert.equal(answer.status, 200);
+    assert.deepEqual(await answer.json(), { removed: 1 });
+    assert.deepEqual(
+      registry
+        .list()
+        .map((p) => p.path)
+        .sort(),
+      [back, here].sort(),
+    );
+    assert.equal(existsSync(here), true);
   });
 });
 

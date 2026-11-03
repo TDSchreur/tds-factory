@@ -262,6 +262,22 @@ export function openProjectRegistry({
         return false;
       }
     },
+    /** Removes every registry entry whose folder is currently missing. @returns {Promise<string[]>} */
+    async removeMissingAsync() {
+      try {
+        return await withLockAsync(lockFile, lockWaitMs, async () => {
+          const { paths } = read();
+          const removed = paths.filter((p) => !fs.existsSync(p));
+          if (!removed.length) return [];
+          const kept = paths.filter((p) => fs.existsSync(p));
+          save(kept);
+          return removed;
+        });
+      } catch (err) {
+        warn(`cannot update ${registryFile}: ${messageOf(err)}`);
+        return [];
+      }
+    },
     /** @returns {DashboardState | undefined} */
     readState() {
       try {
