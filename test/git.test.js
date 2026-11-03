@@ -78,7 +78,7 @@ test('gitAsync closes stdin when no input is given, passes env and kills on time
     const slow = await gitAsync(os.tmpdir(), ['-c', 'alias.slow=!sleep 5', 'slow'], { timeout: 100 });
     assert.equal(slow.status, null);
     assert.ok(slow.error);
-    assert.equal(/** @type {any} */ (slow.error).timedOut, true);
+    assert.equal(/** @type {Error & { timedOut?: boolean }} */ (slow.error).timedOut, true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -89,7 +89,7 @@ test('gitAsync keeps the overflow code and does not mark a maxBuffer overflow as
     maxBuffer: 4,
     timeout: 10_000,
   });
-  const error = /** @type {any} */ (out.error);
+  const error = /** @type {Error & { code?: string, timedOut?: boolean }} */ (out.error);
   assert.ok(error);
   assert.equal(error.code, 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
   assert.notEqual(error.timedOut, true);

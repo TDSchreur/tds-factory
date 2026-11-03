@@ -247,8 +247,10 @@ export function view(url, { cwd, timeout = 10000 } = {}) {
  * @param {{ run?: (args: string[]) => Promise<{ stdout: string }> }} [options]
  * @returns {Promise<PrView>}
  */
-export const viewAsync = async (url, { run = (args) => exec('gh', args, { timeout: 10_000 }) } = {}) =>
-  parseView((await run([...VIEW_ARGS, url, '--json', 'state,headRefOid'])).stdout);
+export const viewAsync = async (
+  url,
+  { run = (args) => exec('gh', args, { timeout: 10_000, maxBuffer: MAX_BUFFER }) } = {},
+) => parseView((await run([...VIEW_ARGS, url, '--json', 'state,headRefOid'])).stdout);
 // Only the state: OPEN, MERGED or CLOSED.
 /** @param {string} url @returns {Promise<string>} */
 export const stateAsync = async (url) =>

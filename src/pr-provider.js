@@ -27,7 +27,7 @@ import * as azure from './pr-azure.js';
  * @property {(url: string, options?: { run?: any }) => Promise<PrStatus>} statusAsync The injected `run` is a test seam for the command runner of each adapter.
  * @property {(url: string, options?: { run?: any }) => Promise<string>} stateAsync
  * @property {(url: string, options?: { cwd?: string, timeout?: number, run?: any }) => PrView} view
- * @property {(url: string, options?: { run?: any }) => Promise<PrView>} [viewAsync]
+ * @property {(url: string, options?: { run?: any }) => Promise<PrView>} [viewAsync] `run` is the adapter's own test seam, like the other `run` options above.
  * @property {(url: string, head: string) => Promise<unknown>} [merge]
  * @property {(url: string) => Promise<string>} [checksSummary]
  * @property {(url: string, cwd?: string) => PrView & { headRefOid: string }} [strictView]

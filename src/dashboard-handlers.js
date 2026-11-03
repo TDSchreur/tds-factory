@@ -184,9 +184,12 @@ async function prMatchesRun({ send }, v, eligibility) {
 
 /** @type {Handler} */
 export async function mergeRun(ctx) {
-  const run = await findRun(ctx);
-  if (!run) return;
-  await exclusive(ctx, run.id, () => mergeChecked(ctx, run.id, run.view));
+  const id = decodeId(ctx, ctx.match[1]);
+  if (id === undefined) return;
+  await exclusive(ctx, id, async () => {
+    const run = await findRun(ctx);
+    if (run) await mergeChecked(ctx, run.id, run.view);
+  });
 }
 
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
@@ -273,11 +276,14 @@ async function acceptCheck(ctx, id, v) {
 
 /** @type {Handler} */
 export async function runAction(ctx) {
-  const run = await findRun(ctx);
-  if (!run) return;
-  const { id, view: v } = run;
-  if (v.unreadable) return ctx.send(409, 'text/plain', 'the Run record cannot be read');
+  const id = decodeId(ctx, ctx.match[1]);
+  if (id === undefined) return;
+  // The guard comes first and the Run is read inside it, so every check below sees the state after any earlier action.
   await exclusive(ctx, id, async () => {
+    const run = await findRun(ctx);
+    if (!run) return;
+    const v = run.view;
+    if (v.unreadable) return ctx.send(409, 'text/plain', 'the Run record cannot be read');
     try {
       const action = ctx.match[2];
       if (action === 'sync') return await syncRun(ctx, id);
