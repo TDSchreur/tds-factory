@@ -12,4 +12,6 @@
 
 **What is recorded.** `size_accepted` is a gated field like `extra_loops`: `run update` refuses it, and only the named operation sets it ([ADR 0006](0006-run-progress-goes-through-named-transitions.md)). The `split` and `size-accepted` events are in the Event log. As in ADR 0024, a compliant agent cannot decide for the user by the usual commands, but one that ignores its Skill or edits `run.json` can; the events make that visible afterwards. The transition to Check keeps its warning, silent after an accept.
 
-**Later.** Define puts the estimate per Ticket in the Spec and proposes a split before Build (see the [Spec](../specs/run-size-gate-b.md)). The Dashboard gets Split and Continue buttons on a Run waiting for size, as write routes under [ADR 0017](0017-dashboard-write-routes-need-origin-host-and-a-session-token.md) ([#530](https://github.com/TDSchreur/tds-factory/issues/530)).
+**Dashboard.** Split and Continue buttons on a Run waiting for size call write routes under [ADR 0017](0017-dashboard-write-routes-need-origin-host-and-a-session-token.md); after a split the Run waits for an agent ([Spec](../specs/dashboard-split-and-continue-buttons.md)).
+
+**Later.** Define puts the estimate per Ticket in the Spec and proposes a split before Build (see the [Spec](../specs/run-size-gate-b.md)).

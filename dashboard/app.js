@@ -205,7 +205,13 @@ function App() {
       const response = await write('POST', runPath(run) + '/' + name + query);
       const text = await response.text();
       // A split answers with the moved links, one per line; they show as links only when they are safe URLs.
-      const links = name === 'split' && response.ok ? text.split('\n').filter(Boolean) : undefined;
+      const links =
+        name === 'split' && response.ok
+          ? text
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .filter(Boolean)
+          : undefined;
       await ask(
         response.ok ? done : failed,
         !response.ok

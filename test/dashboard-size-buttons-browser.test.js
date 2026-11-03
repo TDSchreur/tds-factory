@@ -88,7 +88,7 @@ test('Continue asks first, sends nothing on Cancel, then posts with the token an
       false,
     );
     await click(page, '#dialog-cancel');
-    await page.wait(200);
+    await page.waitFor("return !document.getElementById('dialog').open");
     assert.deepEqual(page.calls, []);
     await click(page, '[aria-label="Continue Too big"]');
     await titled(page, 'Accept the size and continue Build?');
@@ -148,7 +148,7 @@ test('Split confirms with the counts, sends nothing on Cancel, then posts with t
       false,
     );
     await click(page, '#dialog-cancel');
-    await page.wait(200);
+    await page.waitFor("return !document.getElementById('dialog').open");
     assert.deepEqual(page.calls, []);
     await splitDialog(page);
     await click(page, '#dialog-confirm');
@@ -223,6 +223,58 @@ test('Copy agent prompt shows for the split-done reason and copies the continue 
     await page.execute('navigator.clipboard.writeText = async (text) => { window.copied = text; }');
     await click(page, '[aria-label="Copy agent prompt for Too big"]');
     await page.waitFor("return window.copied === '/factory continue w'");
+  } finally {
+    await page.close();
+  }
+});
+
+test('the detail answers too, and shows Copy agent prompt for the split-done reason', async (t) => {
+  const page = await openPage(t, {
+    runs: [waiting(), waiting({ id: 'd', title: 'Split done', reason: 'Split done: ready for an agent' })],
+  });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=w]')");
+    await page.execute("document.querySelector('[data-id=d]').click()");
+    await page.waitFor("return document.getElementById('detail').open");
+    assert.equal(
+      await page.execute(
+        'return !!document.querySelector(\'#detail [aria-label="Copy agent prompt for Split done"]\')',
+      ),
+      true,
+    );
+    await page.execute("document.getElementById('detail').close()");
+    await page.execute("document.querySelector('[data-id=w]').click()");
+    await page.waitFor(
+      "return document.getElementById('detail').open && !!document.querySelector('#detail [aria-label=\"Continue Too big\"]')",
+    );
+    await click(page, '#detail [aria-label="Continue Too big"]');
+    await titled(page, 'Accept the size and continue Build?');
+    await click(page, '#dialog-confirm');
+    await closeAfter(page, 'Continued');
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/w/continue?updated=2026-11-01T10%3A00%3A00.000Z']);
+  } finally {
+    await page.close();
+  }
+});
+
+test('after a refusal the page refreshes and shows the Run as it is now', async (t) => {
+  const runs = [waiting()];
+  const page = await openPage(t, {
+    runs,
+    respond: () => {
+      runs[0] = waiting({ reason: 'Needs a decision' });
+      return { status: 409, body: 'the Run changed since you looked at it; reload and look again' };
+    },
+  });
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=w]')");
+    await click(page, '[aria-label="Split Too big"]');
+    await titled(page, 'Split the Run?');
+    await click(page, '#dialog-confirm');
+    await closeAfter(page, 'Could not split the Run');
+    await page.waitFor('return !document.querySelector(\'[aria-label="Split Too big"]\')');
   } finally {
     await page.close();
   }

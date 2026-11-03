@@ -40,7 +40,7 @@ The Dashboard button that reads a Run's pull request fresh and shows its state, 
 _Avoid_: Merge check
 
 **Fix**:
-The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub or Azure DevOps pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt, which also shows for a Run after a Dashboard Split). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
+The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub or Azure DevOps pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
 
 **Follow-up scope**:
 The one kind of pull request problem a Follow-up Rework fixes: `conflicts` with the base branch, failing `checks` or unresolved review `comments`. Problems outside the scope stay on the pull request for a later Follow-up.
@@ -169,7 +169,7 @@ The size of a Run's diff against its base, in files and bytes, leaving out lockf
 _Avoid_: Diff budget, PR size
 
 **Split**:
-Ending a Run at the Tickets it has done, so the Tickets not yet done move to a new Run. Only the user decides it.
+Ending a Run at the Tickets it has done, so the Tickets not yet done move to a new Run. Only the user decides it. After a Split on the Dashboard the Run waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt).
 _Avoid_: Carve-out, Spin-off
 
 **Run record**:
