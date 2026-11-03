@@ -435,12 +435,6 @@ test('a second action on a busy Run is answered 409 and the Run is released afte
       const busy = await post(dash, id, action, 'x');
       assert.deepEqual(busy, { status: 409, text: 'another action on this Run is already running' }, action);
     }
-    const merge = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}/merge`, {
-      method: 'POST',
-      headers: await writeHeaders(dash),
-    });
-    assert.equal(merge.status, 409);
-    assert.equal(await merge.text(), 'another action on this Run is already running');
     const del = await fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}`, {
       method: 'DELETE',
       headers: await writeHeaders(dash),

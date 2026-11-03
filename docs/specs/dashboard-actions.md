@@ -11,7 +11,7 @@ Add the first Dashboard actions: a "Needs you" browser notification, and buttons
 ## User Stories
 
 1. As a maintainer, I want one written rule for write routes on the loopback server, so that every new route is held to the same checks.
-2. As a user, I want every write route (the new ones and the existing Delete and Merge) to refuse a request without the page's own Origin and the session token, so that another web page in my browser cannot change my Runs.
+2. As a user, I want every write route (the new ones and the existing Delete; the Merge route is gone, [ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md)) to refuse a request without the page's own Origin and the session token, so that another web page in my browser cannot change my Runs.
 3. As a user, I want a browser notification when a Run starts waiting on me, so that I notice without watching the tab.
 4. As a user, I want to enable notifications with a button, so that the browser asks for permission only when I choose.
 5. As a user, I want the tab title count of waiting Runs to keep working, so that I can see it without notifications.

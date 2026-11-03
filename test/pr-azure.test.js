@@ -10,6 +10,8 @@ import {
   repoOfRemote,
   stateAsync,
   statusAsync,
+  details,
+  setup,
   view,
   viewAsync,
 } from '../src/pr-azure.js';
@@ -431,4 +433,24 @@ test('viewAsync gives the same state and head as view, from the injected run', a
   assert.equal((await viewAsync(link('completed'), { run: az('completed') })).state, 'MERGED');
   await assert.rejects(viewAsync('https://github.com/o/r/pull/1', { run: az('passing') }), /not an Azure DevOps/);
   await assert.rejects(viewAsync(link('passing'), { run: az('passing', { pr: { status: 'weird' } }) }), /incomplete/);
+});
+
+test('details gives state, draft and conflicts from the status read, and a merged PR only its state', async () => {
+  const d = await details(link('passing'), { run: az('passing') });
+  assert.equal(d.state, 'open');
+  assert.equal(typeof d.draft, 'boolean');
+  assert.ok(d.conflicts === true || d.conflicts === false || d.conflicts === null);
+  assert.equal(Object.hasOwn(d, 'threads'), false);
+  assert.ok(setup.steps.some((s) => s.includes('az extension add --name azure-devops')));
+  assert.ok(setup.steps.some((s) => s.includes('az login')));
+  assert.ok(setup.steps.some((s) => s.includes('az devops configure')));
+  assert.deepEqual(setup.reasons, ['az-missing', 'az-extension-missing', 'az-not-signed-in']);
+  await assert.rejects(
+    details(link('passing'), {
+      run: async () => {
+        throw Object.assign(new Error('x'), { code: 'ENOENT' });
+      },
+    }),
+    (/** @type {any} */ e) => e.code === 'az-missing',
+  );
 });

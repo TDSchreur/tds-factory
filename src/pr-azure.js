@@ -58,6 +58,16 @@ const bad = () => new Error('incomplete Azure DevOps PR status');
 /** @param {unknown} v */
 const label = (v) => String(v).slice(0, 80);
 
+// The setup steps the user needs when az is missing, lacks the extension or is signed out (ADR 0034).
+export const setup = {
+  reasons: ['az-missing', 'az-extension-missing', 'az-not-signed-in'],
+  steps: [
+    'Install the Azure CLI',
+    'Run `az extension add --name azure-devops`',
+    'Run `az login`',
+    'Run `az devops configure --defaults organization=<url> project=<name>`',
+  ],
+};
 // The status of a PR for the Dashboard, from `az repos pr show` and `az repos pr policy list`; throws when they have the wrong shape.
 /** @type {Record<string, PrStatus['state']>} */
 const STATE = { active: 'open', completed: 'merged', abandoned: 'closed' };
@@ -269,4 +279,20 @@ export function view(url, { cwd, timeout = 20_000, run } = {}) {
   const out = call(args(SHOW, target));
   if (out.status !== 0) throw new Error(failureText(out, 'az failed'));
   return viewOf(JSON.parse(out.stdout), target);
+}
+
+// What Check PR shows for Azure DevOps: state, draft and merge conflicts from the status read; threads and failing build policies are not read here.
+/**
+ * @param {string} url
+ * @param {{ run?: (argv: string[]) => Promise<{ stdout: string }> }} [options]
+ * @returns {Promise<{ state: PrStatus['state'], draft?: boolean, conflicts?: boolean | null }>}
+ */
+export async function details(url, options) {
+  const status = await statusAsync(url, options);
+  if (status.state !== 'open') return { state: status.state };
+  return {
+    state: status.state,
+    draft: status.draft,
+    conflicts: status.merge === 'conflicting' ? true : status.merge === 'mergeable' ? false : null,
+  };
 }

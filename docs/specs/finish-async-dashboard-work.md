@@ -4,13 +4,13 @@
 
 PR #455 made the Dashboard's git calls async but left three gaps.
 
-1. The accept route is the only action that is guarded against overlap, by a module-level Set that every Dashboard in the process shares. Sync, clean, delete, extra-loop and merge can still overlap an accept, or each other, on the same Run while a git call is awaited. When an accept fails, the compensating update that puts the Run back to `waiting` needs the Run lock too and can throw, which leaves the Run `running`.
+1. The accept route is the only action that is guarded against overlap, by a module-level Set that every Dashboard in the process shares. Sync, clean, delete and extra-loop can still overlap an accept, or each other, on the same Run while a git call is awaited. When an accept fails, the compensating update that puts the Run back to `waiting` needs the Run lock too and can throw, which leaves the Run `running`.
 2. `POST /api/runs/:id/clean` looks up the PR with the sync `view` (`spawnSync` of `gh` or `az`, 10 s timeout), so it blocks the event loop and every other request.
 3. `gitAsync` reports a `maxBuffer` overflow like a kill, and the origin lookup then tells the user "origin did not answer within 20s" for an overflow.
 
 ## Solution
 
-- One in-flight guard per Run covers every action route (accept, sync, clean, delete, extra-loop, merge). It belongs to one Dashboard, so two Dashboards in a process do not block each other. A second concurrent action on the same Run is answered 409 "another action on this Run is already running". The guard is released in `finally`.
+- One in-flight guard per Run covers every action route (accept, sync, clean, delete, extra-loop, follow-up). It belongs to one Dashboard, so two Dashboards in a process do not block each other. A second concurrent action on the same Run is answered 409 "another action on this Run is already running". The guard is released in `finally`.
 - If the compensating update after a failed accept fails, the cause goes to stderr and the user still gets the original error.
 - The Dashboard's clean-up looks the PR up without blocking: GitHub and Azure DevOps both have `viewAsync`, the lookup type accepts a sync or an async function, and the CLI keeps the sync `view`.
 - `gitAsync` marks a real timeout with `timedOut: true` on its error; a `maxBuffer` overflow keeps its own code and is not reported as a timeout.
@@ -20,7 +20,7 @@ Routes, auth (ADR 0017) and response bodies do not change, except the 409 text a
 ## User Stories
 
 1. As a Dashboard user, I want a second action on a Run that is already busy to be refused with a clear 409, so that two git operations never overlap on one Run.
-2. As a Dashboard user, I want that refusal to cover sync, clean, delete, extra-loop, accept and merge, so that no action slips past the guard.
+2. As a Dashboard user, I want that refusal to cover sync, clean, delete, extra-loop, accept and follow-up, so that no action slips past the guard.
 3. As a Dashboard user, I want actions on different Runs to proceed at the same time, so that one slow Run does not hold up the others.
 4. As a Dashboard user, I want a Run to be released after any outcome (success, refusal, error), so that I can act on it again without restarting.
 5. As a Dashboard user, I want a failed accept to leave the Run `waiting` again, or the real cause on the console when that is not possible, so that a Run is not stuck `running`.
@@ -48,7 +48,7 @@ Routes, auth (ADR 0017) and response bodies do not change, except the 409 text a
 
 - Good tests check external behavior: HTTP answers, Run record status, stderr output, and results of `gitAsync`, not the contents of the Set.
 - Highest seam is the Dashboard over HTTP (`startDashboard` with real temp Runs, as in the existing dashboard action tests) for the guard and the PR lookup; `gitAsync` and the origin flow are tested directly.
-- Guard tests: two different actions on one Run at the same time (one 409 with the guard text, the Run not left `running`); the same action on two Runs both 200; a failing rollback logs to stderr and answers the original error. Held actions are made slow through a deferred injected seam (`prMerge`, `prInfo`).
+- Guard tests: two different actions on one Run at the same time (one 409 with the guard text, the Run not left `running`); the same action on two Runs both 200; a failing rollback logs to stderr and answers the original error. Held actions are made slow through a deferred injected seam (`prInfo`).
 - PR lookup tests: a slow injected async `prInfo` or a slow adapter `run`; a second request (for example `GET /api/info`) is answered while the clean is pending. Adapter tests for both `viewAsync` variants use the existing recorded fixtures and injected `run`.
 - gitAsync tests: a timeout case sets `timedOut`, a tiny `maxBuffer` case does not (it has the overflow code). Prior art: the existing timeout test in the git tests, which runs in the OS temp directory so no killed child holds a created folder; git calls pass `-c user.name -c user.email` so no global identity is needed.
 - origin test: an overflow error is not reported as a timeout.

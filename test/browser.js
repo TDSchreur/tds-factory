@@ -21,10 +21,12 @@ import { waitUntil } from './wait-until.js';
  * @property {{ id: string, name: string, path?: string, missing?: boolean, runs?: RunStub[] }[]} [projects] Served as /api/views instead of `runs`, in this order.
  * @property {Record<string, string>} [files] Served as /files/<run>/<name>.
  * @property {(req: IncomingMessage) => { status: number, body: string, headers?: Record<string, string> } | undefined} [respond] Answers DELETE and POST requests.
- * @property {string} [checks] The text of /api/projects/p/runs/<id>/merge-checks.
  * @property {string[]} [statusCalls] The pr-status URLs that were read.
  * @property {() => void} [statusReply] Runs on each pr-status read.
  * @property {unknown} [statusBody] The JSON of a pr-status read.
+ * @property {string[]} [detailsCalls] The pr-details URLs that were read.
+ * @property {unknown} [detailsBody] The JSON of a pr-details read.
+ * @property {number} [detailsStatus] The HTTP status of a pr-details read (200 when not set).
  * @property {boolean} [failViews] Makes /api/views answer 500.
  * @property {string} [project]
  * @property {string} [version]
@@ -192,13 +194,20 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     if (routePath === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(routePath))
       return send(200, TYPES[routePath.split('.').pop() ?? ''], readFileSync(new URL(routePath.slice(1), DASHBOARD)));
-    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/merge-checks$/.test(routePath))
-      return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
     // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
     if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/pr-status$/.test(routePath)) {
       (state.statusCalls ??= []).push(req.url ?? '');
       state.statusReply?.();
       return send(200, 'application/json', JSON.stringify(state.statusBody ?? {}));
+    }
+    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/pr-details$/.test(routePath)) {
+      (state.detailsCalls ??= []).push(req.url ?? '');
+      const body = state.detailsBody;
+      return send(
+        state.detailsStatus ?? 200,
+        typeof body === 'string' ? 'text/plain' : 'application/json',
+        typeof body === 'string' ? body : JSON.stringify(body ?? {}),
+      );
     }
     if (routePath === '/api/info')
       return send(
