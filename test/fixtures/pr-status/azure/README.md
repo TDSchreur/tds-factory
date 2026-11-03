@@ -15,7 +15,7 @@ Recorded output of `az repos pr show` (`*.pr.json`) and `az repos pr policy list
 
 ## Threads and statuses
 
-Recorded on 2026-11-03 from one throw-away PR (id 533, organisation `dutchworkz`, source branch `fixture/threads-throwaway`) with `az` and the `azure-devops` extension. The PR was abandoned and its branch deleted afterwards. `sandbox.pr.json` is `az repos pr show`, `sandbox.threads.json` is `az devops invoke --area git --resource pullRequestThreads` and `sandbox.statuses.json` is `--resource pullRequestStatuses`, all read with the project and repository GUIDs (`--route-parameters project=<guid> repositoryId=<guid> pullRequestId=<id> --api-version 7.1`). Ids of the organisation, project, repository, user and tenant, names, e-mail addresses and avatar links are replaced as above; thread, comment and status ids, commit ids, dates and states are as recorded. The PR number 533 is kept in the links.
+Recorded on 2026-11-03 from one throw-away PR (id 533, source branch `fixture/threads-throwaway`) with `az` and the `azure-devops` extension. The PR was abandoned and its branch deleted afterwards. `sandbox.pr.json` is `az repos pr show`, `sandbox.threads.json` is `az devops invoke --area git --resource pullRequestThreads` and `sandbox.statuses.json` is `--resource pullRequestStatuses`, all read with the project and repository GUIDs (`--route-parameters project=<guid> repositoryId=<guid> pullRequestId=<id> --api-version 7.1`). Ids of the organisation, project, repository, user and tenant, names, e-mail addresses and avatar links are replaced as above; thread, comment and status ids, commit ids, dates and states are as recorded. The PR number 533 is kept in the links.
 
 | Fixture | What it shows |
 | --- | --- |
