@@ -4,7 +4,7 @@ A user who works on several repositories at once starts one Dashboard per reposi
 
 ## Solution
 
-One Dashboard serves every Project in a per-user Project registry. The board has a Project row per Project under shared Stage columns, so Runs of different Projects never mix, and the user can collapse a Project row they are not interested in. `tds-factory dashboard` in any repository registers that repository and opens the one Dashboard. See [ADR 0033](../adr/0033-one-dashboard-serves-every-registered-project.md).
+One Dashboard serves every Project in a per-user Project registry. The Dashboard has a Project row per Project under shared Stage columns, so Runs of different Projects never mix, and the user can collapse a Project row they are not interested in. `tds-factory dashboard` in any repository registers that repository and opens the one Dashboard. See [ADR 0033](../adr/0033-one-dashboard-serves-every-registered-project.md).
 
 ## User Stories
 
