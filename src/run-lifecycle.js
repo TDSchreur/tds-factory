@@ -364,10 +364,10 @@ const handedOver = { status: 'waiting', waiting_on_human: false, waiting_reason:
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
- * @param {{ updated?: string, handOver?: boolean }} [options]
+ * @param {{ updated?: string, handOver?: boolean, warn?: (message: string) => void }} [options]
  * @returns {string[]}
  */
-export function splitRun(projectDir, id, { updated, handOver = false } = {}) {
+export function splitRun(projectDir, id, { updated, handOver = false, warn = console.error } = {}) {
   /** @type {string[]} */
   let moved = [];
   /** @type {string} */
@@ -391,7 +391,7 @@ export function splitRun(projectDir, id, { updated, handOver = false } = {}) {
   try {
     appendEvent(dir, { type: 'split', moved });
   } catch (error) {
-    console.error(`note: the split event could not be recorded (${error instanceof Error ? error.message : error})`);
+    warn(`note: the split event could not be recorded (${error instanceof Error ? error.message : error})`);
   }
   return moved;
 }

@@ -82,7 +82,7 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     /** @param {string | undefined} id @param {{ updated?: string }} [data] */
     grantLoop: (id, data) => grantLoopRun(projectDir, id, data),
-    /** @param {string | undefined} id @param {{ updated?: string, handOver?: boolean }} [options] */
+    /** @param {string | undefined} id @param {{ updated?: string, handOver?: boolean, warn?: (message: string) => void }} [options] */
     split: (id, options) => splitRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ accept?: boolean, updated?: string }} [options] */
     size: (id, options) => sizeRun(projectDir, id, options),

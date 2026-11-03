@@ -65,8 +65,8 @@ const leaves = (base, target) => {
 // Copies the skills listed in the manifest from the vendor submodules into skills/.
 // An entry is a path, or { path, as } to ship the skill under another name.
 // Our own skills (no marker) are never touched, and a marked skill edited by hand is kept unless forced.
-/** @param {{ root?: string, skillsDir?: string, force?: boolean }} [options] */
-export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}) {
+/** @param {{ root?: string, skillsDir?: string, force?: boolean, log?: (message: string) => void }} [options] */
+export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false, log = console.log } = {}) {
   const manifestPath = path.join(root, 'skills.manifest.json');
   // The installed package ships skills/ but not the manifest or vendor/, so sync only works in a checkout.
   if (!fs.existsSync(manifestPath))
@@ -121,7 +121,7 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
   for (const e of fs.readdirSync(skillsDir, { withFileTypes: true })) {
     if (e.isDirectory() && !seen.has(e.name) && fs.existsSync(path.join(skillsDir, e.name, MARKER))) {
       fs.rmSync(path.join(skillsDir, e.name), { recursive: true });
-      console.log(`removed ${e.name}`);
+      log(`removed ${e.name}`);
     }
   }
   /** @type {Record<string, object>} */
@@ -162,7 +162,7 @@ export function sync({ root = ROOT, skillsDir = SKILLS_DIR, force = false } = {}
       }
       fs.writeFileSync(path.join(staging, MARKER), `${rel}\n${hashLine(staging)}`);
     });
-    console.log(`synced ${name}`);
+    log(`synced ${name}`);
   }
   const file = path.join(skillsDir, PROVENANCE);
   fs.writeFileSync(

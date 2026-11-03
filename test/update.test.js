@@ -530,7 +530,7 @@ test('versions compare as semver and a prerelease sorts below its release', () =
 test('the usage text lists update and the CLI dispatches it', () => {
   const result = spawnSync(process.execPath, [resolve('bin/tds-factory.js')], { encoding: 'utf8' });
   assert.match(result.stdout, /tds-factory update \[--no-force\]/);
-  assert.match(readFileSync(resolve('bin/tds-factory.js'), 'utf8'), /command === 'update'/);
+  assert.match(readFileSync(resolve('src/cli.js'), 'utf8'), /command === 'update'/);
 });
 
 // A server that takes the connection and then says nothing, or stops halfway through the body. fetchFn points every URL at it.
