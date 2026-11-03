@@ -61,11 +61,15 @@ const entry = (id, title) => {
 };
 const markdown = `# Findings\n\n${long}\n\n| Header | Another |\n| --- | --- |\n| ${long} | ${long} |`;
 
-// The page's scroll width, and every element that scrolls sideways and actually overflows, except the Markdown tables' own scroll area.
+// The page's scroll width, and every element that scrolls sideways (or clips inside the drawer) and actually overflows, except the Markdown tables' own scroll area and the visually hidden stacked-table header.
 const MEASURE = `
   const root = document.scrollingElement;
   const overflowing = [...document.querySelectorAll('*')]
-    .filter((el) => /auto|scroll/.test(getComputedStyle(el).overflowX) && el.scrollWidth > el.clientWidth + 1 && !el.matches('.md .scroll'))
+    .filter((el) => {
+      const x = getComputedStyle(el).overflowX;
+      const clips = /auto|scroll/.test(x) || (/hidden|clip/.test(x) && (el.id === 'detail' || !!el.closest('#detail')));
+      return clips && el.scrollWidth > el.clientWidth + 1 && !el.matches('.md .scroll, .usage-table thead');
+    })
     .map((el) => el.tagName + '.' + el.className + '#' + el.id);
   return { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, overflowing };`;
 
@@ -132,7 +136,20 @@ test('the usage table has no inner scroll area and keeps its table roles wide an
     assert.equal(wideRoles.columnheader, 8);
     assert.equal(wideRoles.rowheader, 4);
     assert.equal(wideRoles.cell, 28);
-    // Below about 32rem of panel width every row stacks.
+    // No column header breaks inside a word at the drawer width of a desktop viewport.
+    for (const width of [1025, 1280, 1440]) {
+      await page.resize(width, 800);
+      const broken = await page.execute(
+        `return [...document.querySelectorAll('.usage-table thead th')].filter((th) => {
+          if (getComputedStyle(th.closest('tr')).display !== 'table-row') return false;
+          const words = th.textContent.trim().split(/\\s+/);
+          return words.some((w) => { const r = document.createRange(); const n = th.firstChild; const i = th.textContent.indexOf(w); r.setStart(n, i); r.setEnd(n, i + w.length); return r.getClientRects().length > 1; });
+        }).map((th) => th.textContent)`,
+      );
+      assert.deepEqual(broken, [], 'headers broken at ' + width);
+      assert.equal((await layout('table-row')).fits, true, 'fits at ' + width);
+    }
+    // Below about 44rem of drawer width every row stacks.
     await page.resize(375, 800);
     const narrow = await layout('block');
     assert.equal(narrow.display, 'block');

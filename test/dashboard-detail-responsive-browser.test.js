@@ -194,7 +194,7 @@ test('the open detail turns from drawer to full-screen sheet and back when cross
     assert.equal(await width(), await viewport());
     await page.resize(1200, 700);
     assert.equal(await page.execute("return document.getElementById('detail').open"), true); // the same dialog stays open
-    assert.equal(await width(), 640);
+    assert.equal(await width(), 896);
     assert.equal(await page.execute("document.getElementById('theme').focus(); return document.activeElement.id"), '');
     await page.resize(375, 700);
     assert.equal(await width(), await viewport());
@@ -289,6 +289,36 @@ test('Escape closes only the confirmation above the detail, then the detail', as
       "return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=w]')",
     );
     assert.deepEqual(page.calls, []);
+  } finally {
+    await page.close();
+  }
+});
+
+test('a selection dragged from the drawer onto the backdrop keeps it open; a plain backdrop click closes it', async (t) => {
+  const page = await openPage(
+    t,
+    { runs: [run({ id: 'r', column: 'build', title: 'Drag run' })] },
+    { width: 1200, height: 700 },
+  );
+  if (!page) return;
+  try {
+    await page.waitFor("return !!document.querySelector('[data-id=r]')");
+    await page.execute("document.querySelector('[data-id=r]').click()");
+    await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    const inside = await page.execute(
+      'const r = document.querySelector("#detail h2").getBoundingClientRect(); return [r.left + 5, r.top + r.height / 2]',
+    );
+    const mouse = (/** @type {string} */ type, /** @type {number} */ x, /** @type {number} */ y) =>
+      page.cdp('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
+    await mouse('mousePressed', inside[0], inside[1]);
+    await mouse('mouseReleased', 100, 300);
+    await page.wait(300);
+    assert.equal(await page.execute("return document.getElementById('detail').open"), true);
+    await mouse('mousePressed', 100, 300);
+    await mouse('mouseReleased', 100, 300);
+    await page.waitFor(
+      "return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=r]')",
+    );
   } finally {
     await page.close();
   }

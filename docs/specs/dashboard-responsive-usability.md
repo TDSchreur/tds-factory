@@ -36,7 +36,7 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 - Compact controls, including navigation, theme, older Runs, card actions, Delete all, introductory disclosure, dialog actions and detail Back, have accessible touch targets. Preserve compact desktop styling where appropriate.
 - Run detail becomes a full-screen view through 1024 CSS pixels with a plainly labeled Back control. Keep focus within it and make the covered Dashboard unavailable to keyboard interaction; lock background scrolling while preserving and restoring its position. Closing returns focus to the selected card and retains Stage selection. Escape still closes detail unless a confirmation dialog is active.
 - At desktop widths the detail is a modal drawer over the full-width board; it is as tall as the viewport, so its controls remain visible. Preserve summary scroll position across polling and reset it when selecting another Run.
-- Wrap long text and links throughout cards and detail. Wide Markdown tables may scroll inside their existing local wrapper; they must not cause the whole panel or page to scroll sideways.
+- Wrap long text and links throughout cards and detail. Wide Markdown tables may scroll inside their existing local wrapper; they must not cause the whole drawer or page to scroll sideways.
 - Dialog actions wrap or stack when needed and remain reachable through internal scrolling on short viewports. Preserve existing confirmation semantics, safe initial focus, cancellation and destructive-operation safeguards.
 - Use browser emulation to set the actual CSS viewport and assert width and height before testing responsive behavior. Reuse the existing ChromeDriver fixture and provide screenshot access without introducing another browser framework.
 - No server routes, Run record schemas, themes or destructive-operation behavior change.
@@ -47,7 +47,7 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 - First cover actual emulated viewport dimensions, including widths below Chromium's minimum window width. Responsive assertions must run only after dimension assertions pass.
 - Exercise 320, 375, 390, 768 and 1024 CSS pixels, plus a desktop width above the breakpoint. Include long project names, connection errors, long titles, many Runs, waiting Runs, empty Stages, older Runs, links, unbroken summary text and wide Markdown tables.
 - Cover Stage switching, counts and waiting markers, stable selection through refresh/filter changes, detail Back/Escape, keyboard containment, restored focus/scroll, detail polling scroll preservation and resizing across the breakpoint.
-- Cover minimum touch target sizes, absence of unintended page and panel horizontal scrolling, reachable dialog actions on short viewports, and cancel/confirm behavior.
+- Cover minimum touch target sizes, absence of unintended page and drawer horizontal scrolling, reachable dialog actions on short viewports, and cancel/confirm behavior.
 - Inspect screenshots at representative phone, tablet, small laptop and desktop sizes, including open detail and dialogs. Verify light and dark themes and preservation of the Factory version display.
 - Run the project's required Verify command, `npm test`, and review committed changes through all Factory Check axes before opening the pull request.
 
@@ -59,4 +59,4 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 
 ## Further Notes
 
-The user confirmed one selected Stage and full-screen Run detail through 1024 CSS pixels. The rejected alternative was retaining all compact Stage columns with jump links: it preserves simultaneous visibility but keeps long pages. Baseline inspection at all five requested widths used asserted emulated viewports; representative findings included a 1272px board inside a 1009px viewport content area at 1024, 33px controls, and long summary text overflowing Run detail. The existing side-drawer decision is refined by ADR 0008.
+The user confirmed one selected Stage and full-screen Run detail through 1024 CSS pixels. The rejected alternative was retaining all compact Stage columns with jump links: it preserves simultaneous visibility but keeps long pages. Baseline inspection at all five requested widths used asserted emulated viewports; representative findings included a 1272px board inside a 1009px viewport content area at 1024, 33px controls, and long summary text overflowing Run detail. The existing side-drawer decision is refined by [ADR 0031](../adr/0031-run-detail-as-a-modal-right-drawer.md).

@@ -444,7 +444,7 @@ test('the Run detail opens as a drawer over a board that keeps its width', async
     );
     assert.equal(box.open, true);
     assert.ok(box.dRight >= box.vw - 1, 'the drawer sits on the right edge');
-    assert.ok(box.dWidth <= 640 + 1 && box.dWidth < box.w, 'the drawer is a sheet, not the whole screen');
+    assert.ok(box.dWidth <= 896 + 1 && box.dWidth < box.w, 'the drawer is a sheet, not the whole screen');
     assert.ok(box.dTop >= 0 && box.dBottom <= box.h + 1, 'the drawer is in view');
     assert.equal(
       await page.execute("return document.querySelector('[data-id=b11]').classList.contains('selected')"),

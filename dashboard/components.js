@@ -569,9 +569,13 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
     if (closing.current) closing.current = false;
     else onClose();
   };
-  // A click on the dialog itself, not on its content, is a click on the backdrop.
+  const pressedOnBackdrop = useRef(false); // a selection dragged out of the content ends on the backdrop and must not close
+  const press = (/** @type {PointerEvent} */ event) => {
+    pressedOnBackdrop.current = event.target === dialog.current;
+  };
+  // A press and a click both on the dialog itself, not on its content, are a click on the backdrop.
   const backdrop = (/** @type {MouseEvent} */ event) => {
-    if (event.target === dialog.current) dialog.current?.close();
+    if (event.target === dialog.current && pressedOnBackdrop.current) dialog.current?.close();
   };
   useEffect(() => {
     if (!run) return undefined;
@@ -600,7 +604,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
   const reviews = run.projectReviews ?? [];
   /** @type {LoadedFile[]} */
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onClick=${backdrop}>
+  return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onPointerDown=${press} onClick=${backdrop}>
     <div class="detail-body">
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
