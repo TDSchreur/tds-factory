@@ -1,11 +1,18 @@
 // @ts-check
 import { DEFAULT_PORT, startDashboard } from './dashboard.js';
 import { openProjectRegistry } from './project-registry.js';
+import { mainCheckout } from './run-folder.js';
 import { compareVersions } from './update.js';
 import { codeOf } from './narrow.js';
+import { projectId } from './project-registry.js';
 
 const HOST = '127.0.0.1';
 const PROBE_TIMEOUT_MS = 1500;
+const SEMVER =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+/** @param {unknown} value */
+const semver = (value) => (typeof value === 'string' && SEMVER.test(value) ? value : undefined);
 
 /** The pid and Factory version of the Dashboard that answers /api/info on a port, or undefined when nothing that looks like a shared (registry-backed) one does; a standalone --port server is a busy port. @param {number} port */
 async function probe(port) {
@@ -19,7 +26,7 @@ async function probe(port) {
     if (typeof info?.token !== 'string' || typeof info?.project !== 'string' || info.shared !== true) return undefined;
     return {
       pid: typeof info?.pid === 'number' ? info.pid : undefined,
-      version: typeof info?.version === 'string' ? info.version : undefined,
+      version: semver(info?.version),
     };
   } catch {
     // nothing answered in time, so there is no Dashboard to reuse
@@ -61,8 +68,9 @@ export async function launchDashboard({
     return { url: standalone.url, port: standalone.port, reused: false, close: standalone.close };
   }
   const project = registry.join(projectDir);
+  const id = project?.id ?? projectId(mainCheckout(projectDir).dir);
   /** @param {number} onPort */
-  const urlOn = (onPort) => `http://${HOST}:${onPort}/${project ? `?project=${project.id}` : ''}`;
+  const urlOn = (onPort) => `http://${HOST}:${onPort}/?project=${id}`;
   /** @param {number} onPort @param {string | undefined} running */
   const reuse = (onPort, running) => {
     if (running && isOlder(running, version))
@@ -75,7 +83,7 @@ export async function launchDashboard({
   const state = registry.readState();
   if (state) {
     const answer = await probe(state.port);
-    if (answer && answer.pid === state.pid) return reuse(state.port, state.version);
+    if (answer && answer.pid === state.pid) return reuse(state.port, answer.version ?? semver(state.version));
   }
 
   /** @type {Awaited<ReturnType<typeof startDashboard>>} */

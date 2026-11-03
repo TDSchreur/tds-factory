@@ -154,7 +154,7 @@ test('removing a Project takes it out of the registry by id and leaves its folde
     writeRun(a, 'r', {});
     const pa = registry.join(a);
     registry.join(b);
-    const dash = await start();
+    const dash = await start({ projectDir: b });
     const headers = await writeHeaders(dash);
     const remove = (/** @type {string} */ id) => fetch(`${dash.url}/api/projects/${id}`, { method: 'DELETE', headers });
     assert.equal((await remove(encodeURIComponent(a))).status, 404);
@@ -227,6 +227,41 @@ test('a Project the server was started for serves alongside the registry before 
     );
     assert.equal(projects[1].runs[0].title, 'Own run');
     assert.equal(projects[1].id, dash.projectId);
+  });
+});
+
+test('removing the unregistered own Project is a 409 with a clear message; unknown ids stay 404', async () => {
+  await withRegistry(async ({ root, registry, start }) => {
+    registry.join(folder(root, 'alpha'));
+    const own = folder(root, 'own');
+    const dash = await start({ projectDir: own });
+    const headers = await writeHeaders(dash);
+    const ownAnswer = await fetch(`${dash.url}/api/projects/${dash.projectId}`, { method: 'DELETE', headers });
+    assert.equal(ownAnswer.status, 409);
+    const text = await ownAnswer.text();
+    assert.match(text, /not in the registry/);
+    assert.match(await (await fetch(`${dash.url}/api/views`)).text(), /"name":"own"/);
+    assert.equal((await fetch(`${dash.url}/api/projects/unknown`, { method: 'DELETE', headers })).status, 404);
+  });
+});
+
+test('removing a Project waits asynchronously for the lock and does not block /api/info', async () => {
+  await withRegistry(async ({ root, registry, start }) => {
+    const a = folder(root, 'alpha');
+    registry.join(a);
+    const dash = await start();
+    const headers = await writeHeaders(dash);
+    const lock = join(registry.dir, 'projects.json.lock');
+    writeFileSync(lock, 'held');
+    let settled = false;
+    const removing = fetch(`${dash.url}/api/projects/${projectId(a)}`, { method: 'DELETE', headers }).finally(
+      () => (settled = true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(settled, false);
+    assert.equal((await fetch(`${dash.url}/api/info`)).status, 200);
+    rmSync(lock, { force: true });
+    assert.equal((await removing).status, 200);
   });
 });
 

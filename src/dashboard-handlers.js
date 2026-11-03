@@ -377,9 +377,16 @@ export async function runFile({ send, store, match }) {
 
 // Removes a Project from the registry by an id the registry holds; the folder and its Runs stay.
 /** @type {Handler} */
-export function removeProject({ send, hub, match }) {
+export async function removeProject({ send, hub, match }) {
   const id = decodeId({ send }, match[1]);
   if (id === undefined) return;
-  if (!hub.remove(id)) return send(404, 'text/plain', 'not found');
+  const removed = await hub.remove(id);
+  if (removed === 'not-found') return send(404, 'text/plain', 'not found');
+  if (removed === 'own-not-registered')
+    return send(
+      409,
+      'text/plain',
+      'this Project is not in the registry, so there is nothing to remove; it is still served because the Dashboard was started in it',
+    );
   send(200, 'text/plain', 'removed');
 }

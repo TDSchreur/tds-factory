@@ -1,12 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import net from 'node:net';
+import { readFileSync } from 'node:fs';
 import { startDashboard } from '../src/dashboard.js';
 import { launchDashboard } from '../src/dashboard-launch.js';
 import { openProjectRegistry, projectId } from '../src/project-registry.js';
+import { mainCheckout } from '../src/run-folder.js';
 import { repo, tempDir } from './git-repo.js';
 
-const FACTORY = '2.0.0';
+const FACTORY = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 async function freePort() {
   const probe = net.createServer();
@@ -127,17 +130,38 @@ test('a busy preferred port that is not a Dashboard falls back to a free port', 
 });
 
 test('a running Dashboard of an older Factory version is reported and left running', async () => {
-  const { launch, warnings } = await setup();
-  const old = await launch(repo(), { version: '1.0.0' });
+  /** @type {string[]} */
+  const warnings = [];
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/api/info') return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ token: 't', project: '/tmp/p', shared: true, pid: 123, version: '0.0.1' }));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
   try {
-    const next = await launch(repo());
+    const next = await launchDashboard({
+      projectDir: repo(),
+      version: FACTORY,
+      warn: (m) => warnings.push(m),
+      registry: {
+        dir: tempDir('launch-'),
+        join: (projectPath) => ({ id: projectId(projectPath), path: projectPath }),
+        list: () => [],
+        remove: () => false,
+        removeAsync: async () => false,
+        removeMissingAsync: async () => [],
+        readState: () => ({ pid: 123, port, version: '0.0.1' }),
+        writeState: () => {},
+        clearState: () => {},
+      },
+    });
     assert.equal(next.reused, true);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /1\.0\.0/);
-    assert.match(warnings[0], /2\.0\.0/);
-    assert.equal((await fetch(`http://127.0.0.1:${old.port}/api/info`)).status, 200);
+    assert.match(warnings[0], /0\.0\.1/);
+    assert.match(warnings[0], new RegExp(FACTORY.replace(/\./g, '\\.')));
   } finally {
-    await old.close();
+    await new Promise((ok) => server.close(() => ok(undefined)));
   }
 });
 
@@ -163,14 +187,55 @@ test('an explicit port starts a standalone server that neither reads nor writes 
 
 test('a registry that cannot be written does not stop the Dashboard', async () => {
   const { launch } = await setup();
-  const first = await launch(repo(), {
+  const main = repo();
+  const first = await launch(main, {
     registry: { ...openProjectRegistry({ dir: tempDir('launch-') }), join: () => undefined },
   });
   try {
     assert.equal(first.reused, false);
-    assert.doesNotMatch(first.url, /project=/);
+    assert.equal(first.url, `http://127.0.0.1:${first.port}/?project=${projectId(mainCheckout(main).dir)}`);
   } finally {
     await first.close();
+  }
+});
+
+test('a non-semver dashboard version from state or /api/info is treated as unknown', async () => {
+  /** @type {string[]} */
+  const warnings = [];
+  const project = mainCheckout(repo()).dir;
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/api/info') return void res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ token: 't', project, shared: true, pid: 456, version: '1.0.0\n\x1b[31mforged' }));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
+  try {
+    const launched = await launchDashboard({
+      projectDir: project,
+      version: FACTORY,
+      preferredPort: 0,
+      warn: (m) => warnings.push(m),
+      registry: {
+        dir: tempDir('launch-'),
+        join: () => ({ id: projectId(project), path: project }),
+        list: () => [],
+        remove: () => false,
+        removeAsync: async () => false,
+        removeMissingAsync: async () => [],
+        readState: () => ({ pid: 456, port, version: '1.0.0\n\x1b[31mforged' }),
+        writeState: () => {},
+        clearState: () => {},
+      },
+    });
+    try {
+      assert.equal(launched.reused, true);
+    } finally {
+      await launched.close();
+    }
+    assert.equal(warnings.length, 0);
+  } finally {
+    await new Promise((ok) => server.close(() => ok(undefined)));
   }
 });
 
