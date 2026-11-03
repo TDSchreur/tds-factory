@@ -534,20 +534,22 @@ test('the usage text lists update and the CLI dispatches it', () => {
 // A server that takes the connection and then says nothing, or stops halfway through the body. fetchFn points every URL at it.
 /**
  * @param {(res: http.ServerResponse) => void} behave
- * @returns {Promise<{ fetchFn: typeof fetch, hits: () => number, close: () => Promise<void> }>}
+ * @returns {Promise<{ fetchFn: typeof fetch, attempts: () => number, close: () => Promise<void> }>}
  */
 async function stalledServer(behave) {
-  let hits = 0;
   const server = http.createServer((_req, res) => {
-    hits++;
     behave(res);
   });
   await new Promise((done) => server.listen(0, '127.0.0.1', () => done(undefined)));
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
+  let attempts = 0;
   return {
-    fetchFn: (_url, options) => fetch(`http://127.0.0.1:${port}/`, options),
-    hits: () => hits,
+    fetchFn: (_url, options) => {
+      attempts++;
+      return fetch(`http://127.0.0.1:${port}/`, options);
+    },
+    attempts: () => attempts,
     close: () => {
       server.closeAllConnections();
       return new Promise((done) => server.close(() => done()));
@@ -566,7 +568,8 @@ test('a server that never answers fails the update within the timeout, after the
         err instanceof Error && 'code' in err && err.code === 'timeout' && /timed out after 0\.05s/.test(err.message),
     );
     assert.ok(Date.now() - started < 5000, 'ends in a bounded time');
-    assert.equal(server.hits(), 6, 'three attempts for the API, three for the redirect lookup');
+    // Counted where the updater calls fetch: under load a 50 ms timeout can abort an attempt before the server sees it.
+    assert.equal(server.attempts(), 6, 'three attempts for the API, three for the redirect lookup');
     assert.deepEqual(w.state.calls, [], 'no command ran');
     assert.match(w.state.warns.join('\n'), /GitHub API failed \(attempt 1\/3\): GitHub API timed out after 0\.05s/);
   } finally {
