@@ -243,7 +243,12 @@ test('the detail answers too, and shows Copy agent prompt for the split-done rea
       ),
       true,
     );
-    await page.execute("document.getElementById('detail').close()");
+    // Close through the page and wait until it has dropped the open Run; the dialog's close event is
+    // asynchronous, so a click before it lands would be undone by it.
+    await click(page, '#detail button[aria-label="Close Run detail"]');
+    await page.waitFor(
+      "return !document.getElementById('detail').open && !document.querySelector('#detail [aria-label=\"Copy agent prompt for Split done\"]')",
+    );
     await page.execute("document.querySelector('[data-id=w]').click()");
     await page.waitFor(
       "return document.getElementById('detail').open && !!document.querySelector('#detail [aria-label=\"Continue Too big\"]')",
