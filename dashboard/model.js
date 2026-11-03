@@ -449,9 +449,9 @@ export const canCopyPrompt = (run) => !run.unreadable && run.waiting === true &&
 export const atLoopCap = (run) =>
   Number.isSafeInteger(run.loops) && Number.isSafeInteger(run.loopCap) && Number(run.loops) >= Number(run.loopCap);
 
-// Whether Fix is offered at all: GitHub pull requests only, and only while the pull request is open.
+// Whether Fix is offered at all: for a pull request of a known host (GitHub or Azure DevOps), and only while the pull request is open.
 /** @param {RunView} run */
-export const canFix = (run) => run.prHost === 'github' && !run.unreadable && run.status !== 'abandoned';
+export const canFix = (run) => !!run.prHost && !run.unreadable && run.status !== 'abandoned';
 
 // Whether the Run waits on the user in Check at its loop limit, so that the user may grant an extra loop (ADR 0024).
 /** @param {RunView} run */

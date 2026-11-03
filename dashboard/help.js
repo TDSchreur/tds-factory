@@ -76,7 +76,7 @@ export const HELP_SECTIONS = [
       },
       {
         term: 'Fix',
-        text: 'send the Run back to Build for one problem (conflicts, checks or comments), then Copy agent prompt hands it to an agent. Shown next to the problem in the Run detail of a GitHub pull request; at the Check loop limit it grants an extra loop first.',
+        text: 'send the Run back to Build for one problem (conflicts, checks or comments), then Copy agent prompt hands it to an agent. Shown next to the problem in the Run detail of a GitHub or Azure DevOps pull request; at the Check loop limit it grants an extra loop first.',
       },
     ],
   },

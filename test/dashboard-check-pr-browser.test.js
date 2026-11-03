@@ -219,6 +219,10 @@ test('the drawer shows the failing and pending checks and the threads of an Azur
     ])
       assert.ok(text.includes(part), part);
     assert.equal(await page.execute("return document.querySelectorAll('#detail .pr-details a').length > 0"), true);
+    assert.deepEqual(
+      await page.execute("return [...document.querySelectorAll('#detail .fix-button')].map(b => b.dataset.scope)"),
+      ['checks', 'comments'],
+    );
   } finally {
     await page.close();
   }
