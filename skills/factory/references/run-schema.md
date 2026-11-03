@@ -16,7 +16,7 @@
 | `requested_effort` | The reasoning effort the Stage worker was asked to use. Set with `run update`; cleared by a change of Stage |
 | `observed_model` | The model the agent reports it is running on. Set with `run update`; cleared by a change of Stage. Only this field says what ran |
 | `last_seen` | ISO 8601 UTC timestamp of the latest write of the Run record by any operation. Maintained by the Run store; never supply it |
-| `tickets_total` | Number of Tickets cut from the Spec. Set once the Tickets exist |
+| `tickets_total` | Number of Tickets cut from the Spec. Follows `tickets`: setting `tickets` sets it, and `run update` refuses a count that differs from the list |
 | `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build |
 | `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set with `run verdict` after each review |
 | `spec` | `pass` or `fail`, or `skipped` on the Fast track only: the Spec verdict of the latest `code-review`. Set with `run verdict` after each review |
@@ -40,7 +40,7 @@
 | `created` | ISO 8601 UTC timestamp, set once |
 | `updated` | ISO 8601 UTC timestamp, set on every write |
 | `spec_link` | Link to the Spec (path or URL). Optional; set once the Spec exists |
-| `tickets` | Links to the Tickets, an array of strings: issue URLs or repo-relative file paths, whichever the tracker produces. Optional; set once they exist |
+| `tickets` | Links to the Tickets, an array of strings: issue URLs or repo-relative file paths, whichever the tracker produces. Optional; set once they exist. Setting it sets `tickets_total` to its length, and it cannot be shorter than `tickets_done` |
 | `pr` | Link to the pull request. Optional; set once it exists |
 
 Record the Spec, Tickets and PR as links only; never copy their content into the Run folder.

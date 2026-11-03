@@ -752,3 +752,67 @@ test('Verify with a missing worktree records that verification is unavailable', 
   assert.equal(read(cwd, id).status, 'verification-unavailable');
   assert.match(read(cwd, id).status_reason ?? '', /worktree.*missing/);
 });
+
+test('run update sets tickets_total to the number of Ticket links, also when the list changes later', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  assert.equal(update(cwd, id, { tickets: ['1', '2', '3'] }).status, 0);
+  assert.equal(read(cwd, id).tickets_total, 3);
+  assert.equal(update(cwd, id, { tickets: ['1'] }).status, 0);
+  assert.equal(read(cwd, id).tickets_total, 1);
+  assert.equal(update(cwd, id, { tickets: ['1', '2'], tickets_total: 2 }).status, 0);
+  assert.equal(read(cwd, id).tickets_total, 2);
+});
+
+test('run update refuses a tickets_total that does not match the list and leaves the record unchanged', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  update(cwd, id, { tickets: ['1', '2'] });
+  const before = readFileSync(file(cwd, id), 'utf8');
+  for (const data of [{ tickets: ['1', '2'], tickets_total: 5 }, { tickets_total: 3 }]) {
+    const result = update(cwd, id, data);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /tickets_total \(\d\) does not match the \d Tickets/);
+  }
+  assert.match(update(cwd, id, { tickets_total: 3 }).stderr, /tickets_total \(3\) does not match the 2 Tickets/);
+  assert.equal(readFileSync(file(cwd, id), 'utf8'), before);
+});
+
+test('run update accepts tickets_total alone while there is no list', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  assert.equal(update(cwd, id, { tickets_total: 4 }).status, 0);
+  assert.equal(read(cwd, id).tickets_total, 4);
+});
+
+test('run update refuses a list shorter than tickets_done', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  update(cwd, id, { tickets: ['1', '2'], tickets_done: 2 });
+  const before = readFileSync(file(cwd, id), 'utf8');
+  const stored = update(cwd, id, { tickets: ['1'] });
+  assert.notEqual(stored.status, 0);
+  assert.match(stored.stderr, /1 Tickets.*2 done|tickets_done \(2\)/);
+  const together = update(cwd, id, { tickets: ['1', '2'], tickets_done: 3 });
+  assert.notEqual(together.status, 0);
+  assert.equal(readFileSync(file(cwd, id), 'utf8'), before);
+  assert.equal(update(cwd, id, { tickets: ['1'], tickets_done: 1 }).status, 0);
+});
+
+test('run update refuses hostile ticket values and leaves the record unchanged', () => {
+  const cwd = repo();
+  const id = startRun(cwd);
+  const before = readFileSync(file(cwd, id), 'utf8');
+  for (const data of [
+    { tickets: 'x' },
+    { tickets: null },
+    { tickets: [1] },
+    { tickets_total: -1 },
+    { tickets_total: Number.MAX_SAFE_INTEGER + 1 },
+    { tickets_total: '2' },
+    { tickets: [], tickets_total: 1 },
+  ])
+    assert.notEqual(update(cwd, id, data).status, 0, json(data));
+  assert.equal(run(cwd, 'update', '--id', id, '--data', '{"tickets_total":NaN}').status === 0, false);
+  assert.equal(readFileSync(file(cwd, id), 'utf8'), before);
+});
