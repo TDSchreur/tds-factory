@@ -15,6 +15,7 @@ import {
   agentPrompt,
   atLoopCap,
   canCheckPr,
+  canAnswerSize,
   canCopyPrompt,
   canFix,
   canGrantLoop,
@@ -204,6 +205,18 @@ function CopyPrompt({ run }) {
     ${state === 'manual' && html`<input ref=${field} class="copy-field" readonly value=${text} aria-label="Agent prompt" onClick=${stop} onKeyDown=${stop} />`}</span>`;
 }
 
+// Split and Continue, the answers to the Run size question (ADR 0035). The card stops the click from opening the Run detail; the detail does not.
+/** @param {{ run: RunView, onSplit: (run: RunView) => void, onContinue: (run: RunView) => void, stopClick?: boolean }} props */
+function SizeButtons({ run, onSplit, onContinue, stopClick = true }) {
+  if (!canAnswerSize(run)) return null;
+  const on = (/** @type {(run: RunView) => void} */ act) => (/** @type {Event} */ e) => {
+    if (stopClick) stop(e);
+    act(run);
+  };
+  return html`<button type="button" aria-label=${'Split ' + run.title} onClick=${on(onSplit)} onKeyDown=${stopClick ? stop : undefined}>Split</button>
+    <button type="button" aria-label=${'Continue ' + run.title} onClick=${on(onContinue)} onKeyDown=${stopClick ? stop : undefined}>Continue</button>`;
+}
+
 // What the last Check PR found, in the Run detail. The live region is always present so a result is announced when it arrives.
 /** @param {{ run: RunView, state: PrDetailsState | null, onFix: (run: RunView, scope: string) => void }} props */
 function PrDetails({ run, state, onFix }) {
@@ -327,6 +340,8 @@ const pauseLabel = (run) => {
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onCheckDetails
  * @param {(run: RunView) => void} props.onGrant
+ * @param {(run: RunView) => void} props.onSplit
+ * @param {(run: RunView) => void} props.onContinue
  * @param {(run: RunView) => void} props.onSync
  * @param {(run: RunView) => void} props.onClean
  * @param {(run: RunView) => void} props.onAccept
@@ -341,6 +356,8 @@ export function Card({
   onCheckPr,
   onCheckDetails,
   onGrant,
+  onSplit,
+  onContinue,
   onSync,
   onClean,
   onAccept,
@@ -379,6 +396,7 @@ export function Card({
       }
       ${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} />`}
       ${canCopyPrompt(run) && html`<${CopyPrompt} run=${run} />`}
+      <${SizeButtons} run=${run} onSplit=${onSplit} onContinue=${onContinue} />
       ${
         canGrantLoop(run) &&
         html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${(
@@ -475,6 +493,8 @@ export function Welcome({ onHelp }) {
  * @property {(run: RunView) => Promise<void>} clean
  * @property {(run: RunView) => Promise<void>} accept
  * @property {(run: RunView) => Promise<void>} grant
+ * @property {(run: RunView) => Promise<void>} split
+ * @property {(run: RunView) => Promise<void>} continueRun
  * @property {(run: RunView) => Promise<void>} remove
  * @property {(project: ProjectView) => Promise<void>} deleteAll
  * @property {(projectId: string) => void} toggleRow
@@ -539,7 +559,7 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
         return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>
         <div class="column-name" aria-hidden="true">${c.label}</div>
         ${c.key === 'done' && doneCount > 0 && html`<button type="button" aria-label=${'Delete all Done Runs of ' + project.name} onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
-        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} onGrant=${actions.grant} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
         ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
       </div>`;
       })}</div>`
@@ -749,8 +769,21 @@ const labelSegments = (label) =>
  * @param {PrDetailsState | null} props.prDetails
  * @param {(run: RunView, scope: string) => void} props.onFix
  * @param {(run: RunView) => void} props.onGrant
+ * @param {(run: RunView) => void} props.onSplit
+ * @param {(run: RunView) => void} props.onContinue
  */
-export function Detail({ run, projectName, onClose, onCheckPr, onCheckDetails, onFix, prDetails, onGrant }) {
+export function Detail({
+  run,
+  projectName,
+  onClose,
+  onCheckPr,
+  onCheckDetails,
+  onFix,
+  prDetails,
+  onGrant,
+  onSplit,
+  onContinue,
+}) {
   const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ key: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
@@ -817,7 +850,7 @@ export function Detail({ run, projectName, onClose, onCheckPr, onCheckDetails, o
       <div class="meta"><span>Project: ${projectName}</span><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${updatedAge === null ? 'unknown' : ago(updatedAge)}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
-      ${(canGrantLoop(run) || canCheckPr(run) || canCopyPrompt(run)) && html`<div class="actions">${canCopyPrompt(run) && html`<${CopyPrompt} run=${run} />`}${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} stopClick=${false} />`}${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button>`}</div>`}
+      ${(canGrantLoop(run) || canCheckPr(run) || canCopyPrompt(run) || canAnswerSize(run)) && html`<div class="actions">${canCopyPrompt(run) && html`<${CopyPrompt} run=${run} />`}<${SizeButtons} run=${run} onSplit=${onSplit} onContinue=${onContinue} stopClick=${false} />${canCheckPr(run) && html`<${CheckPrButton} run=${run} onCheck=${onCheckDetails} stopClick=${false} />`}${canGrantLoop(run) && html`<button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button>`}</div>`}
     </header>
     <${PrDetails} run=${run} state=${prDetails} onFix=${onFix} />
     <${Timeline} run=${run} />

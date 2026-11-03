@@ -356,8 +356,9 @@ const waitsForSize = (old) =>
 
 /** @type {Partial<Run>} */
 const released = { status: 'running', waiting_on_human: false, waiting_reason: '' };
+export const SPLIT_DONE_REASON = 'Split done: ready for an agent';
 /** @type {Partial<Run>} */
-const handedOver = { status: 'waiting', waiting_on_human: false, waiting_reason: 'Split done: ready for an agent' };
+const handedOver = { status: 'waiting', waiting_on_human: false, waiting_reason: SPLIT_DONE_REASON };
 
 // Drops the Tickets not yet done from the Run and returns their links. The command line releases the Run to running. The Dashboard's `handOver` leaves it waiting for an agent instead, not on the user (like a Fix, ADR 0034), and `updated` is the record time the user saw: a Run that changed since is refused.
 /**

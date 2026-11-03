@@ -204,8 +204,14 @@ function App() {
                   ? 'clean up the Run'
                   : name === 'extra-loop'
                     ? 'grant the extra loop'
-                    : 'accept the Check'),
-        response.ok ? (name === 'clean' ? text : done + '.') : text,
+                    : name === 'continue'
+                      ? 'continue the Run'
+                      : 'accept the Check'),
+        response.ok
+          ? name === 'clean'
+            ? text
+            : done + (name === 'continue' ? '. The agent picks it up on its next step.' : '.')
+          : text,
         'Close',
         false,
         true,
@@ -219,7 +225,9 @@ function App() {
               ? 'clean up the Run'
               : name === 'extra-loop'
                 ? 'grant the extra loop'
-                : 'accept the Check'),
+                : name === 'continue'
+                  ? 'continue the Run'
+                  : 'accept the Check'),
         run.title,
         'Close',
         false,
@@ -334,6 +342,18 @@ function App() {
       'Extra loop granted',
       '?updated=' + encodeURIComponent(run.updated),
     );
+  // The answers to the Run size question (ADR 0035); the server refuses a Run that changed since the page showed it.
+  const continueRun = (/** @type {RunView} */ run) =>
+    runAction(
+      run,
+      'continue',
+      'Accept the size and continue Build?',
+      '"' + run.title + '" goes on in this Run; the size question is not asked again.',
+      'Continue',
+      'Continued',
+      '?updated=' + encodeURIComponent(run.updated),
+    );
+  const splitRun = async () => {}; // wired in the next Ticket
   /**
    * @param {RunView[]} doomed
    * @param {string} message
@@ -531,6 +551,8 @@ function App() {
     clean: cleanRun,
     accept: acceptRun,
     grant: grantRun,
+    split: splitRun,
+    continueRun,
     remove: (run) =>
       removeRuns(
         [run],
@@ -563,7 +585,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

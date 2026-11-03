@@ -436,6 +436,15 @@ export const canCheckPr = (run) =>
 // Mirrors FIX_WAITING_REASON in src/run-follow-up.js; the page cannot import Node code.
 export const FIX_WAITING_REASON = 'Follow-up Rework ready for an agent';
 
+// Mirror SIZE_WAIT_REASON in src/run-size.js and SPLIT_DONE_REASON in src/run-lifecycle.js; a unit test keeps them equal.
+export const SIZE_WAIT_REASON = 'Run size over the limit: split the remaining Tickets into a new Run?';
+export const SPLIT_DONE_REASON = 'Split done: ready for an agent';
+
+// Whether the Run waits for the user's answer to the Run size question (ADR 0035): Split or Continue.
+/** @param {RunView} run */
+export const canAnswerSize = (run) =>
+  !run.unreadable && run.waiting === true && run.column === 'build' && run.reason === SIZE_WAIT_REASON;
+
 // The prompt that hands a Run to an agent.
 /** @param {RunView} run */
 export const agentPrompt = (run) => '/factory continue ' + run.id;

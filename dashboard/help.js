@@ -71,6 +71,10 @@ export const HELP_SECTIONS = [
       },
       { term: 'Grant extra loop', text: 'allow one more Check loop. Shown while a Run waits at the Check loop limit.' },
       {
+        term: 'Split and Continue',
+        text: 'answer the Run size question. Split moves the Tickets that are not done to a new Run and leaves the Run waiting for an agent; Continue accepts the size and goes on in this Run. Shown while a Run waits in Build for that answer.',
+      },
+      {
         term: 'Check PR',
         text: 'read the pull request now and list its problems in the Run detail. Shown on a Done Run with an open pull request and on a Run in Follow-up.',
       },
