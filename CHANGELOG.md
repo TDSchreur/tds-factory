@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-03
+
+### Added
+- `tds-factory doctor` reports a `scratch-ignore` check: for a project with a Local tracker it says whether git ignores `.scratch/`. It never makes the report fail, and the factory Skill's Preflight adds `.scratch/` to `.gitignore` and `.git/info/exclude` when it is missing.
+
+### Changed
+- The Run detail drawer is wider on desktop, and the token usage table headers no longer break inside words; the table stacks sooner when it does not fit.
+
+### Fixed
+- Dragging a text selection out of the Run detail drawer and releasing it on the backdrop no longer closes the drawer.
+
 ## [0.6.4] - 2026-11-03
 
 ### Changed
