@@ -437,7 +437,9 @@ test('the Run detail opens as a drawer over a board that keeps its width', async
     await page.execute(
       "document.querySelector('[data-id=b11]').scrollIntoView(); document.querySelector('[data-id=b11]').click()",
     );
-    await page.waitFor("return document.querySelector('#detail h4') !== null");
+    await page.waitFor(
+      "return document.querySelector('#detail h4') !== null && document.getElementById('detail').open",
+    );
     assert.deepEqual(await columns(), before, 'the board does not move or shrink');
     const box = await page.execute(
       "const d = document.getElementById('detail').getBoundingClientRect(); return { open: document.getElementById('detail').open, dRight: d.right, vw: document.documentElement.clientWidth, dTop: d.top, dBottom: d.bottom, w: innerWidth, h: innerHeight, dWidth: d.width }",
