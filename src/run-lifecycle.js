@@ -21,9 +21,11 @@ import {
   loops,
   isTrack,
 } from './run-record.js';
-import { runRoot, changeRun, changeRunning, changeRunningFlow } from './run-folder.js';
+import { runRoot, readRun, changeRun, changeRunning, changeRunningFlow } from './run-folder.js';
 import { fetchOriginDefault, fetchOriginDefaultFlow, mergeProblem, worktreeStateFlow } from './worktrees.js';
 import { finishProblems, clearEvidence } from './evidence.js';
+import { runSize, overLimit, SIZE_WAIT_REASON } from './run-size.js';
+import { appendEvent } from './run-events.js';
 import { newMetrics, moveVisit, firstCheck, recordCauses, REWORK_CAUSES } from './run-metrics.js';
 
 /**
@@ -144,9 +146,33 @@ export function updateRun(projectDir, id, data) {
     if ('status' in data && oneOf(['done', 'abandoned'], old.status))
       throw new Error(`a ${old.status} Run cannot change status`);
     const next = apply(old, ticketCount(old, data));
+    if (growsOverTheLimit(projectDir, id, old, next)) return waitForSize(next);
     return data.status === 'abandoned' ? moveVisit(next, null) : next;
   });
 }
+
+// A Ticket finished in Build while Tickets remain and the size is over the limit: the user decides (ADR 0035). The measuring happens under the Run lock, in the same change.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {Run} old
+ * @param {Run} next
+ */
+function growsOverTheLimit(projectDir, id, old, next) {
+  if (next.stage !== 'build' || next.status !== 'running' || next.size_accepted) return false;
+  const done = next.tickets_done ?? 0;
+  if (done <= (old.tickets_done ?? 0) || done >= (next.tickets_total ?? 0)) return false;
+  const size = runSize(projectDir, id);
+  return size !== undefined && overLimit(size);
+}
+
+/** @param {Run} record @returns {Run} */
+const waitForSize = (record) => ({
+  ...record,
+  status: 'waiting',
+  waiting_on_human: true,
+  waiting_reason: SIZE_WAIT_REASON,
+});
 
 // The count of Tickets follows the Ticket links: a new list sets it, and a count that disagrees with the list is refused.
 /**
@@ -320,6 +346,70 @@ export function reworkRun(projectDir, id, data = {}, causes = []) {
     return { record, activity: 'Rework: back to Build' };
   });
 }
+// The user's answers to a Run that outgrew the size limit in Build (ADR 0035). The commands are for the agent only after the user answered.
+/** @param {Run} old */
+const waitsForSize = (old) =>
+  old.stage === 'build' &&
+  old.status === 'waiting' &&
+  old.waiting_on_human === true &&
+  old.waiting_reason === SIZE_WAIT_REASON;
+
+/** @type {Partial<Run>} */
+const released = { status: 'running', waiting_on_human: false, waiting_reason: '' };
+
+// Drops the Tickets not yet done from the Run and returns their links.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @returns {string[]}
+ */
+export function splitRun(projectDir, id) {
+  /** @type {string[]} */
+  let moved = [];
+  changeRun(projectDir, id, (old) => {
+    if (!waitsForSize(old)) throw new Error('split needs a Run in Build that waits for the Run size answer');
+    const kept = old.tickets?.slice(0, old.tickets_done ?? 0) ?? [];
+    moved = old.tickets?.slice(kept.length) ?? [];
+    return {
+      ...old,
+      ...released,
+      tickets: kept,
+      tickets_total: kept.length,
+      activity: 'Split: the remaining Tickets move to a new Run',
+      updated: new Date().toISOString(),
+    };
+  });
+  appendEvent(readRun(projectDir, id).dir, { type: 'split', moved });
+  return moved;
+}
+
+// Without `accept` only measures; with it records the user's acceptance, which also releases a Run that waits for size.
+/**
+ * @param {string} projectDir
+ * @param {string | undefined} id
+ * @param {{ accept?: boolean }} [options]
+ * @returns {{ files: number, bytes: number } | undefined}
+ */
+export function sizeRun(projectDir, id, { accept = false } = {}) {
+  if (!accept) return runSize(projectDir, id);
+  const size = runSize(projectDir, id);
+  changeRun(projectDir, id, (old) => {
+    if (old.size_accepted) throw new Error('the Run size is already accepted');
+    if (!waitsForSize(old) && !(old.status === 'running' && oneOf(['build', 'check'], old.stage)))
+      throw new Error('size --accept needs a running Run in Build or Check, or one that waits for the Run size answer');
+    const now = new Date().toISOString();
+    return {
+      ...old,
+      ...(waitsForSize(old) ? released : {}),
+      size_accepted: now,
+      activity: 'The user accepted the Run size',
+      updated: now,
+    };
+  });
+  appendEvent(readRun(projectDir, id).dir, { type: 'size-accepted', ...size });
+  return size;
+}
+
 // The user's decision to allow one more Rework (ADR 0024). Not reachable from the command line: only the Dashboard route calls it.
 // `updated` is the record time the user saw; a Run that changed since is refused.
 /**

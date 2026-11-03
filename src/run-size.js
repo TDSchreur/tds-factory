@@ -4,6 +4,11 @@ import { readRun } from './run-folder.js';
 
 export const MAX_DIFF_BYTES = 40 * 1024;
 export const MAX_FILES = 15;
+// The reason a Run waits on the user when it outgrows the limit during Build (ADR 0035); `run split` and `run size --accept` check for it.
+export const SIZE_WAIT_REASON = 'Run size over the limit: split the remaining Tickets into a new Run?';
+
+/** @param {{ files: number, bytes: number }} size */
+export const overLimit = (size) => size.bytes > MAX_DIFF_BYTES || size.files > MAX_FILES;
 
 const LOCKFILES = [
   'package-lock.json',
@@ -57,11 +62,13 @@ export function sizeWarnings(projectDir, id) {
   /** @type {string[]} */
   const warnings = [];
   const { bytes, files } = size;
-  if (bytes > MAX_DIFF_BYTES)
+  // After the user accepted the size, the Run is not told again.
+  if (!record.size_accepted && bytes > MAX_DIFF_BYTES)
     warnings.push(
       `the diff is ${Math.round(bytes / 1024)} KB, above about ${MAX_DIFF_BYTES / 1024} KB, so Check reviewers get it in pieces`,
     );
-  if (files > MAX_FILES) warnings.push(`the diff touches ${files} files, above about ${MAX_FILES}`);
+  if (!record.size_accepted && files > MAX_FILES)
+    warnings.push(`the diff touches ${files} files, above about ${MAX_FILES}`);
   const made = Number(commits.stdout.trim());
   const total = record.tickets_total ?? 0;
   if (total > 1 && made < total)

@@ -196,6 +196,7 @@ import { stages, targets, isStage } from './flow.js';
  * @property {FollowUp} [follow_up]
  * @property {Track} [track]
  * @property {number} [extra_loops]
+ * @property {string} [size_accepted] ISO time at which the user accepted the Run size (ADR 0035).
  * @property {number} [check_loops]
  * @property {Metrics} [metrics]
  * @property {string} worktree Set by `run start`.
@@ -230,6 +231,7 @@ const strings = [
   'pr',
   'worktree',
   'base_sha',
+  'size_accepted',
   'requested_model',
   'requested_effort',
   'observed_model',
@@ -251,7 +253,17 @@ export const trackOf = (record) => (record?.track === 'fast' ? 'fast' : 'full');
 /** @param {string} axis @param {Run | undefined | null} record */
 export const skippable = (axis, record) => axis === 'infrastructure' || (axis === 'spec' && trackOf(record) === 'fast');
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
-export const gated = ['stage', 'track', 'check_loops', 'extra_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
+export const gated = [
+  'stage',
+  'track',
+  'check_loops',
+  'extra_loops',
+  'size_accepted',
+  ...verdicts,
+  'worktree',
+  'base_sha',
+  'follow_up',
+];
 // How many times Check and Follow-up may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
 export const MAX_CHECK_LOOPS = 4;
 // A model belongs to the Stage worker that was asked for or reported it, so a change of Stage clears the three fields and
