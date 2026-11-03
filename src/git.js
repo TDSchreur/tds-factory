@@ -25,6 +25,10 @@ export const gitAsync = (cwd, args, options = {}) =>
       if (!error) return resolve({ status: 0, stdout, stderr });
       const code = /** @type {{ code?: unknown }} */ (error).code;
       if (typeof code === 'number') return resolve({ status: code, stdout, stderr });
+      // A real timeout is marked; a maxBuffer overflow also kills the child but keeps its own code.
+      const failure = /** @type {Error & { killed?: boolean, signal?: string | null, timedOut?: boolean }} */ (error);
+      if (failure.killed === true && failure.signal === 'SIGTERM' && code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
+        failure.timedOut = true;
       resolve({ status: null, stdout, stderr, error });
     });
     // spawnSync gives the child no input and closes its stdin; execFile leaves it open, so a command that reads stdin would hang.
