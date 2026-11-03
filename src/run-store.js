@@ -1,5 +1,5 @@
 /** @import { Run } from './run-record.js' */
-/** @import { PrLookup } from './run-clean.js' */
+/** @import { PrLookup, SyncPrLookup } from './run-clean.js' */
 import path from 'node:path';
 import { followUpRun } from './run-follow-up.js';
 import { summarizeMetrics, totalMetrics } from './run-metrics.js';
@@ -24,7 +24,7 @@ import {
   completeRun,
 } from './run-lifecycle.js';
 import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
-import { removeRun, removeRunFlow, cleanRun, cleanRunFlow, cleanAll } from './run-clean.js';
+import { removeRun, removeRunFlow, cleanRun, cleanRunFlow, cleanAll, ghPrInfoAsync } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
 import { guidesRun } from './guides.js';
 import { sizeWarnings } from './run-size.js';
@@ -103,7 +103,7 @@ export function openRunStore(callerDir) {
     /** @param {string} id @param {(reason: string) => void} [why] @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options] */
     removeAsync: (id, why, options) => runAsync(removeRunFlow(projectDir, id, why, options)),
     /** @param {string | undefined} id @param {{ prState?: PrLookup }} [options] */
-    cleanAsync: (id, { prState } = {}) => runAsync(cleanRunFlow(projectDir, callerDir, id, prState)),
+    cleanAsync: (id, { prState } = {}) => runAsync(cleanRunFlow(projectDir, callerDir, id, prState ?? ghPrInfoAsync)),
     list: () => listRuns(runsDir),
     /** @param {string} [id] */
     stats: async (id) => {
@@ -139,9 +139,9 @@ export function openRunStore(callerDir) {
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     /** @param {string} id @param {(reason: string) => void} [why] @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options] */
     remove: (id, why, options) => removeRun(projectDir, id, why, options),
-    /** @param {string | undefined} id @param {{ prState?: PrLookup }} [options] */
+    /** @param {string | undefined} id @param {{ prState?: SyncPrLookup }} [options] */
     clean: (id, { prState } = {}) => cleanRun(projectDir, callerDir, id, prState),
-    /** @param {{ prState?: PrLookup }} [options] */
+    /** @param {{ prState?: SyncPrLookup }} [options] */
     cleanAll: ({ prState } = {}) => cleanAll(projectDir, callerDir, prState),
   };
 }

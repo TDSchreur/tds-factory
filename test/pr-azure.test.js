@@ -2,7 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { launch, matches, name, parseStatus, repoOfRemote, stateAsync, statusAsync, view } from '../src/pr-azure.js';
+import {
+  launch,
+  matches,
+  name,
+  parseStatus,
+  repoOfRemote,
+  stateAsync,
+  statusAsync,
+  view,
+  viewAsync,
+} from '../src/pr-azure.js';
 
 // Recorded `az repos pr show` and `az repos pr policy list` output from the sandbox repository Kahoot (see the README of the fixtures folder).
 const DIR = new URL('./fixtures/pr-status/azure/', import.meta.url);
@@ -400,4 +410,12 @@ test('a status that is a prototype key is not a state', () => {
       }),
     /incomplete Azure DevOps PR state/,
   );
+});
+
+test('viewAsync gives the same state and head as view, from the injected run', async () => {
+  const wanted = { state: 'OPEN', headRefOid: fixture('passing').pr.lastMergeSourceCommit.commitId };
+  assert.deepEqual(await viewAsync(link('passing'), { run: az('passing') }), wanted);
+  assert.equal((await viewAsync(link('completed'), { run: az('completed') })).state, 'MERGED');
+  await assert.rejects(viewAsync('https://github.com/o/r/pull/1', { run: az('passing') }), /not an Azure DevOps/);
+  await assert.rejects(viewAsync(link('passing'), { run: az('passing', { pr: { status: 'weird' } }) }), /incomplete/);
 });

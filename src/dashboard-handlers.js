@@ -10,15 +10,12 @@ import { messageOf } from './narrow.js';
 import { interpretRun, str } from './dashboard-view.js';
 import { ghChecks, ghPrDetails } from './dashboard-pr-views.js';
 
-// Runs whose accept is under way: a second concurrent accept must not pass the checks and then reset the Run to waiting when it fails.
-/** @type {Set<string>} */
-const accepting = new Set();
-
 /**
  * What every handler gets: the services of one Dashboard and the request being answered.
  * @typedef {object} DashboardContext
  * @property {ReturnType<typeof openRunStore>} store
  * @property {ReturnType<typeof openRunStore>} mainStore Clean-up runs from the main checkout, also when the Dashboard was started inside a Run worktree.
+ * @property {Set<string>} inFlight Ids of the Runs with an action under way; one Dashboard's set, not the process's.
  * @property {string} token
  * @property {string} projectDir
  * @property {(url: string, head: string) => Promise<unknown>} prMerge
@@ -70,6 +67,21 @@ const decodeId = (ctx, raw) => {
     return undefined;
   }
 };
+// One action at a time per Run: a second one is answered 409 instead of overlapping the first one's git calls. Released in finally.
+/**
+ * @param {DashboardContext} ctx
+ * @param {string} id
+ * @param {() => Promise<void> | void} work
+ */
+const exclusive = async ({ inFlight, send }, id, work) => {
+  if (inFlight.has(id)) return send(409, 'text/plain', 'another action on this Run is already running');
+  inFlight.add(id);
+  try {
+    await work();
+  } finally {
+    inFlight.delete(id);
+  }
+};
 // The Run of the path's id and its interpretation; a missing Run is answered with 404.
 /** @param {DashboardContext} ctx */
 const findRun = async (ctx) => {
@@ -95,9 +107,14 @@ const DELETE_STATUSES = {
 
 /** @type {Handler} */
 export async function deleteRun(ctx) {
-  const { send, store, res } = ctx;
   const id = decodeId(ctx, ctx.path.slice('/api/runs/'.length));
   if (id === undefined) return;
+  await exclusive(ctx, id, () => removeRun(ctx, id));
+}
+
+/** @param {DashboardContext} ctx @param {string} id */
+async function removeRun(ctx, id) {
+  const { send, store, res } = ctx;
   const params = query(ctx);
   const options = [...params.entries()];
   if (
@@ -167,10 +184,17 @@ async function prMatchesRun({ send }, v, eligibility) {
 
 /** @type {Handler} */
 export async function mergeRun(ctx) {
+  const id = decodeId(ctx, ctx.match[1]);
+  if (id === undefined) return;
+  await exclusive(ctx, id, async () => {
+    const run = await findRun(ctx);
+    if (run) await mergeChecked(ctx, run.id, run.view);
+  });
+}
+
+/** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
+async function mergeChecked(ctx, id, v) {
   const { send, store, prViews, prMerge } = ctx;
-  const run = await findRun(ctx);
-  if (!run) return;
-  const { id, view: v } = run;
   const provider = providerFor(v.pr);
   if (v.status !== 'done' || !provider) return send(409, 'text/plain', 'cannot merge this Run');
   if (!can(v.pr, 'merge')) return send(409, 'text/plain', `${provider.title} cannot merge from the Dashboard`);
@@ -223,49 +247,53 @@ function grantExtraLoop(ctx, id, v) {
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
 async function acceptCheck(ctx, id, v) {
   const { send, store } = ctx;
-  if (accepting.has(id)) return send(409, 'text/plain', 'another action on this Run is already running');
   if (!v.waiting || v.column !== 'check')
     return send(409, 'text/plain', 'only a Run in Check that waits on you can be accepted');
   // The user decided on the Run as the page showed it; a change since then needs a new look.
   if (query(ctx).get('updated') !== v.updated)
     return send(409, 'text/plain', 'the Run changed since you looked at it; reload and look again');
-  accepting.add(id);
+  const { problems } = await store.mergeEligibilityAsync(id);
+  if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
+  // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.
+  const reason = v.reason || 'accept the Check or send it back to Build';
+  store.update(id, { status: 'running', activity: 'The user accepted the Check on the Dashboard' });
   try {
-    const { problems } = await store.mergeEligibilityAsync(id);
-    if (!problems.length) return send(409, 'text/plain', 'the Check is already clean or accepted');
-    // A Run changes only while running, so the answer to the wait first releases it, as the Factory Skill does.
-    const reason = v.reason || 'accept the Check or send it back to Build';
-    store.update(id, { status: 'running', activity: 'The user accepted the Check on the Dashboard' });
+    await store.acceptAsync(id, {
+      findings: problems.join('; '),
+      decision: 'Continue to Finish with the open findings. Accepted by the user on the Dashboard.',
+    });
+  } catch (err) {
     try {
-      await store.acceptAsync(id, {
-        findings: problems.join('; '),
-        decision: 'Continue to Finish with the open findings. Accepted by the user on the Dashboard.',
-      });
-    } catch (err) {
       store.update(id, { status: 'waiting', waiting_reason: reason });
-      throw err;
+    } catch (rollback) {
+      // The user still gets the accept's own error; the cause of the failed rollback goes to the console.
+      logFailure('putting the Run back to waiting after a failed accept', rollback);
     }
-    send(200, 'text/plain', 'accepted');
-  } finally {
-    accepting.delete(id);
+    throw err;
   }
+  send(200, 'text/plain', 'accepted');
 }
 
 /** @type {Handler} */
 export async function runAction(ctx) {
-  const run = await findRun(ctx);
-  if (!run) return;
-  const { id, view: v } = run;
-  if (v.unreadable) return ctx.send(409, 'text/plain', 'the Run record cannot be read');
-  try {
-    const action = ctx.match[2];
-    if (action === 'sync') return await syncRun(ctx, id);
-    if (action === 'clean') return await cleanRun(ctx, id);
-    if (action === 'extra-loop') return grantExtraLoop(ctx, id, v);
-    return await acceptCheck(ctx, id, v);
-  } catch (err) {
-    ctx.send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
-  }
+  const id = decodeId(ctx, ctx.match[1]);
+  if (id === undefined) return;
+  // The guard comes first and the Run is read inside it, so every check below sees the state after any earlier action.
+  await exclusive(ctx, id, async () => {
+    const run = await findRun(ctx);
+    if (!run) return;
+    const v = run.view;
+    if (v.unreadable) return ctx.send(409, 'text/plain', 'the Run record cannot be read');
+    try {
+      const action = ctx.match[2];
+      if (action === 'sync') return await syncRun(ctx, id);
+      if (action === 'clean') return await cleanRun(ctx, id);
+      if (action === 'extra-loop') return grantExtraLoop(ctx, id, v);
+      return await acceptCheck(ctx, id, v);
+    } catch (err) {
+      ctx.send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
+    }
+  });
 }
 
 /** @type {Handler} */

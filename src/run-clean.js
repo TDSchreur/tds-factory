@@ -2,7 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { git as runGit, gitStep, callStep, runSync } from './git.js';
 /** @import { Step } from './git.js' */
-/** @typedef {(url: string) => { state: string, head?: string } | undefined} PrLookup */
+/**
+ * @typedef {{ state: string, head?: string }} PrInfo
+ * @typedef {(url: string) => PrInfo | undefined} SyncPrLookup What the CLI and Doctor use.
+ * @typedef {(url: string) => PrInfo | undefined | Promise<PrInfo | undefined>} PrLookup A lookup may answer at once or later; the Dashboard's clean awaits it.
+ */
 import { codeOf, messageOf, oneOf } from './narrow.js';
 import { statuses, validId } from './run-record.js';
 import { providerFor } from './pr-provider.js';
@@ -89,16 +93,31 @@ export function* removeRunFlow(projectDir, id, why = () => {}, { discardChanges 
  */
 export const removeRun = (projectDir, id, why, options) => runSync(removeRunFlow(projectDir, id, why, options));
 
+// The answer of a provider's view as a PrInfo; undefined when its state is not a string. Shared by the sync and async lookups.
+/** @param {{ state?: unknown, headRefOid?: string }} view @returns {PrInfo | undefined} */
+const prInfoOf = ({ state, headRefOid }) => (typeof state === 'string' ? { state, head: headRefOid } : undefined);
+
 // State and head commit of a PR as its host reports them; undefined when the host cannot say or no provider handles the link.
-/** @type {PrLookup} */
+/** @type {(url: string) => PrInfo | undefined} */
 function ghPrInfo(url) {
   const provider = providerFor(url);
   if (!provider) return undefined;
   try {
-    const { state, headRefOid } = provider.view(url);
-    return typeof state === 'string' ? { state, head: headRefOid } : undefined;
+    return prInfoOf(provider.view(url));
   } catch {
     // A PR that cannot be looked up is unknown; the caller then keeps the Run's worktree.
+    return undefined;
+  }
+}
+// The same without blocking the event loop, for the Dashboard; undefined too when the provider has no viewAsync.
+/** @type {(url: string) => Promise<PrInfo | undefined>} */
+export async function ghPrInfoAsync(url) {
+  const provider = providerFor(url);
+  if (!provider?.viewAsync) return undefined;
+  try {
+    return prInfoOf(await provider.viewAsync(url));
+  } catch {
+    // Unknown, like the sync lookup: the caller then keeps the Run's worktree.
     return undefined;
   }
 }
@@ -177,7 +196,7 @@ export function* cleanRunFlow(projectDir, callerDir, rawId, prState = ghPrInfo) 
  * @param {string} projectDir
  * @param {string} callerDir
  * @param {string | undefined} rawId
- * @param {PrLookup} [prState]
+ * @param {SyncPrLookup} [prState]
  */
 export const cleanRun = (projectDir, callerDir, rawId, prState) =>
   runSync(cleanRunFlow(projectDir, callerDir, rawId, prState));
@@ -185,7 +204,7 @@ export const cleanRun = (projectDir, callerDir, rawId, prState) =>
 // Ids of Runs whose PR is merged but whose worktree or branch is still there. Doctor reports them; nothing is changed.
 /**
  * @param {string} callerDir
- * @param {PrLookup} [prState]
+ * @param {SyncPrLookup} [prState]
  */
 export function mergedLeftovers(callerDir, prState = ghPrInfo) {
   /** @type {string} */
@@ -219,7 +238,7 @@ export function mergedLeftovers(callerDir, prState = ghPrInfo) {
 /**
  * @param {string} projectDir
  * @param {string} callerDir
- * @param {PrLookup} [prState]
+ * @param {SyncPrLookup} [prState]
  */
 export function cleanAll(projectDir, callerDir, prState) {
   if (!fs.existsSync(path.join(projectDir, '.factory', 'runs'))) return [];

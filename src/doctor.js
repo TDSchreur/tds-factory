@@ -236,7 +236,7 @@ function binaryCheck(agent) {
  * @param {string} options.projectDir
  * @param {string} [options.agent]
  * @param {string} [options.homeDir]
- * @param {import('./run-clean.js').PrLookup} [options.prState]
+ * @param {import('./run-clean.js').SyncPrLookup} [options.prState]
  * @param {NodeJS.ProcessEnv} [options.env]
  */
 export function doctor({ projectDir, agent, homeDir = os.homedir(), prState, env = process.env }) {

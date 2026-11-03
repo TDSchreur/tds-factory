@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseStatus, statusAsync } from '../src/pr-github.js';
+import { parseStatus, statusAsync, viewAsync } from '../src/pr-github.js';
 import { providerFor } from '../src/pr-provider.js';
 
 const URL_ = 'https://github.com/o/r/pull/1';
@@ -233,4 +233,19 @@ test('statusAsync refuses a link that is not a GitHub pull request, and the seam
     /not a GitHub pull request/,
   );
   assert.equal(typeof providerFor(URL_)?.statusAsync, 'function');
+});
+
+test('viewAsync asks gh for the state and head and gives the recorded answer back', async () => {
+  const recorded = { state: 'MERGED', headRefOid: real().headRefOid ?? 'a'.repeat(40) };
+  /** @type {string[][]} */
+  const calls = [];
+  const out = await viewAsync(URL_, {
+    run: async (args) => {
+      calls.push(args);
+      return { stdout: JSON.stringify(recorded) };
+    },
+  });
+  assert.deepEqual(out, recorded);
+  assert.deepEqual(calls, [['pr', 'view', URL_, '--json', 'state,headRefOid']]);
+  await assert.rejects(viewAsync(URL_, { run: async () => ({ stdout: 'not json' }) }), SyntaxError);
 });
