@@ -1,9 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { utimesSync } from 'node:fs';
+import { platform } from 'node:os';
 import { openProjectRegistry, projectId, factoryConfigDir } from '../src/project-registry.js';
 import { repo, linked, tempDir } from './git-repo.js';
 
@@ -21,7 +31,7 @@ test('a Project joins once and is listed with its id and path', () => {
   reg.join(main);
   assert.deepEqual(project, { id: projectId(main), path: main });
   assert.deepEqual(reg.list(), [project]);
-  assert.match(project?.id ?? '', /^[0-9a-f]{8}$/);
+  assert.match(project?.id ?? '', /^[0-9a-f]{12}$/);
   assert.deepEqual(JSON.parse(readFileSync(join(dir, 'projects.json'), 'utf8')), { projects: [main] });
 });
 
@@ -57,6 +67,24 @@ test('a write leaves no temporary file behind', () => {
   reg.join(repo());
   reg.writeState({ pid: 1, port: 4300, version: '1.0.0' });
   assert.deepEqual(readdirSync(dir).sort(), ['dashboard.json', 'projects.json']);
+});
+
+test('registry and file modes are private on non-Windows hosts', { skip: platform() === 'win32' }, () => {
+  const { registry: reg, dir } = registry();
+  reg.join(repo());
+  reg.writeState({ pid: 1, port: 4300, version: '1.0.0' });
+  assert.equal(lstatSync(dir).mode & 0o777, 0o700);
+  assert.equal(lstatSync(join(dir, 'projects.json')).mode & 0o777, 0o600);
+  assert.equal(lstatSync(join(dir, 'dashboard.json')).mode & 0o777, 0o600);
+});
+
+test('an existing staging path is never followed', () => {
+  const { registry: reg } = registry();
+  const target = join(tempDir('registry-target-'), 'written-by-link');
+  const trap = join(reg.dir, `projects.json.${process.pid}.tmp`);
+  symlinkSync(target, trap);
+  reg.join(repo());
+  assert.equal(existsSync(target), false);
 });
 
 test('a corrupt registry reads as empty with a warning and is kept aside when a Project joins', () => {
@@ -174,4 +202,44 @@ test('a lock that stays held is a warning and the join gives up without throwing
   assert.equal(reg.join(repo()), undefined);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /locked/);
+});
+
+test('a lock that changed owners while held is not removed on release', async () => {
+  const dir = tempDir('registry-lock-token-');
+  const main = repo();
+  const script = `import { openProjectRegistry } from ${JSON.stringify(new URL('../src/project-registry.js', import.meta.url).href)};
+    const reg = openProjectRegistry({ dir: process.argv[1], lockWaitMs: 2000, warn: (m) => console.error(m) });
+    reg.join(process.argv[2]);`;
+  writeFileSync(join(dir, 'projects.json.lock'), 'foreign-token');
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(join(dir, 'projects.json.lock'), old, old);
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script, dir, main], { stdio: 'pipe' });
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  writeFileSync(join(dir, 'projects.json.lock'), 'other-owner');
+  const code = await new Promise((resolve) => child.on('close', resolve));
+  assert.equal(code, 0);
+  assert.equal(readFileSync(join(dir, 'projects.json.lock'), 'utf8'), 'other-owner');
+});
+
+test('join warns and keeps the first path when another path has the same id', () => {
+  const { dir, warnings } = registry();
+  const idOf = () => 'same-id';
+  const reg = openProjectRegistry({ dir, warn: (m) => warnings.push(m), idOf });
+  const first = join(tempDir('registry-collide-'), 'a');
+  const second = join(tempDir('registry-collide-'), 'b');
+  mkdirSync(first, { recursive: true });
+  mkdirSync(second, { recursive: true });
+  assert.deepEqual(reg.join(first), { id: 'same-id', path: first });
+  assert.equal(reg.join(second), undefined);
+  assert.deepEqual(reg.list(), [{ id: 'same-id', path: first }]);
+  assert.match(warnings[0] ?? '', /same id/);
+});
+
+test('join from a non-repository path never throws and normalizes the path fallback', () => {
+  const { registry: reg } = registry();
+  const root = tempDir('registry-fallback-');
+  const nested = join(root, 'a', '..', 'b');
+  mkdirSync(nested, { recursive: true });
+  const project = reg.join(nested);
+  assert.deepEqual(project, { id: projectId(join(root, 'b')), path: join(root, 'b') });
 });

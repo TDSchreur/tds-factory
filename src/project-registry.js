@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mainCheckout } from './run-folder.js';
 import { codeOf, isMissing, messageOf } from './narrow.js';
 
@@ -18,18 +18,42 @@ export function factoryConfigDir({ env = process.env, platform = process.platfor
 }
 
 /** A short hash of the main checkout path. @param {string} projectPath */
-export const projectId = (projectPath) => createHash('sha1').update(projectPath).digest('hex').slice(0, 8);
+export const projectId = (projectPath) => createHash('sha1').update(projectPath).digest('hex').slice(0, 12);
+
+const DIR_MODE = 0o700;
+const FILE_MODE = 0o600;
+
+/** @param {string} dir */
+function ensurePrivateDir(dir) {
+  if (fs.existsSync(dir)) return;
+  fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  try {
+    fs.chmodSync(dir, DIR_MODE);
+  } catch {
+    // best effort on hosts that do not apply POSIX modes
+  }
+}
 
 /** @param {string} file @param {unknown} value */
 function writeAtomic(file, value) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const staging = `${file}.${process.pid}.tmp`;
-  try {
-    fs.writeFileSync(staging, `${JSON.stringify(value, null, 2)}\n`);
-    fs.renameSync(staging, file);
-  } catch (err) {
-    fs.rmSync(staging, { force: true });
-    throw err;
+  ensurePrivateDir(path.dirname(file));
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  for (;;) {
+    const staging = `${file}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`;
+    try {
+      fs.writeFileSync(staging, text, { flag: 'wx', mode: FILE_MODE });
+      fs.renameSync(staging, file);
+      try {
+        fs.chmodSync(file, FILE_MODE);
+      } catch {
+        // best effort on hosts that do not apply POSIX modes
+      }
+      return;
+    } catch (err) {
+      fs.rmSync(staging, { force: true });
+      if (codeOf(err) === 'EEXIST') continue;
+      throw err;
+    }
   }
 }
 
@@ -42,37 +66,116 @@ const LOCK_RETRY_MS = 15;
 
 /** @param {number} ms */
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+/** @param {number} ms */
+const sleepAsync = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** @param {string} lockFile */
+const lockToken = (lockFile) => `${process.pid}:${randomBytes(16).toString('hex')}:${path.basename(lockFile)}`;
+
+/** @param {string} lockFile */
+const takeoverLockName = (lockFile) => `${lockFile}.stale-${process.pid}-${randomBytes(8).toString('hex')}`;
+
+/** @param {string} lockFile */
+function tryTakeOverStaleLock(lockFile) {
+  const age = Date.now() - fs.statSync(lockFile).mtimeMs;
+  if (age <= LOCK_STALE_MS) return false;
+  const takeover = takeoverLockName(lockFile);
+  fs.renameSync(lockFile, takeover);
+  fs.rmSync(takeover, { force: true });
+  return true;
+}
+
+/**
+ * @param {string} lockFile
+ * @param {number} waitMs
+ * @param {(ms: number) => void} wait
+ */
+function acquireLockSync(lockFile, waitMs, wait) {
+  ensurePrivateDir(path.dirname(lockFile));
+  const token = lockToken(lockFile);
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
+      return token;
+    } catch (err) {
+      if (codeOf(err) !== 'EEXIST') throw err;
+      try {
+        if (!tryTakeOverStaleLock(lockFile) && Date.now() >= deadline)
+          throw new Error(`${lockFile} is locked by another process`);
+      } catch (inner) {
+        if (!isMissing(inner)) throw inner;
+      }
+      wait(LOCK_RETRY_MS);
+    }
+  }
+}
+
+/**
+ * @param {string} lockFile
+ * @param {number} waitMs
+ * @param {(ms: number) => Promise<void>} wait
+ */
+async function acquireLockAsync(lockFile, waitMs, wait) {
+  ensurePrivateDir(path.dirname(lockFile));
+  const token = lockToken(lockFile);
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
+      return token;
+    } catch (err) {
+      if (codeOf(err) !== 'EEXIST') throw err;
+      try {
+        if (!tryTakeOverStaleLock(lockFile) && Date.now() >= deadline)
+          throw new Error(`${lockFile} is locked by another process`);
+      } catch (inner) {
+        if (!isMissing(inner)) throw inner;
+      }
+      await wait(LOCK_RETRY_MS);
+    }
+  }
+}
+
+/** @param {string} lockFile @param {string} token */
+function releaseLock(lockFile, token) {
+  try {
+    if (fs.readFileSync(lockFile, 'utf8') === token) fs.rmSync(lockFile, { force: true });
+  } catch (err) {
+    if (!isMissing(err)) throw err;
+  }
+}
 
 // Runs fn while holding an exclusive lock file (created with `wx`) next to the registry, so two processes cannot both read the old list and drop each other's Project. A lock older than LOCK_STALE_MS belongs to a dead process and is taken over. Throws when the lock stays held for waitMs.
 /** @template T @param {string} lockFile @param {number} waitMs @param {() => T} fn @returns {T} */
 function withLock(lockFile, waitMs, fn) {
-  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
-  const deadline = Date.now() + waitMs;
-  for (;;) {
-    try {
-      fs.closeSync(fs.openSync(lockFile, 'wx'));
-      break;
-    } catch (err) {
-      if (codeOf(err) !== 'EEXIST') throw err;
-      try {
-        if (Date.now() - fs.statSync(lockFile).mtimeMs > LOCK_STALE_MS) fs.rmSync(lockFile, { force: true });
-        else if (Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
-        else sleep(LOCK_RETRY_MS);
-      } catch (inner) {
-        if (!isMissing(inner)) throw inner;
-      }
-    }
-  }
+  const token = acquireLockSync(lockFile, waitMs, sleep);
   try {
     return fn();
   } finally {
-    fs.rmSync(lockFile, { force: true });
+    releaseLock(lockFile, token);
   }
 }
 
 // Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
-/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number }} [options] */
-export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {}, lockWaitMs = LOCK_WAIT_MS } = {}) {
+/** @template T @param {string} lockFile @param {number} waitMs @param {() => Promise<T>} fn @returns {Promise<T>} */
+async function withLockAsync(lockFile, waitMs, fn) {
+  const token = await acquireLockAsync(lockFile, waitMs, sleepAsync);
+  try {
+    return await fn();
+  } finally {
+    releaseLock(lockFile, token);
+  }
+}
+
+// Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
+/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number, idOf?: (projectPath: string) => string }} [options] */
+export function openProjectRegistry({
+  dir = factoryConfigDir(),
+  warn = () => {},
+  lockWaitMs = LOCK_WAIT_MS,
+  idOf = projectId,
+} = {}) {
   const registryFile = path.join(dir, 'projects.json');
   const lockFile = `${registryFile}.lock`;
   const stateFile = path.join(dir, 'dashboard.json');
@@ -103,22 +206,29 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {},
   return {
     dir,
     /** @returns {Project[]} */
-    list: () => read().paths.map((p) => ({ id: projectId(p), path: p })),
+    list: () => read().paths.map((p) => ({ id: idOf(p), path: p })),
     /** Adds the main checkout of projectDir. @param {string} projectDir @returns {Project | undefined} */
     join(projectDir) {
-      const main = mainCheckout(projectDir).dir;
       try {
+        const main = mainCheckout(projectDir).dir;
+        const id = idOf(main);
         withLock(lockFile, lockWaitMs, () => {
           const { paths, corrupt } = read();
           if (corrupt) {
             fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
             warn(`kept the unreadable registry as ${registryFile}.corrupt`);
           }
+          const collision = paths.find((p) => p !== main && idOf(p) === id);
+          if (collision) {
+            warn(`cannot register ${main} in ${registryFile}: ${collision} has the same id (${id})`);
+            return;
+          }
           if (!paths.includes(main)) save([...paths, main]);
         });
-        return { id: projectId(main), path: main };
+        if (read().paths.includes(main)) return { id, path: main };
+        return undefined;
       } catch (err) {
-        warn(`cannot register ${main} in ${registryFile}: ${messageOf(err)}`);
+        warn(`cannot register ${projectDir} in ${registryFile}: ${messageOf(err)}`);
         return undefined;
       }
     },
@@ -127,7 +237,22 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {},
       try {
         return withLock(lockFile, lockWaitMs, () => {
           const { paths } = read();
-          const kept = paths.filter((p) => projectId(p) !== id);
+          const kept = paths.filter((p) => idOf(p) !== id);
+          if (kept.length === paths.length) return false;
+          save(kept);
+          return true;
+        });
+      } catch (err) {
+        warn(`cannot update ${registryFile}: ${messageOf(err)}`);
+        return false;
+      }
+    },
+    /** @param {string} id */
+    async removeAsync(id) {
+      try {
+        return await withLockAsync(lockFile, lockWaitMs, async () => {
+          const { paths } = read();
+          const kept = paths.filter((p) => idOf(p) !== id);
           if (kept.length === paths.length) return false;
           save(kept);
           return true;
