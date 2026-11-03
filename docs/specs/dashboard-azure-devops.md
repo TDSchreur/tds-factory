@@ -6,7 +6,7 @@ The Dashboard shows the status of a Run's pull request (checks, merge conflicts,
 
 ## Solution
 
-A second adapter, `src/pr-azure.js`, handles Azure DevOps PR links and reads a PR with the `az` command (`azure-devops` extension), read-only. The existing PR status block shows its result in the same shape as for GitHub. The Done Stage gets the PR state (open, merged, closed) and Clean up works from it. Merge, which writes, stays GitHub-only: an Azure DevOps PR shows a note to merge it in Azure DevOps, and Follow-up on such a PR says it is not supported yet. A missing `az`, a missing extension or a missing sign-in shows "status unavailable" with the command that fixes it, and never breaks the Dashboard.
+A second adapter, `src/pr-azure.js`, handles Azure DevOps PR links and reads a PR with the `az` command (`azure-devops` extension), read-only. The existing PR status block shows its result in the same shape as for GitHub. The Done Stage gets the PR state (open, merged, closed) and Clean up works from it. The Dashboard never merges ([ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md)), and Follow-up on such a PR says it is not supported yet. A missing `az`, a missing extension or a missing sign-in shows "status unavailable" with the command that fixes it, and never breaks the Dashboard.
 
 ## User Stories
 

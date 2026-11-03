@@ -20,7 +20,7 @@ Show the status of a Run's open GitHub pull request on its card and in its detai
 6. As a user, I want the status to be cached per PR, so that the Dashboard does not call the provider on every poll.
 7. As a user, I want a poll never to wait for the provider: the card says "checking" until the first answer arrives.
 8. As a user, I want "PR status unavailable" with the reason (`gh` missing, not signed in, rate limited, other) and a Check again button when the provider fails, so that I can fix the cause and ask again, and the rest of the board keeps working.
-9. As a user, I want the Merge action to behave as before.
+9. As a user, I want no Merge action; the Dashboard never merges ([ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md)).
 10. As a maintainer, I want tests to inject the provider's runner and use recorded `gh` output as fixtures, so that tests need no network.
 
 ## Implementation Decisions
@@ -29,7 +29,7 @@ Show the status of a Run's open GitHub pull request on its card and in its detai
 - A failure is a `FactoryError` whose `code` is the reason: `gh-missing` (ENOENT), `not-signed-in` (stderr mentions authentication or login), `rate-limited` (stderr mentions a rate limit) or `error`.
 - The Dashboard takes a `prStatus(url)` option, default `providerFor(url).statusAsync`. A cache per PR URL keeps a success for 60 seconds, a merged or closed PR for 10 minutes and a failure for 30 seconds. At most one lookup per URL is in flight. `/api/views` answers at once from the cache; a missing or expired entry starts a background lookup, and until the first answer the view says `{ checking: true }`. A stale entry is served while it refreshes.
 - `/api/views` carries `prStatus` on a Run with a GitHub PR link in Finish, Follow-up or Done that is not abandoned or unreadable: `{ checking: true }`, `{ unavailable: <reason> }` or the parsed status. It is `null` otherwise.
-- `GET /api/runs/<id>/pr-status[?refresh=1]` answers the same object for that Run. With `refresh=1` it skips the cache and waits for the lookup (bounded by the adapter's 10 second timeout). It is a GET that writes nothing, so it needs no session token. It answers 404 for an unknown Run and 409 for a Run without a GitHub PR link. The Merge route and its checks are unchanged.
+- `GET /api/runs/<id>/pr-status[?refresh=1]` answers the same object for that Run. With `refresh=1` it skips the cache and waits for the lookup (bounded by the adapter's 10 second timeout). It is a GET that writes nothing, so it needs no session token. It answers 404 for an unknown Run and 409 for a Run without a GitHub PR link. There is no Merge route.
 - Page: a PR status block on the card and in the detail: link, then Checks, Merge, Review and Draft as text. Unavailable shows the reason and a Check again button.
 - `docs/dashboard.md`, `GLOSSARY.md` (PR status) and a changelog fragment are updated. ADR 0020 gets a short addendum that the adapter now has a status operation.
 

@@ -31,7 +31,7 @@ When a Run's [token usage](usage.md#5-follow-runs-on-the-dashboard) is tracked, 
 
 ## Help and the first run
 
-The **Help** button in the header opens a help panel: a dialog with short sections on the Stages, the Fast and Full track, what "Needs you" means, the Check verdicts (pass, fail, skipped) and Left open, and the actions Merge, Sync, Clean up, Accept Check and Grant extra loop. The text is static (`dashboard/help.js`) and uses the glossary's terms. The focus moves into the panel, Tab stays inside it, Esc or **Close** closes it and the focus returns to what opened it. On narrow screens it fills the screen.
+The **Help** button in the header opens a help panel: a dialog with short sections on the Stages, the Fast and Full track, what "Needs you" means, the Check verdicts (pass, fail, skipped) and Left open, and the actions Sync, Clean up, Accept Check, Grant extra loop, Check PR and Fix. The text is static (`dashboard/help.js`) and uses the glossary's terms. The focus moves into the panel, Tab stays inside it, Esc or **Close** closes it and the focus returns to what opened it. On narrow screens it fills the screen.
 
 When there are no Runs at all and at most one Project (none missing), a welcome card replaces the Stage columns. It shows how to start (`/factory` and what you want built), says that the Run appears here, and has a **How does this work?** link that opens the help panel. The card goes away as soon as a Run exists, and it does not appear when the Needs you filter merely hides every Run.
 
