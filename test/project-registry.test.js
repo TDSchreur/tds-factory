@@ -298,25 +298,21 @@ test('two racing stale-lock takeovers end with one winner', async () => {
   writeFileSync(lock, 'stale-token');
   const old = new Date(Date.now() - 60_000);
   utimesSync(lock, old, old);
-  const barrier = join(dir, 'barrier');
-  const readyA = join(dir, 'ready-a');
-  const readyB = join(dir, 'ready-b');
-  const winner = join(dir, 'takeover-winner');
+  const takeovers = join(dir, 'takeovers.log');
   const overlap = join(dir, 'overlap.log');
   const acquired = join(dir, 'acquired.log');
   const holder = join(dir, 'holder');
   const script = `import { openProjectRegistry } from ${JSON.stringify(new URL('../src/project-registry.js', import.meta.url).href)};
-import { writeFileSync, appendFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 const [dir, label, project] = process.argv.slice(1);
 const wait = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const reg = openProjectRegistry({
   dir,
-  lockWaitMs: 2000,
+  lockWaitMs: 15000,
   onBeforeStaleTakeover: () => {
-    writeFileSync(join(dir, 'ready-' + label), label);
-    while (!existsSync(join(dir, 'barrier'))) wait(2);
-    try { writeFileSync(join(dir, 'takeover-winner'), label, { flag: 'wx' }); } catch {}
+    appendFileSync(join(dir, 'takeovers.log'), label + '\\n');
+    wait(300);
   },
   onLockAcquired: () => {
     try {
@@ -342,15 +338,12 @@ process.exit(reg.join(project) ? 0 : 7);`;
     });
   const pa = spawnOne('a', a);
   const pb = spawnOne('b', b);
-  for (let i = 0; i < 300 && (!existsSync(readyA) || !existsSync(readyB)); i += 1)
-    await new Promise((r) => setTimeout(r, 5));
-  writeFileSync(barrier, 'go');
   const [ca, cb] = await Promise.all([pa, pb]);
-  const winnerLabel = readFileSync(winner, 'utf8').trim();
+  const takeoverLabels = readFileSync(takeovers, 'utf8').trim().split('\n').filter(Boolean);
   const acquiredLabels = readFileSync(acquired, 'utf8').trim().split('\n').filter(Boolean).sort();
   assert.deepEqual([ca, cb], [0, 0]);
   assert.deepEqual(acquiredLabels, ['a', 'b']);
-  assert.equal(winnerLabel === 'a' || winnerLabel === 'b', true);
+  assert.equal(takeoverLabels.length, 1);
   assert.equal(existsSync(overlap), false);
   assert.equal(existsSync(`${lock}.takeover`), false);
   assert.equal(existsSync(holder), false);
