@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import './git-repo.js';
 
 const cli = resolve('bin/tds-factory.js');
 const { version } = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));

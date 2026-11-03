@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import './git-repo.js';
 
 // The README and the colleague guides are the first thing a colleague reads; keep their links and commands true.
 const GUIDES = [

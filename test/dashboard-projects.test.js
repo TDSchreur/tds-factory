@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
 import { openProjectRegistry, projectId } from '../src/project-registry.js';
 import { writeHeaders } from './dashboard-token.js';
+import './git-repo.js';
 
 /** @import { Run } from '../src/run-record.js' */
 

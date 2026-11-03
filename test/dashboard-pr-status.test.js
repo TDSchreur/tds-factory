@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { startDashboard } from '../src/dashboard.js';
 import { viewsOf } from './run-view.js';
+import './git-repo.js';
 
 /** @import { PrStatus } from '../src/pr-provider.js' */
 /** @import { Run } from '../src/run-record.js' */

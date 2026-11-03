@@ -5,6 +5,7 @@ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
+import './git-repo.js';
 
 /**
  * @param {number} port

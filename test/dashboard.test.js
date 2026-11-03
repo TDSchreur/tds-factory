@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
 import { viewsOf } from './run-view.js';
+import './git-repo.js';
 
 /** @typedef {Awaited<ReturnType<typeof startDashboard>>} Dash */
 /** @type {string} */
