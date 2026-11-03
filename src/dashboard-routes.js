@@ -17,7 +17,7 @@ export const ROUTES = [
   { methods: ['DELETE'], pattern: /^\/api\/projects\/([^/]+)\/runs\/([\s\S]*)$/, handler: h.deleteRun, scoped: true },
   {
     methods: ['POST'],
-    pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/(sync|clean|accept|extra-loop|follow-up)$/,
+    pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/(sync|clean|accept|extra-loop|follow-up|continue|split)$/,
     handler: h.runAction,
     scoped: true,
   },

@@ -6,7 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { messageOf, oneOf } from './narrow.js';
-import { FOLLOW_UP_SCOPES } from './run-store.js';
+import { FOLLOW_UP_SCOPES, SIZE_WAIT_REASON } from './run-store.js';
 import { interpretRun, str } from './dashboard-view.js';
 import { can, providerFor } from './pr-provider.js';
 
@@ -181,6 +181,38 @@ async function fixRun(ctx, id, v) {
   send(200, 'text/plain', outcome.result);
 }
 
+// ADR 0035: the user's answer to a Run that outgrew the size limit, as the page showed it. A Run that changed since, or that waits for something else, is refused and nothing changes.
+/** @param {DashboardContext} ctx @param {ReturnType<typeof interpretRun>} v @returns {string | undefined} The `updated` the user saw; undefined after the refusal is sent. */
+function sizeAnswer(ctx, v) {
+  const { send } = ctx;
+  const updatedValues = query(ctx).getAll('updated');
+  if (updatedValues.length > 1) return void send(400, 'text/plain', 'each query parameter may appear once');
+  if (updatedValues.length === 0)
+    return void send(409, 'text/plain', 'the request must name the Run record time you looked at');
+  if (!v.waiting || v.column !== 'build' || v.reason !== SIZE_WAIT_REASON)
+    return void send(409, 'text/plain', 'only a Run in Build that waits for the Run size answer can be answered');
+  if (updatedValues[0] !== v.updated)
+    return void send(409, 'text/plain', 'the Run changed since you looked at it; reload and look again');
+  return updatedValues[0];
+}
+
+/** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
+function continueRun(ctx, id, v) {
+  const updated = sizeAnswer(ctx, v);
+  if (updated === undefined) return;
+  ctx.store.size(id, { accept: true, updated });
+  ctx.send(200, 'text/plain', 'continued');
+}
+
+// The links are untrusted text: control and format characters become spaces, so one link is one line.
+/** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
+function splitRun(ctx, id, v) {
+  const updated = sizeAnswer(ctx, v);
+  if (updated === undefined) return;
+  const moved = ctx.store.split(id, { updated, handOver: true });
+  ctx.send(200, 'text/plain', moved.map((link) => link.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ')).join('\n'));
+}
+
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
 async function acceptCheck(ctx, id, v) {
   const { send, store } = ctx;
@@ -227,6 +259,8 @@ export async function runAction(ctx) {
       if (action === 'clean') return await cleanRun(ctx, id);
       if (action === 'extra-loop') return grantExtraLoop(ctx, id, v);
       if (action === 'follow-up') return await fixRun(ctx, id, v);
+      if (action === 'continue') return continueRun(ctx, id, v);
+      if (action === 'split') return splitRun(ctx, id, v);
       return await acceptCheck(ctx, id, v);
     } catch (err) {
       ctx.send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
