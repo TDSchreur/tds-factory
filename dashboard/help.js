@@ -15,6 +15,18 @@ export const HELP_SECTIONS = [
     ],
   },
   {
+    id: 'projects',
+    title: 'Project rows',
+    items: [
+      {
+        text: 'Each Project has its own row under the same Stage columns. The button with the Project name collapses the row to one line with its Runs per Stage and a waiting badge, and the page remembers it.',
+      },
+      {
+        text: 'A new waiting Run never opens a collapsed row. Opening a Run from a notification does. Missing Projects are grouped in one summary row with Remove and Remove all missing.',
+      },
+    ],
+  },
+  {
     id: 'tracks',
     title: 'Tracks',
     items: [
@@ -30,7 +42,7 @@ export const HELP_SECTIONS = [
     title: 'Waiting on you',
     items: [
       {
-        text: 'A red card with a "Needs you" banner waits for your answer in the agent session. The header button "Needs you" shows only those Runs, and they come first in their Stage.',
+        text: 'A red card with a "Needs you" banner waits for your answer in the agent session. The header button "Needs you" shows only those Runs in every Project, and they come first in their Stage.',
       },
     ],
   },

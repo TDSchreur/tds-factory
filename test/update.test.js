@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import http from 'node:http';
 import { update, compareVersions } from '../src/update.js';
 import { defined } from './run-view.js';
+import './git-repo.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';

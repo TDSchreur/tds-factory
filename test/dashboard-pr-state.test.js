@@ -136,8 +136,11 @@ if (args[1] === 'view') {
    * @param {string} [origin]
    */
   const post = async (id = '2026-01-01-r', origin = dash.url) =>
-    fetch(`${dash.url}/api/runs/${id}/merge`, { method: 'POST', headers: await writeHeaders(dash, origin) });
-  const checks = () => fetch(`${dash.url}/api/runs/2026-01-01-r/merge-checks`);
+    fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}/merge`, {
+      method: 'POST',
+      headers: await writeHeaders(dash, origin),
+    });
+  const checks = () => fetch(`${dash.url}/api/projects/${dash.projectId}/runs/2026-01-01-r/merge-checks`);
   /** @returns {string[][]} */
   const readCalls = () => JSON.parse(readFileSync(calls, 'utf8'));
   const close = async () => {

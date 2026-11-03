@@ -1,6 +1,6 @@
 // Presentational components of the Dashboard page. State, polling and actions live in app.js.
 /** @import { VNode } from 'preact' */
-/** @import { RunView } from './model.js' */
+/** @import { RunView, ProjectView, RowView } from './model.js' */
 /** @import { Span, ListItem } from './markdown.js' */
 import { Fragment, h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -19,10 +19,13 @@ import {
   modelOf,
   prStatusOf,
   progressOf,
+  filePath,
+  runKey,
   safeUrl,
   ticketTilesOf,
   timelineOf,
   waitAgeOf,
+  MISSING_SUMMARY_ID,
 } from './model.js';
 
 export const html = htm.bind(h);
@@ -156,7 +159,7 @@ function Tickets({ run }) {
   const mark = { done: '✓', active: '▶', todo: '○', rework: '↻' };
   return tickets.length
     ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => {
-        const id = `usage-${run.id}-${t.key}`.replace(/[^A-Za-z0-9_-]/g, '-');
+        const id = `usage-${run.projectId}-${run.id}-${t.key}`.replace(/[^A-Za-z0-9_-]/g, '-');
         return html`<li key=${t.key} class=${'ticket ' + t.state}>
           <div class="ticket-head"><span aria-hidden="true">${mark[t.state]}</span> ${t.href ? html`<${Link} href=${t.href}>${t.label}<//>` : t.label}<span class="sr"> (${t.state})</span></div>
           ${
@@ -189,8 +192,8 @@ const pauseLabel = (run) => {
  * @param {RunView} props.run
  * @param {boolean} props.selected
  * @param {boolean} props.expanded
- * @param {(id: string) => void} props.onSelect
- * @param {(id: string) => void} props.onToggle
+ * @param {(run: RunView) => void} props.onSelect
+ * @param {(run: RunView) => void} props.onToggle
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onGrant
  * @param {(run: RunView) => void} props.onMerge
@@ -307,10 +310,10 @@ export function Card({
   ]
     .filter(Boolean)
     .join(' ');
-  return html`<li class=${classes} data-id=${run.id} tabindex="0" onClick=${() => onSelect(run.id)} onKeyDown=${(
+  return html`<li class=${classes} data-id=${run.id} data-project=${run.projectId} data-key=${runKey(run)} tabindex="0" onClick=${() => onSelect(run)} onKeyDown=${(
     /** @type {KeyboardEvent} */ e,
   ) => {
-    if (e.key === 'Enter') onSelect(run.id);
+    if (e.key === 'Enter') onSelect(run);
   }}>
     ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
     <div class="title">${(run.unreadable ? 'Unreadable record: ' : '') + run.title}</div>
@@ -323,7 +326,7 @@ export function Card({
         /** @type {Event} */ e,
       ) => {
         stop(e);
-        onToggle(run.id);
+        onToggle(run);
       }} onKeyDown=${stop}>${expanded ? '▾' : '▸'} ${toggleText}</button>`
     }
     ${done && html`<div class="details" hidden=${!expanded}>${more}</div>`}
@@ -344,8 +347,8 @@ export function Welcome({ onHelp }) {
 
 /**
  * @typedef {object} Actions
- * @property {(id: string) => void} select
- * @property {(id: string) => void} toggle
+ * @property {(run: RunView) => void} select
+ * @property {(run: RunView) => void} toggle
  * @property {(run: RunView) => Promise<void>} checkPr
  * @property {(run: RunView) => Promise<void>} merge
  * @property {(run: RunView) => Promise<void>} sync
@@ -353,37 +356,101 @@ export function Welcome({ onHelp }) {
  * @property {(run: RunView) => Promise<void>} accept
  * @property {(run: RunView) => Promise<void>} grant
  * @property {(run: RunView) => Promise<void>} remove
- * @property {() => Promise<void>} deleteAll
+ * @property {(project: ProjectView) => Promise<void>} deleteAll
+ * @property {(projectId: string) => void} toggleRow
+ * @property {(project: ProjectView) => Promise<void>} removeProject
+ * @property {(projects: ProjectView[]) => Promise<void>} removeMissing
  */
+// The id of an element made from a Project id.
+/** @param {string} projectId */
+const domId = (projectId) => 'project-' + projectId.replace(/[^A-Za-z0-9_-]/g, '-');
+
 /**
  * @param {object} props
- * @param {RunView[]} props.runs
+ * @param {RowView} props.row
+ * @param {boolean} props.onlyWaiting
+ * @param {string} props.stage
+ * @param {string | null} props.selectedKey
+ * @param {Set<string>} props.expandedKeys
+ * @param {Actions} props.actions
+ */
+function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, actions }) {
+  const { project, kind, cards, counted, doneCount, missingProjects = [] } = row;
+  const heading = domId(project.id);
+  const waiting = counted.filter((r) => r.waiting).length;
+  const toggles = kind === 'open' || kind === 'collapsed' || kind === 'missing-summary';
+  const summaryOpen = kind === 'open' && project.id === MISSING_SUMMARY_ID;
+  const summaryCollapsed = kind === 'collapsed' && project.id === MISSING_SUMMARY_ID;
+  const name = toggles
+    ? html`<button type="button" class="row-toggle" aria-expanded=${String(kind === 'open')} onClick=${() => actions.toggleRow(project.id)}>${project.name}</button>`
+    : project.name;
+  return html`<section class=${'project-row' + (kind === 'open' ? '' : ' collapsed') + (project.id === MISSING_SUMMARY_ID ? ' missing-summary' : '')} data-project=${project.id} aria-labelledby=${heading}>
+    <div class="project-head">
+      <h2 id=${heading}>${name}</h2>
+      ${kind === 'empty' && html`<span class="row-note">No Runs</span>`}
+      ${summaryCollapsed && html`<span class="row-note">Expand to review and remove missing Projects.</span>`}
+      ${
+        kind === 'collapsed' &&
+        !summaryCollapsed &&
+        html`<ul class="row-summary" aria-label="Runs per Stage">${COLUMNS.map((c) => html`<li key=${c.key}>${c.label} <span class="stage-count">${counted.filter((r) => r.column === c.key).length}</span></li>`)}${waiting > 0 && html`<li class="row-waiting">${waiting} waiting</li>`}</ul>`
+      }
+      ${
+        summaryOpen &&
+        html`<button type="button" class="danger" onClick=${() => actions.removeMissing(missingProjects)} aria-label=${'Remove all missing, ' + missingProjects.length + ' Project' + (missingProjects.length === 1 ? '' : 's')}>Remove all missing</button>`
+      }
+    </div>
+    ${
+      summaryOpen &&
+      html`<div role="region" aria-label="Missing Projects">
+        <ul class="missing-list">${missingProjects.map(
+          (missing) => html`<li key=${missing.id}>
+            <div><strong>${missing.name}</strong></div>
+            <div><code>${missing.path}</code></div>
+            <button type="button" onClick=${() => actions.removeProject(missing)} aria-label=${'Remove the Project ' + missing.name + ' from the Dashboard'}>Remove</button>
+          </li>`,
+        )}</ul>
+      </div>`
+    }
+    ${
+      kind === 'open' &&
+      project.id !== MISSING_SUMMARY_ID &&
+      html`<div class="project-columns">${COLUMNS.map((c) => {
+        const mine = cards.filter((r) => r.column === c.key);
+        return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>
+        <div class="column-name" aria-hidden="true">${c.label}</div>
+        ${c.key === 'done' && doneCount > 0 && html`<button type="button" aria-label=${'Delete all Done Runs of ' + project.name} onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
+        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+        ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
+      </div>`;
+      })}</div>`
+    }
+  </section>`;
+}
+
+/**
+ * @param {object} props
+ * @param {RowView[]} props.rows
  * @param {boolean} props.onlyWaiting
  * @param {string} props.stage
  * @param {(stage: string) => void} props.onStage
- * @param {string | null} props.selectedId
- * @param {Set<string>} props.expandedIds
- * @param {number} props.doneCount
+ * @param {string | null} props.selectedKey
+ * @param {Set<string>} props.expandedKeys
  * @param {Actions} props.actions
  */
-export function Board({ runs, onlyWaiting, stage, onStage, selectedId, expandedIds, doneCount, actions }) {
+export function Board({ rows, onlyWaiting, stage, onStage, selectedKey, expandedKeys, actions }) {
+  const visibleRuns = rows.flatMap((row) => row.cards);
   return html`<div class="board-wrap">
   <nav class="stage-nav" aria-label="Stages">${COLUMNS.map((c) => {
-    const mine = runs.filter((r) => r.column === c.key);
+    const mine = visibleRuns.filter((r) => r.column === c.key);
     return html`<button type="button" aria-pressed=${String(stage === c.key)} onClick=${() => onStage(c.key)}>
       <span>${c.label} <span class="stage-count">(${mine.length})</span></span>${' '}
       ${mine.some((r) => r.waiting) && html`<span class="stage-waiting">Needs you</span>`}
     </button>`;
   })}</nav>
-  <main id="board" aria-label="Runs by Stage" tabindex="-1">${COLUMNS.map((c) => {
-    const mine = runs.filter((r) => r.column === c.key);
-    return html`<section key=${c.key} class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'col-' + c.key}>
-      <h2 id=${'col-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>
-      ${c.key === 'done' && doneCount > 0 && html`<button type="button" onClick=${actions.deleteAll}>Delete all</button>`}
-      <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${r.id === selectedId} expanded=${expandedIds.has(r.id)} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
-      ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
-    </section>`;
-  })}</main></div>`;
+  <main id="board" aria-label="Runs by Stage" tabindex="-1">
+    <div class="stage-headers">${COLUMNS.map((c) => html`<h2 key=${c.key} id=${'stage-' + c.key} tabindex="0" title=${c.help}>${c.label}</h2>`)}</div>
+    ${rows.map((row) => html`<${ProjectRow} key=${row.project.id} row=${row} onlyWaiting=${onlyWaiting} stage=${stage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`)}
+  </main></div>`;
 }
 
 // The help panel: static text from help.js in a native dialog. The dialog closes itself on Esc and on the Close button; onClose tells the page.
@@ -482,10 +549,11 @@ function Logo() {
   </svg>`;
 }
 
-// The pill shows the last segment of the project path; the full path is its tooltip.
+// The pill shows the last segment of the project path, or the number of Projects when there are several; the full path or the names are its tooltip.
 /**
  * @param {object} props
  * @param {string} props.project
+ * @param {string[]} props.projectNames the names of every Project on the page
  * @param {string} props.version
  * @param {{ error: boolean, text: string }} props.status
  * @param {string} props.olderLabel
@@ -499,6 +567,7 @@ function Logo() {
  */
 export function Header({
   project,
+  projectNames,
   version,
   status,
   olderLabel,
@@ -512,7 +581,11 @@ export function Header({
 }) {
   return html`<header>
     <div class="title"><h1><${Logo} /><span class="sr">tds-factory</span></h1><span class="tagline">Factory</span>${version && html`<span id="factory-version">v${version}</span>`}</div>
-    ${folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`}
+    ${
+      projectNames.length > 1
+        ? html`<span id="project" title=${projectNames.join(', ')}>${projectNames.length} Projects</span>`
+        : folderName(project) && html`<span id="project" title=${project}>${folderName(project)}</span>`
+    }
     <span id="status" role="status" aria-live="polite" class=${status.error ? 'error' : ''}>${status.text}</span>
     <button id="needs-you" type="button" aria-pressed=${String(!!onlyWaiting)} title="Show only the Runs that wait on you" onClick=${onToggleWaiting}>Needs you (${waitingCount ?? 0})</button>
     <button id="help" type="button" aria-haspopup="dialog" onClick=${onHelp}>Help</button>
@@ -549,13 +622,14 @@ const labelSegments = (label) =>
 /**
  * @param {object} props
  * @param {RunView | null} props.run
+ * @param {string} props.projectName the name of the Project of the Run
  * @param {() => void} props.onClose
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onGrant
  */
-export function Detail({ run, onClose, onCheckPr, onGrant }) {
-  const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
-  const [loaded, setLoaded] = useState(/** @type {{ id: string, files: LoadedFile[] } | null} */ (null));
+export function Detail({ run, projectName, onClose, onCheckPr, onGrant }) {
+  const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links]) : '';
+  const [loaded, setLoaded] = useState(/** @type {{ key: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
   const heading = useRef(null);
   /** @type {{ current: HTMLDialogElement | null }} */
@@ -571,7 +645,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
       element.close();
     }
     if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true });
-  }, [run?.id]); // only a newly opened Run takes focus, never a refresh
+  }, [run && runKey(run)]); // only a newly opened Run takes focus, never a refresh
   const closed = () => {
     if (closing.current) closing.current = false;
     else onClose();
@@ -589,7 +663,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
     let live = true;
     Promise.all(
       run.files.map((/** @type {string} */ name) =>
-        fetch('/files/' + encodeURIComponent(run.id) + '/' + encodeURIComponent(name), { cache: 'no-store' })
+        fetch(filePath(run, name), { cache: 'no-store' })
           .then((res) => {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.text();
@@ -600,7 +674,7 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
           ),
       ),
     ).then((files) => {
-      if (live) setLoaded({ id: run.id, files });
+      if (live) setLoaded({ key: runKey(run), files });
     });
     return () => {
       live = false;
@@ -610,14 +684,14 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
   const updatedAge = ageMs(run.updated);
   const reviews = run.projectReviews ?? [];
   /** @type {LoadedFile[]} */
-  const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
+  const files = loaded && loaded.key === runKey(run) ? loaded.files : run.files.map((name) => ({ name }));
   return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onPointerDown=${press} onClick=${backdrop}>
     <div class="detail-body">
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
       ${pauseLabel(run) && html`<div class=${'reason' + (run.waiting ? ' needs-you' : '')}>${pauseLabel(run)}${run.reason ? ': ' + run.reason : ''}</div>`}
-      <div class="meta"><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${updatedAge === null ? 'unknown' : ago(updatedAge)}</span></div>
+      <div class="meta"><span>Project: ${projectName}</span><span>Stage: ${COLUMNS.find((c) => c.key === run.column)?.label ?? run.column}</span>${run.status === 'abandoned' && html`<span>Abandoned</span>`}${run.agent && html`<span>Agent: ${run.agent}</span>`}<span>Updated: ${updatedAge === null ? 'unknown' : ago(updatedAge)}</span></div>
       <${Chips} run=${run} />
       <${PrStatus} run=${run} onCheckPr=${onCheckPr} showLink=${false} />
       ${canGrantLoop(run) && html`<div class="actions"><button type="button" aria-label=${'Grant an extra Check loop to ' + run.title} onClick=${() => onGrant(run)}>Grant extra loop</button></div>`}

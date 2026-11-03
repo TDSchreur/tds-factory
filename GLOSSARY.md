@@ -203,14 +203,26 @@ The git worktree and branch a Run works in, so agents running at the same time n
 _Avoid_: Sandbox, Workspace
 
 **Dashboard**:
-A local web page that shows every Run as a card in a column per Stage and flags the Runs waiting on a human.
+A local web page that shows every Run of every Project in the Project registry as a card, in a row per Project and a column per Stage, and flags the Runs waiting on a human.
 _Avoid_: Board, Monitor
+
+**Project**:
+A repository's main checkout that has a Run store. The Dashboard shows the Runs of every Project in the Project registry.
+_Avoid_: Repo, Workspace
+
+**Project registry**:
+The per-user list of Projects the Dashboard shows. A Project joins it when a Run starts in it or when the Dashboard is opened there, and leaves it when the user removes it. It holds paths only, never Run data or the Session token, and lives outside every repository.
+_Avoid_: Project list, Workspace file
+
+**Project row**:
+The row of the Dashboard that holds one Project's Runs under the shared Stage columns. The user can collapse it to a single line with the Project name, the Runs per Stage and a waiting badge; the choice is kept per Project in the browser. Missing Projects are grouped in one summary row with their cleanup actions.
+_Avoid_: Swimlane, Lane, Group
 
 **Factory version**:
 The version of the Factory installation serving a Dashboard, independent of the project or its Runs.
 
 **Run detail**:
-The drawer the Dashboard opens over the board when a Run's card is selected, showing its status, links and Stage summaries. The board stays visible behind it until it is closed.
+The drawer the Dashboard opens over the Dashboard when a Run's card is selected, showing its status, links and Stage summaries. The Dashboard stays visible behind it until it is closed.
 _Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Panel
 
 **Release**:

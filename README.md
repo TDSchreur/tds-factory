@@ -88,7 +88,7 @@ The [capability matrix](docs/capabilities.md) lists the default models per Stage
 
 ## Dashboard
 
-`tds-factory dashboard` serves every Run of the repository on 127.0.0.1, with one card per Run in a column per Stage. The [Dashboard guide](docs/dashboard.md) covers what it shows, which routes it serves and how to delete a Run.
+`tds-factory dashboard` serves the Runs on 127.0.0.1 (port 4300 by default, shared by every repository you start it in), with one card per Run, in a row per Project (collapsible) and a column per Stage. The [Dashboard guide](docs/dashboard.md) covers what it shows, which routes it serves and how to delete a Run.
 
 Add `.factory/` to the `.gitignore` of any project you run the factory in; the Factory only tells you to. For a Local tracker, Preflight itself adds `.scratch/` to `.gitignore` and `.git/info/exclude` when git does not ignore it, and tells you to commit the `.gitignore` line.
 

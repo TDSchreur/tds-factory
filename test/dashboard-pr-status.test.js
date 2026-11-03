@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { startDashboard } from '../src/dashboard.js';
 import { viewsOf } from './run-view.js';
+import './git-repo.js';
 
 /** @import { PrStatus } from '../src/pr-provider.js' */
 /** @import { Run } from '../src/run-record.js' */
@@ -55,7 +56,7 @@ async function withDashboard(records, prStatus, body, options = {}) {
   try {
     await body({
       views: () => viewsOf(dash),
-      get: (/** @type {string} */ path) => fetch(`${dash.url}${path}`),
+      get: (/** @type {string} */ path) => fetch(`${dash.url}/api/projects/${dash.projectId}${path}`),
     });
   } finally {
     await dash.close();
@@ -139,7 +140,7 @@ test('a provider failure becomes an unavailable status with its reason, never an
       assert.deepEqual((await views())[0].prStatus, { unavailable: 'rate-limited' });
       mode = '';
       // A plain poll keeps the cached failure; the user's refresh asks again.
-      const refreshed = await (await get(`/api/runs/2026-01-01-r/pr-status?refresh=1`)).json();
+      const refreshed = await (await get(`/runs/2026-01-01-r/pr-status?refresh=1`)).json();
       assert.deepEqual(refreshed, OPEN);
       assert.deepEqual((await views())[0].prStatus, OPEN);
     },
@@ -173,15 +174,15 @@ test('the pr-status route answers for a Run, refuses others and limits refreshes
       return OPEN;
     },
     async ({ get }) => {
-      assert.equal((await get('/api/runs/nope/pr-status')).status, 404);
-      assert.equal((await get('/api/runs/2026-01-02-r/pr-status')).status, 409);
-      assert.equal((await get('/api/runs/%E0%A4%A/pr-status')).status, 400);
-      const first = await get('/api/runs/2026-01-01-r/pr-status?refresh=1');
+      assert.equal((await get('/runs/nope/pr-status')).status, 404);
+      assert.equal((await get('/runs/2026-01-02-r/pr-status')).status, 409);
+      assert.equal((await get('/runs/%E0%A4%A/pr-status')).status, 400);
+      const first = await get('/runs/2026-01-01-r/pr-status?refresh=1');
       assert.equal(first.status, 200);
       assert.deepEqual(await first.json(), OPEN);
-      assert.deepEqual(await (await get('/api/runs/2026-01-01-r/pr-status?refresh=1')).json(), OPEN);
+      assert.deepEqual(await (await get('/runs/2026-01-01-r/pr-status?refresh=1')).json(), OPEN);
       assert.deepEqual(calls, [GH], 'a second refresh within a few seconds reuses the answer');
-      assert.equal((await fetch((await get('/api/runs/2026-01-01-r/pr-status')).url, { method: 'POST' })).status, 403);
+      assert.equal((await fetch((await get('/runs/2026-01-01-r/pr-status')).url, { method: 'POST' })).status, 403);
     },
   );
 });

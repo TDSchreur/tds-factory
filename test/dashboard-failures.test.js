@@ -5,6 +5,7 @@ import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
+import './git-repo.js';
 
 /**
  * @param {number} port
@@ -38,12 +39,12 @@ test(
     const logged = mock.method(console, 'error', () => {});
     const dash = await startDashboard({ projectDir: project, port: 0 });
     try {
-      const answer = await get(dash.port, '/files/2026-01-01-good/define.md?token=secret');
+      const answer = await get(dash.port, `/files/${dash.projectId}/2026-01-01-good/define.md?token=secret`);
       assert.equal(answer.status, 500);
       assert.equal(answer.body, 'internal error');
       assert.equal(logged.mock.callCount(), 1);
       const line = String(logged.mock.calls[0].arguments[0]);
-      assert.match(line, /^dashboard: GET \/files\/2026-01-01-good\/define\.md: .*EACCES/s);
+      assert.match(line, /^dashboard: GET \/files\/[0-9a-f]{12}\/2026-01-01-good\/define\.md: .*EACCES/s);
       assert.doesNotMatch(line, /secret/);
       assert.doesNotMatch(line.split(':')[1], /[\x00-\x1f]/);
     } finally {
@@ -60,7 +61,7 @@ test('a file that is not there is a 404 and logs nothing', async () => {
   const logged = mock.method(console, 'error', () => {});
   const dash = await startDashboard({ projectDir: project, port: 0 });
   try {
-    assert.equal((await get(dash.port, '/files/2026-01-01-none/define.md')).status, 404);
+    assert.equal((await get(dash.port, `/files/${dash.projectId}/2026-01-01-none/define.md`)).status, 404);
     assert.equal(logged.mock.callCount(), 0);
   } finally {
     logged.mock.restore();

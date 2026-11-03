@@ -319,6 +319,7 @@ export const runIds = (root) =>
 export function mainCheckout(dir) {
   const out = git(dir, ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--show-toplevel']);
   const [gitDir, common] = out.status === 0 ? out.stdout.trim().split('\n') : [];
-  if (!gitDir || path.basename(common) !== '.git') return { dir };
-  return { dir: path.dirname(common) };
+  if (!gitDir || !common || path.basename(common) !== '.git') return { dir: path.normalize(dir) };
+  // git prints forward slashes on Windows; the Project id hashes this path, so use the native form.
+  return { dir: path.normalize(path.dirname(common)) };
 }

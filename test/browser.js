@@ -16,10 +16,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 /**
  * @typedef {object} PageState What the stub server serves and records.
- * @property {RunStub[]} [runs] Served as /api/views.
+ * @property {RunStub[]} [runs] Served as /api/views, in the one Project `p`.
+ * @property {{ id: string, name: string, path?: string, missing?: boolean, runs?: RunStub[] }[]} [projects] Served as /api/views instead of `runs`, in this order.
  * @property {Record<string, string>} [files] Served as /files/<run>/<name>.
  * @property {(req: IncomingMessage) => { status: number, body: string, headers?: Record<string, string> } | undefined} [respond] Answers DELETE and POST requests.
- * @property {string} [checks] The text of /api/runs/<id>/merge-checks.
+ * @property {string} [checks] The text of /api/projects/p/runs/<id>/merge-checks.
  * @property {string[]} [statusCalls] The pr-status URLs that were read.
  * @property {() => void} [statusReply] Runs on each pr-status read.
  * @property {unknown} [statusBody] The JSON of a pr-status read.
@@ -150,9 +151,9 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
 /**
  * @param {{ skip: (reason: string) => void }} t
  * @param {PageState} state
- * @param {{ args?: string[], width?: number, height?: number }} [options]
+ * @param {{ args?: string[], width?: number, height?: number, query?: string }} [options] `query` is added to the page URL, for example `?project=b`.
  */
-export async function openPage(t, state, { args = [], width = 1200, height = 700 } = {}) {
+export async function openPage(t, state, { args = [], width = 1200, height = 700, query = '' } = {}) {
   if (WINDOWS) {
     t.skip('the browser tests are not supported on Windows');
     return null;
@@ -170,7 +171,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   const tokens = []; // the X-Factory-Token header of each write
   const served = Object.assign(state, { runs: state.runs ?? [], files: state.files ?? {} });
   const server = createServer((req, res) => {
-    const path = (req.url ?? '').split('?')[0];
+    const routePath = (req.url ?? '').split('?')[0];
     /**
      * @param {number} status
      * @param {string} type
@@ -187,27 +188,42 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       const answer = state.respond?.(req) ?? { status: 200, body: '' };
       return send(answer.status, 'text/plain', answer.body, answer.headers);
     }
-    if (path === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
-    if (ASSET.test(path))
-      return send(200, TYPES[path.split('.').pop() ?? ''], readFileSync(new URL(path.slice(1), DASHBOARD)));
-    if (/^\/api\/runs\/[^/]+\/merge-checks$/.test(path))
+    if (routePath === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
+    if (ASSET.test(routePath))
+      return send(200, TYPES[routePath.split('.').pop() ?? ''], readFileSync(new URL(routePath.slice(1), DASHBOARD)));
+    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/merge-checks$/.test(routePath))
       return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
     // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
-    if (/^\/api\/runs\/[^/]+\/pr-status$/.test(path)) {
+    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/pr-status$/.test(routePath)) {
       (state.statusCalls ??= []).push(req.url ?? '');
       state.statusReply?.();
       return send(200, 'application/json', JSON.stringify(state.statusBody ?? {}));
     }
-    if (path === '/api/info')
+    if (routePath === '/api/info')
       return send(
         200,
         'application/json',
         JSON.stringify({ project: state.project ?? 'test', version: state.version, token: 'test-token' }),
       );
-    if (path === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
-    if (path === '/api/views') return send(200, 'application/json', JSON.stringify(served.runs));
-    if (path.startsWith('/files/')) {
-      const text = served.files[decodeURIComponent(path.slice('/files/'.length))];
+    if (routePath === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
+    if (routePath === '/api/views')
+      return send(
+        200,
+        'application/json',
+        JSON.stringify({
+          projects: (state.projects ?? [{ id: 'p', name: 'p', runs: served.runs }]).map(
+            ({ id, name, path: projectPath = name, missing = false, runs = [] }) => ({
+              id,
+              name,
+              path: projectPath,
+              missing,
+              runs: runs.map((run) => ({ ...run, projectId: id })),
+            }),
+          ),
+        }),
+      );
+    if (routePath.startsWith('/files/')) {
+      const text = served.files[decodeURIComponent(routePath.split('/').slice(3).join('/'))];
       return text === undefined ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', text);
     }
     send(404, 'text/plain', 'not found');
@@ -332,7 +348,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         }
         throw new Error('Timed out waiting for: ' + script);
       },
-      load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${portOf(server)}/` }),
+      load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${portOf(server)}/${query}` }),
       /**
        * @param {number} w
        * @param {number} h

@@ -39,7 +39,7 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
     assert.equal(await page.execute("return document.getElementById('help').textContent"), 'Help');
     assert.deepEqual(
       await page.execute(
-        "return [...document.querySelectorAll('#board h2')].map(h => [h.textContent, h.tabIndex, h.title.length > 20])",
+        "return [...document.querySelectorAll('.stage-headers h2')].map(h => [h.textContent, h.tabIndex, h.title.length > 20])",
       ),
       ['Define', 'Build', 'Check', 'Finish', 'Follow-up', 'Done'].map((label) => [label, 0, true]),
     );
@@ -152,7 +152,7 @@ test('a Done card shows the PR state, and only an open PR can be merged after co
   const page = await openPage(t, { runs: [done('open', 'open'), done('merged', 'merged')] });
   if (!page) return;
   try {
-    await page.execute("document.querySelectorAll('[aria-expanded]').forEach(b => b.click())");
+    await page.execute("document.querySelectorAll('.card [aria-expanded]').forEach(b => b.click())");
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('.pr')].map(p => p.textContent)"), [
       'Pull request Merged',
       'Pull request Open',
@@ -174,7 +174,7 @@ test('a Done card shows the PR state, and only an open PR can be merged after co
     await page.waitFor("return document.getElementById('dialog').open");
     await page.execute("document.getElementById('dialog-confirm').click()");
     await page.wait(200);
-    assert.deepEqual(page.calls, ['POST /api/runs/open/merge']);
+    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/open/merge']);
   } finally {
     await page.close();
   }
@@ -196,7 +196,7 @@ test('merge confirmation shows failing and pending GitHub checks', async (t) => 
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('.card [aria-expanded]').click()");
     await page.execute('document.querySelector(\'[aria-label^="Squash and merge"]\').click()');
     await page.waitFor("return document.getElementById('dialog').open");
     assert.match(
@@ -225,7 +225,7 @@ test('Escape cancels a confirmation, and the Merge button keeps keyboard focus a
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('.card [aria-expanded]').click()");
     await page.waitFor("return !document.querySelector('.details').hidden");
     await page.execute(
       'document.querySelector(\'[aria-label^="Squash and merge"]\').focus(); document.activeElement.click();',
@@ -276,7 +276,7 @@ test('active Runs offer deletion and dirty changes need separate confirmation', 
       /build.*permanently.*worktree/i,
     );
     await page.execute("document.getElementById('dialog-cancel').click()");
-    assert.deepEqual(page.calls, ['DELETE /api/runs/build']);
+    assert.deepEqual(page.calls, ['DELETE /api/projects/p/runs/build']);
     await page.execute("document.querySelector('[data-id=build] .danger').click()");
     await page.waitFor("return document.getElementById('dialog').open");
     await page.execute("document.getElementById('dialog-confirm').click()");
@@ -287,9 +287,9 @@ test('active Runs offer deletion and dirty changes need separate confirmation', 
     await page.waitFor("return !document.getElementById('dialog').open");
     await waitForCalls(page, 3);
     assert.deepEqual(page.calls, [
-      'DELETE /api/runs/build',
-      'DELETE /api/runs/build',
-      'DELETE /api/runs/build?discardChanges=true',
+      'DELETE /api/projects/p/runs/build',
+      'DELETE /api/projects/p/runs/build',
+      'DELETE /api/projects/p/runs/build?discardChanges=true',
     ]);
   } finally {
     await page.close();
@@ -338,7 +338,9 @@ test('Delete all names the hidden older Runs and reports the Runs that fail', as
   const page = await openPage(t, {
     runs: [done('new'), done('old', { updated: '2020-01-01T00:00:00Z' }), run({ id: 'active', title: 'active' })],
     respond: (req) =>
-      req.url?.startsWith('/api/runs/old') ? { status: 409, body: 'refused' } : { status: 200, body: 'deleted' },
+      req.url?.startsWith('/api/projects/p/runs/old')
+        ? { status: 409, body: 'refused' }
+        : { status: 200, body: 'deleted' },
   });
   if (!page) return;
   try {
@@ -358,7 +360,10 @@ test('Delete all names the hidden older Runs and reports the Runs that fail', as
     );
     assert.equal(await page.execute("return document.getElementById('dialog-message').textContent"), 'old (refused)');
     assert.equal(await page.execute("return document.getElementById('dialog-cancel').hidden"), true);
-    assert.deepEqual(page.calls.sort(), ['DELETE /api/runs/new?doneOnly=true', 'DELETE /api/runs/old?doneOnly=true']);
+    assert.deepEqual(page.calls.sort(), [
+      'DELETE /api/projects/p/runs/new?doneOnly=true',
+      'DELETE /api/projects/p/runs/old?doneOnly=true',
+    ]);
   } finally {
     await page.close();
   }
@@ -673,7 +678,7 @@ test('card buttons are visibly distinct: filled Merge, warning Delete, link-styl
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('.card [aria-expanded]').click()");
     await page.waitFor("return !document.querySelector('.details').hidden");
     /**
      * @param {string} sel

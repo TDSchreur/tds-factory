@@ -8,7 +8,8 @@ import { formatGuides } from '../src/guides.js';
 import { rowLine } from '../src/run-usage.js';
 import { sync } from '../src/sync.js';
 import { syncRules } from '../src/rules.js';
-import { startDashboard } from '../src/dashboard.js';
+import { launchDashboard } from '../src/dashboard-launch.js';
+import { openProjectRegistry } from '../src/project-registry.js';
 import { doctor } from '../src/doctor.js';
 import { update } from '../src/update.js';
 import { messageOf } from '../src/narrow.js';
@@ -20,7 +21,7 @@ const USAGE = `Usage:
   tds-factory rules [--force] [--dry-run]   (writes .claude/rules/ copies of .github/instructions/*.instructions.md, with applyTo as paths)
   tds-factory update [--no-force]
   tds-factory doctor [--agent claude|codex|copilot] [--json]
-  tds-factory dashboard [--port N]
+  tds-factory dashboard [--port N]   (one Dashboard for every Project on port 4300, or the next free port; --port N starts a separate one that is not shared)
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
   tds-factory run track --id ID --value fast|full   (in Define, after the user chose or confirmed the track)
@@ -82,8 +83,10 @@ try {
     const data = values.data === undefined ? undefined : JSON.parse(values.data);
     const store = openRunStore(process.cwd());
     const [, op] = positionals;
-    if (op === 'start') console.log(store.start(data));
-    else if (op === 'update') store.update(values.id, data);
+    if (op === 'start') {
+      console.log(store.start(data));
+      openProjectRegistry({ warn: (m) => console.error(`warning: ${m}`) }).join(store.projectDir);
+    } else if (op === 'update') store.update(values.id, data);
     else if (op === 'track') store.track(values.id, values.value);
     else if (op === 'transition') {
       store.transition(values.id, values.to, data);
@@ -216,9 +219,17 @@ try {
     const port = values.port === undefined ? undefined : Number(values.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535))
       throw new Error(`invalid port: ${values.port}`);
-    const { url } = await startDashboard({ projectDir: process.cwd(), port });
-    const link = process.stdout.isTTY && !process.env.NO_COLOR ? `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\` : url;
-    console.log(`Dashboard for ${process.cwd()}/.factory running at ${link} (Ctrl+C to stop)`);
+    const dashboard = await launchDashboard({ projectDir: process.cwd(), port, version });
+    const link =
+      process.stdout.isTTY && !process.env.NO_COLOR
+        ? `\x1b]8;;${dashboard.url}\x1b\\${dashboard.url}\x1b]8;;\x1b\\`
+        : dashboard.url;
+    if (dashboard.reused) console.log(`Dashboard already running; open ${link}`);
+    else {
+      console.log(`Dashboard running at ${link} (Ctrl+C to stop)`);
+      for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM']))
+        process.once(signal, () => void dashboard.close().finally(() => process.exit(0)));
+    }
   } else {
     console.log(USAGE);
     process.exitCode = command ? 1 : 0;

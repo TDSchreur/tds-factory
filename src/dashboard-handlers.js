@@ -2,6 +2,7 @@
 /** @import { PrLookup } from './run-clean.js' */
 /** @import { createPrViews } from './dashboard-pr-views.js' */
 /** @import { openRunStore } from './run-store.js' */
+/** @import { createProjectHub } from './dashboard-projects.js' */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { can, providerFor, remoteRepo } from './pr-provider.js';
@@ -11,13 +12,14 @@ import { interpretRun, str } from './dashboard-view.js';
 import { ghChecks, ghPrDetails } from './dashboard-pr-views.js';
 
 /**
- * What every handler gets: the services of one Dashboard and the request being answered.
+ * What every handler gets: the Dashboard's token and Projects and the request being answered. A handler of a Project route also gets that Project's services (`store` and the fields after it).
  * @typedef {object} DashboardContext
+ * @property {string} token
+ * @property {string} projectDir The Project the server was started for.
+ * @property {ReturnType<typeof createProjectHub>} hub
  * @property {ReturnType<typeof openRunStore>} store
  * @property {ReturnType<typeof openRunStore>} mainStore Clean-up runs from the main checkout, also when the Dashboard was started inside a Run worktree.
- * @property {Set<string>} inFlight Ids of the Runs with an action under way; one Dashboard's set, not the process's.
- * @property {string} token
- * @property {string} projectDir
+ * @property {Set<string>} inFlight Ids of the Runs with an action under way; one Project's set, so equal Run ids in two Projects never block each other.
  * @property {(url: string, head: string) => Promise<unknown>} prMerge
  * @property {PrLookup | undefined} prInfo
  * @property {number} statusRefreshMs
@@ -27,7 +29,7 @@ import { ghChecks, ghPrDetails } from './dashboard-pr-views.js';
  * @property {(status: number, type: string, body: string | undefined) => void} send
  * @property {string} target The request URL with its query string.
  * @property {string} path The request path without the query string.
- * @property {RegExpMatchArray} match The match of the route pattern on the path.
+ * @property {RegExpMatchArray} match The match of the route pattern on the path; on a Project route the Project id is left out, so group 1 is the first group after it.
  */
 /** @typedef {(ctx: DashboardContext) => Promise<void> | void} Handler */
 
@@ -57,7 +59,7 @@ const expectedRepo = async (worktree) => {
 const query = (ctx) => new URL(ctx.target, 'http://localhost').searchParams;
 
 // Answers 400 and returns undefined when the id is not valid percent encoding.
-/** @param {DashboardContext} ctx @param {string} raw */
+/** @param {Pick<DashboardContext, 'send'>} ctx @param {string} raw */
 const decodeId = (ctx, raw) => {
   try {
     return decodeURIComponent(raw);
@@ -107,7 +109,7 @@ const DELETE_STATUSES = {
 
 /** @type {Handler} */
 export async function deleteRun(ctx) {
-  const id = decodeId(ctx, ctx.path.slice('/api/runs/'.length));
+  const id = decodeId(ctx, ctx.match[1]);
   if (id === undefined) return;
   await exclusive(ctx, id, () => removeRun(ctx, id));
 }
@@ -330,20 +332,35 @@ export async function prStatus(ctx) {
 }
 
 /** @type {Handler} */
-export async function info({ send, token, projectDir }) {
+export async function info({ send, token, projectDir, hub }) {
   const version = await readFile(new URL('../package.json', import.meta.url), 'utf8')
     .then((data) => str(JSON.parse(data).version))
     .catch(() => '');
   send(
     200,
     'application/json',
-    JSON.stringify({ project: resolve(projectDir), token, ...(version ? { version } : {}) }),
+    JSON.stringify({
+      project: resolve(projectDir),
+      token,
+      pid: process.pid,
+      shared: hub.shared,
+      ...(version ? { version } : {}),
+    }),
   );
 }
 
+// Every Project, in registry order. A Project whose folder is gone is reported as missing with no Runs; each Run carries its Project id.
 /** @type {Handler} */
-export async function views({ send, store, prViews }) {
-  send(200, 'application/json', JSON.stringify(await Promise.all((await store.list()).map(prViews.view))));
+export async function views({ send, hub }) {
+  const projects = await Promise.all(
+    hub.list().map(async ({ id, name, missing, path }) => {
+      if (missing) return { id, name, path, missing, runs: [] };
+      const { store, prViews } = hub.servicesOf({ id, path });
+      const viewed = await Promise.all((await store.list()).map(prViews.view));
+      return { id, name, path, missing, runs: viewed.map((view) => ({ ...view, projectId: id })) };
+    }),
+  );
+  send(200, 'application/json', JSON.stringify({ projects }));
 }
 
 /** @type {Handler} */
@@ -352,8 +369,30 @@ export async function runs({ send, store }) {
 }
 
 /** @type {Handler} */
-export async function runFile({ send, store, path }) {
-  const body = await store.readFile(path.slice('/files/'.length));
+export async function runFile({ send, store, match }) {
+  const body = await store.readFile(match[1]);
   if (body === null) send(404, 'text/plain', 'not found');
   else send(200, 'text/markdown', body);
+}
+
+// Removes a Project from the registry by an id the registry holds; the folder and its Runs stay.
+/** @type {Handler} */
+export async function removeProject({ send, hub, match }) {
+  const id = decodeId({ send }, match[1]);
+  if (id === undefined) return;
+  const removed = await hub.remove(id);
+  if (removed === 'not-found') return send(404, 'text/plain', 'not found');
+  if (removed === 'own-not-registered')
+    return send(
+      409,
+      'text/plain',
+      'this Project is not in the registry, so there is nothing to remove; it is still served because the Dashboard was started in it',
+    );
+  send(200, 'text/plain', 'removed');
+}
+
+/** @type {Handler} */
+export async function removeMissingProjects({ send, hub }) {
+  const removed = await hub.removeMissing();
+  send(200, 'application/json', JSON.stringify({ removed }));
 }

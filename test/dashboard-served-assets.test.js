@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix, sep } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
+import './git-repo.js';
 
 // The files the page loads, worked out the way a browser does (#368: a module missing from the server's allowlist stopped the whole page),
 // asked from the real server, not from a stub.
