@@ -42,7 +42,7 @@ Five changes, each cutting one cause. The Sweep finds stale numbers, removed hea
 
 ## Out of Scope
 
-- Refusing a transition on size.
+- Refusing a transition on size. (The size is also checked during Build and the Run waits on the user; see [ADR 0035](../adr/0035-build-waits-on-the-user-when-a-run-outgrows-the-size-limit.md).)
 - Changing Check's Blocking rules, loop cap or reviewer assignment.
 - Sweeping non-Markdown files other than the command line help and the Dashboard help text (added by [Stale documents in Build](stale-documents-in-build.md)), or plain (unquoted) comma lists.
 

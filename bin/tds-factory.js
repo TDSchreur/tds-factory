@@ -26,6 +26,8 @@ const USAGE = `Usage:
   tds-factory run update --id ID --data JSON
   tds-factory run track --id ID --value fast|full   (in Define, after the user chose or confirmed the track)
   tds-factory run transition --id ID --to build|check|finish|follow-up [--data JSON]
+  tds-factory run split --id ID   (when a Run waits for the Run size answer in Build: keeps the Tickets done, prints the links of the others; only after the user chose to split)
+  tds-factory run size --id ID [--accept]   (prints the Run size; --accept records the user's acceptance of the size, only after the user answered)
   tds-factory run follow-up --id ID [--scope conflicts|checks|comments]   (observes the GitHub or Azure DevOps PR; --scope is required when it has findings, and only that scope goes back to Build as a Rework)
   tds-factory run rework --id ID [--cause CAUSE]... [--data JSON]   (CAUSE: stale-doc, test-gap, spec-gap, security, bug, size or other)
   tds-factory run sync --id ID [--data JSON]   (rebases the Run branch onto origin's default branch)
@@ -68,6 +70,7 @@ const { values, positionals } = parseArgs({
     all: { type: 'boolean', default: false },
     files: { type: 'boolean', default: false },
     cause: { type: 'string', multiple: true },
+    accept: { type: 'boolean', default: false },
     fast: { type: 'boolean', default: false },
     carried: { type: 'boolean', default: false },
     term: { type: 'string', multiple: true },
@@ -93,6 +96,13 @@ try {
       store.transition(values.id, values.to, data);
       if (values.to === 'check')
         for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
+    } else if (op === 'split') {
+      for (const link of store.split(values.id))
+        console.log(link.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?'));
+    } else if (op === 'size') {
+      const size = store.size(values.id, { accept: values.accept });
+      if (!size) console.log('The Run size is unknown (no base commit, or git failed)');
+      else console.log(`${size.files} file${size.files === 1 ? '' : 's'}, ${Math.round(size.bytes / 1024)} KB`);
     } else if (op === 'follow-up') console.log(store.followUp(values.id, { scope: values.scope }));
     else if (op === 'rework') store.rework(values.id, data, values.cause ?? []);
     else if (op === 'sync') store.sync(values.id, data);
@@ -105,7 +115,10 @@ try {
       if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all, not both');
       for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)])
         console.log(
-          (reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'),
+          (reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(
+            /[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
+            '?',
+          ),
         );
     } else if (op === 'stats') {
       if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
@@ -127,7 +140,7 @@ try {
         for (const gap of formatted.usage.gaps ?? []) console.log(`    ${gap.label} · no data`);
       };
       for (const run of report.runs) {
-        const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
+        const name = run.id.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?');
         if (run.unreadable) console.log(`${name}: unreadable (no data)`);
         else if (run.summary) print(name, run.summary);
       }
@@ -141,7 +154,7 @@ try {
         }
         if (report.usage.left.length)
           console.log(
-            `Left out of the token totals (not tracked): ${report.usage.left.map((id) => id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')).join(', ')}`,
+            `Left out of the token totals (not tracked): ${report.usage.left.map((id) => id.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?')).join(', ')}`,
           );
         const missing = report.runs.filter(
           (run) =>
@@ -236,6 +249,6 @@ try {
     process.exitCode = command ? 1 : 0;
   }
 } catch (err) {
-  console.error(`error: ${messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
+  console.error(`error: ${messageOf(err).replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?')}`);
   process.exitCode = 1;
 }

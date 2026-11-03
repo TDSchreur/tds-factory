@@ -17,6 +17,8 @@ import {
   transitionRun,
   acceptRun,
   grantLoopRun,
+  splitRun,
+  sizeRun,
   syncRun,
   syncRunFlow,
   acceptRunFlow,
@@ -78,6 +80,10 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     /** @param {string | undefined} id @param {{ updated?: string }} [data] */
     grantLoop: (id, data) => grantLoopRun(projectDir, id, data),
+    /** @param {string | undefined} id */
+    split: (id) => splitRun(projectDir, id),
+    /** @param {string | undefined} id @param {{ accept?: boolean }} [options] */
+    size: (id, options) => sizeRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ fast?: boolean }} [options] */
     verify: (id, options) => verifyRun(projectDir, id, options),
     /** @param {string | undefined} id @param {string | undefined} axis @param {string | undefined} value @param {{ carried?: boolean }} [options] */

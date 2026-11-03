@@ -164,6 +164,14 @@ _Avoid_: Task, story
 One pass of the Flow for one piece of work, from idea to pull request.
 _Avoid_: Job, Pipeline
 
+**Run size**:
+The size of a Run's diff against its base, in files and bytes, leaving out lockfiles and recorded test fixtures. Above the size limit Check reviewers read the diff in pieces, so Build waits for the user to split or accept once a finished Ticket leaves the Run over the limit with Tickets remaining.
+_Avoid_: Diff budget, PR size
+
+**Split**:
+Ending a Run at the Tickets it has done, so the Tickets not yet done move to a new Run. Only the user decides it.
+_Avoid_: Carve-out, Spin-off
+
 **Run record**:
 The status file a Run keeps up to date as it moves through the Stages, read by the Dashboard. It also holds the model the agent was asked to use and reported, and when the Run was last seen.
 _Avoid_: Log, State file

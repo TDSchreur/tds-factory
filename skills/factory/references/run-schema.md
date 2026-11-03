@@ -17,7 +17,7 @@
 | `observed_model` | The model the agent reports it is running on. Set with `run update`; cleared by a change of Stage. Only this field says what ran |
 | `last_seen` | ISO 8601 UTC timestamp of the latest write of the Run record by any operation. Maintained by the Run store; never supply it |
 | `tickets_total` | Number of Tickets cut from the Spec. Follows `tickets`: setting `tickets` sets it, and `run update` refuses a count that differs from the list |
-| `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build |
+| `tickets_done` | Number of those Tickets finished. Raise it each time a Ticket is completed during Build; when that leaves the Run over the size limit with Tickets remaining, the Run waits on the user (see `run split` and `run size`) |
 | `standards` | `pass` or `fail`: the Standards verdict of the latest `code-review`. Set with `run verdict` after each review |
 | `spec` | `pass` or `fail`, or `skipped` on the Fast track only: the Spec verdict of the latest `code-review`. Set with `run verdict` after each review |
 | `security` | `pass` or `fail`: the Security verdict of the latest `security-scan`. `fail` while any CRITICAL, HIGH or MEDIUM finding is open. Set with `run verdict` after each review |
@@ -27,6 +27,7 @@
 | `follow_up` | The latest observation of the PR on its host (GitHub or Azure DevOps): PR, head, observation time, `conflicts` (whether the PR has merge conflicts), checks, failures, pending flag, unresolved threads with comments and the `scope` of the Rework it started (`conflicts`, `checks` or `comments`; absent when none started). Set only by `run follow-up`; its text is untrusted scope, not Evidence |
 | `track` | `fast` or `full`: the Track the user chose. Absent means `full`. Set only by `run track` in Define, never by `run start` or `run update` |
 | `extra_loops` | Number of extra Check loops the user granted on the Dashboard, `0` when absent. The loop limit is the frozen cap (at most 4) plus this number. Raised only by the Dashboard's grant (ADR 0024), never by `run update` or an agent |
+| `size_accepted` | ISO time at which the user accepted the Run size, absent when not. Set only by `run size --accept`, never by `run update` or on your own judgment (ADR 0035); once set, Build no longer waits for size and the transition to Check prints no size warning |
 | `check_loops` | Number of times Check or Follow-up has sent the Run back to Build, `0` up to the loop limit. Starts at `0`; `run rework` and actionable `run follow-up` raise it by 1 on each return to Build |
 | `metrics` | Versioned observations maintained by named operations: Stage visits with UTC start and end, historical Check verdict events with head and attempt (and base for Project reviews), first Check outcome, the `rework_causes` given to `run rework` (`attempt`, `causes`, `at`), the agent `sessions` that worked on the Run, and token `usage`: `status` `tracked` with `rows` (Stage, model, `ticket` number or `bucket` `rework` or `wrap-up`, `input`, `cache_read`, `cache_write`, `output`, `reasoning` and `subagent_fresh`, counts only) and `sessions`, or `not tracked` with a `reason`. Older Runs may omit it; never supply it with `run update` |
 | `worktree` | Path of the Run worktree the Run works in. Set by `run start` |

@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
+import { runSize, overLimit } from '../src/run-size.js';
 
 const cli = resolve('bin/tds-factory.js');
 /**
@@ -83,3 +84,54 @@ test(
     assert.doesNotMatch(result.stderr, /pwned/);
   },
 );
+
+const big = 'x'.repeat(2048);
+
+test('runSize leaves lockfiles at any depth and test/fixtures out, and counts tests and sources', () => {
+  const { cwd, id } = inBuild(1, [
+    {
+      'package-lock.json': big,
+      'sub/dir/go.sum': big,
+      'a/yarn.lock': big,
+      'test/fixtures/deep/case.txt': big,
+      'test/a.test.js': big,
+      'src/a.js': big,
+    },
+  ]);
+  const size = runSize(cwd, id);
+  assert.equal(size?.files, 2);
+  assert.ok(size && size.bytes > 4096 && size.bytes < 4096 + 1024, `bytes ${size?.bytes}`);
+});
+
+test('runSize does not count uncommitted changes', () => {
+  const { cwd, id } = inBuild(1, [{ 'a.txt': 'a\n' }]);
+  const worktree = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8')).worktree;
+  writeFileSync(join(worktree, 'a.txt'), big);
+  writeFileSync(join(worktree, 'new.txt'), big);
+  assert.equal(runSize(cwd, id)?.files, 1);
+});
+
+test('runSize gives no size for an unknown base', () => {
+  const { cwd, id } = inBuild(1, [{ 'a.txt': 'a\n' }]);
+  const path = join(cwd, '.factory', 'runs', id, 'run.json');
+  const record = JSON.parse(readFileSync(path, 'utf8'));
+  record.base_sha = '0'.repeat(40);
+  writeFileSync(path, JSON.stringify(record));
+  assert.equal(runSize(cwd, id), undefined);
+  assert.equal(toCheck({ cwd, id }).stderr.includes('warning: the diff'), false);
+});
+
+test('a big lockfile and big fixtures do not trigger the size warning', () => {
+  const result = toCheck(
+    inBuild(1, [{ 'package-lock.json': 'x'.repeat(60 * 1024), 'test/fixtures/f.txt': 'x'.repeat(60 * 1024) }]),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /warning: the diff/);
+});
+
+test('a diff that overflows maxBuffer counts as over the limit, not as unknown', () => {
+  const { cwd, id } = inBuild(1, [{ 'big.txt': 'x'.repeat(50 * 1024) }]);
+  const size = runSize(cwd, id, { maxBuffer: 1024 });
+  assert.ok(size, 'the size is known');
+  assert.ok(overLimit(size));
+});
