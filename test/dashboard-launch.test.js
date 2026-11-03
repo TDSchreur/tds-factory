@@ -10,6 +10,8 @@ import { mainCheckout } from '../src/run-folder.js';
 import { repo, tempDir } from './git-repo.js';
 
 const FACTORY = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+/** @param {string} text */
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 async function freePort() {
   const probe = net.createServer();
@@ -159,7 +161,7 @@ test('a running Dashboard of an older Factory version is reported and left runni
     assert.equal(next.reused, true);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /0\.0\.1/);
-    assert.match(warnings[0], new RegExp(FACTORY.replace(/\./g, '\\.')));
+    assert.match(warnings[0], new RegExp(escapeRegex(FACTORY)));
   } finally {
     await new Promise((ok) => server.close(() => ok(undefined)));
   }
@@ -308,6 +310,59 @@ test('an oversized /api/info body is ignored as unknown and never warns about ol
     assert.equal(warnings.length, 0);
   } finally {
     await new Promise((ok) => server.close(() => ok(undefined)));
+  }
+});
+
+test('semver probe keeps strict semver and rejects malformed or pathological strings quickly', async () => {
+  const project = mainCheckout(repo()).dir;
+  const pathological = `0.0.0-0.${'--.'.repeat(20)}`;
+  const cases = [
+    { version: '1.2.3', warningExpected: true },
+    { version: '2.0.0', warningExpected: true },
+    { version: '1.2.3-rc.1+build.7' },
+    { version: '01.2.3', warningExpected: false },
+    { version: '1.2.3\nforged', warningExpected: false },
+    { version: pathological, warningExpected: false, assertFast: true },
+  ];
+  for (const { version, warningExpected, assertFast } of cases) {
+    /** @type {string[]} */
+    const warnings = [];
+    const server = http.createServer((req, res) => {
+      if (req.url !== '/api/info') return void res.writeHead(404).end();
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ token: 't', project, shared: true, pid: 458, version }));
+    });
+    await new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(undefined)));
+    const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
+    try {
+      const started = Date.now();
+      const launched = await launchDashboard({
+        projectDir: project,
+        version: '9.9.9',
+        preferredPort: 0,
+        warn: (m) => warnings.push(m),
+        registry: {
+          dir: tempDir('launch-semver-'),
+          join: () => ({ id: projectId(project), path: project }),
+          list: () => [],
+          remove: () => false,
+          removeAsync: async () => false,
+          removeMissingAsync: async () => [],
+          readState: () => ({ pid: 458, port, version }),
+          writeState: () => {},
+          clearState: () => {},
+        },
+      });
+      try {
+        assert.equal(launched.reused, true);
+      } finally {
+        await launched.close();
+      }
+      if (assertFast) assert.ok(Date.now() - started < 250, 'pathological semver probe should fail fast');
+      if (warningExpected !== undefined) assert.equal(warningExpected, warnings.length === 1, `version=${version}`);
+    } finally {
+      await new Promise((ok) => server.close(() => ok(undefined)));
+    }
   }
 });
 
