@@ -438,6 +438,7 @@ test('the main file stays small and names every reference file where it is neede
     'check.md',
     'continue.md',
     'define.md',
+    'doctor-checks.md',
     'exit-checklist.md',
     'fast-track.md',
     'finish.md',
@@ -571,6 +572,6 @@ test('/factory continue resumes a Run and the scoped Follow-up rules are in the 
   const followUp = references['follow-up.md'];
   assert.match(followUp, /--scope conflicts\|checks\|comments/);
   assert.match(followUp, /`conflicts` Rework start with `tds-factory run sync/);
-  assert.match(followUp, /each comment you judged to need no change/);
+  assert.match(followUp, /every comment you did not act on, with the reason/);
   assert.match(followUp, /never post replies or resolve threads/i);
 });

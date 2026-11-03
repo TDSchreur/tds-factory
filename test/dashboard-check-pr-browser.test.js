@@ -19,13 +19,13 @@ const doneRun = (/** @type {Record<string, unknown>} */ over = {}) =>
 /** @param {Page} page */
 const buttons = (page) =>
   page.execute(
-    "return [...document.querySelectorAll('.card [aria-label^=\"Check the pull request of\"]')].map(b => b.getAttribute('aria-label'))",
+    "return [...document.querySelectorAll('.card [aria-label^=\"Check PR: the pull request of\"]')].map(b => b.getAttribute('aria-label'))",
   );
 /** @param {Page} page @param {string} id */
 const check = async (page, id) => {
   await page.waitFor(`return !!document.querySelector('[data-id=${id}]')`);
   await page.execute(
-    `const card = document.querySelector('[data-id=${id}]'); const d = card.querySelector('.details'); if (d) d.hidden = false; card.querySelector('[aria-label^="Check the pull request of"]').click()`,
+    `const card = document.querySelector('[data-id=${id}]'); const d = card.querySelector('.details'); if (d) d.hidden = false; card.querySelector('[aria-label^="Check PR: the pull request of"]').click()`,
   );
   await page.waitFor(
     "return document.getElementById('detail').open && !!document.querySelector('#detail .pr-details h4')",
@@ -49,8 +49,8 @@ test('Check PR shows only for a Done Run with an open pull request and for a Run
   try {
     await page.waitFor("return !!document.querySelector('[data-id=fu]')");
     assert.deepEqual((await buttons(page)).sort(), [
-      'Check the pull request of Done one',
-      'Check the pull request of Follow',
+      'Check PR: the pull request of Done one',
+      'Check PR: the pull request of Follow',
     ]);
   } finally {
     await page.close();
@@ -106,7 +106,7 @@ test('a merged pull request shows its state only', async (t) => {
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=fu]')");
-    await page.execute('document.querySelector(\'[aria-label^="Check the pull request of"]\').click()');
+    await page.execute('document.querySelector(\'[aria-label^="Check PR: the pull request of"]\').click()');
     await page.waitFor("return /State: merged/.test(document.querySelector('#detail .pr-details')?.textContent ?? '')");
     const text = await drawer(page);
     assert.doesNotMatch(text, /Failing checks|conflicts|Pending|threads/);
@@ -127,7 +127,7 @@ for (const [host, steps] of [
     if (!page) return;
     try {
       await page.waitFor("return !!document.querySelector('[data-id=d]')");
-      await page.execute('document.querySelector(\'[aria-label^="Check the pull request of"]\').click()');
+      await page.execute('document.querySelector(\'[aria-label^="Check PR: the pull request of"]\').click()');
       await page.waitFor("return !!document.querySelector('#detail .pr-setup')");
       const items = await page.execute(
         "return [...document.querySelectorAll('#detail .pr-setup li')].map(li => li.textContent)",
@@ -145,7 +145,7 @@ test('a refused lookup says why', async (t) => {
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=d]')");
-    await page.execute('document.querySelector(\'[aria-label^="Check the pull request of"]\').click()');
+    await page.execute('document.querySelector(\'[aria-label^="Check PR: the pull request of"]\').click()');
     await page.waitFor("return /not eligible/.test(document.querySelector('#detail .pr-details')?.textContent ?? '')");
   } finally {
     await page.close();

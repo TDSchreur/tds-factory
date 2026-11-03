@@ -14,8 +14,8 @@
 
 - `GET /api/projects/<id>/runs/<run-id>/pr-details` reads a Done or Follow-up Run's pull request fresh (state,
   draft, conflicts, failing and pending checks, unresolved review threads) without touching the PR status cache. When
-  `gh` or `az` is missing or not signed in, it answers the host's setup steps. The PR provider's unused
-  `checksSummary` is replaced by `details`.
+  `gh` or `az` is missing or not signed in, it answers the host's setup steps. The PR provider's `checksSummary`, which
+  only the removed merge-checks route used, is replaced by `details`.
 - `POST /api/projects/<id>/runs/<run-id>/follow-up?scope=...&updated=...[&grant=true]` (the Dashboard's Fix) starts a
   Follow-up scoped to one problem of a GitHub pull request, moves the Run to Build and leaves it waiting with "Follow-up
   Rework ready for an agent". With `grant=true` at the Check loop limit it raises `extra_loops` by one (with the

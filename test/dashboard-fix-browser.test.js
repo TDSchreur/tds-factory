@@ -29,7 +29,7 @@ const followUp = (/** @type {Record<string, unknown>} */ over = {}) =>
 /** @param {Page} page */
 const open = async (page) => {
   await page.waitFor("return !!document.querySelector('[data-id=f]')");
-  await page.execute('document.querySelector(\'[aria-label^="Check the pull request of"]\').click()');
+  await page.execute('document.querySelector(\'[aria-label^="Check PR: the pull request of"]\').click()');
   await page.waitFor("return !!document.querySelector('#detail .pr-details h4')");
 };
 /** @param {Page} page */
@@ -189,6 +189,17 @@ test('Copy agent prompt copies the exact text and says so', async (t) => {
       "return window.copied !== null && /Copied/.test(document.querySelector('.copy-status').textContent)",
     );
     assert.equal(await page.execute('return window.copied'), '/factory continue w');
+  } finally {
+    await page.close();
+  }
+});
+
+test('Copy agent prompt is not offered for a Run id outside the Run id format', async (t) => {
+  const page = await openPage(t, { runs: [{ ...ready(), id: 'Bad Id;rm' }] });
+  if (!page) return;
+  try {
+    await page.waitFor("return document.querySelectorAll('.card').length > 0");
+    assert.equal(await page.execute("return document.querySelectorAll('.copy-prompt').length"), 0);
   } finally {
     await page.close();
   }

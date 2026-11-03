@@ -77,6 +77,10 @@ test('a Fix is refused for a stale record time and for a second Rework, with how
     assert.equal(stale.status, 409);
     assert.match(stale.text, /changed since you looked at it; reload/);
     assert.equal((await fix('?scope=checks')).status, 409, 'updated is required');
+    const dup = await fix('?scope=checks&scope=comments&updated=x');
+    assert.equal(dup.status, 400, 'a repeated scope is refused');
+    assert.equal((await fix('?scope=checks&updated=a&updated=b')).status, 400);
+    assert.equal((await fix('?scope=checks&updated=x&grant=true&grant=true')).status, 400);
     assert.equal(f.read().stage, 'finish');
     assert.equal((await fix()).status, 200);
     const second = await fix();

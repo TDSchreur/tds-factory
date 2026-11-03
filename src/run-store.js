@@ -39,6 +39,7 @@ export {
   trackOf,
 } from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
+export { FOLLOW_UP_SCOPES } from './run-follow-up.js';
 
 /** @param {Run} record @param {{ head: string, dirty: boolean }} state */
 const eligibility = (record, state) => ({

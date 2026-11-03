@@ -88,6 +88,8 @@
  * @property {FailingCheckView[]} [failing]
  * @property {string[]} [pending]
  * @property {ThreadView[]} [threads]
+ * @property {number} [failingTotal]
+ * @property {number} [pendingTotal]
  * @property {number} [threadsTotal]
  */
 /** @typedef {{ key: string, loading: boolean, data?: PrDetailsData, error?: string }} PrDetailsState The Check PR result of the Run whose key it holds. */
@@ -431,6 +433,7 @@ export const canCheckPr = (run) =>
   !!run.prHost &&
   ((run.column === 'done' && run.prState === 'open') || run.column === 'follow-up');
 
+// Mirrors FIX_WAITING_REASON in src/run-follow-up.js; the page cannot import Node code.
 export const FIX_WAITING_REASON = 'Follow-up Rework ready for an agent';
 
 // The prompt that hands a Run to an agent.
@@ -445,8 +448,6 @@ export const canCopyPrompt = (run) => !run.unreadable && run.waiting === true &&
 /** @param {RunView} run */
 export const atLoopCap = (run) =>
   Number.isSafeInteger(run.loops) && Number.isSafeInteger(run.loopCap) && Number(run.loops) >= Number(run.loopCap);
-
-export const FIX_SCOPES = /** @type {const} */ (['conflicts', 'checks', 'comments']);
 
 // Whether Fix is offered at all: GitHub pull requests only, and only while the pull request is open.
 /** @param {RunView} run */

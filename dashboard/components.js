@@ -181,6 +181,8 @@ function FixButton({ run, scope, onFix }) {
 // A button that copies the prompt that hands the Run to an agent. Without the Clipboard API the text is shown selected.
 /** @param {{ run: RunView }} props */
 function CopyPrompt({ run }) {
+  // Only a Run id of the Factory's own format is offered as a prompt (the rule of validId in src/run-folder.js; the page cannot import Node).
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(run.id)) return null;
   const [state, setState] = useState(/** @type {'idle' | 'copied' | 'manual'} */ ('idle'));
   const text = agentPrompt(run);
   /** @type {{ current: HTMLInputElement | null }} */
@@ -220,6 +222,8 @@ function PrDetails({ run, state, onFix }) {
   const yesNo = (/** @type {boolean | null | undefined} */ v) => (v === true ? 'yes' : v === false ? 'no' : 'unknown');
   const failing = Array.isArray(data?.failing) ? data.failing : [];
   const pending = Array.isArray(data?.pending) ? data.pending : [];
+  const failingTotal = Number.isSafeInteger(data?.failingTotal) ? Number(data?.failingTotal) : failing.length;
+  const pendingTotal = Number.isSafeInteger(data?.pendingTotal) ? Number(data?.pendingTotal) : pending.length;
   const threads = Array.isArray(data?.threads) ? data.threads.slice(0, THREADS_SHOWN) : [];
   const total = Number.isSafeInteger(data?.threadsTotal) ? Number(data?.threadsTotal) : threads.length;
   return html`<div class="pr-details-wrap"><div class="sr" role="status">${announce}</div>
@@ -249,12 +253,12 @@ function PrDetails({ run, state, onFix }) {
         open &&
         html`<h4>Failing checks</h4>${
           failing.length
-            ? html`<ul class="pr-failing">${failing.map((c, i) => html`<li key=${i}><${Link} href=${c.url}>${plain(c.name, 200)}<//></li>`)}</ul>`
+            ? html`<ul class="pr-failing">${failing.map((c, i) => html`<li key=${i}><${Link} href=${c.url}>${plain(c.name, 200)}<//></li>`)}</ul>${failingTotal > failing.length ? html`<p>${failingTotal - failing.length} more not shown.</p>` : ''}`
             : html`<p>None.</p>`
         }${failing.length > 0 ? html`<${FixButton} run=${run} scope="checks" onFix=${onFix} />` : ''}
         <h4>Pending checks</h4>${
           pending.length
-            ? html`<ul class="pr-pending">${pending.map((name, i) => html`<li key=${i}>${plain(name, 200)}</li>`)}</ul>`
+            ? html`<ul class="pr-pending">${pending.map((name, i) => html`<li key=${i}>${plain(name, 200)}</li>`)}</ul>${pendingTotal > pending.length ? html`<p>${pendingTotal - pending.length} more not shown.</p>` : ''}`
             : html`<p>None.</p>`
         }
         <h4>Unresolved review threads</h4>${
@@ -270,7 +274,7 @@ function PrDetails({ run, state, onFix }) {
 // The button that reads the pull request fresh and opens the Run detail on it.
 /** @param {{ run: RunView, onCheck: (run: RunView) => void, stopClick?: boolean }} props */
 function CheckPrButton({ run, onCheck, stopClick = true }) {
-  return html`<button type="button" aria-label=${'Check the pull request of ' + run.title} onClick=${(
+  return html`<button type="button" aria-label=${'Check PR: the pull request of ' + run.title} onClick=${(
     /** @type {Event} */ e,
   ) => {
     if (stopClick) stop(e);

@@ -40,7 +40,9 @@ test('a passing PR has no failing or pending checks and no threads', async () =>
     draft: false,
     conflicts: false,
     failing: [],
+    failingTotal: 0,
     pending: [],
+    pendingTotal: 0,
     threads: [],
     threadsTotal: 0,
   });
@@ -211,4 +213,48 @@ test('a link must be https without whitespace and at most 500 characters', async
     d.threads?.map((t) => t.url),
     [null, null],
   );
+});
+
+test('C1 controls and bidi or zero-width characters become spaces, and a cut keeps surrogate pairs whole', async () => {
+  const hostile = 'a\u0085b\u009fc​d‏e‪f‮g⁦h⁩i';
+  const d = await details(URL_, { run: run(open(), page([thread('p', hostile)])) });
+  assert.equal(d.threads?.[0].comment, 'a b c d e f g h i');
+  const emoji = '😀'.repeat(400);
+  const e = await details(URL_, { run: run(open(), page([thread('p', emoji)])) });
+  const comment = String(e.threads?.[0].comment);
+  assert.ok(comment.length <= 300);
+  assert.doesNotMatch(comment, /[\ud800-\udbff](?![\udc00-\udfff])/, 'no lone high surrogate');
+  assert.ok(comment.length > 0 && comment.endsWith('😀'));
+});
+
+test('a link must parse as an https URL without control characters', async () => {
+  const urls = [
+    'http://github.com/x',
+    'https://',
+    'javascript:alert(1)',
+    'https://github.com/a\u0085b',
+    'https://github.com/a​b',
+  ];
+  const d = await details(URL_, {
+    run: run(
+      open(),
+      page(urls.map((url) => ({ isResolved: false, path: 'p', comments: { nodes: [{ body: 'c', url }] } }))),
+    ),
+  });
+  assert.deepEqual(
+    d.threads?.map((t) => t.url),
+    urls.map((u) => (u === 'https://github.com/a​b' ? u : null)),
+  );
+});
+
+test('failing and pending checks are capped at 50 each and counted', async () => {
+  const checks = [
+    ...Array.from({ length: 80 }, (_, i) => check(`f${i}`, 'COMPLETED', 'FAILURE')),
+    ...Array.from({ length: 70 }, (_, i) => check(`p${i}`, 'IN_PROGRESS')),
+  ];
+  const d = await details(URL_, { run: run(open({ statusCheckRollup: checks }), page([])) });
+  assert.equal(d.failing?.length, 50);
+  assert.equal(d.failingTotal, 80);
+  assert.equal(d.pending?.length, 50);
+  assert.equal(d.pendingTotal, 70);
 });

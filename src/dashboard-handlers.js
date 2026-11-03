@@ -6,9 +6,9 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { messageOf, oneOf } from './narrow.js';
+import { FOLLOW_UP_SCOPES } from './run-store.js';
 import { interpretRun, str } from './dashboard-view.js';
 import { can, providerFor } from './pr-provider.js';
-import { FOLLOW_UP_SCOPES } from './run-follow-up.js';
 
 /**
  * What every handler gets: the Dashboard's token and Projects and the request being answered. A handler of a Project route also gets that Project's services (`store` and the fields after it).
@@ -158,6 +158,8 @@ function grantExtraLoop(ctx, id, v) {
 async function fixRun(ctx, id, v) {
   const { send, store } = ctx;
   const params = query(ctx);
+  if (['scope', 'updated', 'grant'].some((name) => params.getAll(name).length > 1))
+    return send(400, 'text/plain', 'each query parameter may appear once');
   const [scope, updated, grant] = [params.get('scope'), params.get('updated'), params.get('grant')];
   if (!oneOf(FOLLOW_UP_SCOPES, scope))
     return send(400, 'text/plain', `invalid scope: use ${FOLLOW_UP_SCOPES.join(', ')}`);
@@ -170,7 +172,7 @@ async function fixRun(ctx, id, v) {
     return send(
       409,
       'text/plain',
-      `${outcome.result}; there is nothing to fix for ${scope}, so the Run stays as it was`,
+      `${outcome.result}; there is nothing to fix for ${scope}; no Rework started and the snapshot was refreshed`,
     );
   send(200, 'text/plain', outcome.result);
 }

@@ -429,11 +429,29 @@ const NAME_MAX = 120,
   COMMENT_MAX = 300,
   LINK_MAX = 500,
   THREADS_MAX = 50,
+  CHECKS_MAX = 50,
   THREAD_PAGES = 10;
 /** @param {unknown} v @param {number} max */
-const cut = (v, max) => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, max);
+// Control, C1 and bidi/zero-width characters become spaces; a cut never splits a surrogate pair.
+const cut = (v, max) => {
+  const text = (typeof v === 'string' ? v : '').replace(
+    /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g,
+    ' ',
+  );
+  if (text.length <= max) return text;
+  const code = text.charCodeAt(max - 1);
+  return text.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
+};
 /** @param {unknown} v @returns {string | null} */
-const link = (v) => (typeof v === 'string' && /^https:\/\/\S+$/.test(v) && v.length <= LINK_MAX ? v : null);
+const link = (v) => {
+  if (typeof v !== 'string' || v.length > LINK_MAX || /[\u0000-\u0020\u007f-\u009f]/.test(v)) return null;
+  try {
+    return new URL(v).protocol === 'https:' ? v : null;
+  } catch {
+    // Not a URL at all: no link.
+    return null;
+  }
+};
 const reviewThreadsQuery = `query PrThreads($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { reviewThreads(first:100,after:$cursor) { nodes { isResolved path comments(first:1) { nodes { body url } } } pageInfo { hasNextPage endCursor } } } } }`;
 /**
  * @typedef {object} PrDetails
@@ -442,6 +460,8 @@ const reviewThreadsQuery = `query PrThreads($owner:String!, $repo:String!, $numb
  * @property {boolean | null} [conflicts] null when the host has not computed it yet.
  * @property {{ name: string, url: string | null }[]} [failing]
  * @property {string[]} [pending]
+ * @property {number} [failingTotal]
+ * @property {number} [pendingTotal]
  * @property {{ path: string, comment: string, url: string | null }[]} [threads]
  * @property {number} [threadsTotal]
  */
@@ -517,12 +537,16 @@ export async function details(
     cursor = connection.pageInfo.endCursor;
     if (!connection.pageInfo.hasNextPage || typeof cursor !== 'string') break;
   }
+  const failingEntries = entries.filter((e) => e.failing);
+  const pendingEntries = entries.filter((e) => e.pending && !e.failing);
   return {
     state,
     draft: pr.isDraft === true,
     conflicts: pr.mergeable === 'CONFLICTING' ? true : pr.mergeable === 'MERGEABLE' ? false : null,
-    failing: entries.filter((e) => e.failing).map((e) => ({ name: cut(e.name, NAME_MAX), url: link(e.url) })),
-    pending: entries.filter((e) => e.pending && !e.failing).map((e) => cut(e.name, NAME_MAX)),
+    failing: failingEntries.slice(0, CHECKS_MAX).map((e) => ({ name: cut(e.name, NAME_MAX), url: link(e.url) })),
+    failingTotal: failingEntries.length,
+    pending: pendingEntries.slice(0, CHECKS_MAX).map((e) => cut(e.name, NAME_MAX)),
+    pendingTotal: pendingEntries.length,
     threads,
     threadsTotal: total,
   };
