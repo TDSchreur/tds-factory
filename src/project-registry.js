@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { mainCheckout } from './run-folder.js';
-import { isMissing, messageOf } from './narrow.js';
+import { codeOf, isMissing, messageOf } from './narrow.js';
 
 /** @typedef {{ id: string, path: string }} Project */
 /** @typedef {{ pid: number, port: number, version: string }} DashboardState */
@@ -36,10 +36,45 @@ function writeAtomic(file, value) {
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const LOCK_WAIT_MS = 5000;
+const LOCK_STALE_MS = 10_000;
+const LOCK_RETRY_MS = 15;
+
+/** @param {number} ms */
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+// Runs fn while holding an exclusive lock file (created with `wx`) next to the registry, so two processes cannot both read the old list and drop each other's Project. A lock older than LOCK_STALE_MS belongs to a dead process and is taken over. Throws when the lock stays held for waitMs.
+/** @template T @param {string} lockFile @param {number} waitMs @param {() => T} fn @returns {T} */
+function withLock(lockFile, waitMs, fn) {
+  fs.mkdirSync(path.dirname(lockFile), { recursive: true });
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      fs.closeSync(fs.openSync(lockFile, 'wx'));
+      break;
+    } catch (err) {
+      if (codeOf(err) !== 'EEXIST') throw err;
+      try {
+        if (Date.now() - fs.statSync(lockFile).mtimeMs > LOCK_STALE_MS) fs.rmSync(lockFile, { force: true });
+        else if (Date.now() >= deadline) throw new Error(`${lockFile} is locked by another process`);
+        else sleep(LOCK_RETRY_MS);
+      } catch (inner) {
+        if (!isMissing(inner)) throw inner;
+      }
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    fs.rmSync(lockFile, { force: true });
+  }
+}
+
 // Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
-/** @param {{ dir?: string, warn?: (message: string) => void }} [options] */
-export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {} } = {}) {
+/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number }} [options] */
+export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {}, lockWaitMs = LOCK_WAIT_MS } = {}) {
   const registryFile = path.join(dir, 'projects.json');
+  const lockFile = `${registryFile}.lock`;
   const stateFile = path.join(dir, 'dashboard.json');
 
   /** @returns {{ paths: string[], corrupt: boolean }} */
@@ -73,12 +108,14 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {} 
     join(projectDir) {
       const main = mainCheckout(projectDir).dir;
       try {
-        const { paths, corrupt } = read();
-        if (corrupt) {
-          fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
-          warn(`kept the unreadable registry as ${registryFile}.corrupt`);
-        }
-        if (!paths.includes(main)) save([...paths, main]);
+        withLock(lockFile, lockWaitMs, () => {
+          const { paths, corrupt } = read();
+          if (corrupt) {
+            fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
+            warn(`kept the unreadable registry as ${registryFile}.corrupt`);
+          }
+          if (!paths.includes(main)) save([...paths, main]);
+        });
         return { id: projectId(main), path: main };
       } catch (err) {
         warn(`cannot register ${main} in ${registryFile}: ${messageOf(err)}`);
@@ -87,12 +124,14 @@ export function openProjectRegistry({ dir = factoryConfigDir(), warn = () => {} 
     },
     /** @param {string} id */
     remove(id) {
-      const { paths } = read();
-      const kept = paths.filter((p) => projectId(p) !== id);
-      if (kept.length === paths.length) return false;
       try {
-        save(kept);
-        return true;
+        return withLock(lockFile, lockWaitMs, () => {
+          const { paths } = read();
+          const kept = paths.filter((p) => projectId(p) !== id);
+          if (kept.length === paths.length) return false;
+          save(kept);
+          return true;
+        });
       } catch (err) {
         warn(`cannot update ${registryFile}: ${messageOf(err)}`);
         return false;
