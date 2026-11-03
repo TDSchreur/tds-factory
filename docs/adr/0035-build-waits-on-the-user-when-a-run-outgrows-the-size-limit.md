@@ -14,4 +14,4 @@
 
 **Dashboard.** Split and Continue buttons on a Run waiting for size call write routes under [ADR 0017](0017-dashboard-write-routes-need-origin-host-and-a-session-token.md); after a split the Run waits for an agent ([Spec](../specs/dashboard-split-and-continue-buttons.md)).
 
-**Later.** Define puts the estimate per Ticket in the Spec and proposes a split before Build (see the [Spec](../specs/run-size-gate-b.md)).
+**Define.** Define puts the estimate per Ticket in the Spec and proposes a split before Build (see the [Spec](../specs/run-size-gate-b.md)).
