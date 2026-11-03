@@ -419,7 +419,7 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   const { status, report } = doctor(huge);
   assert.equal(status, 1);
   assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
-  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 6);
+  assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 7);
   for (const a of report.agents) assert.equal(a.checks.length, 4, a.id);
   // A link to a regular file is fine.
   const shared = project();
@@ -508,7 +508,7 @@ test('doctor reports claude, codex and copilot in that order by default, shared 
   );
   assert.deepEqual(
     report.checks.map((c) => c.id).filter((id) => id !== 'agents'),
-    ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'guides'],
+    ['cli', 'tracker', 'git', 'verify-command', 'verify-fast', 'scratch-ignore', 'guides'],
   );
   for (const a of report.agents)
     assert.deepEqual(
@@ -667,4 +667,83 @@ test('doctor fails the skills check when the installed factory Skill lacks its r
   assert.equal(skills.status, 'fail');
   assert.match(skills.message, /factory Skill is missing its reference files: check\.md/);
   assert.match(skills.message, /tds-factory install/);
+});
+
+// Tracker kinds and ignore rules for the scratch-ignore check, against real temporary git repositories.
+/**
+ * @param {string} tracker
+ * @param {(dir: string) => void} [prepare]
+ */
+function scratchReport(tracker, prepare) {
+  const dir = project();
+  if (tracker === null) rmSync(join(dir, 'docs', 'agents', 'issue-tracker.md'));
+  else writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), tracker);
+  prepare?.(dir);
+  return doctor(dir).report;
+}
+
+test('scratch-ignore is missing for a local tracker without an ignore, and never changes ok or the files', () => {
+  const dir = project();
+  writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), '# Tracker\n\nLocal Markdown in `.scratch/`.\n');
+  const { report } = doctor(dir);
+  const found = check(report, 'scratch-ignore');
+  assert.equal(found.status, 'missing');
+  assert.match(found.message, /\.gitignore/);
+  assert.equal(existsSync(join(dir, '.gitignore')), false);
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  install(home, 'claude');
+  const ready = doctorOn(pathWith('claude'), dir, home);
+  assert.equal(check(ready.report, 'scratch-ignore').status, 'missing');
+  assert.equal(ready.report.ok, true);
+  assert.equal(ready.status, 0);
+});
+
+test('scratch-ignore passes when any rule ignores .scratch/', () => {
+  const tracker = '# Tracker\n\nIssues are local Markdown files.\n';
+  for (const rule of ['.scratch', '/.scratch/', '.scratch/'])
+    assert.equal(
+      check(
+        scratchReport(tracker, (d) => writeFileSync(join(d, '.gitignore'), `${rule}\n`)),
+        'scratch-ignore',
+      ).status,
+      'pass',
+      rule,
+    );
+  assert.equal(
+    check(
+      scratchReport(tracker, (d) => writeFileSync(join(d, '.git', 'info', 'exclude'), '.scratch/\n')),
+      'scratch-ignore',
+    ).status,
+    'pass',
+  );
+});
+
+test('scratch-ignore honours a global excludes file', () => {
+  const dir = project();
+  writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), '# Tracker\n\nLocal Markdown.\n');
+  const home = mkdtempSync(join(tmpdir(), 'doctor-home-'));
+  mkdirSync(join(home, '.config', 'git'), { recursive: true });
+  writeFileSync(join(home, '.config', 'git', 'ignore'), '.scratch/\n');
+  const result = spawnSync(process.execPath, [cli, 'doctor', '--json'], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, '.config') },
+  });
+  assert.equal(check(JSON.parse(result.stdout), 'scratch-ignore').status, 'pass');
+});
+
+test('scratch-ignore passes for a remote tracker, a missing tracker file and an unnamed tracker is local', () => {
+  for (const text of ['# Tracker\n\nGitHub Issues.\n', 'Azure DevOps boards', 'Jira', 'Linear']) {
+    const found = check(scratchReport(text), 'scratch-ignore');
+    assert.equal(found.status, 'pass', text);
+  }
+  assert.equal(check(scratchReport(/** @type {any} */ (null)), 'scratch-ignore').status, 'pass');
+  assert.equal(check(scratchReport('# x\n'), 'scratch-ignore').status, 'missing');
+});
+
+test('scratch-ignore reads hostile tracker text safely', () => {
+  // A mention of GitHub next to the .scratch/ folder still counts as local; control bytes and huge files do not crash the report.
+  assert.equal(check(scratchReport('Not GitHub: use .scratch/ files\n'), 'scratch-ignore').status, 'missing');
+  assert.equal(check(scratchReport('\u0000\u001b[31mx\n'), 'scratch-ignore').status, 'missing');
+  assert.equal(check(scratchReport('x'.repeat((1 << 20) + 1)), 'scratch-ignore').status, 'fail');
 });

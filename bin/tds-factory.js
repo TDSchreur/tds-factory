@@ -19,7 +19,7 @@ const USAGE = `Usage:
   tds-factory install [--agent claude|codex|copilot|all] [--project] [--force] [--dry-run]
   tds-factory rules [--force] [--dry-run]   (writes .claude/rules/ copies of .github/instructions/*.instructions.md, with applyTo as paths)
   tds-factory update [--no-force]
-  tds-factory doctor [--agent claude|codex|copilot] [--json]
+  tds-factory doctor [--agent claude|codex|copilot] [--json]   (read-only; scratch-ignore reports a Local tracker whose .scratch/ git does not ignore, and never fails the report)
   tds-factory dashboard [--port N]
   tds-factory run start --data JSON
   tds-factory run update --id ID --data JSON
