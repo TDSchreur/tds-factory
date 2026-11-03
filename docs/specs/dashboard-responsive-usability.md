@@ -4,7 +4,7 @@ The Dashboard is difficult to use on phones, tablets and small laptops. Stacked 
 
 ## Solution
 
-Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and visible navigation to every Stage. Show Stage counts and waiting indicators so users can find Runs needing attention. Open Run detail as a full-screen view at these widths, with a clear Back control that restores the selected Stage and card. Preserve the desktop board and adjacent detail panel above this breakpoint, using the existing styling, themes and browser tooling.
+Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and visible navigation to every Stage. Show Stage counts and waiting indicators so users can find Runs needing attention. Open Run detail as a full-screen view at these widths, with a clear Back control that restores the selected Stage and card. Above this breakpoint the desktop board stays at full width and the detail is a modal drawer on the right ([ADR 0031](../adr/0031-run-detail-as-a-modal-right-drawer.md)), using the existing styling, themes and browser tooling.
 
 ## User Stories
 
@@ -23,7 +23,7 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 13. As a user, I want dialogs to keep actions reachable on narrow or short screens, so that I can safely confirm or cancel operations.
 14. As a touch user, I want controls at least 44 CSS pixels high with appropriately sized close and navigation targets, so that actions are easy to select.
 15. As a user, I want the Factory version, project identity, connection status and theme control to remain available, so that responsive layout preserves existing information and preferences.
-16. As a desktop user, I want to keep the multi-column Dashboard and adjacent Run detail, so that I can monitor other Runs while reading.
+16. As a desktop user, I want to keep the multi-column Dashboard visible behind the Run detail drawer, so that I can see the other Runs while reading.
 17. As a maintainer, I want responsive tests to assert the actual CSS viewport, so that a browser window minimum cannot mask layout regressions.
 
 ## Implementation Decisions
@@ -35,7 +35,7 @@ Provide a compact Dashboard through 1024 CSS pixels with one selected Stage and 
 - Arrange header identity, project, connection status and controls deliberately rather than relying on incidental wrapping. Keep the Factory version beside the logo/Factory identity and ellipsize long project names with the existing full-path tooltip. Connection errors wrap within the screen.
 - Compact controls, including navigation, theme, older Runs, card actions, Delete all, introductory disclosure, dialog actions and detail Back, have accessible touch targets. Preserve compact desktop styling where appropriate.
 - Run detail becomes a full-screen view through 1024 CSS pixels with a plainly labeled Back control. Keep focus within it and make the covered Dashboard unavailable to keyboard interaction; lock background scrolling while preserving and restoring its position. Closing returns focus to the selected card and retains Stage selection. Escape still closes detail unless a confirmation dialog is active.
-- At desktop widths keep the board clickable beside detail. Fit the detail height to the actual available viewport and header so its controls remain visible. Preserve summary scroll position across polling and reset it when selecting another Run.
+- At desktop widths the detail is a modal drawer over the full-width board; it is as tall as the viewport, so its controls remain visible. Preserve summary scroll position across polling and reset it when selecting another Run.
 - Wrap long text and links throughout cards and detail. Wide Markdown tables may scroll inside their existing local wrapper; they must not cause the whole panel or page to scroll sideways.
 - Dialog actions wrap or stack when needed and remain reachable through internal scrolling on short viewports. Preserve existing confirmation semantics, safe initial focus, cancellation and destructive-operation safeguards.
 - Use browser emulation to set the actual CSS viewport and assert width and height before testing responsive behavior. Reuse the existing ChromeDriver fixture and provide screenshot access without introducing another browser framework.
