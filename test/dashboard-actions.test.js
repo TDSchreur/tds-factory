@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -33,16 +33,16 @@ const data = (value) => JSON.stringify(value);
 const PR = 'https://github.com/o/r/pull/1';
 
 // A Run in Check on top of `origin` (the same repository).
-function checked() {
-  const cwd = repo();
-  git(cwd, 'config', 'user.name', 't'); // the rebase in sync commits, and CI has no global identity
-  git(cwd, 'config', 'user.email', 't@t');
-  writeFileSync(join(cwd, '.gitignore'), '.factory/\n');
-  git(cwd, 'add', '-A');
-  git(cwd, 'commit', '-q', '-m', 'ignore');
-  const id = ok(
-    run(cwd, 'start', '--data', data({ title: 'Actions', agent: 'claude', commands: 'true', conventions: [] })),
-  );
+function checked(existing, title = 'Actions') {
+  const cwd = existing ?? repo();
+  if (!existing) {
+    git(cwd, 'config', 'user.name', 't'); // the rebase in sync commits, and CI has no global identity
+    git(cwd, 'config', 'user.email', 't@t');
+    writeFileSync(join(cwd, '.gitignore'), '.factory/\n');
+    git(cwd, 'add', '-A');
+    git(cwd, 'commit', '-q', '-m', 'ignore');
+  }
+  const id = ok(run(cwd, 'start', '--data', data({ title, agent: 'claude', commands: 'true', conventions: [] })));
   const wt = read(cwd, id).worktree;
   ok(
     run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })),
@@ -387,3 +387,135 @@ while (!fs.existsSync(${JSON.stringify(release)}) && Date.now() < end) Atomics.w
     await dash.close();
   }
 });
+
+// A finished Run with a PR, so that clean asks the PR lookup.
+/** @param {string} [cwd] @param {string} [title] */
+function finished(cwd, title) {
+  const made = checked(cwd, title);
+  review(made.cwd, made.id);
+  ok(run(made.cwd, 'transition', '--id', made.id, '--to', 'finish'));
+  ok(run(made.cwd, 'update', '--id', made.id, '--data', data({ pr: PR })));
+  ok(run(made.cwd, 'complete', '--id', made.id));
+  return { ...made, tip: git(made.wt, 'rev-parse', 'HEAD') };
+}
+// A promise that is settled from outside, and a way to wait until `count` calls have started.
+function gate() {
+  /** @type {() => void} */
+  let open = () => {};
+  const opened = new Promise((resolve) => (open = () => resolve(undefined)));
+  let entered = 0;
+  return {
+    opened,
+    open,
+    enter: () => entered++,
+    /** @param {number} count */
+    async reached(count) {
+      for (let i = 0; i < 250 && entered < count; i++) await sleep(20);
+      assert.ok(entered >= count, 'the held calls started');
+    },
+  };
+}
+
+test('a second action on a busy Run is answered 409 and the Run is released afterwards', async () => {
+  const { cwd, id, tip } = finished();
+  const held = gate();
+  const dash = await startDashboard({
+    projectDir: cwd,
+    port: 0,
+    prInfo: async () => {
+      held.enter();
+      await held.opened;
+      return { state: 'OPEN', head: tip };
+    },
+  });
+  try {
+    const cleaning = post(dash, id, 'clean');
+    await held.reached(1);
+    for (const action of ['sync', 'accept', 'extra-loop']) {
+      const busy = await post(dash, id, action, 'x');
+      assert.deepEqual(busy, { status: 409, text: 'another action on this Run is already running' }, action);
+    }
+    const merge = await fetch(`${dash.url}/api/runs/${id}/merge`, {
+      method: 'POST',
+      headers: await writeHeaders(dash),
+    });
+    assert.equal(merge.status, 409);
+    assert.equal(await merge.text(), 'another action on this Run is already running');
+    const del = await fetch(`${dash.url}/api/runs/${id}`, { method: 'DELETE', headers: await writeHeaders(dash) });
+    assert.equal(del.status, 409);
+    assert.equal(await del.text(), 'another action on this Run is already running');
+    held.open();
+    assert.equal((await cleaning).status, 409);
+    assert.notEqual(read(cwd, id).status, 'running');
+    const again = await post(dash, id, 'sync');
+    assert.doesNotMatch(again.text, /already running/);
+  } finally {
+    held.open();
+    await dash.close();
+  }
+});
+
+test('the same action on two Runs runs at the same time, and two Dashboards do not block each other', async () => {
+  const first = finished(undefined, 'One');
+  const second = finished(first.cwd, 'Two');
+  const held = gate();
+  const prInfo = async () => {
+    held.enter();
+    await held.opened;
+    return { state: 'OPEN', head: first.tip };
+  };
+  const dash = await startDashboard({ projectDir: first.cwd, port: 0, prInfo });
+  const other = await startDashboard({ projectDir: first.cwd, port: 0 });
+  try {
+    const one = post(dash, first.id, 'clean');
+    const two = post(dash, second.id, 'clean');
+    await held.reached(2);
+    const elsewhere = await post(other, first.id, 'sync');
+    assert.doesNotMatch(elsewhere.text, /already running/);
+    held.open();
+    assert.deepEqual([(await one).status, (await two).status], [409, 409]);
+    assert.doesNotMatch((await one).text, /already running/);
+  } finally {
+    held.open();
+    await other.close();
+    await dash.close();
+  }
+});
+
+test(
+  'a failing rollback after a failed accept goes to stderr and the answer keeps the accept error',
+  { skip: process.platform === 'win32' || process.getuid?.() === 0 },
+  async () => {
+    const { cwd, id, wt } = checked();
+    review(cwd, id, 'fail');
+    waiting(cwd, id);
+    writeFileSync(join(wt, 'dirty.txt'), 'x\n');
+    // `git status` in the Run worktree runs this command; once the Run is running it makes the Run folder read-only, so the compensating update cannot be written (POSIX; a Windows folder stays writable).
+    const folder = join(cwd, '.factory', 'runs', id);
+    const breaker = join(cwd, 'break.js');
+    writeFileSync(
+      breaker,
+      `const fs = require('node:fs');
+if (JSON.parse(fs.readFileSync(${JSON.stringify(join(folder, 'run.json'))}, 'utf8')).status === 'running') fs.chmodSync(${JSON.stringify(folder)}, 0o555);
+`,
+    );
+    git(wt, 'config', 'core.fsmonitor', `node ${JSON.stringify(breaker.replaceAll('\\', '/'))}`);
+    const dash = await startDashboard({ projectDir: cwd, port: 0 });
+    const lines = /** @type {string[]} */ ([]);
+    const original = console.error;
+    console.error = (...args) => void lines.push(args.join(' '));
+    try {
+      const stamp = (await viewsOf(dash)).find((r) => r.id === id)?.updated ?? '';
+      const result = await post(dash, id, 'accept', stamp);
+      assert.equal(result.status, 409);
+      assert.match(result.text, /uncommitted changes/);
+      const logged = lines.find((line) => line.includes('after a failed accept'));
+      assert.ok(logged, lines.join('\n'));
+      assert.match(logged, /EACCES/);
+    } finally {
+      console.error = original;
+      chmodSync(folder, 0o755);
+      await dash.close();
+    }
+  },
+);
