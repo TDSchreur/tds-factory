@@ -5,3 +5,4 @@
 ### Changed
 
 - Notifications and Run detail name the Project, and the compact view applies one Stage to every Project row. The header pill shows "N Projects" when there are several.
+- The collapsed row's Runs per Stage and waiting badge no longer change with the Needs you filter, the **Delete all** button names its Project, and a focused card is no longer hidden under the sticky headers.

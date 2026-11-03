@@ -18,7 +18,7 @@ A failing step skips the steps that depend on it; the others still run, and the 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/
 node bin/tds-factory.js install    # install skills/ into ~/.claude/skills ($CLAUDE_CONFIG_DIR/skills when set) and ~/.agents/skills
-node bin/tds-factory.js dashboard  # serve the Runs of ./.factory on a per-repo port (printed at start)
+node bin/tds-factory.js dashboard  # serve the Runs of every registered Project on the shared port 4300 (a free port when it is busy; the URL is printed)
 ```
 
 `sync` validates every manifest entry (name, paths inside the repository, no symlinks, no duplicate names) before it writes any. It replaces each skill folder through a staging folder and a rename, so a failure leaves the old folder intact, and it refuses to replace a synced skill you edited by hand (`--force` overrides). It also writes `skills/PROVENANCE.json`: per skill the source path, upstream URL and commit, transformations, licence and attribution.

@@ -1,6 +1,6 @@
 # Dashboard write routes need Origin, Host and a session token
 
-The Dashboard server on 127.0.0.1 began read-only, then gained `DELETE /api/runs/<id>` and `POST /api/runs/<id>/merge`. [Issue #249](https://github.com/TDSchreur/tds-factory/issues/249) adds three more writes: `POST /api/runs/<id>/sync`, `/clean` and `/accept`. Any page the user has open in the same browser can send requests to a loopback port, so each write route is a way for a web page to change Runs, worktrees and pull requests. Binding to loopback does not close that.
+The Dashboard server on 127.0.0.1 began read-only, then gained `DELETE /api/projects/<project-id>/runs/<run-id>` and `POST /api/projects/<project-id>/runs/<run-id>/merge` (written `/api/runs/<id>` before [ADR 0033](0033-one-dashboard-serves-every-registered-project.md)). [Issue #249](https://github.com/TDSchreur/tds-factory/issues/249) adds three more writes: `POST /api/projects/<project-id>/runs/<run-id>/sync`, `/clean` and `/accept`. Any page the user has open in the same browser can send requests to a loopback port, so each write route is a way for a web page to change Runs, worktrees and pull requests. Binding to loopback does not close that.
 
 Every route that is not a GET or HEAD passes one guard before it does anything, and a request that fails any rule gets 403 and changes nothing:
 

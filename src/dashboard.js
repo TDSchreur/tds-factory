@@ -45,7 +45,7 @@ const FALLBACK_PAGE = `<!doctype html>
 <meta charset="utf-8">
 <title>TDS Factory</title>
 <h1>TDS Factory</h1>
-<p>The Dashboard page is not installed. Run records are available at <a href="/api/runs">/api/runs</a>.</p>
+<p>The Dashboard page is not installed. Run records are available at <a href="/api/views">/api/views</a>.</p>
 `;
 /** @param {string} raw */
 const decodeProjectId = (raw) => {
