@@ -1,4 +1,4 @@
-/** @import { Run } from './run-record.js' */
+/** @import { FollowUp, Run } from './run-record.js' */
 import { oneOf } from './narrow.js';
 import { changeRun } from './run-folder.js';
 import { ownWorktrees, worktreeState } from './worktrees.js';
@@ -16,12 +16,33 @@ function providerOrThrow(url) {
   return { pr: url, provider: providerWith(url, 'strictView', 'observe') };
 }
 
+// One scope per Rework: the kind of finding the agent works on.
+export const FOLLOW_UP_SCOPES = /** @type {const} */ (['conflicts', 'checks', 'comments']);
+/** @typedef {typeof FOLLOW_UP_SCOPES[number]} FollowUpScope */
+const ALLOWED = `${FOLLOW_UP_SCOPES.slice(0, -1).join(', ')} or ${FOLLOW_UP_SCOPES.at(-1)}`;
+const FLAG = `--scope ${FOLLOW_UP_SCOPES.join('|')}`;
+
+// The scopes of the findings in an observation, in the order of FOLLOW_UP_SCOPES.
+/** @param {FollowUp} snapshot @returns {FollowUpScope[]} */
+const scopesWithFindings = (snapshot) =>
+  FOLLOW_UP_SCOPES.filter((scope) =>
+    scope === 'conflicts'
+      ? snapshot.conflicts === true
+      : scope === 'checks'
+        ? snapshot.failures.length > 0
+        : snapshot.threads.length > 0,
+  );
+
 /**
+ * Observes the PR and, for the findings of the chosen scope only, sends the Run back to Build as a Rework.
  * @param {string} projectDir
  * @param {string | undefined} id
+ * @param {{ scope?: string }} [options] `scope` is required when the observation has findings.
  */
-export function followUpRun(projectDir, id) {
+export function followUpRun(projectDir, id, { scope } = {}) {
   if (!validId(id)) throw new Error('invalid Run id');
+  if (scope !== undefined && !oneOf(FOLLOW_UP_SCOPES, scope))
+    throw new Error(`invalid Follow-up scope "${scope}": use ${ALLOWED}`);
   const runId = id;
   /** @type {string | undefined} */
   let result;
@@ -74,14 +95,26 @@ export function followUpRun(projectDir, id) {
       status_reason: '',
       follow_up: snapshot,
     };
-    if (snapshot.failures.length || snapshot.threads.length) {
-      if (loops(record) >= loopCap(record))
+    const found = scopesWithFindings(snapshot);
+    if (scope === undefined && found.length)
+      throw new Error(
+        `Follow-up found ${found.join(', ')}; choose what to work on with ${FLAG} (one scope per Rework)`,
+      );
+    if (scope !== undefined && found.includes(/** @type {FollowUpScope} */ (scope))) {
+      if (loops(record) >= loopCap(record)) {
+        record = { ...record, follow_up: { ...snapshot, scope: /** @type {FollowUpScope} */ (scope) } };
         result = `Check loop limit of ${loopCap(record)} reached; Follow-up scope retained`;
-      else {
-        record = clearEvidence({ ...moveVisit(record, 'build'), stage: 'build', check_loops: loops(record) + 1 });
-        result = 'Follow-up scoped Rework: back to Build';
+      } else {
+        record = clearEvidence({
+          ...moveVisit({ ...record, follow_up: { ...snapshot, scope: /** @type {FollowUpScope} */ (scope) } }, 'build'),
+          stage: 'build',
+          check_loops: loops(record) + 1,
+        });
+        result = `Follow-up scoped Rework (${scope}): back to Build`;
       }
-    } else result = snapshot.pending ? 'Follow-up: CI pending' : 'Follow-up: no actionable feedback';
+    } else if (scope !== undefined)
+      result = `Follow-up: no ${scope} findings${found.length ? `; ${found.join(', ')} remain in the snapshot` : ''}`;
+    else result = snapshot.pending ? 'Follow-up: CI pending' : 'Follow-up: no actionable feedback';
     return { ...record, activity: result, updated: new Date().toISOString() };
   });
   return result;

@@ -80,6 +80,8 @@ import { stages, targets, isStage } from './flow.js';
  * @property {string} pr
  * @property {string} head
  * @property {string} observed
+ * @property {boolean} conflicts Whether the PR has merge conflicts with its base branch.
+ * @property {'conflicts' | 'checks' | 'comments'} [scope] The scope of the Rework this observation started; absent when none started.
  * @property {Check[]} checks
  * @property {Check[]} failures
  * @property {boolean} pending

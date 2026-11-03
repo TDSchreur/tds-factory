@@ -40,7 +40,7 @@ function gh(args, cwd) {
     throw reasonError('malformed GitHub response', 'error', err);
   }
 }
-const checksQuery = `query FollowUpChecks($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100,after:$cursor) { nodes { __typename ... on CheckRun { name status conclusion detailsUrl } ... on StatusContext { context state targetUrl description } } pageInfo { hasNextPage endCursor } } } } } } } } }`;
+const checksQuery = `query FollowUpChecks($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid mergeable commits(last:1) { nodes { commit { statusCheckRollup { contexts(first:100,after:$cursor) { nodes { __typename ... on CheckRun { name status conclusion detailsUrl } ... on StatusContext { context state targetUrl description } } pageInfo { hasNextPage endCursor } } } } } } } } }`;
 const threadsQuery = `query FollowUpThreads($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid reviewThreads(first:100,after:$cursor) { nodes { id isResolved path comments(first:100) { nodes { body url } pageInfo { hasNextPage endCursor } } } pageInfo { hasNextPage endCursor } } } } }`;
 const commentsQuery = `query FollowUpComments($thread:ID!, $cursor:String) { node(id:$thread) { ... on PullRequestReviewThread { id comments(first:100,after:$cursor) { nodes { body url } pageInfo { hasNextPage endCursor } } } } }`;
 /**
@@ -152,7 +152,8 @@ export function strictView(url, cwd) {
     throw new Error('incomplete GitHub PR state');
   return value;
 }
-// What Follow-up observes at the PR head: current checks and unresolved review threads.
+// What Follow-up observes at the PR head: merge conflicts, current checks and unresolved review threads.
+// GitHub computes `mergeable` lazily; UNKNOWN is no finding, the next Follow-up reads it again.
 /**
  * @param {string} url
  * @param {string} head
@@ -170,10 +171,14 @@ export function observe(url, head, cwd) {
     if (!value || value.headRefOid !== head) throw new Error('GitHub PR head changed during Follow-up');
     return value;
   };
+  /** @type {unknown} */
+  let mergeable;
   const checks = pages(
     (cursor) => graph(checksQuery, fields, cwd, cursor),
     (data) => {
-      const commits = pr(data).commits?.nodes;
+      const value = pr(data);
+      mergeable ??= value.mergeable;
+      const commits = value.commits?.nodes;
       if (
         !Array.isArray(commits) ||
         commits.length !== 1 ||
@@ -185,6 +190,8 @@ export function observe(url, head, cwd) {
       return rollup === null ? { nodes: [], pageInfo: { hasNextPage: false } } : rollup?.contexts;
     },
   ).map(checkState);
+  if (!['MERGEABLE', 'CONFLICTING', 'UNKNOWN'].includes(String(mergeable)))
+    throw new Error('incomplete GitHub merge state');
   const rawThreads = pages(
     (cursor) => graph(threadsQuery, fields, cwd, cursor),
     (data) => pr(data).reviewThreads,
@@ -219,6 +226,7 @@ export function observe(url, head, cwd) {
     pr: url,
     head,
     observed: new Date().toISOString(),
+    conflicts: mergeable === 'CONFLICTING',
     checks,
     failures: checks.filter((c) => c.failing),
     pending: checks.some((c) => c.pending),

@@ -6,7 +6,7 @@ After Finish publishes a Run's pull request, CI failures and review comments arr
 
 ## Solution
 
-Add Follow-up as the fifth Stage after Finish. `tds-factory run follow-up --id ID` reads the Run's PR, snapshots failing current-head CI checks and unresolved review comments, and immediately starts Rework scoped to that snapshot when work remains and the shared loop cap permits it. Keep Finish's publication and Done's handoff meaning, while allowing this named command to reopen a delivered Run explicitly. Follow [ADR 0014](../adr/0014-follow-up-reopens-a-published-run.md).
+Add Follow-up as the fifth Stage after Finish. `tds-factory run follow-up --id ID --scope conflicts|checks|comments` reads the Run's PR, snapshots merge conflicts, failing current-head CI checks and unresolved review comments, and immediately starts Rework scoped to the chosen part of that snapshot when work remains and the shared loop cap permits it. Keep Finish's publication and Done's handoff meaning, while allowing this named command to reopen a delivered Run explicitly. Follow [ADR 0014](../adr/0014-follow-up-reopens-a-published-run.md).
 
 ## User Stories
 

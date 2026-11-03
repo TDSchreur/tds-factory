@@ -26,7 +26,7 @@ const USAGE = `Usage:
   tds-factory run update --id ID --data JSON
   tds-factory run track --id ID --value fast|full   (in Define, after the user chose or confirmed the track)
   tds-factory run transition --id ID --to build|check|finish|follow-up [--data JSON]
-  tds-factory run follow-up --id ID
+  tds-factory run follow-up --id ID [--scope conflicts|checks|comments]   (observes the PR; --scope is required when it has findings, and only that scope goes back to Build as a Rework)
   tds-factory run rework --id ID [--cause CAUSE]... [--data JSON]   (CAUSE: stale-doc, test-gap, spec-gap, security, bug, size or other)
   tds-factory run sync --id ID [--data JSON]   (rebases the Run branch onto origin's default branch)
   tds-factory run complete --id ID [--data JSON]
@@ -60,6 +60,7 @@ const { values, positionals } = parseArgs({
     data: { type: 'string' },
     id: { type: 'string' },
     to: { type: 'string' },
+    scope: { type: 'string' },
     axis: { type: 'string' },
     value: { type: 'string' },
     json: { type: 'boolean', default: false },
@@ -92,7 +93,7 @@ try {
       store.transition(values.id, values.to, data);
       if (values.to === 'check')
         for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
-    } else if (op === 'follow-up') console.log(store.followUp(values.id));
+    } else if (op === 'follow-up') console.log(store.followUp(values.id, { scope: values.scope }));
     else if (op === 'rework') store.rework(values.id, data, values.cause ?? []);
     else if (op === 'sync') store.sync(values.id, data);
     else if (op === 'complete') {

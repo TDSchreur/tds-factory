@@ -56,7 +56,8 @@ export function openRunStore(callerDir) {
     /** @param {string | undefined} id @param {string | undefined} to @param {{ activity?: string }} [data] */
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     /** @param {string | undefined} id */
-    followUp: (id) => followUpRun(projectDir, id),
+    followUp: (/** @type {string | undefined} */ id, /** @type {{ scope?: string }} */ options = {}) =>
+      followUpRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] @param {string[]} [causes] */
     rework: (id, data, causes) => reworkRun(projectDir, id, data, causes),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] */

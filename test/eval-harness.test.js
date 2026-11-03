@@ -148,7 +148,7 @@ test('Follow-up eval detects omitted scope and accepts the bounded scoped Rework
   const idle = grade('follow-up', 'true');
   assert.equal(idle.status, 1);
   assert.match(idle.stdout, /FAIL.*scope/i);
-  const worked = grade('follow-up', `${RUN} follow-up --id $id`);
+  const worked = grade('follow-up', `${RUN} follow-up --id $id --scope checks`);
   assert.equal(worked.status, 0, worked.stdout + worked.stderr);
   assert.doesNotMatch(worked.stdout, /FAIL/);
 });
