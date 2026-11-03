@@ -580,7 +580,8 @@ export function* observeFlow(url, head, cwd) {
     pending: PENDING.includes(c.status),
   }));
   const threads = openThreads(threadsAnswer).map((t) => {
-    if (!Number.isSafeInteger(t.id)) throw new Error('incomplete Azure DevOps review thread');
+    if (!Number.isSafeInteger(t.id) || /** @type {number} */ (t.id) <= 0)
+      throw new Error('incomplete Azure DevOps review thread');
     const href = /** @type {string} */ (t.link(url));
     const comments = t.comments
       .filter((c) => c.commentType !== 'system')
