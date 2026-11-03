@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-03
+
+### Added
+- A per-user Project registry (`projects.json` in the Factory config folder). A Project joins it when a Run starts in it and when `tds-factory dashboard` runs there.
+- The Dashboard page shows a Project row per Project under one sticky row of Stage headers. A Project row collapses to one line with its Runs per Stage and a waiting badge, and the choice is remembered per Project. Project rows are in alphabetical order, with the `?project=<id>` row first and expanded. An empty Project says "No Runs", and a missing Project has a Remove button.
+- The Dashboard server serves every Project in the Project registry, picks up Projects added later without a restart, and reports a Project whose folder is gone as missing. `DELETE /api/projects/<id>` removes a Project from the registry by its id.
+
+### Changed
+- Project registry ids now use 12 hex characters and collision-safe locking/writes.
+- Dashboard launch always prints a `?project=<id>` link for the main checkout, even when registry writes fail.
+- Dashboard launch prints a plain URL (without `?project=`) when registration fails from a Project-id collision.
+- Dashboard UI groups missing Projects into one summary row and adds bulk cleanup for missing entries.
+- Tests now isolate `TDS_FACTORY_CONFIG_DIR` by default, so direct `node --test` runs do not touch the real user config folder.
+- Dashboard `/api/info` probing now caps the response body at 64 KiB; a version longer than 64 characters is treated as unknown.
+- `tds-factory dashboard` shares one Dashboard on port 4300 (a free port when it is busy) instead of one port per repository. A later call in another repository registers it, prints the URL with `?project=<id>` and exits; an older running Dashboard gets a warning and is never stopped. `--port N` still starts a separate Dashboard.
+- `/api/info` also returns the process id of the server.
+- Two Dashboard or Run processes that join or leave the registry at the same time no longer lose each other's change: `projects.json` is changed under a lock file, and a lock that cannot be taken is a warning.
+- Notifications and Run detail name the Project, and the compact view applies one Stage to every Project row. The header pill shows "N Projects" when there are several.
+- The collapsed row's Runs per Stage and waiting badge no longer change with the Needs you filter, the **Delete all** button names its Project, and a focused card is no longer hidden under the sticky headers.
+- Run routes name the Project: `/api/projects/<id>/runs/<run-id>...` and `/files/<id>/<run-id>/<name>`. `/api/views` answers `{ projects: [{ id, name, path, missing, runs }] }`, and every Run carries its `projectId`. `/api/runs` is now `/api/projects/<id>/runs`.
+- `/api/info` also says whether the Dashboard is `shared` (backed by the registry). `tds-factory dashboard` reuses only a shared Dashboard on port 4300; a `--port` Dashboard there counts as a busy port.
+- `/api/info` reuse probing now reads at most 64 KiB and treats overlong (more than 64 chars) version strings as unknown.
+- The fallback page links to `/api/views` instead of the removed `/api/runs`.
+
+### Fixed
+- Registry registration now degrades safely when checkout discovery or writes fail.
+- Dashboard project removal now returns an explicit conflict for the server's own unregistered Project id, while unknown ids stay 404.
+- Existing config folders are tightened to private mode (`0700`) on non-Windows hosts.
+
 ## [0.7.0] - 2026-11-03
 
 ### Added
