@@ -71,7 +71,7 @@ The status never delays the Dashboard. `/api/views` answers from a cache per PR 
 
 An Azure DevOps link has the form `https://dev.azure.com/<organisation>/<project>/_git/<repository>/pullrequest/<id>` (the older `visualstudio.com` form is not supported). The Azure CLI with its `azure-devops` extension and a signed-in user (`az login`) are needed, and every call only reads. The same lines are shown, taken from the PR and its policies:
 
-- **Checks** are the blocking policies that are not about reviewers (build validation, comment requirements, status checks): a rejected or broken one is failing and is named, a running or queued one is pending.
+- **Checks** are the blocking policies that are not about reviewers (build validation, comment requirements, status checks): a rejected or broken one is failing and is named, a running or queued one is pending. "Require a merge strategy" is not a check: it stays rejected until a merge strategy is chosen at completion.
 - **Merge** is conflicts when Azure DevOps reports a merge conflict.
 - **Review** is changes requested when a reviewer voted "rejected" or "waiting for the author", review required while a required reviewer has not voted or a reviewers policy is not met (a creator's own vote does not count unless the policy allows it), approved when someone approved.
 - The Done Stage shows the PR as open, merged (completed) or closed (abandoned), and Clean up works after it is merged.
