@@ -40,7 +40,7 @@ The Dashboard button that reads a Run's pull request fresh and shows its state, 
 _Avoid_: Merge check
 
 **Fix**:
-The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
+The Dashboard button, one per Follow-up scope, that starts a scoped Follow-up for a GitHub or Azure DevOps pull request: the Run goes back to Build as a Rework and waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt). At the Check loop limit it reads "Grant extra loop and fix". There is no way to merge from the Dashboard. See ADR 0034.
 
 **Follow-up scope**:
 The one kind of pull request problem a Follow-up Rework fixes: `conflicts` with the base branch, failing `checks` or unresolved review `comments`. Problems outside the scope stay on the pull request for a later Follow-up.
