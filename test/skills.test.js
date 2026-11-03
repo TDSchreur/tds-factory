@@ -546,8 +546,16 @@ test('Preflight fixes a missing scratch-ignore for a Local tracker without ever 
   assert.match(main, /`\.factory\/` is only reported/);
   assert.match(main, /`\.scratch\/` for a Local tracker is the one case you edit/);
   const fix = references['scratch-ignore.md'];
-  assert.match(fix, /`git rev-parse --git-common-dir`/);
+  assert.match(fix, /`git rev-parse --path-format=absolute --git-common-dir`/);
   assert.match(fix, /uncommitted and should be committed to the default branch/);
   assert.match(references['define.md'], /Do not commit or force-add `\.scratch\/`/);
   assert.match(references['finish.md'], /"local, not committed"/);
+});
+
+test('the scratch-ignore procedure is exact about line endings, symlinks and the finish rule', () => {
+  const fix = references['scratch-ignore.md'];
+  assert.match(fix, /trailing `\\r`/);
+  assert.match(fix, /does not end with a newline, add one first/);
+  assert.match(fix, /is a symlink, do not write it/);
+  assert.doesNotMatch(references['finish.md'], /In the PR body, name a Local tracker/);
 });

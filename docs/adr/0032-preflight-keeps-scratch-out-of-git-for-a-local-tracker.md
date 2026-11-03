@@ -1,6 +1,6 @@
-# Preflight keeps `.scratch/` out of git for a local tracker
+# Preflight keeps `.scratch/` out of git for a Local tracker
 
-A project with a local Markdown Issue tracker keeps its Spec and Tickets in `.scratch/`, and those files kept ending up in commits. The Doctor now reports a `scratch-ignore` check, and the Factory Skill's Preflight fixes it: it appends `.scratch/` to the main checkout's `.gitignore` and to `.git/info/exclude`, and tells the user what changed. See the [Spec](../specs/scratch-gitignore-preflight.md).
+A project with a Local tracker keeps its Spec and Tickets in `.scratch/`, and those files kept ending up in commits. The Doctor now reports a `scratch-ignore` check, and the Factory Skill's Preflight fixes it: it appends `.scratch/` to the main checkout's `.gitignore` and to `.git/info/exclude`, and tells the user what changed. See the [Spec](../specs/scratch-gitignore-preflight.md).
 
 The Doctor stays read-only, so the Skill makes the edit. This is the one exception to the rule that the Skill never edits `.gitignore`: `.factory/` is still only reported, because it is a Factory file every project needs and the user owns that decision, while `.scratch/` is project data that the chosen tracker creates. Both files are written because a Run worktree is created from the default branch: an uncommitted `.gitignore` edit is invisible there, and `.git/info/exclude` is shared by every worktree. The `.gitignore` line is left uncommitted for the user to commit.
 

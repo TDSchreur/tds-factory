@@ -54,11 +54,12 @@ function trackerCheck(projectDir) {
     : ['pass', 'issue tracker and domain docs are configured'];
 }
 
-// The tracker is local when its file names local Markdown or `.scratch/`, or names no tracker at all (the default of to-tickets).
+// A remote tracker named anywhere in the file wins, even when `.scratch/` is mentioned in passing. The tracker is local when
+// the file names none (the default of to-tickets); local Markdown or `.scratch/` is how a local file names itself.
+const REMOTE_TRACKER =
+  /\b(github|gitlab|gitea|forgejo|codeberg|bitbucket|azure[ -]*(devops|boards)|jira|linear|redmine|youtrack|trello|asana|shortcut|clickup|phabricator|bugzilla)\b|https?:\/\/|\bgh\s+issue\b|\baz\s+boards\b|\bglab\b/i;
 /** @param {string} text */
-const isLocalTracker = (text) =>
-  /\.scratch\b|\blocal[ -]+markdown\b/i.test(text) ||
-  !/\b(github|gitlab|bitbucket|azure[ -]*devops|jira|linear|trello|asana|youtrack|shortcut|clickup)\b/i.test(text);
+const isLocalTracker = (text) => !REMOTE_TRACKER.test(text);
 
 // Read-only: reports whether git ignores `.scratch/` for a local tracker; the factory Skill's Preflight makes the fix.
 /**
