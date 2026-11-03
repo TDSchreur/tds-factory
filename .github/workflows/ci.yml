@@ -76,6 +76,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          # Two commits, so a pull request's merge commit can be compared with its first parent.
+          fetch-depth: 2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: lts/*
@@ -84,6 +86,10 @@ jobs:
       - if: matrix.shard == 1
         run: npm run check
       - run: npm run test:unit -- --test-shard=${{ matrix.shard }}/2
+      # A test that is only sometimes red on Windows should fail the pull request that adds it, not a later one.
+      - name: Repeat the changed unit tests
+        if: github.event_name == 'pull_request' && matrix.shard == 1
+        run: node scripts/with-temp-dir.js node scripts/repeat-changed-tests.js
 
   package:
     name: Package install (${{ matrix.os }})
