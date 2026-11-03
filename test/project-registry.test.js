@@ -242,6 +242,7 @@ test('a stale guard left by a dead process does not block a join forever', () =>
 test('a stale-lock takeover does not remove a live lock replaced before stale removal', () => {
   const dir = tempDir('registry-stale-race-');
   const lock = join(dir, 'projects.json.lock');
+  const guard = `${lock}.takeover`;
   writeFileSync(lock, 'stale-token');
   const old = new Date(Date.now() - 60_000);
   utimesSync(lock, old, old);
@@ -263,6 +264,7 @@ test('a stale-lock takeover does not remove a live lock replaced before stale re
   assert.equal(reg.join(repo()), undefined);
   assert.equal(replaced, true);
   assert.equal(readFileSync(lock, 'utf8'), 'replacement-token');
+  assert.equal(existsSync(guard), false);
   assert.match(warnings[0] ?? '', /locked/);
 });
 
@@ -295,22 +297,32 @@ test('two racing stale-lock takeovers end with one winner', async () => {
   const barrier = join(dir, 'barrier');
   const readyA = join(dir, 'ready-a');
   const readyB = join(dir, 'ready-b');
-  const won = join(dir, 'won.log');
+  const winner = join(dir, 'takeover-winner');
+  const overlap = join(dir, 'overlap.log');
+  const acquired = join(dir, 'acquired.log');
+  const holder = join(dir, 'holder');
   const script = `import { openProjectRegistry } from ${JSON.stringify(new URL('../src/project-registry.js', import.meta.url).href)};
-  import { writeFileSync, appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { writeFileSync, appendFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 const [dir, label, project] = process.argv.slice(1);
 const wait = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const reg = openProjectRegistry({
   dir,
-  lockWaitMs: 80,
+  lockWaitMs: 2000,
   onBeforeStaleTakeover: () => {
     writeFileSync(join(dir, 'ready-' + label), label);
     while (!existsSync(join(dir, 'barrier'))) wait(2);
+    try { writeFileSync(join(dir, 'takeover-winner'), label, { flag: 'wx' }); } catch {}
   },
-  onLockAcquired: ({ lockFile }) => {
-    if (readFileSync(lockFile, 'utf8').includes('projects.json.lock')) appendFileSync(join(dir, 'won.log'), label + '\\n');
-    wait(120);
+  onLockAcquired: () => {
+    try {
+      mkdirSync(join(dir, 'holder'));
+    } catch {
+      appendFileSync(join(dir, 'overlap.log'), label + '\\n');
+    }
+    appendFileSync(join(dir, 'acquired.log'), label + '\\n');
+    wait(150);
+    rmSync(join(dir, 'holder'), { recursive: true, force: true });
   },
 });
 process.exit(reg.join(project) ? 0 : 7);`;
@@ -330,9 +342,14 @@ process.exit(reg.join(project) ? 0 : 7);`;
     await new Promise((r) => setTimeout(r, 5));
   writeFileSync(barrier, 'go');
   const [ca, cb] = await Promise.all([pa, pb]);
-  const winners = existsSync(won) ? readFileSync(won, 'utf8').trim().split('\n').filter(Boolean) : [];
-  assert.deepEqual([ca, cb].sort(), [0, 7]);
-  assert.equal(winners.length, 1);
+  const winnerLabel = readFileSync(winner, 'utf8').trim();
+  const acquiredLabels = readFileSync(acquired, 'utf8').trim().split('\n').filter(Boolean).sort();
+  assert.deepEqual([ca, cb], [0, 0]);
+  assert.deepEqual(acquiredLabels, ['a', 'b']);
+  assert.equal(winnerLabel === 'a' || winnerLabel === 'b', true);
+  assert.equal(existsSync(overlap), false);
+  assert.equal(existsSync(`${lock}.takeover`), false);
+  assert.equal(existsSync(holder), false);
 });
 
 test('join warns and keeps the first path when another path has the same id', () => {

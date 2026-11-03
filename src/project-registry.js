@@ -104,6 +104,8 @@ function readLockSnapshot(file) {
  * @param {number} mtimeMs
  */
 function removeIfMatches(file, token, mtimeMs) {
+  // The read-then-remove gap is inherent to filesystem locks; it is bounded here by matching the stale snapshot
+  // (token + mtime) and by only using this path for stale takeover.
   const seen = readLockSnapshot(file);
   if (!seen || seen.token !== token || seen.mtimeMs !== mtimeMs) return false;
   fs.rmSync(file, { force: true });
