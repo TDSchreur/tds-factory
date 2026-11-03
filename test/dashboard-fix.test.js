@@ -198,3 +198,29 @@ test('no command line option grants a loop', () => {
   assert.notEqual(result.status, 0);
   assert.equal(f.read().extra_loops, undefined);
 });
+
+test('hostile scope, grant and updated query values start nothing', async () => {
+  const f = fixture();
+  const { dash, fix } = await withFix(f);
+  const before = JSON.stringify(f.read());
+  try {
+    for (const q of [
+      `?scope=${encodeURIComponent('checks\nconflicts')}&updated=x`,
+      `?scope=${'a'.repeat(5000)}&updated=x`,
+      '?scope=CHECKS&updated=x',
+      '?scope=__proto__&updated=x',
+      '?scope=checks&scope=nothing&updated=x&grant=TRUE',
+      '?scope=checks&updated=x&grant=1',
+      '?scope=checks&updated=x&grant=true&grant=false&grant=%00',
+    ]) {
+      const res = await fix(q);
+      assert.ok([400, 409].includes(res.status), `${q.slice(0, 40)} answered ${res.status}`);
+    }
+    assert.equal(JSON.stringify(f.read()), before, 'the Run record is unchanged');
+    const control = await fix(`?scope=checks&updated=${encodeURIComponent('\u0000\n'.repeat(5000))}`);
+    assert.ok([409, 431].includes(control.status));
+    assert.equal(JSON.stringify(f.read()), before);
+  } finally {
+    await dash.close();
+  }
+});

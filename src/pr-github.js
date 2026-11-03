@@ -419,7 +419,7 @@ export async function statusAsync(
 }
 
 // What the user sees after Check PR (ADR 0034): a fresh read of the PR's state, conflicts, checks and unresolved review threads.
-// Every text comes from GitHub and is untrusted: it is returned as a plain string cut to a fixed length, and a link only when it is https.
+// Every text comes from GitHub and is untrusted: it is returned as a plain string without control characters, cut to a fixed length, and a link only when it is https.
 export const setup = {
   reasons: ['gh-missing', 'not-signed-in'],
   steps: ['Install the GitHub CLI from https://cli.github.com', 'Run `gh auth login`'],
@@ -431,7 +431,7 @@ const NAME_MAX = 120,
   THREADS_MAX = 50,
   THREAD_PAGES = 10;
 /** @param {unknown} v @param {number} max */
-const cut = (v, max) => (typeof v === 'string' ? v : '').slice(0, max);
+const cut = (v, max) => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, max);
 /** @param {unknown} v @returns {string | null} */
 const link = (v) => (typeof v === 'string' && /^https:\/\/\S+$/.test(v) && v.length <= LINK_MAX ? v : null);
 const reviewThreadsQuery = `query PrThreads($owner:String!, $repo:String!, $number:Int!, $cursor:String) { repository(owner:$owner,name:$repo) { pullRequest(number:$number) { reviewThreads(first:100,after:$cursor) { nodes { isResolved path comments(first:1) { nodes { body url } } } pageInfo { hasNextPage endCursor } } } } }`;

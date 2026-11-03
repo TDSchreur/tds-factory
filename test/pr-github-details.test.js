@@ -154,3 +154,61 @@ test('a malformed answer is an error, and another host link is refused', async (
   );
   await assert.rejects(details('https://example.com/x', { run: run(open(), page([])) }));
 });
+
+test('control characters and newlines in host text become spaces', async () => {
+  const d = await details(URL_, {
+    run: run(
+      open({ statusCheckRollup: [check('a\nb\u0000c\u001b[31m', 'COMPLETED', 'FAILURE')] }),
+      page([thread('p\r\nq', 'line1\nline2\u0007')]),
+    ),
+  });
+  const text = JSON.stringify([d.failing, d.threads]);
+  assert.doesNotMatch(String(d.failing?.[0].name), /[\u0000-\u001f\u007f]/);
+  assert.doesNotMatch(String(d.threads?.[0].comment), /[\u0000-\u001f\u007f]/);
+  assert.doesNotMatch(String(d.threads?.[0].path), /[\u0000-\u001f\u007f]/);
+  assert.ok(text.length > 0);
+});
+
+test('many threads are capped at 50 and counted, and the page loop stops at 10 pages', async () => {
+  const many = Array.from({ length: 100 }, (_, i) => thread(`f${i}`, 'c'));
+  const manyOne = await details(URL_, { run: run(open(), page(many)) });
+  assert.equal(manyOne.threads?.length, 50);
+  assert.equal(manyOne.threadsTotal, 100);
+  let graphqlCalls = 0;
+  /** @param {string[]} args */
+  const endless = async (args) => {
+    if (args[0] === 'pr') return { stdout: JSON.stringify(open()) };
+    graphqlCalls++;
+    return {
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              reviewThreads: { nodes: [thread('x', 'c')], pageInfo: { hasNextPage: true, endCursor: 'c' } },
+            },
+          },
+        },
+      }),
+    };
+  };
+  const d = await details(URL_, { run: endless });
+  assert.equal(graphqlCalls, 10);
+  assert.equal(d.threadsTotal, 10);
+});
+
+test('a link must be https without whitespace and at most 500 characters', async () => {
+  const long = `https://github.com/${'a'.repeat(600)}`;
+  const d = await details(URL_, {
+    run: run(
+      open(),
+      page([
+        { isResolved: false, path: 'p', comments: { nodes: [{ body: 'c', url: long }] } },
+        { isResolved: false, path: 'p', comments: { nodes: [{ body: 'c', url: 'https://x.test/a b' }] } },
+      ]),
+    ),
+  });
+  assert.deepEqual(
+    d.threads?.map((t) => t.url),
+    [null, null],
+  );
+});
