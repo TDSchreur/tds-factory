@@ -49,6 +49,7 @@ Before you ask the user at each of these points, update the Run with `status` `w
 
 - Preflight: no verify command was found, after creating the Run with an empty `commands` and before asking for it.
 - Define: a question for the user, the confirmation of the shared understanding after grilling, or on the Fast track the single confirmation, which also covers the track when Define recommended it.
+- Build: the Run outgrew the size limit while Tickets remain (ADR 0035). Ask the user to split or accept. After split: run `tds-factory run split --id <id>`, which prints the links of the moved Tickets, take the Run to Check, then start a new Run at once with `/factory` and the links. After accept: run `tds-factory run size --id <id> --accept` and Build goes on.
 - Check: when any axis is `fail`, or the loop cap is reached with Blocking findings still open, to ask for permission to continue to Finish.
 
 If verification cannot run, set `verification-unavailable` with a `status_reason`; if the agent is interrupted, set `interrupted` with a `status_reason`. Resume either explicitly with `status` `running`. A failed Verify command is not an unavailable one.

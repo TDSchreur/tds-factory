@@ -10,7 +10,7 @@ A Run whose diff passes about 40 KB or 15 files reaches Check reviewers in piece
 
 Measure the Run size in a way that matches what reviewers read, put the estimate in the Spec so Define can propose a split, and let Build stop the Run for a decision as soon as the real size passes the limit while Tickets remain. The user splits (the remaining Tickets go to a new Run) or accepts the size (no more size waits for this Run).
 
-This work is cut into two Runs, because it does not fit in one (see the estimate below). **Run A** (this Run, Tickets published) builds the measurement, the wait and the two answers on the command line. **Run B** (a later Run, started with `/factory`) adds the Skill text for Define and the Fast track, the Waiting rule in `SKILL.md`, the Dashboard buttons and the remaining documents.
+This work is cut into several Runs, because it does not fit in one (see the estimate below). **Run A** (Tickets published) builds the measurement, the wait and the two answers on the command line. **Run B** is itself cut: [Size gate B](run-size-gate-b.md) carries the Skill text for Define, the Fast track and the Waiting rule (stories 10, 11 and 13); the Dashboard buttons (story 12) and the leftovers of Run A go to a later Run, [#530](https://github.com/TDSchreur/tds-factory/issues/530).
 
 ## User Stories
 
@@ -26,7 +26,7 @@ Run A:
 8. As a user, I want the split and the acceptance in the Event log, so that the history of the Run shows who decided what.
 9. As an agent, I want `references/progress-commands.md` to say that I run `split` or `size --accept` only after the user answered, as for `run track`, so that I never decide for the user.
 
-Run B (later):
+Run B ([Size gate B](run-size-gate-b.md) and [#530](https://github.com/TDSchreur/tds-factory/issues/530)):
 
 10. As a user, I want Define to put an estimate per Ticket (files, KB) in the Spec and, when the total passes the limit, to propose a split into several Runs with a suggested cut in the confirmation, so that I decide before Build.
 11. As a user, I want the Fast track to move to the Full track when the estimate passes the limit.

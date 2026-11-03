@@ -6,7 +6,9 @@ When a Ticket needs a security-sensitive primitive the platform does not offer (
 
 ## Size
 
-Estimate the diff when you cut the Tickets. When it passes about 40 KB or about 15 files, split the work into separate Runs or into Tickets that each fit well below that, because Check reviewers read about 40 KB inline and a larger diff reaches them in pieces. Build commits once per Ticket. `run transition --to check` warns, without refusing, when the diff is larger than that or the branch has fewer commits than Tickets.
+The Spec holds a size estimate: a table with a row per Ticket, a row for the Define artifacts and a total, the Spec counted, in files and KB of diff. Count what the Run size counts (no lockfiles, no `test/fixtures/`), with tests at their real size, Markdown by the length of its lines. Estimates run low, so the Run fits only when the total stays at or under two thirds of the limit: 10 files and 27 KB. The limit itself (about 40 KB, about 15 files) stays what Build enforces: Build waits for the user when the Run outgrows it, and `run transition --to check` warns, without refusing, when the diff is larger or the branch has fewer commits than Tickets. Build commits once per Ticket.
+
+Above two thirds of the limit, Define proposes a split with a suggested cut in the confirmation, and the user decides; never split without the answer. After the user confirms a split, Tickets exist only for the first Run. Each later Run gets one issue with its scope (what it carries, why it was cut, what it needs first) and no Ticket label; the first Run's Spec names those issues, and the later Run starts with `/factory` and its own Define.
 
 ## Tracker labels
 

@@ -165,7 +165,7 @@ One pass of the Flow for one piece of work, from idea to pull request.
 _Avoid_: Job, Pipeline
 
 **Run size**:
-The size of a Run's diff against its base, in files and bytes, leaving out lockfiles and recorded test fixtures. Above the size limit Check reviewers read the diff in pieces, so Build waits for the user to split or accept once a finished Ticket leaves the Run over the limit with Tickets remaining.
+The size of a Run's diff against its base, in files and bytes, leaving out lockfiles and recorded test fixtures. Above the size limit Check reviewers read the diff in pieces, so Define estimates it per Ticket and proposes a split above two thirds of the limit, and Build waits for the user to split or accept once a finished Ticket leaves the Run over the limit with Tickets remaining.
 _Avoid_: Diff budget, PR size
 
 **Split**:
