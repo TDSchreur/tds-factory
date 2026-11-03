@@ -145,8 +145,7 @@ test('a missing or signed-out gh is classified and the host has setup steps', as
       (/** @type {any} */ e) => e.code === code && setup.reasons.includes(e.code),
     );
   }
-  assert.ok(setup.steps.some((s) => s.includes('cli.github.com')));
-  assert.ok(setup.steps.some((s) => s.includes('gh auth login')));
+  assert.deepEqual(setup.steps, ['Install the GitHub CLI from https://cli.github.com', 'Run `gh auth login`']);
 });
 
 test('a malformed answer is an error, and another host link is refused', async () => {
