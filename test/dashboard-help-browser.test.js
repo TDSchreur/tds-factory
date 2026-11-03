@@ -21,7 +21,7 @@ test('the Help button opens the help panel with the focus inside, and Esc closes
     );
     assert.deepEqual(
       await page.execute("return [...document.querySelectorAll('#help-panel h3')].map((h) => h.textContent)"),
-      ['Stages', 'Tracks', 'Waiting on you', 'Check verdicts', 'Actions'],
+      ['Stages', 'Project rows', 'Tracks', 'Waiting on you', 'Check verdicts', 'Actions'],
     );
     assert.match(await page.execute("return document.getElementById('help-panel').textContent"), /\/factory/);
     await page.key(''); // Escape

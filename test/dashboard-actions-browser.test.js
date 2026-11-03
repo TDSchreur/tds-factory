@@ -127,7 +127,7 @@ test('Clean up is offered for a merged Done Run and shows why a clean-up is refu
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelectorAll('[aria-expanded]').forEach(b => b.click())");
+    await page.execute("document.querySelectorAll('.card [aria-expanded]').forEach(b => b.click())");
     assert.equal(await page.execute('return document.querySelectorAll(\'[aria-label^="Clean up"]\').length'), 1);
     await confirmed(page, '[aria-label="Clean up merged"]', 'Clean up Run?');
     assert.deepEqual(await answer(page, 'Could not clean up the Run'), [
@@ -171,7 +171,7 @@ test('Needs you: a Run that starts waiting raises a browser notification, and on
     ];
     await page.waitFor('return window.__notes.length === 1');
     assert.deepEqual(await page.execute('return window.__notes'), [
-      ['Needs you: Now waiting', 'confirm the shared understanding', 'new'],
+      ['Needs you in p: Now waiting', 'confirm the shared understanding', 'p/new'],
     ]);
     await page.wait(2500);
     assert.equal(await page.execute('return window.__notes.length'), 1);

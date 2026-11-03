@@ -5,7 +5,7 @@ import { openPage, run } from './browser.js';
 /** @import { RunStub } from './browser.js' */
 
 const clickStage = `const button = [...document.querySelectorAll('nav[aria-label="Stages"] button')].find((b) => b.textContent.includes(arguments[0])); if (button) button.click(); return !!button`;
-const visibleStages = `return [...document.querySelectorAll('#board section')].filter((s) => s.getBoundingClientRect().height > 0).map((s) => s.dataset.stage)`;
+const visibleStages = `return [...document.querySelectorAll('#board .column')].filter((s) => s.getBoundingClientRect().height > 0).map((s) => s.dataset.stage)`;
 
 test('compact users can select a Stage and find waiting Runs after polling', async (t) => {
   const state = {

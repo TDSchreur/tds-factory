@@ -476,3 +476,46 @@ export function prStatusOf(run) {
   lines.push('Review: ' + (reviewText[s.review ?? ''] ?? 'none yet'));
   return { kind: 'open', lines, failing: checks.result === 'failing', conflicting: s.merge === 'conflicting' };
 }
+
+/** @typedef {{ id: string, name: string, missing: boolean, runs: RunView[] }} ProjectView */
+
+// A Run id is only unique within its Project, so everything the page remembers about a Run is keyed by both.
+/** @param {{ id: string, projectId: string }} run */
+export const runKey = (run) => run.projectId + '/' + run.id;
+
+// The Project rows in a stable alphabetical order, the linked Project first. Returns a new list.
+/**
+ * @param {ProjectView[]} projects
+ * @param {string} [first] the id of the Project that comes first
+ */
+export const sortProjects = (projects, first = '') =>
+  [...projects].sort(
+    (a, b) =>
+      Number(b.id === first) - Number(a.id === first) ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+      a.name.localeCompare(b.name) ||
+      a.id.localeCompare(b.id),
+  );
+
+export const COLLAPSE_KEY = 'dashboard-collapsed-projects';
+
+// The saved collapse choices: { [projectId]: boolean }. Missing, blocked or corrupt storage gives no choices.
+/** @returns {Record<string, boolean>} */
+export function loadCollapsed() {
+  try {
+    const data = JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '{}');
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+    return Object.fromEntries(Object.entries(data).filter(([, value]) => typeof value === 'boolean'));
+  } catch {
+    return {};
+  }
+}
+
+/** @param {Record<string, boolean>} choices */
+export function saveCollapsed(choices) {
+  try {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify(choices));
+  } catch {
+    /* storage unavailable: the choice still applies to this page */
+  }
+}

@@ -8,7 +8,18 @@ The Project registry is `projects.json` in the Factory config folder (`$XDG_CONF
 
 The header shows the serving Factory installation's version beside the logo, including when there are no Runs. This is the same version printed by that installation's `tds-factory --version`.
 
-At widths up to 1024 CSS pixels, the Dashboard shows one Stage at a time. Use the Stage buttons to switch columns; each button shows the number of visible Runs and flags those waiting for you. The first view favors a waiting Run's Stage, then the first nonempty Stage. Your selection stays in place while the Dashboard refreshes or you change the older-Run filter. Wider screens show all six columns together.
+## Project rows
+
+The page has one sticky row of Stage headers and, under it, one Project row per Project in the Project registry, so Runs of different Projects never share a column. The Project name is the folder name, with the parent folder added when two Projects have the same name. Each Project row is a labelled region whose heading holds a toggle button (`aria-expanded`); it works with Enter and Space.
+
+- **Collapse.** A collapsed Project row is one line with the Runs per Stage and a **N waiting** badge. The choice is saved per Project id in the browser (`localStorage`), so it survives a reload; blocked or unreadable storage only means it is not remembered. A Run that starts waiting never expands a Project row, and neither does **Needs you**. Opening a Run from a notification expands its Project row.
+- **Order.** Project rows are in alphabetical order and stay put, however the registry is ordered. The Project row of `?project=<id>` (the link `tds-factory dashboard` prints) is first and expanded. Inside a Project row the cards keep the waiting-first order.
+- **Global controls.** **Needs you (N)**, the older-Runs toggle and the Done card expansion work over every Project row. A Run is always shown with its Project: cards sit in its Project row, and Run detail says "Project: <name>". Selection, expanded Done cards and the focus after closing Run detail are kept per Project and Run id, so two Projects may use the same Run id. **Delete all** in the Done column of a Project row deletes only that Project's Done Runs.
+- **Empty and missing Projects.** A Project without Runs is a collapsed Project row that says "No Runs". A Project whose folder is gone shows a warning and a **Remove** button instead of columns. Remove asks first, then sends `DELETE /api/projects/<id>`; it removes the Project from the registry and touches no folder or Run.
+- **Notifications.** A browser notification is raised for every Project and names it: "Needs you in <Project>: <title>".
+- **Header.** The pill beside the logo shows the Project the Dashboard was started in; with several Projects it shows "N Projects" and the names as its tooltip, and the tab title no longer carries one name.
+
+At widths up to 1024 CSS pixels, the Dashboard shows one Stage at a time. Use the Stage buttons to switch columns; the Stage headers are replaced by these buttons and the Stage applies to every Project row. Each button shows the number of visible Runs over all Projects and flags those waiting for you; the Project rows stack and can be collapsed. The first view favors a waiting Run's Stage, then the first nonempty Stage. Your selection stays in place while the Dashboard refreshes or you change the older-Run filter. Wider screens show all six columns together.
 
 Selecting a Run opens its detail as a modal drawer on the right, over a full-width board that stays visible behind a light backdrop ([ADR 0031](adr/0031-run-detail-as-a-modal-right-drawer.md)). Close it with the close button, Escape or a click on the backdrop; focus returns to the Run's card. While it is open the board is not available, so close it before selecting another Run. A confirmation opened from the detail appears above it, and Escape closes only that confirmation first. A refresh keeps the drawer open, and it closes when its Run is no longer shown. At widths up to 1024 CSS pixels the detail fills the screen instead, with **Back to stages**. The Dashboard fits every width without a horizontal scrollbar; only wide Markdown tables in a summary scroll inside their own area.
 
@@ -20,7 +31,7 @@ When a Run's [token usage](usage.md#5-follow-runs-on-the-dashboard) is tracked, 
 
 The **Help** button in the header opens a help panel: a dialog with short sections on the Stages, the Fast and Full track, what "Needs you" means, the Check verdicts (pass, fail, skipped) and Left open, and the actions Merge, Sync, Clean up, Accept Check and Grant extra loop. The text is static (`dashboard/help.js`) and uses the glossary's terms. The focus moves into the panel, Tab stays inside it, Esc or **Close** closes it and the focus returns to what opened it. On narrow screens it fills the screen.
 
-When there are no Runs at all, a welcome card replaces the Stage columns. It shows how to start (`/factory` and what you want built), says that the Run appears here, and has a **How does this work?** link that opens the help panel. The card goes away as soon as a Run exists, and it does not appear when the Needs you filter merely hides every Run.
+When there are no Runs at all and at most one Project (none missing), a welcome card replaces the Stage columns. It shows how to start (`/factory` and what you want built), says that the Run appears here, and has a **How does this work?** link that opens the help panel. The card goes away as soon as a Run exists, and it does not appear when the Needs you filter merely hides every Run.
 
 ## Design
 

@@ -39,7 +39,7 @@ test('the board explains itself and flags Runs that wait on the user', async (t)
     assert.equal(await page.execute("return document.getElementById('help').textContent"), 'Help');
     assert.deepEqual(
       await page.execute(
-        "return [...document.querySelectorAll('#board h2')].map(h => [h.textContent, h.tabIndex, h.title.length > 20])",
+        "return [...document.querySelectorAll('.stage-headers h2')].map(h => [h.textContent, h.tabIndex, h.title.length > 20])",
       ),
       ['Define', 'Build', 'Check', 'Finish', 'Follow-up', 'Done'].map((label) => [label, 0, true]),
     );
@@ -152,7 +152,7 @@ test('a Done card shows the PR state, and only an open PR can be merged after co
   const page = await openPage(t, { runs: [done('open', 'open'), done('merged', 'merged')] });
   if (!page) return;
   try {
-    await page.execute("document.querySelectorAll('[aria-expanded]').forEach(b => b.click())");
+    await page.execute("document.querySelectorAll('.card [aria-expanded]').forEach(b => b.click())");
     assert.deepEqual(await page.execute("return [...document.querySelectorAll('.pr')].map(p => p.textContent)"), [
       'Pull request Merged',
       'Pull request Open',
@@ -196,7 +196,7 @@ test('merge confirmation shows failing and pending GitHub checks', async (t) => 
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('.card [aria-expanded]').click()");
     await page.execute('document.querySelector(\'[aria-label^="Squash and merge"]\').click()');
     await page.waitFor("return document.getElementById('dialog').open");
     assert.match(
@@ -225,7 +225,7 @@ test('Escape cancels a confirmation, and the Merge button keeps keyboard focus a
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('.card [aria-expanded]').click()");
     await page.waitFor("return !document.querySelector('.details').hidden");
     await page.execute(
       'document.querySelector(\'[aria-label^="Squash and merge"]\').focus(); document.activeElement.click();',
@@ -678,7 +678,7 @@ test('card buttons are visibly distinct: filled Merge, warning Delete, link-styl
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('[aria-expanded]').click()");
+    await page.execute("document.querySelector('.card [aria-expanded]').click()");
     await page.waitFor("return !document.querySelector('.details').hidden");
     /**
      * @param {string} sel
