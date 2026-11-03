@@ -29,3 +29,15 @@ test('waitUntil checks once more at the deadline', async (t) => {
   assert.equal(await waitUntil(() => ++calls === 2, { timeoutMs: 20, intervalMs: 50 }), true);
   assert.equal(calls, 2);
 });
+
+test('waitUntil stops after the check at the deadline', async (t) => {
+  // Readings 0, 10 and 20 ms: the second check runs when the 20 ms deadline is reached, and no third one follows.
+  const times = [0, 10];
+  t.mock.method(Date, 'now', () => times.shift() ?? 20);
+  let calls = 0;
+  await assert.rejects(
+    waitUntil(() => (calls++, false), { timeoutMs: 20, intervalMs: 50, message: 'never ready' }),
+    /never ready/,
+  );
+  assert.equal(calls, 2);
+});
