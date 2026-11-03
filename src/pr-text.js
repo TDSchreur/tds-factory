@@ -6,8 +6,8 @@ export const NAME_MAX = 120,
   LINK_MAX = 500,
   THREADS_MAX = 50,
   CHECKS_MAX = 50;
-/** @param {unknown} v @param {number} max */
 // Control, C1 and bidi/zero-width characters become spaces; a cut never splits a surrogate pair.
+/** @param {unknown} v @param {number} max */
 export const cut = (v, max) => {
   const text = (typeof v === 'string' ? v : '').replace(
     /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g,

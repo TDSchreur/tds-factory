@@ -12,3 +12,5 @@
 
 - `tds-factory run follow-up` no longer says "Follow-up needs a GitHub PR URL"; the Dashboard Fix refusal for a host
   without an adapter names GitHub and Azure DevOps.
+- The text of a failed `gh` or `az` command that reaches an error is capped at 500 characters, with control characters
+  replaced by spaces.

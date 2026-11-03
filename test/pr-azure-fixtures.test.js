@@ -31,6 +31,8 @@ for (const file of files) {
       [],
     );
     assert.doesNotMatch(text, /aad\.(?!REDACTED)[\w-]+/);
+    // No GUID anywhere (a merge id, an artifact id) is a real one.
+    for (const guid of text.match(GUID) ?? []) assert.match(guid, PLACEHOLDER, `${file}: ${guid}`);
     for (const m of text.matchAll(IDENTITY)) {
       const value = m[1] ?? m[2] ?? m[3];
       if (GUID.test(value)) assert.match(value, PLACEHOLDER, `${file}: ${value}`);

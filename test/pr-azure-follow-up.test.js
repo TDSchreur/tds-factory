@@ -12,11 +12,12 @@ const HEAD = 'a'.repeat(40);
 
 /**
  * @param {import('../src/git.js').Flow} flow
- * @param {{ pr?: any, policies?: any, threads?: any, statuses?: any, fail?: { status: number | null, stderr: string, error?: Error } }} [answers]
+ * @param {{ pr?: any, prAfter?: any, policies?: any, threads?: any, statuses?: any, fail?: { status: number | null, stderr: string, error?: Error } }} [answers]
  */
 function drive(flow, answers = {}) {
   /** @type {string[][]} */
   const calls = [];
+  let shows = 0;
   let next = flow.next();
   while (!next.done) {
     const step = /** @type {{ command: [string, string | undefined, string[]] }} */ (
@@ -32,7 +33,8 @@ function drive(flow, answers = {}) {
         : resource === 'pullRequestStatuses'
           ? (answers.statuses ?? json('sandbox.statuses.json'))
           : argv[2] === 'show'
-            ? (answers.pr ?? { ...json('sandbox.pr.json'), lastMergeSourceCommit: { commitId: HEAD } })
+            ? ((shows++ > 0 ? answers.prAfter : undefined) ??
+              answers.pr ?? { ...json('sandbox.pr.json'), lastMergeSourceCommit: { commitId: HEAD } })
             : (answers.policies ?? []);
     next = flow.next(
       answers.fail ? { stdout: '', ...answers.fail } : { status: 0, stdout: JSON.stringify(body), stderr: '' },
@@ -113,6 +115,38 @@ test('observeFlow refuses a head that differs and shapes that are not the record
   assert.throws(() => drive(observeFlow('https://example.com/x', HEAD)), /not an Azure DevOps/);
 });
 
+test('observeFlow refuses a PR whose head moved while the findings were read', () => {
+  const moved = pr({ lastMergeSourceCommit: { commitId: 'b'.repeat(40) } });
+  assert.throws(
+    () => drive(observeFlow(URL_, HEAD), { prAfter: moved }),
+    /Azure DevOps PR head changed during Follow-up/,
+  );
+  const { calls } = drive(observeFlow(URL_, HEAD));
+  assert.equal(calls.filter((argv) => argv[2] === 'show').length, 2);
+});
+
+test('observeFlow cuts check names and thread paths and keeps the comment bodies whole', () => {
+  const long = 'n'.repeat(5000);
+  const statuses = { value: [{ id: 1, state: 'failed', context: { name: `x\u202e${long}` } }] };
+  const body = 'c'.repeat(5000);
+  const threads = {
+    value: [
+      {
+        id: 4,
+        status: 'active',
+        comments: [{ id: 1, commentType: 'text', content: body }],
+        threadContext: { filePath: `/a\n${long}` },
+      },
+    ],
+  };
+  const { value } = drive(observeFlow(URL_, HEAD), { statuses, threads });
+  assert.ok(
+    value.checks.every((/** @type {{ name: string }} */ c) => c.name.length <= 120 && !/[\u202e]/.test(c.name)),
+  );
+  assert.ok(value.threads[0].path.length <= 300 && !value.threads[0].path.includes('\n'));
+  assert.equal(value.threads[0].comments[0].body, body);
+});
+
 test('the failure codes of az reach the flows', () => {
   /** @param {string} stderr @param {any} [extra] */
   const code = (stderr, extra) => {
@@ -127,4 +161,22 @@ test('the failure codes of az reach the flows', () => {
   assert.equal(code('Please run az login'), 'az-not-signed-in');
   assert.equal(code('TF400733 rate limit'), 'rate-limited');
   assert.equal(code('boom'), 'error');
+});
+
+test('the text of an az failure in an error is capped and holds no control character', () => {
+  const stderr = `ERROR: boom\u001b[31m\n${'x'.repeat(100000)}`;
+  try {
+    drive(strictViewFlow(URL_), { fail: { status: 1, stderr } });
+    assert.fail('should throw');
+  } catch (err) {
+    const message = /** @type {Error} */ (err).message;
+    assert.ok(message.length < 700, String(message.length));
+    assert.doesNotMatch(message, /[\u0000-\u001f]/);
+  }
+});
+
+test('observeFlow treats a response with a continuation token as complete', () => {
+  const threads = { ...json('sandbox.threads.json'), continuation_token: 'next' };
+  const { value } = drive(observeFlow(URL_, HEAD), { threads });
+  assert.equal(value.threads.length, 4);
 });

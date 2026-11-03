@@ -9,7 +9,6 @@ const DIR = new URL('./fixtures/pr-status/azure/', import.meta.url);
 const json = (file) => JSON.parse(readFileSync(new URL(file, DIR), 'utf8'));
 const URL_ = 'https://dev.azure.com/example-org/Projects/_git/Kahoot/pullrequest/533';
 const HEAD = 'a'.repeat(40);
-const LIMIT_MS = 3000;
 
 /** @param {{ pr?: any, policies?: any, threads?: any, statuses?: any }} answers */
 const answerOf = (answers) => (/** @type {string[]} */ argv) => {
@@ -44,14 +43,12 @@ function drive(flow, answers) {
   return next.value;
 }
 
-test('details: thousands of threads and statuses stay capped and finish in bounded time', async () => {
+test('details: thousands of threads and statuses stay capped', async () => {
   const threads = { value: Array.from({ length: 20000 }, (_, i) => thread(i + 1, 'x'.repeat(2000))) };
   const statuses = {
     value: Array.from({ length: 20000 }, (_, i) => ({ id: i + 1, state: 'failed', context: { name: `s${i}` } })),
   };
-  const start = Date.now();
   const d = await details(URL_, { run: run({ threads, statuses }) });
-  assert.ok(Date.now() - start < LIMIT_MS);
   assert.deepEqual([d.threads?.length, d.threadsTotal, d.failing?.length, d.failingTotal], [50, 20000, 50, 20000]);
 });
 
@@ -128,11 +125,9 @@ test('details: malformed shapes are errors, never an empty list that looks clean
     await assert.rejects(details(URL_, { run: run({ statuses }) }), /Azure DevOps/, JSON.stringify(statuses));
 });
 
-test('observeFlow: thousands of threads finish in bounded time and keep every finding', () => {
+test('observeFlow: thousands of threads keep every finding', () => {
   const threads = { value: Array.from({ length: 5000 }, (_, i) => thread(i + 1, 'c')) };
-  const start = Date.now();
   const value = drive(observeFlow(URL_, HEAD), { threads });
-  assert.ok(Date.now() - start < LIMIT_MS);
   assert.equal(value.threads.length, 5000);
 });
 

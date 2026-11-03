@@ -4,7 +4,7 @@ import * as azure from './pr-azure.js';
 
 // The PR provider seam (ADR 0020): the rest of the Factory asks this module about a PR link and never calls a hosting CLI itself.
 // An adapter exports `name`, `title`, `matches(url)`, `repoOfRemote(remote)` and the operations its callers use. GitHub (the `gh` command) has all of them;
-// Azure DevOps (the `az` command) only reads: PR status, state and head. A caller asks `can(url, operation)` before it uses an operation not every adapter has.
+// Azure DevOps (the `az` command) reads status, state, head, details and Follow-up observations, and has no write operation. A caller asks `can(url, operation)` before it uses an operation not every adapter has.
 
 /**
  * The status of a PR for the Dashboard.

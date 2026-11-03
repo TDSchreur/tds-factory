@@ -572,7 +572,7 @@ export function* observeFlow(url, head, cwd) {
   const statuses = yield* value(STATUSES);
   const threadsAnswer = yield* value(THREADS);
   const checks = checkEntries(target, policies, statuses).map((c) => ({
-    name: c.name,
+    name: cut(c.name, NAME_MAX),
     state: c.status,
     url: link(c.url),
     description: null,
@@ -589,8 +589,11 @@ export function* observeFlow(url, head, cwd) {
         if (typeof c.content !== 'string') throw new Error('incomplete Azure DevOps review comment');
         return { body: c.content, url: href };
       });
-    return { id: String(t.id), path: typeof t.path === 'string' ? t.path : '', comments };
+    return { id: String(t.id), path: cut(t.path, PATH_MAX), comments };
   });
+  // The PR can move while the findings are read: read it once more after the last read and refuse a different head.
+  const after = yield* azFlow(args(SHOW, target), cwd, 'follow-up');
+  if (after.lastMergeSourceCommit?.commitId !== head) throw new Error('Azure DevOps PR head changed during Follow-up');
   return {
     pr: url,
     head,
