@@ -33,7 +33,11 @@ The lighter Track for bug fixes and tiny changes: one confirmation in Define, a 
 The default Track: the full Define interview, a Spec and as many Tickets as the work needs.
 
 **Follow-up**:
-The Stage after Finish that observes the Run's pull request and scopes Rework to failing checks and unresolved review comments. It is entered explicitly and can reopen a delivered Run.
+The Stage after Finish that observes the Run's pull request and scopes Rework to one Follow-up scope. It is entered explicitly, from the agent or from the Dashboard, and can reopen a delivered Run.
+
+**Follow-up scope**:
+The one kind of pull request problem a Follow-up Rework fixes: `conflicts` with the base branch, failing `checks` or unresolved review `comments`. Problems outside the scope stay on the pull request for a later Follow-up.
+_Avoid_: Fix type, Problem category
 
 **Done**:
 A Run that has delivered its current revision for review or whose pull request has merged. Done ends the current work; explicit Follow-up may resume observation of an open pull request.
@@ -121,7 +125,7 @@ _Avoid_: Blocker, Problem worth fixing
 A finding that is not a Blocking finding (LOW, INFO, a code smell or style judgement). It is listed in `check-N.md`, `finish.md` and the pull request description, and never causes a Rework or stops a Clean Check.
 
 **Extra loop**:
-One more Check loop that the user grants from the Dashboard to a Run that waits on them in Check at its loop limit. It raises the limit by one (`extra_loops` in the Run record), is recorded in the Event log and has no ceiling. Only the user grants it, one click at a time; an agent cannot. See ADR 0024.
+One more Rework loop that the user grants from the Dashboard to a Run at its loop limit: to a Run that waits on them in Check, or together with a Follow-up Rework. It raises the limit by one (`extra_loops` in the Run record), is recorded in the Event log and has no ceiling. Only the user grants it, one click at a time; an agent cannot. See ADR 0024.
 _Avoid_: Override, Bonus loop
 
 **Rework cause**:
@@ -183,11 +187,11 @@ The Usage of Build visits after a Rework. It belongs to the Run, not to a Ticket
 The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.
 
 **PR provider**:
-The module that handles a pull request link for a hosting service: it reads a PR's state, head and checks, merges it and finds a Run's PR, so no other module runs a hosting command. GitHub, through the `gh` command, does all of that. Azure DevOps, through the `az` command, only reads a PR's status, state and head; it cannot merge or follow up. See ADR 0020.
+The module that handles a pull request link for a hosting service: it reads a PR's state, head, checks and review threads and finds a Run's PR, so no other module runs a hosting command. It never merges a PR. GitHub, through the `gh` command, does all of that. Azure DevOps, through the `az` command, only reads a PR's status, state and head; it cannot follow up yet. See ADR 0020.
 _Avoid_: PR backend, Host adapter
 
 **PR status**:
-What the Dashboard shows of a Run's open pull request: its checks, whether it conflicts with the base branch, its review state and whether it is a draft. The PR provider reads it, the Dashboard caches it per PR link and a lookup that fails shows as unavailable with a Check again button. Read-only; it is not Evidence and never gates a Run.
+What the Dashboard shows of a Run's open pull request: its checks, whether it conflicts with the base branch, its review state and whether it is a draft. The PR provider reads it, the Dashboard caches it per PR link, and the Check PR button reads it again on demand with the failing checks and unresolved review threads; a lookup that fails shows as unavailable with the setup steps for the host. Read-only; it is not Evidence and never gates a Run.
 _Avoid_: PR health, Build status
 
 **Run store**:
