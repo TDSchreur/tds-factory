@@ -1,5 +1,5 @@
 /** @import { PrStatus } from './pr-provider.js' */
-import { can, providerFor, providerWith } from './pr-provider.js';
+import { providerFor, providerWith } from './pr-provider.js';
 import { codeOf, oneOf } from './narrow.js';
 import { interpretRun } from './dashboard-view.js';
 
@@ -22,12 +22,6 @@ const STATUS_REASONS = [
 // A PR link no provider handles, or one whose provider lacks the operation, throws here, as it always did.
 /** @param {string} url */
 export const ghPrState = (url) => providerWith(url, 'statusAsync').stateAsync(url);
-/** @param {string} url @param {string} head */
-export const ghPrMerge = (url, head) => providerWith(url, 'merge').merge(url, head);
-/** @param {string} url */
-export const ghPrDetails = (url) => providerWith(url, 'viewAsync').viewAsync(url);
-/** @param {string} url */
-export const ghChecks = (url) => providerWith(url, 'checksSummary').checksSummary(url);
 /** @param {string} url */
 export const ghPrStatus = (url) => providerWith(url, 'statusAsync').statusAsync(url);
 
@@ -102,7 +96,6 @@ export function createPrViews({ prState, prStatus }) {
       prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '',
       prStatus: hasStatus(v) ? statusOf(v.pr) : null,
       prHost: providerFor(v.pr)?.name ?? '',
-      prCanMerge: can(v.pr, 'merge'),
     };
   };
   return { prCache, statusCache, fetchStatus, statusOf, hasStatus, view };

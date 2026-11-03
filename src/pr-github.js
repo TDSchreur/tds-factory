@@ -255,10 +255,6 @@ export const viewAsync = async (
 /** @param {string} url @returns {Promise<string>} */
 export const stateAsync = async (url) =>
   JSON.parse((await exec('gh', ['pr', 'view', url, '--json', 'state'], { timeout: 10_000 })).stdout).state;
-// Squash-merges the PR at exactly this head commit.
-/** @param {string} url @param {string} head */
-export const merge = (url, head) =>
-  exec('gh', ['pr', 'merge', url, '--squash', '--match-head-commit', head], { timeout: 30_000 });
 // A one-line summary of the PR's checks.
 /** @param {string} url */
 export async function checksSummary(url) {

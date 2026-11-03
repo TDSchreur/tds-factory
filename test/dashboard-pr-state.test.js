@@ -1,15 +1,12 @@
 import { writeHeaders } from './dashboard-token.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { repo, linked, git } from './git-repo.js';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { repo } from './git-repo.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fakeCommand, pathWith } from './fake-command.js';
 import { startDashboard } from '../src/dashboard.js';
 import { viewsOf } from './run-view.js';
-
-/** @import { Run } from '../src/run-record.js' */
 
 const GH = 'https://github.com/o/r/pull/1';
 
@@ -66,252 +63,21 @@ test('a failed lookup leaves the state empty', async () => {
   assert.equal(first[0].prState, '');
 });
 
-/**
- * @typedef {object} SetupOptions
- * @property {string} [originUrl]
- * @property {Partial<Run>} [record]
- * @property {Record<string, unknown>} [gh] What the fake gh answers.
- */
-/** @param {SetupOptions} [options] */
-async function mergeSetup(options = {}) {
+test('the Dashboard has no merge routes and its views have no prCanMerge', async () => {
   const project = repo();
-  const worktree = linked(project);
-  git(worktree, 'remote', 'set-url', 'origin', options.originUrl ?? 'https://github.com/o/r.git');
-  const head = git(worktree, 'rev-parse', 'HEAD');
   const dir = join(project, '.factory', 'runs', '2026-01-01-r');
   mkdirSync(dir, { recursive: true });
-  const reviewed = Object.fromEntries(
-    ['standards', 'spec', 'security', 'infrastructure'].map((axis) => [axis, { head, attempt: 1 }]),
-  );
-  /** @type {Run} */
-  const record = {
-    title: 'r',
-    status: 'done',
-    pr: GH,
-    worktree,
-    commands: 'npm test',
-    check_loops: 0,
-    standards: 'pass',
-    spec: 'pass',
-    security: 'pass',
-    infrastructure: 'skipped',
-    reviewed,
-    verify: { head, dirty: false, command: 'npm test', exit_code: 0, started: '', ended: '', log: '' },
-    ...options.record,
-  };
-  const recordFile = join(dir, 'run.json');
-  writeFileSync(recordFile, JSON.stringify(record));
-  const bin = mkdtempSync(join(tmpdir(), 'fake-gh-'));
-  const config = join(bin, 'config.json'),
-    calls = join(bin, 'calls.json');
-  writeFileSync(calls, '[]');
-  /** @param {Record<string, unknown> | undefined} [data] */
-  const configure = (data) => writeFileSync(config, JSON.stringify({ head, state: 'OPEN', checks: [], ...data }));
-  configure(options.gh);
-  fakeCommand(
-    bin,
-    'gh',
-    `const fs = require('node:fs');
-const config = JSON.parse(fs.readFileSync(${JSON.stringify(config)}));
-const args = process.argv.slice(2);
-const calls = JSON.parse(fs.readFileSync(${JSON.stringify(calls)}));
-calls.push(args); fs.writeFileSync(${JSON.stringify(calls)}, JSON.stringify(calls));
-if (args[1] === 'view') {
-  if (config.viewError) process.exit(1);
-  console.log(JSON.stringify({ state: config.state, headRefOid: config.head }));
-} else if (args[1] === 'checks') {
-  if (config.checksError) process.exit(1);
-  console.log(JSON.stringify(config.checks));
-  if (config.checks.some(c => c.bucket === 'fail')) process.exit(1);
-} else if (args[1] === 'merge') {
-  if (config.mergeError || (config.mergeHead && args[args.indexOf('--match-head-commit') + 1] !== config.mergeHead)) process.exit(1);
-} else process.exit(1);
-`,
-  );
-  const previousPath = process.env.PATH;
-  process.env.PATH = pathWith(bin);
-  const dash = await startDashboard({ projectDir: project, port: 0 });
-  /**
-   * @param {string} [id]
-   * @param {string} [origin]
-   */
-  const post = async (id = '2026-01-01-r', origin = dash.url) =>
-    fetch(`${dash.url}/api/projects/${dash.projectId}/runs/${id}/merge`, {
-      method: 'POST',
-      headers: await writeHeaders(dash, origin),
-    });
-  const checks = () => fetch(`${dash.url}/api/projects/${dash.projectId}/runs/2026-01-01-r/merge-checks`);
-  /** @returns {string[][]} */
-  const readCalls = () => JSON.parse(readFileSync(calls, 'utf8'));
-  const close = async () => {
+  writeFileSync(join(dir, 'run.json'), JSON.stringify({ title: 'r', status: 'done', pr: GH }));
+  const dash = await startDashboard({ projectDir: project, port: 0, prState: async () => 'open' });
+  try {
+    const base = `${dash.url}/api/projects/${dash.projectId}/runs/2026-01-01-r`;
+    const merge = await fetch(`${base}/merge`, { method: 'POST', headers: await writeHeaders(dash) });
+    assert.equal(merge.status, 405, 'a POST to a path without a route is a method that is not allowed');
+    assert.equal((await fetch(`${base}/merge-checks`)).status, 404);
+    const [view] = await viewsOf(dash);
+    assert.equal(view.prHost, 'github');
+    assert.equal('prCanMerge' in view, false);
+  } finally {
     await dash.close();
-    process.env.PATH = previousPath;
-  };
-  return { dash, post, checks, readCalls, configure, close, record, recordFile, worktree, head };
-}
-
-/** @typedef {Awaited<ReturnType<typeof mergeSetup>>} Setup */
-/** @param {Setup} setup */
-const merges = (setup) => setup.readCalls().filter((args) => args[1] === 'merge');
-
-test('Merge uses the clean Check head to protect the squash merge', async () => {
-  const setup = await mergeSetup();
-  try {
-    assert.equal((await setup.post()).status, 200);
-    assert.deepEqual(merges(setup), [['pr', 'merge', GH, '--squash', '--match-head-commit', setup.head]]);
-  } finally {
-    await setup.close();
-  }
-});
-
-test('Merge accepts a current Accepted Check', async () => {
-  const setup = await mergeSetup({ record: { security: 'fail' } });
-  try {
-    setup.record.accepted = { head: setup.head, findings: 'open finding', decision: 'accepted' };
-    writeFileSync(setup.recordFile, JSON.stringify(setup.record));
-    assert.equal((await setup.post()).status, 200);
-    assert.equal(merges(setup).length, 1);
-  } finally {
-    await setup.close();
-  }
-});
-
-test('Merge refuses missing, failed and stale Evidence and a dirty or missing worktree', async () => {
-  /** @type {((s: Setup) => void)[]} */
-  const mutations = [
-    (s) => {
-      delete s.record.verify;
-    },
-    (s) => {
-      s.record.security = 'fail';
-    },
-    (s) => {
-      const spec = s.record.reviewed?.spec;
-      assert.ok(spec, 'the record has a spec review');
-      spec.head = 'a'.repeat(40);
-    },
-    (s) => {
-      s.record.accepted = { head: 'a'.repeat(40) };
-      s.record.security = 'fail';
-    },
-    (s) => {
-      s.record.worktree = '/missing/worktree';
-    },
-    (s) => {
-      writeFileSync(join(s.worktree, 'dirty'), 'x');
-    },
-  ];
-  for (const mutate of mutations) {
-    const setup = await mergeSetup();
-    try {
-      mutate(setup);
-      writeFileSync(setup.recordFile, JSON.stringify(setup.record));
-      assert.equal((await setup.post()).status, 409);
-      assert.deepEqual(merges(setup), []);
-    } finally {
-      await setup.close();
-    }
-  }
-});
-
-test('Merge rejects unrelated repositories, different PR heads and unavailable GitHub details', async () => {
-  for (const options of [
-    { originUrl: 'https://github.com/other/r.git' },
-    { originUrl: '/local/repo' },
-    { gh: { head: 'a'.repeat(40) } },
-    { gh: { head: null } },
-    { gh: { viewError: true } },
-    { gh: { state: 'MERGED' } },
-  ]) {
-    const setup = await mergeSetup(options);
-    try {
-      assert.ok([409, 502].includes((await setup.post()).status));
-      assert.deepEqual(merges(setup), []);
-    } finally {
-      await setup.close();
-    }
-  }
-});
-
-test('Merge refuses other origins, unknown runs, active runs and non-GitHub links', async () => {
-  /** @type {[SetupOptions, string | undefined, string | undefined, number][]} */
-  const cases = [
-    [{}, undefined, 'http://evil.example', 403],
-    [{}, 'nope', undefined, 404],
-    [{ record: { status: 'running' } }, undefined, undefined, 409],
-    [{ record: { status: 'abandoned' } }, undefined, undefined, 409],
-    [{ record: { pr: 'https://example.com/pr/1' } }, undefined, undefined, 409],
-    [{ record: { pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/1' } }, undefined, undefined, 409],
-  ];
-  for (const [options, id, origin, want] of cases) {
-    const setup = await mergeSetup(options);
-    try {
-      assert.equal((await setup.post(id, origin)).status, want);
-      assert.deepEqual(merges(setup), []);
-    } finally {
-      await setup.close();
-    }
-  }
-});
-
-test('Merge reports a failed head-protected merge and drops the cached PR state', async () => {
-  const setup = await mergeSetup({ gh: { mergeHead: 'b'.repeat(40) } });
-  try {
-    const states = async () => (await viewsOf(setup.dash))[0].prState;
-    assert.equal(await states(), 'open');
-    assert.equal((await setup.post()).status, 502);
-    setup.configure({ state: 'MERGED' });
-    assert.equal(await states(), 'merged');
-    assert.deepEqual(merges(setup)[0].slice(-2), ['--match-head-commit', setup.head]);
-  } finally {
-    await setup.close();
-  }
-});
-
-test('confirmation data names failing, pending and unavailable GitHub checks', async () => {
-  const setup = await mergeSetup({
-    gh: {
-      checks: [
-        { name: 'CI', bucket: 'fail', state: 'FAILURE' },
-        { name: 'Lint', bucket: 'pending', state: 'PENDING' },
-      ],
-    },
-  });
-  try {
-    const warning = await (await setup.checks()).text();
-    assert.match(warning, /CI: failing/);
-    assert.match(warning, /Lint: pending/);
-    setup.configure({ checksError: true });
-    assert.match(await (await setup.checks()).text(), /checks: unavailable/i);
-    setup.configure({ checks: [{ name: 'CI', bucket: 'pass', state: 'SUCCESS' }] });
-    assert.match(await (await setup.checks()).text(), /checks: passing/i);
-    assert.deepEqual(merges(setup), []);
-  } finally {
-    await setup.close();
-  }
-});
-
-test('an Azure DevOps PR cannot be merged or checked from the Dashboard, and the view says so', async () => {
-  const setup = await mergeSetup({ record: { pr: 'https://dev.azure.com/o/p/_git/r/pullrequest/1' } });
-  try {
-    const view = (await viewsOf(setup.dash))[0];
-    assert.deepEqual([view.prHost, view.prCanMerge], ['azure-devops', false]);
-    const post = await setup.post();
-    assert.equal(post.status, 409);
-    assert.match(await post.text(), /cannot merge from the Dashboard/);
-    assert.equal((await setup.checks()).status, 409);
-    assert.deepEqual(setup.readCalls(), [], 'neither gh nor az was called');
-  } finally {
-    await setup.close();
-  }
-});
-
-test('a GitHub PR can be merged and the view says so', async () => {
-  const setup = await mergeSetup();
-  try {
-    const view = (await viewsOf(setup.dash))[0];
-    assert.deepEqual([view.prHost, view.prCanMerge], ['github', true]);
-  } finally {
-    await setup.close();
   }
 });

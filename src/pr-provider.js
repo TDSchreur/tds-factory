@@ -28,7 +28,6 @@ import * as azure from './pr-azure.js';
  * @property {(url: string, options?: { run?: any }) => Promise<string>} stateAsync
  * @property {(url: string, options?: { cwd?: string, timeout?: number, run?: any }) => PrView} view
  * @property {(url: string, options?: { run?: any }) => Promise<PrView>} [viewAsync] `run` is the adapter's own test seam, like the other `run` options above.
- * @property {(url: string, head: string) => Promise<unknown>} [merge]
  * @property {(url: string) => Promise<string>} [checksSummary]
  * @property {(url: string, cwd?: string) => PrView & { headRefOid: string }} [strictView]
  * @property {(url: string, head: string, cwd?: string) => import('./run-record.js').FollowUp} [observe]
@@ -42,7 +41,6 @@ const OPERATIONS = [
   'stateAsync',
   'view',
   'viewAsync',
-  'merge',
   'checksSummary',
   'strictView',
   'observe',

@@ -16,7 +16,7 @@ const open = (over = {}) => ({
   ...over,
 });
 /** @param {Partial<RunStub>} over */
-const azure = (over) => run({ pr: AZ, prHost: 'azure-devops', prCanMerge: false, ...over });
+const azure = (over) => run({ pr: AZ, prHost: 'azure-devops', ...over });
 /**
  * @param {Page} page
  * @param {string} selector
@@ -70,7 +70,7 @@ test('the unavailable texts of Azure DevOps name the fix and the host', () => {
   assert.match(reason('not-signed-in', 'github'), /gh auth login/);
 });
 
-test('an Azure DevOps pull request shows its status, the unavailable fixes and no Merge button', async (t) => {
+test('an Azure DevOps pull request shows its status, the unavailable fixes and no merge note', async (t) => {
   const runs = [
     azure({
       id: 'a',
@@ -91,7 +91,6 @@ test('an Azure DevOps pull request shows its status, the unavailable fixes and n
       status: 'done',
       pr: 'https://github.com/o/r/pull/1',
       prHost: 'github',
-      prCanMerge: true,
       prState: 'open',
     }),
   ];
@@ -107,14 +106,9 @@ test('an Azure DevOps pull request shows its status, the unavailable fixes and n
       await text(page, '[data-id=b] .pr-status'),
       'Pull request PR status unavailable: the Azure DevOps extension is missing (run az extension add --name azure-devops) Check again',
     );
-    assert.equal(
-      await page.execute("return document.querySelector('[data-id=c] .actions .primary')"),
-      null,
-      'no Merge button on an Azure DevOps pull request',
-    );
-    assert.equal(await text(page, '[data-id=c] .merge-note'), 'Merge it in Azure DevOps');
-    assert.equal(await text(page, '[data-id=g] .actions .primary'), 'Merge', 'GitHub keeps its Merge button');
-    assert.equal(await page.execute("return document.querySelector('[data-id=g] .merge-note')"), null);
+    assert.equal(await page.execute("return document.querySelector('.merge-note')"), null);
+    assert.equal(await page.execute("return document.querySelector('[data-id=c] .actions .primary')"), null);
+    assert.equal(await page.execute("return document.querySelector('[data-id=g] .actions .primary')"), null);
   } finally {
     await page.close();
   }

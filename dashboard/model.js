@@ -73,7 +73,6 @@
  * @property {string} [prState]
  * @property {PrStatusData | null} [prStatus]
  * @property {string} [prHost]
- * @property {boolean} [prCanMerge]
  */
 /** @type {{ key: string, label: string, help: string }[]} */
 export const COLUMNS = [

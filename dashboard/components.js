@@ -196,7 +196,6 @@ const pauseLabel = (run) => {
  * @param {(run: RunView) => void} props.onToggle
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onGrant
- * @param {(run: RunView) => void} props.onMerge
  * @param {(run: RunView) => void} props.onSync
  * @param {(run: RunView) => void} props.onClean
  * @param {(run: RunView) => void} props.onAccept
@@ -210,7 +209,6 @@ export function Card({
   onToggle,
   onCheckPr,
   onGrant,
-  onMerge,
   onSync,
   onClean,
   onAccept,
@@ -236,19 +234,6 @@ export function Card({
     (done ||
       (!run.unreadable && ['running', 'waiting', 'verification-unavailable', 'interrupted'].includes(run.status))) &&
       html`<div class="actions">
-      ${run.pr && run.prState === 'open' && run.status === 'done' && run.prCanMerge === false && html`<span class="merge-note">Merge it in ${run.prHost === 'azure-devops' ? 'Azure DevOps' : 'the pull request host'}</span>`}
-      ${
-        run.pr &&
-        run.prState === 'open' &&
-        run.status === 'done' &&
-        run.prCanMerge !== false &&
-        html`<button type="button" class="primary" aria-label=${'Squash and merge the pull request of ' + run.title} onClick=${(
-          /** @type {Event} */ e,
-        ) => {
-          stop(e);
-          onMerge(run);
-        }} onKeyDown=${stop}>Merge</button>`
-      }
       ${
         !run.unreadable &&
         ['build', 'check'].includes(run.column) &&
@@ -350,7 +335,6 @@ export function Welcome({ onHelp }) {
  * @property {(run: RunView) => void} select
  * @property {(run: RunView) => void} toggle
  * @property {(run: RunView) => Promise<void>} checkPr
- * @property {(run: RunView) => Promise<void>} merge
  * @property {(run: RunView) => Promise<void>} sync
  * @property {(run: RunView) => Promise<void>} clean
  * @property {(run: RunView) => Promise<void>} accept
@@ -419,7 +403,7 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
         return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>
         <div class="column-name" aria-hidden="true">${c.label}</div>
         ${c.key === 'done' && doneCount > 0 && html`<button type="button" aria-label=${'Delete all Done Runs of ' + project.name} onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
-        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onMerge=${actions.merge} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onGrant=${actions.grant} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
         ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
       </div>`;
       })}</div>`

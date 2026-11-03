@@ -15,17 +15,10 @@ export const ROUTES = [
   { methods: ['DELETE'], pattern: /^\/api\/projects\/missing$/, handler: h.removeMissingProjects },
   { methods: ['DELETE'], pattern: /^\/api\/projects\/([^/]+)$/, handler: h.removeProject },
   { methods: ['DELETE'], pattern: /^\/api\/projects\/([^/]+)\/runs\/([\s\S]*)$/, handler: h.deleteRun, scoped: true },
-  { methods: ['POST'], pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/merge$/, handler: h.mergeRun, scoped: true },
   {
     methods: ['POST'],
     pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/(sync|clean|accept|extra-loop)$/,
     handler: h.runAction,
-    scoped: true,
-  },
-  {
-    methods: ['GET'],
-    pattern: /^\/api\/projects\/([^/]+)\/runs\/([^/]+)\/merge-checks$/,
-    handler: h.mergeChecks,
     scoped: true,
   },
   {

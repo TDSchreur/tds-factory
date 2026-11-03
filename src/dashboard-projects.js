@@ -5,23 +5,19 @@ import { existsSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { openRunStore } from './run-store.js';
 import { projectId } from './project-registry.js';
-import { createPrViews, ghPrState, ghPrMerge, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
+import { createPrViews, ghPrState, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
 
 /**
  * The PR operations of one Project; what a Project leaves out comes from the server's defaults.
  * @typedef {object} PrSeams
  * @property {(url: string) => Promise<string>} [prState]
- * @property {(url: string, head: string) => Promise<unknown>} [prMerge]
  * @property {PrLookup} [prInfo]
  * @property {(url: string) => Promise<PrStatus>} [prStatus]
  */
 /** @typedef {ReturnType<typeof createServices>} ProjectServices */
 
 /** @param {string} dir @param {PrSeams & { statusRefreshMs: number }} seams */
-function createServices(
-  dir,
-  { prState = ghPrState, prMerge = ghPrMerge, prInfo, prStatus = ghPrStatus, statusRefreshMs },
-) {
+function createServices(dir, { prState = ghPrState, prInfo, prStatus = ghPrStatus, statusRefreshMs }) {
   const store = openRunStore(dir);
   return {
     store,
@@ -29,7 +25,6 @@ function createServices(
     mainStore: openRunStore(store.projectDir),
     /** @type {Set<string>} */
     inFlight: new Set(),
-    prMerge,
     prInfo,
     statusRefreshMs,
     prViews: createPrViews({ prState, prStatus }),

@@ -61,10 +61,6 @@ export const HELP_SECTIONS = [
     title: 'Actions',
     items: [
       {
-        term: 'Merge',
-        text: 'squash and merge the open pull request of a Done Run. Shown on a Done Run with an open pull request.',
-      },
-      {
         term: 'Sync',
         text: 'rebase the Run branch onto the default branch of origin. Shown while a Run is running in Build or Check.',
       },

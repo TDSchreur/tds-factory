@@ -366,30 +366,6 @@ function App() {
     poll();
   };
 
-  const mergeRun = async (/** @type {RunView} */ run) => {
-    let checks = 'GitHub checks: unavailable';
-    try {
-      const response = await fetch(runPath(run) + '/merge-checks', { cache: 'no-store' });
-      if (response.ok) checks = await response.text();
-    } catch {}
-    if (
-      !(await ask(
-        'Squash and merge?',
-        'Merge the pull request for "' + run.title + '"?\n' + run.pr + '\n\n' + checks,
-        'Squash and merge',
-        false,
-      ))
-    )
-      return;
-    try {
-      const response = await write('POST', runPath(run) + '/merge');
-      if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
-    } catch {
-      await ask('Could not merge', run.title, 'Close', false, true);
-    }
-    poll();
-  };
-
   const allRuns = projects.flatMap((p) => p.runs);
   const olderRuns = allRuns.filter(isOlder);
   const rows = projectRows(projects, { linked, showOlder, onlyWaiting, opened, saved });
@@ -485,7 +461,6 @@ function App() {
       } catch {}
       poll();
     },
-    merge: mergeRun,
     sync: syncRun,
     clean: cleanRun,
     accept: acceptRun,

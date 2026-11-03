@@ -10,7 +10,7 @@ export const str = (v) => (typeof v === 'string' ? v.trim() : '');
 const strList = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : []);
 /**
  * @param {ReadableEntry | UnreadableEntry} entry An entry of the Run store. Its record is read from disk and may have any shape, so every field is checked as it is read.
- * @returns {Omit<RunView, 'projectId' | 'prState' | 'prStatus' | 'prHost' | 'prCanMerge'>}
+ * @returns {Omit<RunView, 'projectId' | 'prState' | 'prStatus' | 'prHost'>}
  */
 export function interpretRun(entry) {
   const id = typeof entry?.id === 'string' ? entry.id : '',

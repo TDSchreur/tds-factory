@@ -10,7 +10,7 @@ import { join, sep } from 'node:path';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { codeOf, oneOf } from './narrow.js';
 import { interpretRun } from './dashboard-view.js';
-import { ghPrState, ghPrMerge, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
+import { ghPrState, ghPrStatus, PR_STATUS_REFRESH_MS } from './dashboard-pr-views.js';
 import { createProjectHub } from './dashboard-projects.js';
 import { logFailure } from './dashboard-handlers.js';
 import { matchRoute } from './dashboard-routes.js';
@@ -71,9 +71,9 @@ async function serveStatic(dashboardDir, path, send) {
 // Serves the .factory/runs folder of every Project in the registry on 127.0.0.1, and of the main checkout of projectDir's repository while the registry does not hold it.
 // Without a registry only projectDir's Project is served (a standalone Dashboard).
 // Without a port, uses 4300 and falls back to a free one when it is busy. An explicit port is used exactly; 0 means a random free port. Resolves to { server, port, url, close }.
-// prState(url) resolves to OPEN, MERGED or CLOSED; prMerge(url, head) squash-merges the specified head.
+// prState(url) resolves to OPEN, MERGED or CLOSED.
 // prStatus(url) resolves to the parsed PR status of src/pr-github.js and rejects with a FactoryError whose `code` is the reason when the provider fails.
-// prFor(project) returns the prState, prMerge, prInfo and prStatus of one Project; what it leaves out falls back to the options below.
+// prFor(project) returns the prState, prInfo and prStatus of one Project; what it leaves out falls back to the options below.
 // statusRefreshMs is the shortest time between two lookups the user's refresh may start for one PR.
 // prInfo(url) resolves to { state, head } for Run clean-up; it defaults to GitHub through gh.
 /**
@@ -81,7 +81,6 @@ async function serveStatic(dashboardDir, path, send) {
  * @param {string} [options.projectDir]
  * @param {number} [options.port] An explicit port is used exactly; 0 is a random free port.
  * @param {(url: string) => Promise<string>} [options.prState]
- * @param {(url: string, head: string) => Promise<unknown>} [options.prMerge]
  * @param {PrLookup} [options.prInfo]
  * @param {(url: string) => Promise<PrStatus>} [options.prStatus]
  * @param {number} [options.statusRefreshMs]
@@ -93,7 +92,6 @@ export async function startDashboard({
   projectDir = process.cwd(),
   port,
   prState = ghPrState,
-  prMerge = ghPrMerge,
   prInfo,
   prStatus = ghPrStatus,
   statusRefreshMs = PR_STATUS_REFRESH_MS,
@@ -111,7 +109,7 @@ export async function startDashboard({
     registry,
     prFor,
     statusRefreshMs,
-    defaults: { prState, prStatus, prMerge, prInfo },
+    defaults: { prState, prStatus, prInfo },
   });
   const base = { token, projectDir, hub };
 

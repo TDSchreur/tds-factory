@@ -20,7 +20,6 @@ import { setTimeout as delay } from 'node:timers/promises';
  * @property {{ id: string, name: string, path?: string, missing?: boolean, runs?: RunStub[] }[]} [projects] Served as /api/views instead of `runs`, in this order.
  * @property {Record<string, string>} [files] Served as /files/<run>/<name>.
  * @property {(req: IncomingMessage) => { status: number, body: string, headers?: Record<string, string> } | undefined} [respond] Answers DELETE and POST requests.
- * @property {string} [checks] The text of /api/projects/p/runs/<id>/merge-checks.
  * @property {string[]} [statusCalls] The pr-status URLs that were read.
  * @property {() => void} [statusReply] Runs on each pr-status read.
  * @property {unknown} [statusBody] The JSON of a pr-status read.
@@ -191,8 +190,6 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     if (routePath === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(routePath))
       return send(200, TYPES[routePath.split('.').pop() ?? ''], readFileSync(new URL(routePath.slice(1), DASHBOARD)));
-    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/merge-checks$/.test(routePath))
-      return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
     // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
     if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/pr-status$/.test(routePath)) {
       (state.statusCalls ??= []).push(req.url ?? '');

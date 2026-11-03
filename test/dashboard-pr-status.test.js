@@ -237,10 +237,10 @@ test('an Azure DevOps PR gets a status from the same cache and shows its host an
       await settled(views, notChecking);
       const list = await views();
       assert.deepEqual(
-        list.map((r) => [r.prHost, r.prCanMerge, r.prStatus?.unavailable ?? r.prStatus?.state]),
+        list.map((r) => [r.prHost, r.prStatus?.unavailable ?? r.prStatus?.state]),
         [
-          ['azure-devops', false, 'open'],
-          ['azure-devops', false, 'az-extension-missing'],
+          ['azure-devops', 'open'],
+          ['azure-devops', 'az-extension-missing'],
         ],
       );
       assert.deepEqual(

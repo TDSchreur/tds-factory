@@ -341,10 +341,10 @@ test('GitHub and Azure DevOps Projects sit side by side, each with its own PR pr
     });
     const first = await projectsOf(dash);
     assert.deepEqual(
-      first.map((/** @type {any} */ p) => [p.runs[0].prHost, p.runs[0].prCanMerge, p.runs[0].prStatus]),
+      first.map((/** @type {any} */ p) => [p.runs[0].prHost, p.runs[0].prStatus]),
       [
-        ['github', true, { checking: true }],
-        ['azure-devops', false, { checking: true }],
+        ['github', { checking: true }],
+        ['azure-devops', { checking: true }],
       ],
     );
     const second = await waitUntil(
