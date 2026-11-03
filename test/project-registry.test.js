@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   chmodSync,
@@ -370,4 +371,111 @@ test('join from a non-repository path never throws and normalizes the path fallb
   mkdirSync(nested, { recursive: true });
   const project = reg.join(nested);
   assert.deepEqual(project, { id: projectId(join(root, 'b')), path: join(root, 'b') });
+});
+
+/**
+ * Makes `fs.writeFileSync` fail with EPERM for the first `times` exclusive writes that would create the lock file,
+ * as Windows does while another process's delete of that file is still pending. Returns the restore function.
+ * @param {number} times
+ */
+function lockCreateFailsWithEperm(times) {
+  const original = fs.writeFileSync;
+  let left = times;
+  fs.writeFileSync = /** @type {typeof fs.writeFileSync} */ (
+    (file, data, options) => {
+      const wx = typeof options === 'object' && options !== null && 'flag' in options && options.flag === 'wx';
+      if (wx && String(file).endsWith('.lock') && !existsSync(String(file)) && left > 0) {
+        left -= 1;
+        throw Object.assign(new Error(`EPERM: operation not permitted, open '${file}'`), { code: 'EPERM' });
+      }
+      return original(file, data, options);
+    }
+  );
+  return () => {
+    fs.writeFileSync = original;
+  };
+}
+
+test('on Windows a lock file that is still delete pending is retried until it can be created', () => {
+  const restore = lockCreateFailsWithEperm(3);
+  try {
+    const { dir, warnings } = registry();
+    const reg = openProjectRegistry({ dir, warn: (m) => warnings.push(m), platform: 'win32' });
+    const main = repo();
+    assert.equal(reg.join(main)?.path, main);
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(
+      reg.list().map((p) => p.path),
+      [main],
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('on Linux EPERM on the lock file stays a warning that names it', () => {
+  const restore = lockCreateFailsWithEperm(1);
+  try {
+    const { dir, warnings } = registry();
+    const reg = openProjectRegistry({ dir, warn: (m) => warnings.push(m), platform: 'linux' });
+    assert.equal(reg.join(repo()), undefined);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? '', /EPERM/);
+  } finally {
+    restore();
+  }
+});
+
+test('on Windows a persistent EPERM on the lock file ends at the lock wait with a warning', () => {
+  const restore = lockCreateFailsWithEperm(Infinity);
+  try {
+    const { dir, warnings } = registry();
+    const reg = openProjectRegistry({ dir, warn: (m) => warnings.push(m), lockWaitMs: 50, platform: 'win32' });
+    assert.equal(reg.join(repo()), undefined);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? '', /locked/);
+  } finally {
+    restore();
+  }
+});
+
+test('on Windows a stale-lock takeover retries when creating the lock file is refused once', () => {
+  const restore = lockCreateFailsWithEperm(1);
+  try {
+    const { dir, warnings } = registry();
+    const lock = join(dir, 'projects.json.lock');
+    writeFileSync(lock, 'stale-token');
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(lock, old, old);
+    const reg = openProjectRegistry({ dir, warn: (m) => warnings.push(m), platform: 'win32' });
+    const main = repo();
+    assert.equal(reg.join(main)?.path, main);
+    assert.deepEqual(warnings, []);
+  } finally {
+    restore();
+  }
+});
+
+test('releasing a lock that Windows refuses to delete yet is not an error there but is on Linux', () => {
+  const original = fs.rmSync;
+  fs.rmSync = /** @type {typeof fs.rmSync} */ (
+    (target, options) => {
+      if (String(target).endsWith('.lock'))
+        throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+      return original(target, options);
+    }
+  );
+  try {
+    const win = registry();
+    const main = repo();
+    const onWindows = openProjectRegistry({ dir: win.dir, warn: (m) => win.warnings.push(m), platform: 'win32' });
+    assert.equal(onWindows.join(main)?.path, main);
+    assert.deepEqual(win.warnings, []);
+    const lin = registry();
+    const onLinux = openProjectRegistry({ dir: lin.dir, warn: (m) => lin.warnings.push(m), platform: 'linux' });
+    assert.equal(onLinux.join(main), undefined);
+    assert.match(lin.warnings[0] ?? '', /EPERM/);
+  } finally {
+    fs.rmSync = original;
+  }
 });
