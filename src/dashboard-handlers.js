@@ -6,9 +6,8 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { messageOf, oneOf } from './narrow.js';
-import { FOLLOW_UP_SCOPES } from './run-store.js';
+import { FOLLOW_UP_SCOPES, SIZE_WAIT_REASON } from './run-store.js';
 import { interpretRun, str } from './dashboard-view.js';
-import { SIZE_WAIT_REASON } from './run-size.js';
 import { can, providerFor } from './pr-provider.js';
 
 /**
@@ -199,8 +198,9 @@ function sizeAnswer(ctx, v) {
 
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
 function continueRun(ctx, id, v) {
-  if (sizeAnswer(ctx, v) === undefined) return;
-  ctx.store.size(id, { accept: true });
+  const updated = sizeAnswer(ctx, v);
+  if (updated === undefined) return;
+  ctx.store.size(id, { accept: true, updated });
   ctx.send(200, 'text/plain', 'continued');
 }
 

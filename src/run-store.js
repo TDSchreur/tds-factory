@@ -29,7 +29,9 @@ import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, removeRunFlow, cleanRun, cleanRunFlow, cleanAll, ghPrInfoAsync } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
 import { guidesRun } from './guides.js';
-import { sizeWarnings } from './run-size.js';
+import { sizeWarnings, SIZE_WAIT_REASON } from './run-size.js';
+
+export { SIZE_WAIT_REASON };
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
 export {
@@ -82,7 +84,7 @@ export function openRunStore(callerDir) {
     grantLoop: (id, data) => grantLoopRun(projectDir, id, data),
     /** @param {string | undefined} id @param {{ updated?: string, handOver?: boolean }} [options] */
     split: (id, options) => splitRun(projectDir, id, options),
-    /** @param {string | undefined} id @param {{ accept?: boolean }} [options] */
+    /** @param {string | undefined} id @param {{ accept?: boolean, updated?: string }} [options] */
     size: (id, options) => sizeRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ fast?: boolean }} [options] */
     verify: (id, options) => verifyRun(projectDir, id, options),

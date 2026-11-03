@@ -395,20 +395,21 @@ export function splitRun(projectDir, id, { updated, handOver = false } = {}) {
   return moved;
 }
 
-// Without `accept` only measures; with it records the user's acceptance, which also releases a Run that waits for size.
+// Without `accept` only measures; with it records the user's acceptance, which also releases a Run that waits for size. `updated` is the record time the user saw: a Run that changed since is refused.
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
- * @param {{ accept?: boolean }} [options]
+ * @param {{ accept?: boolean, updated?: string }} [options]
  * @returns {{ files: number, bytes: number } | undefined}
  */
-export function sizeRun(projectDir, id, { accept = false } = {}) {
+export function sizeRun(projectDir, id, { accept = false, updated } = {}) {
   if (!accept) return runSize(projectDir, id);
   /** @type {{ files: number, bytes: number } | undefined} */
   let size;
   changeRun(projectDir, id, (old) => {
     size = runSize(projectDir, id);
     if (old.size_accepted) throw new Error('the Run size is already accepted');
+    if (updated !== undefined && updated !== old.updated) throw new Error('the Run changed since it was shown');
     if (!waitsForSize(old) && !(old.status === 'running' && oneOf(['build', 'check'], old.stage)))
       throw new Error('size --accept needs a running Run in Build or Check, or one that waits for the Run size answer');
     const now = new Date().toISOString();

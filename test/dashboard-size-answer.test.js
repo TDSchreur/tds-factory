@@ -212,3 +212,20 @@ test('split answers many long links with one line each, and zero-width character
     assert.ok(lines.every((line) => /^https:\/\/example\.test\/\d+\/x{2000} {2}$/.test(line)));
   });
 });
+
+test('the store refuses size --accept with a stale updated and changes nothing', () => {
+  const { cwd, id } = waitingForSize();
+  const before = readFileSync(file(cwd, id), 'utf8');
+  assert.throws(
+    () => openRunStore(cwd).size(id, { accept: true, updated: '2000-01-01T00:00:00.000Z' }),
+    /changed since it was shown/,
+  );
+  assert.equal(readFileSync(file(cwd, id), 'utf8'), before);
+  openRunStore(cwd).size(id, { accept: true, updated: read(cwd, id).updated });
+  assert.equal(read(cwd, id).status, 'running');
+});
+
+test('the Dashboard handlers import only the store, never run-size.js (ADR 0012)', () => {
+  const source = readFileSync(new URL('../src/dashboard-handlers.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /from '\.\/run-size\.js'/);
+});
