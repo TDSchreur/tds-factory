@@ -194,7 +194,7 @@ The Usage of Build visits after a Rework. It belongs to the Run, not to a Ticket
 The proportion of observed first Check outcomes that reach Finish clean without Rework. Rework and an Accepted nonclean Finish count as unsuccessful outcomes; unfinished and unknown outcomes are excluded.
 
 **PR provider**:
-The module that handles a pull request link for a hosting service: it reads a PR's state, head, checks and review threads and finds a Run's PR, so no other module runs a hosting command. It never merges a PR. GitHub, through the `gh` command, does all of that. Azure DevOps, through the `az` command, only reads a PR's status, state and head; it cannot follow up yet. See ADR 0020.
+The module that handles a pull request link for a hosting service: it reads a PR's state, head, checks and review threads and finds a Run's PR, so no other module runs a hosting command. It never merges a PR. GitHub through the `gh` command and Azure DevOps through the `az` command both do all of that; for Azure DevOps the checks are its blocking policies and the statuses that outside CI posts to the PR. See ADR 0020.
 _Avoid_: PR backend, Host adapter
 
 **PR status**:
