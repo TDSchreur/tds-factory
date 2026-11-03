@@ -1,8 +1,8 @@
 // Constants and pure helpers of the Dashboard page. No DOM access.
 
-// The shape of one Run as the Dashboard reads it: the result of interpretRun in src/dashboard.js plus the PR lookups of the views route.
+// The shape of one Run as the Dashboard reads it: the result of interpretRun in src/dashboard-view.js plus the PR lookups of the views route.
 // It is declared here and not imported from src/, because this folder is checked without Node types (see dashboard/tsconfig.json).
-// src/dashboard.js declares that interpretRun returns this shape, so the two cannot drift apart unnoticed.
+// src/dashboard-view.js declares that interpretRun returns this shape, so the two cannot drift apart unnoticed.
 
 /**
  * @typedef {object} UsageRowView

@@ -234,9 +234,18 @@ function viewOf(pr, target) {
  * @returns {Promise<string>}
  */
 export async function stateAsync(url, { run = defaultRun } = {}) {
+  return (await viewAsync(url, { run })).state;
+}
+// State and head commit, read without blocking the caller. `run` is the injection point for tests.
+/**
+ * @param {string} url
+ * @param {{ run?: (argv: string[]) => Promise<{ stdout: string }> }} [options]
+ * @returns {Promise<PrView>}
+ */
+export async function viewAsync(url, { run = defaultRun } = {}) {
   if (!matches(url)) throw new Error('not an Azure DevOps pull request');
   const target = parts(url);
-  return viewOf(await read(run, target, SHOW), target).state;
+  return viewOf(await read(run, target, SHOW), target);
 }
 // State and head commit of a PR, read without blocking the caller more than `timeout`; throws when az cannot say.
 /**

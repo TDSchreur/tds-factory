@@ -53,6 +53,7 @@ export function appendEvent(dir, event) {
   }
 }
 
+// `any`: an event is whatever JSON line the log holds, and the callers (and their tests) read its fields by type without a shared Event typedef.
 /** @typedef {{ events: any[], damaged: number, unreadable?: boolean }} EventLog */
 /** @param {unknown} err @returns {EventLog} */
 const readFailure = (err) =>

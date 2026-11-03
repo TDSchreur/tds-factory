@@ -98,13 +98,6 @@ function App() {
     else if (target) target.focus();
     setSelectedId(null);
   };
-  useLayoutEffect(() => {
-    const onKey = (/** @type {KeyboardEvent} */ e) => {
-      if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDetail();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [selectedId, compact]);
 
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
   /**
@@ -418,9 +411,9 @@ function App() {
   const showsBoard = !(loaded && !entries.length);
 
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
-    <div id="layout" class=${openRun ? 'open' : ''}>
+    <div id="layout">
       ${loaded && !entries.length ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} runs=${onlyWaiting ? runs.filter((r) => r.waiting) : runs} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedId=${selectedId} expandedIds=${expandedIds} doneCount=${doneRuns.length} actions=${actions} />`}
-      <${Detail} run=${openRun} compact=${compact} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

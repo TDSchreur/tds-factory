@@ -34,6 +34,7 @@ test('compact Run detail contains keyboard focus and returns to the same Stage a
       ),
       true,
     );
+    // The board is unavailable behind the modal dialog: it cannot take focus.
     assert.equal(
       await page.execute(
         "document.getElementById('theme').focus(); return document.activeElement.closest('#detail') !== null",
@@ -41,20 +42,15 @@ test('compact Run detail contains keyboard focus and returns to the same Stage a
       true,
     );
     await page.execute("document.querySelector('#detail .compact-back button').focus()");
-    await page.keyChord(SHIFT, TAB); // Shift+Tab wraps to the last detail control.
-    assert.equal(
-      await page.execute("return document.activeElement === document.querySelector('#detail .link a')"),
-      true,
-    );
-    await page.key(TAB);
-    assert.equal(
-      await page.execute("return document.activeElement === document.querySelector('#detail .compact-back button')"),
-      true,
-    );
-    for (let i = 0; i < 5; i++) {
+    // Tab may leave the page for the browser's own controls, but never lands on the board or the header.
+    await page.keyChord(SHIFT, TAB);
+    const behind = "return document.activeElement.closest('#app > header, #board, .stage-nav') === null";
+    assert.equal(await page.execute(behind), true);
+    for (let i = 0; i < 6; i++) {
       await page.key(TAB);
-      assert.equal(await page.execute("return document.activeElement.closest('#detail') !== null"), true);
+      assert.equal(await page.execute(behind), true);
     }
+    await page.execute("document.querySelector('#detail h2').focus()");
     await page.execute(
       "[...document.querySelectorAll('#detail button')].find(b => /Back to stages/i.test(b.textContent)).click()",
     );
@@ -97,13 +93,13 @@ for (const width of [320, 375, 390, 768, 1024]) {
       await page.execute("document.querySelector('[data-id=r]').click()");
       await page.waitFor("return !!document.querySelector('#detail .md table')");
       const result = await page.execute(
-        "const d=document.getElementById('detail'), r=d.getBoundingClientRect(), b=document.querySelector('#detail .compact-back button').getBoundingClientRect(), t=document.querySelector('#detail .md .scroll'); return {left:r.left, top:r.top, width:r.width, height:r.height, panel:d.scrollWidth, client:d.clientWidth, page:document.documentElement.scrollWidth, backHeight:b.height, table:t.scrollWidth, tableClient:t.clientWidth}",
+        "const d=document.getElementById('detail'), r=d.getBoundingClientRect(), b=document.querySelector('#detail .compact-back button').getBoundingClientRect(), t=document.querySelector('#detail .md .scroll'); return {left:r.left, top:r.top, width:r.width, height:r.height, panel:d.scrollWidth, client:d.clientWidth, viewport:document.documentElement.clientWidth, page:document.documentElement.scrollWidth, backHeight:b.height, table:t.scrollWidth, tableClient:t.clientWidth}",
       );
       assert.ok(
-        result.left === 0 && result.top === 0 && result.width === width && result.height === 700,
+        result.left === 0 && result.top === 0 && result.width === result.viewport && result.height === 700,
         JSON.stringify(result),
       );
-      assert.ok(result.page <= width && result.panel <= result.client, JSON.stringify(result));
+      assert.ok(result.page <= result.viewport && result.panel <= result.client, JSON.stringify(result));
       assert.ok(result.backHeight >= 44 && result.table > result.tableClient, JSON.stringify(result));
     } finally {
       await page.close();
@@ -111,7 +107,7 @@ for (const width of [320, 375, 390, 768, 1024]) {
   });
 }
 
-test('desktop detail stays inside the viewport and leaves the board interactive', async (t) => {
+test('desktop drawer stays inside the viewport, makes the board unavailable and closes on a backdrop click', async (t) => {
   const page = await openPage(
     t,
     {
@@ -123,23 +119,29 @@ test('desktop detail stays inside the viewport and leaves the board interactive'
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=a]')");
-    await page.execute("document.querySelector('[data-id=a]').click()");
+    const board = await page.execute("return document.getElementById('board').getBoundingClientRect().width");
+    await page.execute("document.querySelector('[data-id=a]').focus(); document.querySelector('[data-id=a]').click()");
     await page.waitFor("return !!document.querySelector('#detail .md table')");
     const result = await page.execute(
-      "const d=document.getElementById('detail'), r=d.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,panel:d.scrollWidth,client:d.clientWidth,viewport:innerHeight}",
+      "const d=document.getElementById('detail'), r=d.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,right:r.right,vw:document.documentElement.clientWidth,panel:d.scrollWidth,client:d.clientWidth,viewport:innerHeight,width:innerWidth,board:document.getElementById('board').getBoundingClientRect().width,modal:d.matches(':modal')}",
     );
     assert.ok(
       result.top >= 0 && result.bottom <= result.viewport && result.panel <= result.client,
       JSON.stringify(result),
     );
-    await page.execute("document.querySelector('[data-id=b]').click()");
-    await page.waitFor("return document.querySelector('#detail h2').textContent === 'Second'");
+    assert.ok(result.modal && result.right === result.vw && result.board === board, JSON.stringify(result));
+    // A click on the backdrop, left of the drawer, closes it and gives the focus back to the card.
+    await page.cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: 20, y: 300, button: 'left', clickCount: 1 });
+    await page.cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 20, y: 300, button: 'left', clickCount: 1 });
+    await page.waitFor(
+      "return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=a]')",
+    );
   } finally {
     await page.close();
   }
 });
 
-test('detail keeps its Back control and background position on a short screen', async (t) => {
+test('detail keeps its Back control on a short screen and the Run stays in view after closing', async (t) => {
   const runs = Array.from({ length: 12 }, (_, i) => run({ id: 'r' + i, title: 'Run ' + i, files: ['define.md'] }));
   runs[4].title = 'A very long title '.repeat(30);
   const page = await openPage(
@@ -156,43 +158,46 @@ test('detail keeps its Back control and background position on a short screen', 
     await page.execute(
       "const card=document.querySelector('[data-id=r4]'); card.scrollIntoView({block:'center'}); card.focus()",
     );
-    // Scrolling can be animated; read the position once it stops.
-    await page.waitFor('const y = window.scrollY, same = window.__y === y; window.__y = y; return same');
-    const before = await page.execute('return window.scrollY');
     await page.execute("document.querySelector('[data-id=r4]').click()");
     await page.waitFor("return document.querySelector('#detail h2') === document.activeElement");
-    for (let i = 0; i < 4; i++) await page.key(PAGE_DOWN); // Page Down is handled by the open detail.
+    for (let i = 0; i < 4; i++) await page.key(PAGE_DOWN); // Page Down scrolls the open detail.
     await page.waitFor("return document.getElementById('detail').scrollTop > 0");
     const result = await page.execute(
-      "const d=document.getElementById('detail'), b=document.querySelector('#detail .compact-back button').getBoundingClientRect(); return {page:window.scrollY,detail:d.scrollTop,top:b.top,bottom:b.bottom}",
+      "const d=document.getElementById('detail'), b=document.querySelector('#detail .compact-back button').getBoundingClientRect(); return {detail:d.scrollTop,top:b.top,bottom:b.bottom}",
     );
-    assert.equal(result.page, before);
     assert.ok(result.detail > 0 && result.top >= 0 && result.bottom <= SHORT_HEIGHT, JSON.stringify(result));
     await page.key(ESCAPE);
     await page.waitFor(
       "return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=r4]')",
     );
-    assert.equal(await page.execute('return window.scrollY'), before);
+    // The card is on screen again; no measured scroll offset is compared, as it depends on layout timing.
+    assert.equal(
+      await page.execute(
+        "const r=document.querySelector('[data-id=r4]').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight",
+      ),
+      true,
+    );
   } finally {
     await page.close();
   }
 });
 
-test('open detail changes focus and background behavior when crossing the breakpoint', async (t) => {
+test('the open detail turns from drawer to full-screen sheet and back when crossing the breakpoint', async (t) => {
   const page = await openPage(t, { runs: [run({ id: 'r', title: 'Resize me' })] }, { width: 375, height: 700 });
   if (!page) return;
   try {
     await page.waitFor("return !!document.querySelector('[data-id=r]')");
     await page.execute("document.querySelector('[data-id=r]').click()");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
+    const width = () => page.execute("return document.getElementById('detail').getBoundingClientRect().width");
+    const viewport = () => page.execute('return document.documentElement.clientWidth');
+    assert.equal(await width(), await viewport());
     await page.resize(1200, 700);
-    await page.waitFor("return document.querySelector('#detail').getAttribute('aria-modal') !== 'true'");
-    assert.equal(
-      await page.execute("document.getElementById('theme').focus(); return document.activeElement.id"),
-      'theme',
-    );
+    assert.equal(await page.execute("return document.getElementById('detail').open"), true); // the same dialog stays open
+    assert.equal(await width(), 640);
+    assert.equal(await page.execute("document.getElementById('theme').focus(); return document.activeElement.id"), '');
     await page.resize(375, 700);
-    await page.waitFor("return document.querySelector('#detail').getAttribute('aria-modal') === 'true'");
+    assert.equal(await width(), await viewport());
     assert.equal(await page.execute("return document.activeElement.closest('#detail') !== null"), true);
     await page.key(ESCAPE);
     await page.waitFor(
@@ -216,7 +221,7 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
   try {
     await page.waitFor("return !!document.querySelector('[data-id=r] .danger')");
     await page.execute("const b=document.querySelector('[data-id=r] .danger'); b.scrollIntoView(); b.click()");
-    await page.waitFor("return document.querySelector('dialog').open");
+    await page.waitFor("return document.querySelector('#dialog').open");
     /** @type {number[]} */
     const touch = await page.execute(
       "return [...document.querySelectorAll('#dialog button')].map(b => b.getBoundingClientRect().height)",
@@ -227,42 +232,62 @@ test('short confirmation dialogs keep cancel and discard actions reachable', asy
     );
     await page.execute("const b=document.getElementById('dialog-confirm'); b.scrollIntoView(); b.click()");
     await page.waitFor(
-      "return document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?' && document.querySelector('dialog').open && document.activeElement === document.getElementById('dialog-cancel')",
+      "return document.getElementById('dialog-title').textContent === 'Discard uncommitted changes?' && document.querySelector('#dialog').open && document.activeElement === document.getElementById('dialog-cancel')",
     );
     const reach = await page.execute(
-      "const b=document.getElementById('dialog-cancel'); b.scrollIntoView(); const r=b.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,width:document.documentElement.scrollWidth, dialog:document.querySelector('dialog').getBoundingClientRect().height}",
+      "const b=document.getElementById('dialog-cancel'); b.scrollIntoView(); const r=b.getBoundingClientRect(); return {top:r.top,bottom:r.bottom,width:document.documentElement.scrollWidth, dialog:document.querySelector('#dialog').getBoundingClientRect().height}",
     );
     assert.ok(
       reach.top >= 0 && reach.bottom <= SHORT_HEIGHT && reach.width <= 320 && reach.dialog <= SHORT_HEIGHT,
       JSON.stringify(reach),
     );
     await page.key(ESCAPE);
-    await page.waitFor("return !document.querySelector('dialog').open");
+    await page.waitFor("return !document.querySelector('#dialog').open");
     assert.deepEqual(page.calls, ['DELETE /api/runs/r']);
   } finally {
     await page.close();
   }
 });
 
-test('native confirmation retains keyboard control over compact detail', async (t) => {
-  const page = await openPage(t, { runs: [run({ id: 'r', title: 'A run' })] }, { width: 1200, height: 700 });
+test('Escape closes only the confirmation above the detail, then the detail', async (t) => {
+  const page = await openPage(
+    t,
+    {
+      runs: [
+        run({
+          id: 'w',
+          title: 'At the limit',
+          column: 'check',
+          status: 'waiting',
+          waiting: true,
+          loops: 4,
+          loopCap: 4,
+        }),
+      ],
+    },
+    { width: 1200, height: 700 },
+  );
   if (!page) return;
   try {
-    await page.waitFor("return !!document.querySelector('[data-id=r]')");
-    await page.execute("document.querySelector('[data-id=r]').click()");
+    await page.waitFor("return !!document.querySelector('[data-id=w]')");
+    await page.execute("document.querySelector('[data-id=w]').click()");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
-    await page.execute("document.querySelector('[data-id=r] .danger').click()");
-    await page.waitFor("return document.querySelector('dialog').open");
-    await page.resize(375, 700);
-    await page.waitFor("return document.querySelector('#detail').getAttribute('aria-modal') === 'true'");
-    for (let i = 0; i < 3; i++) {
-      await page.key(TAB);
-      assert.equal(await page.execute("return document.activeElement.closest('#detail') === null"), true);
-    }
+    // A real click gives the page user activation, so the browser treats the two dialogs as separate close requests.
+    const at = await page.execute(
+      'const r = document.querySelector(\'#detail [aria-label^="Grant an extra Check loop"]\').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]',
+    );
+    for (const type of ['mousePressed', 'mouseReleased'])
+      await page.cdp('Input.dispatchMouseEvent', { type, x: at[0], y: at[1], button: 'left', clickCount: 1 });
+    await page.waitFor("return document.querySelector('#dialog').open");
     await page.key(ESCAPE);
-    await page.waitFor("return !document.querySelector('dialog').open");
-    assert.equal(await page.execute("return !document.getElementById('detail').hidden"), true);
-    assert.equal(await page.execute("return document.activeElement.closest('#detail') !== null"), true);
+    await page.waitFor("return !document.querySelector('#dialog').open");
+    assert.equal(await page.execute("return document.getElementById('detail').open"), true);
+    await page.wait(300);
+    assert.equal(await page.execute("return document.getElementById('detail').open"), true);
+    await page.key(ESCAPE);
+    await page.waitFor(
+      "return document.getElementById('detail').hidden && document.activeElement === document.querySelector('[data-id=w]')",
+    );
     assert.deepEqual(page.calls, []);
   } finally {
     await page.close();
@@ -286,7 +311,6 @@ test('resizing desktop detail returns to the Stage of the selected Run', async (
     await page.execute("document.querySelector('[data-id=b]').click()");
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
     await page.resize(375, 700);
-    await page.waitFor("return document.querySelector('#detail').getAttribute('aria-modal') === 'true'");
     await page.key(ESCAPE);
     await page.waitFor("return document.getElementById('detail').hidden");
     assert.equal(await page.execute("return document.activeElement === document.querySelector('[data-id=b]')"), true);

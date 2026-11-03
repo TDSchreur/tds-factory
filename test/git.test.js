@@ -78,7 +78,34 @@ test('gitAsync closes stdin when no input is given, passes env and kills on time
     const slow = await gitAsync(os.tmpdir(), ['-c', 'alias.slow=!sleep 5', 'slow'], { timeout: 100 });
     assert.equal(slow.status, null);
     assert.ok(slow.error);
+    assert.equal(/** @type {Error & { timedOut?: boolean }} */ (slow.error).timedOut, true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('gitAsync keeps the overflow code and does not mark a maxBuffer overflow as a timeout', async () => {
+  const out = await gitAsync(os.tmpdir(), ['-c', 'alias.big=!echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'big'], {
+    maxBuffer: 4,
+    timeout: 10_000,
+  });
+  const error = /** @type {Error & { code?: string, timedOut?: boolean }} */ (out.error);
+  assert.ok(error);
+  assert.equal(error.code, 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
+  assert.notEqual(error.timedOut, true);
+});
+
+test('origin lookup names a timeout, but not a maxBuffer overflow, as "did not answer within"', async () => {
+  const { originDefaultBranchFlow } = await import('../src/origin.js');
+  /** @param {object} extra */
+  const answer = (extra) => {
+    const flow = originDefaultBranchFlow(os.tmpdir());
+    flow.next();
+    return /** @type {{ error?: string }} */ (
+      flow.next({ status: null, stdout: '', stderr: '', error: Object.assign(new Error('boom'), extra) }).value
+    );
+  };
+  assert.match(answer({ timedOut: true }).error ?? '', /did not answer within 20s/);
+  const overflow = answer({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', killed: true, signal: 'SIGTERM' });
+  assert.equal(overflow.error, 'origin did not answer: boom');
 });

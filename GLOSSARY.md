@@ -206,8 +206,8 @@ _Avoid_: Board, Monitor
 The version of the Factory installation serving a Dashboard, independent of the project or its Runs.
 
 **Run detail**:
-The panel the Dashboard opens when a Run's card is selected, showing its status, links and Stage summaries.
-_Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Modal
+The drawer the Dashboard opens over the board when a Run's card is selected, showing its status, links and Stage summaries. The board stays visible behind it until it is closed.
+_Avoid_: Ticket (a Ticket is a unit of work cut from a Spec, not what you click), Panel
 
 **Release**:
 A packaged build of the Factory published on GitHub when a maintainer chooses to release changes. Colleagues install the latest Release with one command.

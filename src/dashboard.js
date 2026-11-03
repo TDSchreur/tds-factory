@@ -96,6 +96,8 @@ export async function startDashboard({
     store,
     // Clean-up must run from the main checkout, also when the Dashboard was started inside a Run worktree.
     mainStore: openRunStore(store.projectDir),
+    /** @type {Set<string>} */
+    inFlight: new Set(),
     token,
     projectDir,
     prMerge,

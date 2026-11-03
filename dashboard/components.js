@@ -3,7 +3,7 @@
 /** @import { RunView } from './model.js' */
 /** @import { Span, ListItem } from './markdown.js' */
 import { Fragment, h } from 'preact';
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import htm from 'htm';
 import { parseMarkdown } from './markdown.js';
 import { HELP_SECTIONS } from './help.js';
@@ -522,6 +522,19 @@ export function Header({
   </header>`;
 }
 
+// The columns of the token usage table: the field of a usage row and its header; the first column is the row label.
+/** @type {[keyof import('./model.js').UsageRowView, string][]} */
+const USAGE_COLUMNS = [
+  ['label', 'Where'],
+  ['fresh', 'Fresh'],
+  ['input', 'Input'],
+  ['cacheRead', 'Cache read'],
+  ['cacheWrite', 'Cache write'],
+  ['output', 'Output'],
+  ['reasoning', 'Reasoning'],
+  ['subagents', 'Subagents'],
+];
+
 /** @typedef {{ name: string, text?: string, error?: string }} LoadedFile */
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
@@ -529,87 +542,37 @@ export function Header({
 /**
  * @param {object} props
  * @param {RunView | null} props.run
- * @param {boolean} props.compact
  * @param {() => void} props.onClose
  * @param {(run: RunView) => void} props.onCheckPr
  * @param {(run: RunView) => void} props.onGrant
  */
-export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
+export function Detail({ run, onClose, onCheckPr, onGrant }) {
   const key = run ? JSON.stringify([run.id, run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ id: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
   const heading = useRef(null);
+  /** @type {{ current: HTMLDialogElement | null }} */
+  const dialog = useRef(null);
+  const closing = useRef(false); // true while the page itself closes the dialog, so its close event is not a user's close
+  // The native modal dialog provides the focus trap, the inert board and Escape. It opens once per Run: a refresh never calls showModal again.
   useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (run && !element.open) element.showModal();
+    else if (!run && element.open) {
+      closing.current = true;
+      element.close();
+    }
     if (run && document.activeElement !== heading.current) heading.current?.focus({ preventScroll: true });
   }, [run?.id]); // only a newly opened Run takes focus, never a refresh
-  // Compact detail covers the Dashboard: the background becomes inert and stops scrolling, and Tab stays inside the detail.
-  useLayoutEffect(() => {
-    if (!run || !compact) return undefined;
-    const detail = document.getElementById('detail');
-    if (!detail) return undefined;
-    const background = elementsOf(document, '#app > header, .board-wrap');
-    const previous = background.map((element) => element.inert);
-    const overflow = document.body.style.overflow;
-    background.forEach((element) => {
-      element.inert = true;
-    });
-    document.body.style.overflow = 'hidden';
-    if (!detail.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
-    const trap = (/** @type {KeyboardEvent} */ event) => {
-      if (event.key !== 'Tab' || document.querySelector('dialog[open]')) return;
-      const targets = elementsOf(
-        detail,
-        'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ).filter((element) => element.getClientRects().length && !element.closest('[hidden]'));
-      if (!targets.length) {
-        event.preventDefault();
-        return;
-      }
-      const first = targets[0],
-        last = targets[targets.length - 1],
-        active = document.activeElement;
-      const outside = !detail.contains(active);
-      if (event.shiftKey && (active === first || outside)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || outside)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', trap);
-    return () => {
-      document.removeEventListener('keydown', trap);
-      background.forEach((element, index) => {
-        element.inert = previous[index];
-      });
-      document.body.style.overflow = overflow;
-    };
-  }, [!!run, compact]);
-  // The desktop drawer starts below the header. Measure its actual top so its bottom stays in view.
-  useLayoutEffect(() => {
-    if (!run || compact) return undefined;
-    const detail = document.getElementById('detail');
-    const header = document.querySelector('#app > header');
-    if (!detail || !header) return undefined;
-    const fit = () => {
-      detail.style.top = header.getBoundingClientRect().height + 20 + 'px';
-      detail.style.maxHeight =
-        Math.max(0, window.innerHeight - Math.max(0, detail.getBoundingClientRect().top) - 20) + 'px';
-    };
-    const observer = new ResizeObserver(fit);
-    observer.observe(header);
-    window.addEventListener('resize', fit);
-    window.addEventListener('scroll', fit, { passive: true });
-    fit();
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', fit);
-      window.removeEventListener('scroll', fit);
-      detail.style.removeProperty('top');
-      detail.style.removeProperty('max-height');
-    };
-  }, [!!run, compact]);
+  const closed = () => {
+    if (closing.current) closing.current = false;
+    else onClose();
+  };
+  // A click on the dialog itself, not on its content, is a click on the backdrop.
+  const backdrop = (/** @type {MouseEvent} */ event) => {
+    if (event.target === dialog.current) dialog.current?.close();
+  };
   useEffect(() => {
     if (!run) return undefined;
     let live = true;
@@ -632,12 +595,13 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       live = false;
     };
   }, [key]);
-  if (!run) return html`<section id="detail" aria-label="Run detail" hidden></section>`;
+  if (!run) return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} hidden></dialog>`;
   const updatedAge = ageMs(run.updated);
   const reviews = run.projectReviews ?? [];
   /** @type {LoadedFile[]} */
   const files = loaded && loaded.id === run.id ? loaded.files : run.files.map((name) => ({ name }));
-  return html`<section id="detail" aria-label="Run detail" role=${compact ? 'dialog' : undefined} aria-modal=${compact ? 'true' : undefined}>
+  return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onClick=${backdrop}>
+    <div class="detail-body">
     <div class="compact-back"><button type="button" onClick=${onClose}><span aria-hidden="true">← </span>Back to stages</button></div>
     <header>
       <div class="head-row"><h2 ref=${heading} tabindex="-1">${run.title}</h2><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
@@ -657,9 +621,12 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
       <div>Tokens: ${run.metrics.tokens}</div>
       ${
         run.metrics.usage?.rows?.length > 0 &&
-        html`<div class="usage-table-wrap" tabindex="0" role="region" aria-label="Token usage table"><table class="usage-table"><caption>Token usage per Stage, model and Ticket</caption>
-        <thead><tr><th scope="col">Where</th><th scope="col">Fresh</th><th scope="col">Input</th><th scope="col">Cache read</th><th scope="col">Cache write</th><th scope="col">Output</th><th scope="col">Reasoning</th><th scope="col">Subagents</th></tr></thead>
-        <tbody>${run.metrics.usage.rows.map((r) => html`<tr key=${r.label}><th scope="row">${r.label}</th><td>${r.fresh}</td><td>${r.input}</td><td>${r.cacheRead}</td><td>${r.cacheWrite}</td><td>${r.output}</td><td>${r.reasoning ?? 'n/a'}</td><td>${r.subagents}</td></tr>`)}</tbody></table></div>`
+        html`<div class="usage"><table class="usage-table" role="table"><caption>Token usage per Stage, model and Ticket</caption>
+        <thead role="rowgroup"><tr role="row">${USAGE_COLUMNS.map(([, label]) => html`<th key=${label} scope="col" role="columnheader">${label}</th>`)}</tr></thead>
+        <tbody role="rowgroup">${run.metrics.usage.rows.map(
+          (r) =>
+            html`<tr key=${r.label} role="row"><th scope="row" role="rowheader">${r.label}</th>${USAGE_COLUMNS.slice(1).map(([field, label]) => html`<td key=${label} role="cell" data-label=${label}>${r[field] ?? 'n/a'}</td>`)}</tr>`,
+        )}</tbody></table></div>`
       }
       ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label} · no data</div>`)}
       <div>Cost: ${run.metrics.cost}</div>
@@ -677,7 +644,8 @@ export function Detail({ run, compact, onClose, onCheckPr, onGrant }) {
     <//>`,
       )
     }
-  </section>`;
+    </div>
+  </dialog>`;
 }
 
 // A native dialog driven by one request at a time: { title, message, action, danger, notice, resolve }, or null when closed.
