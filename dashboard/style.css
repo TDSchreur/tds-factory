@@ -312,11 +312,20 @@
   .usage-breakdown { display: none; color: var(--colorNeutralForeground2); }
   .usage-model { display: block; }
   .ticket-usage:hover .usage-breakdown, .ticket-usage:focus .usage-breakdown { display: block; }
-  .usage-table-wrap { overflow-x: auto; margin-top: var(--spacingVerticalS); }
-  .usage-table { border-collapse: collapse; font-size: var(--fontSizeBase200); }
+  .usage { container-type: inline-size; margin-top: var(--spacingVerticalS); }
+  .usage-table { width: 100%; border-collapse: collapse; font-size: var(--fontSizeBase200); }
   .usage-table caption { text-align: left; color: var(--colorNeutralForeground3); padding-bottom: var(--spacingVerticalXS); }
-  .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; white-space: nowrap; }
+  .usage-table th, .usage-table td { padding: var(--spacingVerticalXXS) var(--spacingHorizontalS); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); text-align: right; font-weight: normal; overflow-wrap: anywhere; }
+  .usage-table td { white-space: nowrap; }
   .usage-table th[scope="col"]:first-child, .usage-table th[scope="row"] { text-align: left; }
+  @container (max-width: 32rem) {
+    .usage-table, .usage-table tbody, .usage-table tr { display: block; }
+    .usage-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .usage-table tr { padding: var(--spacingVerticalXS) 0; border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); }
+    .usage-table th[scope="row"] { display: block; border: 0; font-weight: var(--fontWeightSemibold); }
+    .usage-table td { display: flex; justify-content: space-between; gap: var(--spacingHorizontalM); border: 0; }
+    .usage-table td::before { content: attr(data-label); color: var(--colorNeutralForeground3); text-align: left; white-space: normal; }
+  }
   .skip-link { position: absolute; left: var(--spacingHorizontalM); top: -100px; z-index: 100; padding: var(--spacingVerticalS) var(--spacingHorizontalM); background: var(--colorNeutralBackground1); color: var(--colorNeutralForeground1); border: 1px solid var(--colorStrokeFocus2); border-radius: var(--borderRadiusMedium); }
   .skip-link:focus { top: var(--spacingVerticalS); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

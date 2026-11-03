@@ -522,6 +522,19 @@ export function Header({
   </header>`;
 }
 
+// The columns of the token usage table: the field of a usage row and its header; the first column is the row label.
+/** @type {[keyof import('./model.js').UsageRowView, string][]} */
+const USAGE_COLUMNS = [
+  ['label', 'Where'],
+  ['fresh', 'Fresh'],
+  ['input', 'Input'],
+  ['cacheRead', 'Cache read'],
+  ['cacheWrite', 'Cache write'],
+  ['output', 'Output'],
+  ['reasoning', 'Reasoning'],
+  ['subagents', 'Subagents'],
+];
+
 /** @typedef {{ name: string, text?: string, error?: string }} LoadedFile */
 
 // Shows the Markdown files of the selected Run. On a refresh of the same Run the old text stays until the new files are loaded,
@@ -608,9 +621,12 @@ export function Detail({ run, onClose, onCheckPr, onGrant }) {
       <div>Tokens: ${run.metrics.tokens}</div>
       ${
         run.metrics.usage?.rows?.length > 0 &&
-        html`<div class="usage-table-wrap" tabindex="0" role="region" aria-label="Token usage table"><table class="usage-table"><caption>Token usage per Stage, model and Ticket</caption>
-        <thead><tr><th scope="col">Where</th><th scope="col">Fresh</th><th scope="col">Input</th><th scope="col">Cache read</th><th scope="col">Cache write</th><th scope="col">Output</th><th scope="col">Reasoning</th><th scope="col">Subagents</th></tr></thead>
-        <tbody>${run.metrics.usage.rows.map((r) => html`<tr key=${r.label}><th scope="row">${r.label}</th><td>${r.fresh}</td><td>${r.input}</td><td>${r.cacheRead}</td><td>${r.cacheWrite}</td><td>${r.output}</td><td>${r.reasoning ?? 'n/a'}</td><td>${r.subagents}</td></tr>`)}</tbody></table></div>`
+        html`<div class="usage"><table class="usage-table" role="table"><caption>Token usage per Stage, model and Ticket</caption>
+        <thead role="rowgroup"><tr role="row">${USAGE_COLUMNS.map(([, label]) => html`<th key=${label} scope="col" role="columnheader">${label}</th>`)}</tr></thead>
+        <tbody role="rowgroup">${run.metrics.usage.rows.map(
+          (r) =>
+            html`<tr key=${r.label} role="row"><th scope="row" role="rowheader">${r.label}</th>${USAGE_COLUMNS.slice(1).map(([field, label]) => html`<td key=${label} role="cell" data-label=${label}>${r[field] ?? 'n/a'}</td>`)}</tr>`,
+        )}</tbody></table></div>`
       }
       ${(run.metrics.usage?.gaps ?? []).map((g) => html`<div key=${g.label}>${g.label} · no data</div>`)}
       <div>Cost: ${run.metrics.cost}</div>
