@@ -32,17 +32,26 @@ const PATHSPEC = ['.', ...LOCKFILES.map((n) => `:(exclude,glob)**/${n}`), ':(exc
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
+ * @param {{ maxBuffer?: number }} [options] maxBuffer is for tests; a diff that overflows it counts as over the limit
  * @returns {{ files: number, bytes: number } | undefined}
  */
-export function runSize(projectDir, id) {
+export function runSize(projectDir, id, { maxBuffer = 256 * 1024 * 1024 } = {}) {
   const { record } = readRun(projectDir, id);
   const base = record.base_sha;
   if (!record.worktree || !base || !/^[0-9a-f]{40,64}$/.test(base)) return undefined;
   const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
   /** @param {...string} args */
-  const git = (...args) => runGit(record.worktree ?? '', args, { maxBuffer: 256 * 1024 * 1024 });
+  const git = (...args) => runGit(record.worktree ?? '', args, { maxBuffer });
   const diff = git('diff', ...plain, base, 'HEAD', '--', ...PATHSPEC);
   const names = git('diff', ...plain, '-z', '--name-only', base, 'HEAD', '--', ...PATHSPEC);
+  // A diff too big for the buffer is over the limit, not unknown: failing open would let a huge Run pass.
+  const overflow = (/** @type {{ error?: Error }} */ r) =>
+    /** @type {any} */ (r.error)?.code?.match(/^(ENOBUFS|ERR_CHILD_PROCESS_STDIO_MAXBUFFER)$/);
+  if (overflow(diff) || overflow(names))
+    return {
+      files: names.status === 0 ? names.stdout.split('\0').filter(Boolean).length : MAX_FILES + 1,
+      bytes: Math.max(maxBuffer, MAX_DIFF_BYTES) + 1,
+    };
   if (diff.status !== 0 || names.status !== 0) return undefined;
   return { files: names.stdout.split('\0').filter(Boolean).length, bytes: Buffer.byteLength(diff.stdout) };
 }

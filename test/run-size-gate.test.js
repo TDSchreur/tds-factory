@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
@@ -122,7 +122,22 @@ test('size --accept sets size_accepted, releases the Run and logs the size', () 
   assert.ok(accepted.bytes > 50 * 1024);
 });
 
-test('size --accept works on a running Run in Build and in Check, and silences the transition warning', () => {
+test('size --accept works on a running Run in Build and in Check', () => {
+  const inBuildRun = over();
+  finish(inBuildRun, 4);
+  assert.equal(run(inBuildRun.cwd, 'size', '--id', inBuildRun.id, '--accept').status, 0);
+  assert.ok(record(inBuildRun.cwd, inBuildRun.id).size_accepted);
+  assert.equal(record(inBuildRun.cwd, inBuildRun.id).status, 'running');
+
+  const inCheckRun = over();
+  finish(inCheckRun, 4);
+  assert.equal(run(inCheckRun.cwd, 'transition', '--id', inCheckRun.id, '--to', 'check').status, 0);
+  assert.equal(record(inCheckRun.cwd, inCheckRun.id).stage, 'check');
+  assert.equal(run(inCheckRun.cwd, 'size', '--id', inCheckRun.id, '--accept').status, 0);
+  assert.ok(record(inCheckRun.cwd, inCheckRun.id).size_accepted);
+});
+
+test('the transition to Check warns about the size, and not after accept', () => {
   const r = over();
   finish(r, 4);
   const before = run(r.cwd, 'transition', '--id', r.id, '--to', 'check');
@@ -131,37 +146,34 @@ test('size --accept works on a running Run in Build and in Check, and silences t
   const s = over();
   finish(s, 4);
   assert.equal(run(s.cwd, 'size', '--id', s.id, '--accept').status, 0);
-  assert.equal(record(s.cwd, s.id).status, 'running');
   const after = run(s.cwd, 'transition', '--id', s.id, '--to', 'check');
   assert.equal(after.status, 0, after.stderr);
   assert.doesNotMatch(after.stderr, /warning: the diff/);
-  const again = over();
-  finish(again, 4);
-  run(again.cwd, 'transition', '--id', again.id, '--to', 'check');
-  assert.equal(record(again.cwd, again.id).stage, 'check');
-  assert.equal(run(again.cwd, 'size', '--id', again.id, '--accept').status, 0);
-  assert.ok(record(again.cwd, again.id).size_accepted);
 });
 
-test('split and size --accept refuse a Run that does not wait for size in Build', () => {
+test('split refuses a Run that does not wait for size', () => {
   const r = over();
-  for (const args of [['split'], ['size', '--accept']]) {
-    const unrelated = args[0] === 'split' ? r : under();
-    const result = run(unrelated.cwd, args[0], '--id', unrelated.id, ...args.slice(1));
-    if (args[0] === 'split') {
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /waits for the Run size/);
-    } else assert.equal(result.status, 0, 'a running Run in Build may be accepted');
-  }
+  const result = run(r.cwd, 'split', '--id', r.id);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /waits for the Run size/);
+});
+
+test('size --accept on a running Run in Build is accepted', () => {
+  const r = under();
+  assert.equal(run(r.cwd, 'size', '--id', r.id, '--accept').status, 0);
+});
+
+test('split and size --accept refuse a Run that waits for something else', () => {
   const waiting = over();
   finish(waiting, 1);
   const path = join(waiting.cwd, '.factory', 'runs', waiting.id, 'run.json');
   writeFileSync(path, JSON.stringify({ ...record(waiting.cwd, waiting.id), waiting_reason: 'Something else' }));
-  for (const args of [['split'], ['size', '--accept']]) {
-    const result = run(waiting.cwd, args[0], '--id', waiting.id, ...args.slice(1));
-    assert.notEqual(result.status, 0, args.join(' '));
-    assert.match(result.stderr, /Run size/);
-  }
+  const split = run(waiting.cwd, 'split', '--id', waiting.id);
+  assert.notEqual(split.status, 0);
+  assert.match(split.stderr, /Run size/);
+  const accept = run(waiting.cwd, 'size', '--id', waiting.id, '--accept');
+  assert.notEqual(accept.status, 0);
+  assert.match(accept.stderr, /Run size/);
   assert.equal(record(waiting.cwd, waiting.id).waiting_reason, 'Something else');
 });
 
@@ -215,5 +227,36 @@ test(
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout.split('\n').length, 3);
     assert.doesNotMatch(result.stdout, /^warning/m);
+  },
+);
+
+test(
+  'bidi and line separator characters in a Ticket link are replaced in the split output',
+  { skip: process.platform === 'win32' && 'needs special characters in a link' },
+  () => {
+    const r = over();
+    const evil = ['t1', 'a\u2028b\u2029c\u202ed\u2066e\u2069f\u202ag\u202cX'];
+    assert.equal(run(r.cwd, 'update', '--id', r.id, '--data', JSON.stringify({ tickets: [...evil, 't3'] })).status, 0);
+    finish(r, 1);
+    const result = run(r.cwd, 'split', '--id', r.id);
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /[\u2028\u2029\u202a-\u202e\u2066-\u2069]/);
+    assert.equal(result.stdout.split('\n').length, 3);
+  },
+);
+
+test(
+  'split prints the moved links even when the event log cannot be written',
+  { skip: process.platform === 'win32' },
+  () => {
+    const r = over();
+    finish(r, 2);
+    const log = join(r.cwd, '.factory', 'runs', r.id, 'events.jsonl');
+    rmSync(log, { force: true });
+    mkdirSync(log);
+    const result = run(r.cwd, 'split', '--id', r.id);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 't3\nt4\n');
+    assert.deepEqual(record(r.cwd, r.id).tickets, ['t1', 't2']);
   },
 );

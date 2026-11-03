@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { repo, git } from './git-repo.js';
-import { runSize } from '../src/run-size.js';
+import { runSize, overLimit } from '../src/run-size.js';
 
 const cli = resolve('bin/tds-factory.js');
 /**
@@ -127,4 +127,11 @@ test('a big lockfile and big fixtures do not trigger the size warning', () => {
   );
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stderr, /warning: the diff/);
+});
+
+test('a diff that overflows maxBuffer counts as over the limit, not as unknown', () => {
+  const { cwd, id } = inBuild(1, [{ 'big.txt': 'x'.repeat(50 * 1024) }]);
+  const size = runSize(cwd, id, { maxBuffer: 1024 });
+  assert.ok(size, 'the size is known');
+  assert.ok(overLimit(size));
 });

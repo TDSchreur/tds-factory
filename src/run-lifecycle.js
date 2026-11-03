@@ -366,7 +366,10 @@ const released = { status: 'running', waiting_on_human: false, waiting_reason: '
 export function splitRun(projectDir, id) {
   /** @type {string[]} */
   let moved = [];
+  /** @type {string} */
+  let dir = '';
   changeRun(projectDir, id, (old) => {
+    dir = readRun(projectDir, id).dir;
     if (!waitsForSize(old)) throw new Error('split needs a Run in Build that waits for the Run size answer');
     const kept = old.tickets?.slice(0, old.tickets_done ?? 0) ?? [];
     moved = old.tickets?.slice(kept.length) ?? [];
@@ -379,7 +382,12 @@ export function splitRun(projectDir, id) {
       updated: new Date().toISOString(),
     };
   });
-  appendEvent(readRun(projectDir, id).dir, { type: 'split', moved });
+  // The links are already computed: a failing event log must not hide them from the user.
+  try {
+    appendEvent(dir, { type: 'split', moved });
+  } catch (error) {
+    console.error(`note: the split event could not be recorded (${error instanceof Error ? error.message : error})`);
+  }
   return moved;
 }
 
@@ -392,8 +400,10 @@ export function splitRun(projectDir, id) {
  */
 export function sizeRun(projectDir, id, { accept = false } = {}) {
   if (!accept) return runSize(projectDir, id);
-  const size = runSize(projectDir, id);
+  /** @type {{ files: number, bytes: number } | undefined} */
+  let size;
   changeRun(projectDir, id, (old) => {
+    size = runSize(projectDir, id);
     if (old.size_accepted) throw new Error('the Run size is already accepted');
     if (!waitsForSize(old) && !(old.status === 'running' && oneOf(['build', 'check'], old.stage)))
       throw new Error('size --accept needs a running Run in Build or Check, or one that waits for the Run size answer');

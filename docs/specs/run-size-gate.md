@@ -58,7 +58,9 @@ The limit applies to this work as well. Per Ticket, as files and KB of diff (tes
 | Run B: Define and Fast track text, `SKILL.md`, Dashboard buttons and route, `docs/usage.md`, `docs/dashboard.md`, tests                                                                                                    | about 14     | about 28     |
 | **Both Runs in one**                                                                                                                                                                                                       | **about 28** | **about 61** |
 
-One Run would pass both limits, so the work is cut into two. Run A stays under the limit but close to the file count; Ticket 2 must not grow, and if Build finds it will, that is the signal to move parts into Run B.
+One Run would pass both limits, so the work is cut into two. The table is the original plan for Run A: it stays under the limit but close to the file count.
+
+Run A as built: 16-17 files and about 57 KB including the Define artifacts, over the limit of 15 files and 40 KB; the user accepted that size. Lesson for Run B's estimate: tests and long Markdown lines were under-estimated, so count tests at their real size and Markdown lines by their length.
 
 ## Testing Decisions
 

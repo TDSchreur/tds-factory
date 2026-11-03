@@ -97,7 +97,8 @@ try {
       if (values.to === 'check')
         for (const warning of store.sizeWarnings(values.id)) console.error(`warning: ${warning}`);
     } else if (op === 'split') {
-      for (const link of store.split(values.id)) console.log(link.replace(/[\x00-\x1f\x7f-\x9f]/g, '?'));
+      for (const link of store.split(values.id))
+        console.log(link.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?'));
     } else if (op === 'size') {
       const size = store.size(values.id, { accept: values.accept });
       if (!size) console.log('The Run size is unknown (no base commit, or git failed)');
@@ -114,7 +115,10 @@ try {
       if (Boolean(values.id) === values.all) throw new Error('run clean needs --id ID or --all, not both');
       for (const { id, outcome, reason } of values.all ? store.cleanAll() : [store.clean(values.id)])
         console.log(
-          (reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(/[\x00-\x1f\x7f-\x9f]/g, '?'),
+          (reason ? `${outcome} ${id}: ${reason}` : `${outcome} ${id}`).replace(
+            /[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
+            '?',
+          ),
         );
     } else if (op === 'stats') {
       if (Boolean(values.id) === values.all) throw new Error('run stats needs --id ID or --all, not both');
@@ -136,7 +140,7 @@ try {
         for (const gap of formatted.usage.gaps ?? []) console.log(`    ${gap.label} · no data`);
       };
       for (const run of report.runs) {
-        const name = run.id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?');
+        const name = run.id.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?');
         if (run.unreadable) console.log(`${name}: unreadable (no data)`);
         else if (run.summary) print(name, run.summary);
       }
@@ -150,7 +154,7 @@ try {
         }
         if (report.usage.left.length)
           console.log(
-            `Left out of the token totals (not tracked): ${report.usage.left.map((id) => id.replace(/[\x00-\x1f\x7f-\x9f]/g, '?')).join(', ')}`,
+            `Left out of the token totals (not tracked): ${report.usage.left.map((id) => id.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?')).join(', ')}`,
           );
         const missing = report.runs.filter(
           (run) =>
@@ -245,6 +249,6 @@ try {
     process.exitCode = command ? 1 : 0;
   }
 } catch (err) {
-  console.error(`error: ${messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, '?')}`);
+  console.error(`error: ${messageOf(err).replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?')}`);
   process.exitCode = 1;
 }
