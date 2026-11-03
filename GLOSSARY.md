@@ -169,7 +169,7 @@ The size of a Run's diff against its base, in files and bytes, leaving out lockf
 _Avoid_: Diff budget, PR size
 
 **Split**:
-Ending a Run at the Tickets it has done, so the Tickets not yet done move to a new Run. Only the user decides it.
+Ending a Run at the Tickets it has done, so the Tickets not yet done move to a new Run. Only the user decides it. After a Split on the Dashboard the Run waits for an agent (`/factory continue <run id>`, offered by Copy agent prompt).
 _Avoid_: Carve-out, Spin-off
 
 **Run record**:
