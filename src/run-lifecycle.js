@@ -356,14 +356,17 @@ const waitsForSize = (old) =>
 
 /** @type {Partial<Run>} */
 const released = { status: 'running', waiting_on_human: false, waiting_reason: '' };
+/** @type {Partial<Run>} */
+const handedOver = { status: 'waiting', waiting_on_human: false, waiting_reason: 'Split done: ready for an agent' };
 
-// Drops the Tickets not yet done from the Run and returns their links.
+// Drops the Tickets not yet done from the Run and returns their links. The command line releases the Run to running. The Dashboard's `handOver` leaves it waiting for an agent instead, not on the user (like a Fix, ADR 0034), and `updated` is the record time the user saw: a Run that changed since is refused.
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
+ * @param {{ updated?: string, handOver?: boolean }} [options]
  * @returns {string[]}
  */
-export function splitRun(projectDir, id) {
+export function splitRun(projectDir, id, { updated, handOver = false } = {}) {
   /** @type {string[]} */
   let moved = [];
   /** @type {string} */
@@ -371,11 +374,12 @@ export function splitRun(projectDir, id) {
   changeRun(projectDir, id, (old) => {
     dir = readRun(projectDir, id).dir;
     if (!waitsForSize(old)) throw new Error('split needs a Run in Build that waits for the Run size answer');
+    if (updated !== undefined && updated !== old.updated) throw new Error('the Run changed since it was shown');
     const kept = old.tickets?.slice(0, old.tickets_done ?? 0) ?? [];
     moved = old.tickets?.slice(kept.length) ?? [];
     return {
       ...old,
-      ...released,
+      ...(handOver ? handedOver : released),
       tickets: kept,
       tickets_total: kept.length,
       activity: 'Split: the remaining Tickets move to a new Run',

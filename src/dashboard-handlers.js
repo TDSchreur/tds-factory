@@ -204,6 +204,15 @@ function continueRun(ctx, id, v) {
   ctx.send(200, 'text/plain', 'continued');
 }
 
+// The links are untrusted text: control and format characters become spaces, so one link is one line.
+/** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
+function splitRun(ctx, id, v) {
+  const updated = sizeAnswer(ctx, v);
+  if (updated === undefined) return;
+  const moved = ctx.store.split(id, { updated, handOver: true });
+  ctx.send(200, 'text/plain', moved.map((link) => link.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ')).join('\n'));
+}
+
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
 async function acceptCheck(ctx, id, v) {
   const { send, store } = ctx;
@@ -251,6 +260,7 @@ export async function runAction(ctx) {
       if (action === 'extra-loop') return grantExtraLoop(ctx, id, v);
       if (action === 'follow-up') return await fixRun(ctx, id, v);
       if (action === 'continue') return continueRun(ctx, id, v);
+      if (action === 'split') return splitRun(ctx, id, v);
       return await acceptCheck(ctx, id, v);
     } catch (err) {
       ctx.send(409, 'text/plain', messageOf(err).replace(/[\x00-\x1f\x7f-\x9f]/g, ' '));
