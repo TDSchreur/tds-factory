@@ -493,7 +493,7 @@ test('Define decides build or borrow and splits oversized work, and the Exit che
     define,
     /names the approach in the Spec or the Ticket before Build starts: a dependency, a simpler syntax/,
   );
-  assert.match(define, /passes about 40 KB or about 15 files, split the work/);
+  assert.match(define, /Above two thirds of the limit, Define proposes a split/);
   assert.match(define, /warns, without refusing/);
   assert.match(main, /before you cut Tickets \(build or borrow, size\)/);
   const checklist = references['exit-checklist.md'];
@@ -574,4 +574,19 @@ test('/factory continue resumes a Run and the scoped Follow-up rules are in the 
   assert.match(followUp, /`conflicts` Rework start with `tds-factory run sync/);
   assert.match(followUp, /every comment you did not act on, with the reason/);
   assert.match(followUp, /never post replies or resolve threads/i);
+});
+
+test('Define estimates the Run size against two thirds of the limit, proposes the cut, and the Fast track proposes the Full track', () => {
+  const define = references['define.md'];
+  assert.match(define, /a row per Ticket, a row for the Define artifacts and a total/);
+  assert.match(define, /tests at their real size, Markdown by the length of its lines/);
+  assert.match(define, /10 files and 27 KB/);
+  assert.match(define, /proposes a split with a suggested cut in the confirmation, and the user decides/);
+  assert.match(define, /Tickets exist only for the first Run/);
+  assert.match(define, /Each later Run gets one issue with its scope/);
+  assert.doesNotMatch(define, /about 40 KB or about 15 files, split/);
+  const fast = references['fast-track.md'];
+  assert.match(fast, /estimate the diff before the confirmation/i);
+  assert.match(fast, /passes the limit, say so in the confirmation and propose the Full track/);
+  assert.match(fast, /the user chooses/);
 });
