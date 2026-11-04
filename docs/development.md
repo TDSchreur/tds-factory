@@ -41,6 +41,8 @@ Tests that need symbolic links, the executable bit, `mkfifo`, POSIX signals or f
 
 The browser tests are not supported on Windows: every one of them skips there with a reason, also with `REQUIRE_BROWSER=1`. Run them on Linux or macOS (or in WSL) with `chromedriver` and Chromium or Chrome on PATH.
 
+The Dashboard polls every 2000 ms, and a browser test that waits for a poll must not sleep that long. Give `openPage()` a short interval with `{ pollMs: 100 }`: the stub server then serves `dashboard/model.js` with that value, and the shipped Dashboard does not change. Without `pollMs` the page polls every 2000 ms. Wait with `await page.waitForPolls()` instead of a fixed sleep. It resolves when the stub server has answered that many more polls and the page has drawn a frame. For a check that nothing happened, set the state first, then wait for a poll, then assert. `page.fileReads` lists the `/files/` URLs the stub server served, for a test that waits for an open Run to read its files again.
+
 The `ci-ok` job succeeds only when all the other jobs do. The `develop` and `main` rulesets require it, so a PR cannot merge while CI is red. When you add a CI job, add it to `needs` of `ci-ok`.
 
 Run these checks individually with `npm run test:unit`, `npm run test:browser` and `npm run test:package`. Set `REQUIRE_BROWSER=1` to make a missing browser fail locally too. The package check uses temporary directories and verifies project installs for all three Agent targets.
