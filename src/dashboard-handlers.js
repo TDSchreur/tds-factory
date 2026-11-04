@@ -341,7 +341,7 @@ export async function runFile({ send, store, match }) {
   else send(200, 'text/markdown', body);
 }
 
-// A Linked document of a Run: one of the paths its record lists, read-only; every refusal is the same 404 (ADR 0037).
+// A Linked document of a Run: one of the paths its record lists, read-only; every refusal is the same 404 (ADR 0038).
 /** @type {Handler} */
 export async function linkedDocument({ send, store, match }) {
   const body = await store.readDocument(match[1], match[2]);

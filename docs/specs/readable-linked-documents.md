@@ -1,6 +1,6 @@
 # Readable Linked documents in the Dashboard
 
-Full track. Decisions are recorded in [ADR 0037](../adr/0037-the-dashboard-reads-only-the-documents-a-run-record-links-to.md) and in the glossary entry Linked document.
+Full track. Decisions are recorded in [ADR 0038](../adr/0038-the-dashboard-reads-only-the-documents-a-run-record-links-to.md) and in the glossary entry Linked document.
 
 ## Problem Statement
 
@@ -28,7 +28,7 @@ A Linked document that is a path (not an http(s) URL) becomes a link that opens 
 14. As a user, I want a document that only exists in the main checkout (for example after the worktree was cleaned) to still open, so that a finished Run keeps its Spec.
 15. As a user, I want the opened document reachable by keyboard and announced to a screen reader, so that the Dashboard stays accessible (WCAG 2.2 AA).
 16. As a user, I want focus to return to the link I used after Back, so that I do not lose my place.
-17. As a developer, I want the server to read only paths listed in that Run's `spec_link` or `tickets`, so that the Dashboard is not a general file reader (ADR 0037).
+17. As a developer, I want the server to read only paths listed in that Run's `spec_link` or `tickets`, so that the Dashboard is not a general file reader (ADR 0038).
 18. As a developer, I want paths outside the Run worktree and the main checkout, absolute paths, `..` paths, non-Markdown files, unlisted paths and encoded separators answered with 404, so that a hostile page cannot read other files of a Project.
 19. As a developer, I want a symlink that leads outside both folders refused, so that a link in the repo cannot leak a file.
 20. As a developer, I want the new route to be read-only and to need no session token, like `/files`, so that it adds no write surface.
@@ -44,7 +44,7 @@ A Linked document that is a path (not an http(s) URL) becomes a link that opens 
 - **Link text.** Local path: the file name; the path is the `title` attribute. Remote URL: as before (`Spec: <url>`, `#123`).
 - **Opening.** The drawer state gains an open document (path). Opening a document fetches the body from the new route and renders it with the existing Markdown component; Back clears it and returns focus to the link. A Ticket tile click opens the Run detail directly on its document. While the body loads the drawer shows a loading line; a 404 shows "This Ticket is no longer on disk" (or "This Spec ...") and the path.
 - **Run view data.** Local paths and URLs stay in the same lists; the page tells them apart by the existing http(s) check, not by a stored tracker type. No change to the Run record schema.
-- **Documents (swept with `run sweep`, terms `spec_link`, `safeUrl`, `/files`, `plain text`, `Ticket tile`, `Linked document`).** Bring in line: the Dashboard guide (route table, Run detail text), the Dashboard help text, `skills/factory/SKILL.md` and `skills/factory/references/run-schema.md` only where they describe `spec_link` and `tickets` as shown (check, likely unchanged), the glossary and ADR 0037 (already written in Define). The canonical Dashboard Markdown spec is archived (`dashboard-markdown-view`), so it stays as history. A changelog fragment is required.
+- **Documents (swept with `run sweep`, terms `spec_link`, `safeUrl`, `/files`, `plain text`, `Ticket tile`, `Linked document`).** Bring in line: the Dashboard guide (route table, Run detail text), the Dashboard help text, `skills/factory/SKILL.md` and `skills/factory/references/run-schema.md` only where they describe `spec_link` and `tickets` as shown (check, likely unchanged), the glossary and ADR 0038 (already written in Define). The canonical Dashboard Markdown spec is archived (`dashboard-markdown-view`), so it stays as history. A changelog fragment is required.
 
 ## Size estimate
 
@@ -55,7 +55,7 @@ Counted as the Run size counts (no lockfiles, no fixtures), tests at real size, 
 | Ticket 1: document route, lookup, allow-list and adversarial tests                | 4 (run-folder.js, dashboard-handlers.js, dashboard-routes.js, one new test file) | 8.5    |
 | Ticket 2: open in the drawer, Back, not-on-disk message, tile click, browser test | 3 (components.js, model.js, browser test; the test file is new to the diff)      | 7      |
 | Ticket 3: documentation (Dashboard guide, help text, changelog fragment)          | 3 (docs/dashboard.md, dashboard/help.js, changelog fragment)                     | 2.5    |
-| Define artifacts (this Spec, glossary, ADR 0037)                                  | 3                                                                                | 13     |
+| Define artifacts (this Spec, glossary, ADR 0038)                                  | 3                                                                                | 13     |
 | **Total**                                                                         | **12**                                                                           | **31** |
 
 The limit for fitting is 10 files and 27 KB (two thirds of the Run size limit). The user split the work: this Run carries the route, the opening in the drawer and the documentation, with the file name as link text; the titles move to a later Run ([#574](https://github.com/TDSchreur/tds-factory/issues/574)). The total is still above the fit line, mostly from the Define artifacts, and stays under the Run size limit (15 files, 40 KB).

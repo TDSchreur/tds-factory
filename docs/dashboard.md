@@ -122,7 +122,7 @@ The page is built with Preact and htm, committed in `dashboard/vendor/` (see `da
 
 ## Linked documents
 
-A Spec or Ticket that is a path (a Local tracker) shows its file name in the Run detail and on the Ticket tiles, with the full path as tooltip. A click opens the document, rendered as Markdown, in the Run detail; Back returns to the Run view and the focus to the link. A document that is no longer on disk shows "This Ticket is no longer on disk" (or "This Spec ...") with its path. Relative links inside the document stay plain text. GitHub and Azure DevOps Tickets keep opening in a new tab with their labels. The server reads only the paths listed in that Run's record ([ADR 0037](adr/0037-the-dashboard-reads-only-the-documents-a-run-record-links-to.md)).
+A Spec or Ticket that is a path (a Local tracker) shows its file name in the Run detail and on the Ticket tiles, with the full path as tooltip. A click opens the document, rendered as Markdown, in the Run detail; Back returns to the Run view and the focus to the link. A document that is no longer on disk shows "This Ticket is no longer on disk" (or "This Spec ...") with its path. Relative links inside the document stay plain text. GitHub and Azure DevOps Tickets keep opening in a new tab with their labels. The server reads only the paths listed in that Run's record ([ADR 0038](adr/0038-the-dashboard-reads-only-the-documents-a-run-record-links-to.md)).
 
 ## Actions
 

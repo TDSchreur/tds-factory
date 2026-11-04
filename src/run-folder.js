@@ -306,7 +306,7 @@ export async function readRunFile(runsDir, rawPath) {
   }
 }
 
-// A Linked document is a relative Markdown path that the Run record lists in `spec_link` or `tickets` (ADR 0037); the listing is the main defense, the path checks are a second layer.
+// A Linked document is a relative Markdown path that the Run record lists in `spec_link` or `tickets` (ADR 0038); the listing is the main defense, the path checks are a second layer.
 /** @param {unknown} value */
 const listedPaths = (value) => (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
 /** @param {string} p */
