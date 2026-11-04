@@ -84,6 +84,28 @@ test('clean keeps a worktree with uncommitted changes, and a branch that moved p
   assert.ok(branches(main).includes(moved.id));
 });
 
+test('clean accepts a PR head that moved ahead of the branch, as after "Update branch" on GitHub', () => {
+  const main = repo();
+  const run = finished(main);
+  git(run.wt, 'commit', '-q', '--allow-empty', '-m', 'Merge branch develop into the PR');
+  const prHead = git(run.wt, 'rev-parse', 'HEAD');
+  git(run.wt, 'reset', '-q', '--hard', run.head);
+  const result = run.store.clean(run.id, { prState: () => ({ state: 'MERGED', head: prHead }) });
+  assert.equal(result.outcome, 'cleaned');
+  assert.ok(!existsSync(run.wt));
+  assert.ok(!branches(main).includes(run.id));
+});
+
+test('clean keeps a branch whose PR head is not known locally, and says to fetch it', () => {
+  const main = repo();
+  const run = finished(main);
+  const result = run.store.clean(run.id, { prState: () => ({ state: 'MERGED', head: 'a'.repeat(40) }) });
+  assert.equal(result.outcome, 'kept');
+  assert.match(result.reason ?? '', /fetch/);
+  assert.ok(existsSync(run.wt));
+  assert.ok(branches(main).includes(run.id));
+});
+
 test('clean keeps a merged Run that is not done yet, and a branch that moves while GitHub is asked', () => {
   const main = repo();
   const going = finished(main);
