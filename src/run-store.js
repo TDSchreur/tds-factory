@@ -159,8 +159,8 @@ export function openRunStore(callerDir) {
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     /** @param {string} runId @param {string} rawPath */
     readDocument: (runId, rawPath) => readLinkedDocument(projectDir, runId, rawPath),
-    /** @param {{ record?: unknown }} entry A store entry. */
-    titles: (entry) => linkedTitles.of(projectDir, entry.record),
+    /** @param {{ id?: string, record?: unknown }} entry A store entry. */
+    titles: (entry) => linkedTitles.of(projectDir, entry.record, entry.id),
     /** @param {string} id @param {(reason: string) => void} [why] @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options] */
     remove: (id, why, options) => removeRun(projectDir, id, why, options),
     /** @param {string | undefined} id @param {{ prState?: SyncPrLookup }} [options] */

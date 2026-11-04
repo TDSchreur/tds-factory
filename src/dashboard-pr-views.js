@@ -34,8 +34,9 @@ export const ghPrDetails = (url) => providerWith(url, 'details').details(url);
  * @param {(url: string) => Promise<string>} options.prState
  * @param {(url: string) => Promise<PrStatus>} options.prStatus
  * @param {(url: string) => Promise<unknown>} [options.prDetails]
+ * @param {(entry: any) => Promise<Record<string, string>>} [options.titles] The link text per local Linked document of a Run.
  */
-export function createPrViews({ prState, prStatus, prDetails = ghPrDetails }) {
+export function createPrViews({ prState, prStatus, prDetails = ghPrDetails, titles = async () => ({}) }) {
   /** @type {Map<string, { at: number, state: Promise<string> }>} */
   const prCache = new Map();
   /** @param {string} url */
@@ -97,6 +98,7 @@ export function createPrViews({ prState, prStatus, prDetails = ghPrDetails }) {
     const v = interpretRun(entry);
     return {
       ...v,
+      titles: await titles(entry),
       prState: v.column === 'done' && providerFor(v.pr) ? await lookup(v.pr) : '',
       prStatus: hasStatus(v) ? statusOf(v.pr) : null,
       prHost: providerFor(v.pr)?.name ?? '',
