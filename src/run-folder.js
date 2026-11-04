@@ -484,13 +484,13 @@ async function readHead(file) {
 }
 
 /**
- * The link text of the local Linked documents of Runs. Two caches: the title per real path, size and modification time (at most `max` entries, least recently used out first), and the located real path per Run and listed document, dropped when the record's `updated` changes.
+ * The link text of the local Linked documents of Runs. Two caches: the title per real path, size and modification time (at most `max` entries, least recently used out first), and the located real path (or not-found) per Run and listed document, dropped when the record's `updated` changes.
  * @param {{ max?: number, read?: (file: string) => Promise<string>, locate?: typeof locateLinkedDocument }} [options]
  */
 export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead, locate = locateLinkedDocument } = {}) {
   /** @type {Map<string, { size: number, mtimeMs: number, title: string }>} */
   const cache = new Map();
-  /** @type {Map<string, { updated: unknown, paths: Map<string, string> }>} */
+  /** @type {Map<string, { updated: unknown, paths: Map<string, string | null> }>} */
   const located = new Map();
   /** @param {string} file @param {fs.Stats} stat */
   async function titleOfFile(file, stat) {
@@ -509,6 +509,15 @@ export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead, loc
       cache.delete(oldest);
     }
     return title;
+  }
+  /** @param {string} file @returns {Promise<string | null>} The file when its real path is itself, else null. */
+  async function cachedRealPath(file) {
+    try {
+      return (await fs.promises.realpath(file)) === file ? file : null;
+    } catch (err) {
+      if (!isRefusal(err)) throw err;
+      return null;
+    }
   }
   /** @param {string} file */
   async function statRegular(file) {
@@ -541,16 +550,22 @@ export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead, loc
       const titles = new Map();
       for (const rel of new Set([...listedPaths(rec.spec_link), ...listedPaths(rec.tickets)])) {
         try {
-          let file = entry?.paths.get(rel) ?? null;
+          const known = entry?.paths.get(rel);
+          // A cached path is used only while its real path is still itself, so a symlink swapped in later is located again.
+          let file = known ? await cachedRealPath(known) : null;
           let stat = file === null ? null : await statRegular(file);
-          if (stat === null) {
-            entry?.paths.delete(rel);
+          if (known === null) continue;
+          if (stat === null || file === null) {
             file = await locate(projectDir, rec, rel);
             stat = file === null ? null : await statRegular(file);
-            if (file === null || stat === null) continue;
+            if (file === null || stat === null) {
+              // Not found stays not found until the Run record changes.
+              entry?.paths.set(rel, null);
+              continue;
+            }
             entry?.paths.set(rel, file);
           }
-          const title = file === null ? '' : await titleOfFile(file, stat);
+          const title = await titleOfFile(file, stat);
           if (!title) continue;
           const digits = /^(\d{1,6})-/.exec(path.posix.basename(rel))?.[1];
           titles.set(rel, digits ? `${digits} ${title}` : title);

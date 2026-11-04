@@ -322,7 +322,7 @@ test('an unchanged record is not located again; a changed one, or a deleted file
     assert.deepEqual(await titles.of(dir, { ...record, updated: '2' }, 'run-1'), {});
     assert.equal(counter.count, 3);
     put(dir, 'a.md', '# Back\n');
-    assert.deepEqual(await titles.of(dir, { ...record, updated: '2' }, 'run-1'), { 'a.md': 'Back' });
+    assert.deepEqual(await titles.of(dir, { ...record, updated: '3' }, 'run-1'), { 'a.md': 'Back' });
     assert.equal(counter.count, 4);
   });
 });
@@ -363,3 +363,39 @@ test('the cache drops the least recently used entry, so a hot title survives a b
     assert.equal(reads.length, 1, 'an entry nobody used was dropped');
   });
 });
+
+test('a document that is not found is located again only when the Run record changes', async () => {
+  await withDir('titles-missing-', async (dir) => {
+    const counter = { count: 0 };
+    const titles = createLinkedTitles({ locate: counting(counter) });
+    const record = { updated: '1', spec_link: 'a.md' };
+    assert.deepEqual(await titles.of(dir, record, 'run-1'), {});
+    assert.deepEqual(await titles.of(dir, record, 'run-1'), {});
+    assert.equal(counter.count, 1);
+    put(dir, 'a.md', '# Now\n');
+    assert.deepEqual(await titles.of(dir, record, 'run-1'), {}, 'the record did not change');
+    assert.deepEqual(await titles.of(dir, { ...record, updated: '2' }, 'run-1'), { 'a.md': 'Now' });
+    assert.equal(counter.count, 2);
+  });
+});
+
+test(
+  'a located file swapped for a symlink to an outside file is located again and refused',
+  { skip: process.platform === 'win32' && 'symlinks need privilege on Windows' },
+  async () => {
+    await withDir('titles-swap-', async (dir) => {
+      put(dir, 'a.md', '# One\n');
+      put(outside, 'swap.md', '# Out\n');
+      const when = new Date(2003, 0, 1);
+      utimesSync(join(dir, 'a.md'), when, when);
+      utimesSync(join(outside, 'swap.md'), when, when);
+      const titles = createLinkedTitles();
+      const record = { updated: '1', spec_link: 'a.md' };
+      assert.deepEqual(await titles.of(dir, record, 'run-1'), { 'a.md': 'One' });
+      rmSync(join(dir, 'a.md'));
+      symlinkSync(join(outside, 'swap.md'), join(dir, 'a.md'));
+      // Same size and modification time as the cached title, so only the real path check can tell.
+      assert.deepEqual(await titles.of(dir, record, 'run-1'), {});
+    });
+  },
+);

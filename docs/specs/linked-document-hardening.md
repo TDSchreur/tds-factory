@@ -26,7 +26,7 @@ Fix each item. The parser follows CommonMark for the cases above. The reader ref
 7. As a user, I want a tab after `#` to stay a valid heading, so that `#<tab>Title` still works.
 8. As a user, I want the file name as label when no non-empty level 1 heading exists, so that a link is never blank.
 9. As a user, I want a number from the file name limited to 1 to 6 digits, so that a long digit name cannot fill the label.
-10. As a user, I want a Ticket tile with a title to show "<title> (<path>)" as its tooltip, so that a cut-off title is readable on the board.
+10. As a user, I want a Ticket tile with a title to show `"<title> (<path>)"` as its tooltip, so that a cut-off title is readable on the board.
 11. As a developer, I want the document route and the titles to refuse a FIFO, a device and a directory, and to fall through to the next root, so that the reader never blocks on or reads a special file.
 12. As a developer, I want the document route to answer 404 for a file above 1 MiB, so that a huge Markdown file cannot be loaded into the Dashboard.
 13. As a developer, I want the file opened without following a final symlink and checked after opening against the file I located, so that a swap between check and read cannot read another file.
