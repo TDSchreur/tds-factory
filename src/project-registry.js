@@ -76,6 +76,15 @@ const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 /** @param {number} ms */
 const sleepAsync = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// A lock file that another process just removed stays "delete pending" on Windows until its last handle closes. In that
+// window creating or reading it fails with EPERM (sometimes EACCES or EBUSY) instead of EEXIST or ENOENT, so there the
+// lock counts as held and the caller retries until the lock wait ends. Elsewhere only EEXIST means held.
+/** @param {unknown} err @param {NodeJS.Platform} platform */
+const lockBusy = (err, platform) => {
+  const code = codeOf(err);
+  return code === 'EEXIST' || (platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'));
+};
+
 /** @param {string} lockFile */
 const lockToken = (lockFile) => `${process.pid}:${randomBytes(16).toString('hex')}:${path.basename(lockFile)}`;
 
@@ -112,14 +121,14 @@ function removeIfMatches(file, token, mtimeMs) {
   return true;
 }
 
-/** @param {string} guardFile */
-function acquireTakeoverGuard(guardFile) {
+/** @param {string} guardFile @param {NodeJS.Platform} platform */
+function acquireTakeoverGuard(guardFile, platform) {
   const token = lockToken(guardFile);
   try {
     fs.writeFileSync(guardFile, token, { flag: 'wx', mode: FILE_MODE });
     return token;
   } catch (err) {
-    if (codeOf(err) !== 'EEXIST') throw err;
+    if (!lockBusy(err, platform)) throw err;
   }
   const seen = readLockSnapshot(guardFile);
   if (!seen) return undefined;
@@ -131,13 +140,14 @@ function acquireTakeoverGuard(guardFile) {
  * @param {string} lockFile
  * @param {string} token
  * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ * @param {NodeJS.Platform} platform
  */
-function tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover) {
+function tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover, platform) {
   const stale = readLockSnapshot(lockFile);
   if (!stale) return false;
   if (Date.now() - stale.mtimeMs <= LOCK_STALE_MS) return false;
   const guardFile = takeoverGuard(lockFile);
-  const guardToken = acquireTakeoverGuard(guardFile);
+  const guardToken = acquireTakeoverGuard(guardFile, platform);
   if (!guardToken) return false;
   try {
     const current = readLockSnapshot(lockFile);
@@ -154,11 +164,11 @@ function tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover) {
       fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
       return true;
     } catch (err) {
-      if (codeOf(err) === 'EEXIST') return false;
+      if (lockBusy(err, platform)) return false;
       throw err;
     }
   } finally {
-    releaseLock(guardFile, guardToken);
+    releaseLock(guardFile, guardToken, platform);
   }
 }
 
@@ -167,8 +177,9 @@ function tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover) {
  * @param {number} waitMs
  * @param {(ms: number) => void} wait
  * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ * @param {NodeJS.Platform} platform
  */
-function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
+function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover, platform) {
   ensurePrivateDir(path.dirname(lockFile));
   const token = lockToken(lockFile);
   const deadline = Date.now() + waitMs;
@@ -177,12 +188,12 @@ function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
       fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
       return token;
     } catch (err) {
-      if (codeOf(err) !== 'EEXIST') throw err;
+      if (!lockBusy(err, platform)) throw err;
       const now = Date.now();
       try {
-        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover)) return token;
+        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover, platform)) return token;
       } catch (inner) {
-        if (!isMissing(inner)) throw inner;
+        if (!isMissing(inner) && !lockBusy(inner, platform)) throw inner;
       }
       if (now >= deadline) throw new Error(`${lockFile} is locked by another process`);
       wait(LOCK_RETRY_MS);
@@ -195,8 +206,9 @@ function acquireLockSync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
  * @param {number} waitMs
  * @param {(ms: number) => Promise<void>} wait
  * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
+ * @param {NodeJS.Platform} platform
  */
-async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
+async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover, platform) {
   ensurePrivateDir(path.dirname(lockFile));
   const token = lockToken(lockFile);
   const deadline = Date.now() + waitMs;
@@ -205,12 +217,12 @@ async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
       fs.writeFileSync(lockFile, token, { flag: 'wx', mode: FILE_MODE });
       return token;
     } catch (err) {
-      if (codeOf(err) !== 'EEXIST') throw err;
+      if (!lockBusy(err, platform)) throw err;
       const now = Date.now();
       try {
-        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover)) return token;
+        if (tryTakeOverStaleLock(lockFile, token, onBeforeStaleTakeover, platform)) return token;
       } catch (inner) {
-        if (!isMissing(inner)) throw inner;
+        if (!isMissing(inner) && !lockBusy(inner, platform)) throw inner;
       }
       if (now >= deadline) throw new Error(`${lockFile} is locked by another process`);
       await wait(LOCK_RETRY_MS);
@@ -218,12 +230,13 @@ async function acquireLockAsync(lockFile, waitMs, wait, onBeforeStaleTakeover) {
   }
 }
 
-/** @param {string} lockFile @param {string} token */
-function releaseLock(lockFile, token) {
+/** @param {string} lockFile @param {string} token @param {NodeJS.Platform} platform */
+function releaseLock(lockFile, token, platform) {
   try {
     if (fs.readFileSync(lockFile, 'utf8') === token) fs.rmSync(lockFile, { force: true });
   } catch (err) {
-    if (!isMissing(err)) throw err;
+    // Best effort on Windows: a lock that is still delete pending is gone for the next process once its handles close.
+    if (!isMissing(err) && !(platform === 'win32' && lockBusy(err, platform))) throw err;
   }
 }
 
@@ -235,31 +248,32 @@ function releaseLock(lockFile, token) {
  * @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover
  * @param {(ctx: { lockFile: string, token: string }) => void} onLockAcquired
  * @param {() => T} fn
+ * @param {NodeJS.Platform} platform
  * @returns {T}
  */
-function withLock(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn) {
-  const token = acquireLockSync(lockFile, waitMs, sleep, onBeforeStaleTakeover);
+function withLock(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn, platform) {
+  const token = acquireLockSync(lockFile, waitMs, sleep, onBeforeStaleTakeover, platform);
   try {
     onLockAcquired({ lockFile, token });
     return fn();
   } finally {
-    releaseLock(lockFile, token);
+    releaseLock(lockFile, token, platform);
   }
 }
 
-/** @template T @param {string} lockFile @param {number} waitMs @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover @param {(ctx: { lockFile: string, token: string }) => void | Promise<void>} onLockAcquired @param {() => Promise<T>} fn @returns {Promise<T>} */
-async function withLockAsync(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn) {
-  const token = await acquireLockAsync(lockFile, waitMs, sleepAsync, onBeforeStaleTakeover);
+/** @template T @param {string} lockFile @param {number} waitMs @param {(ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void} onBeforeStaleTakeover @param {(ctx: { lockFile: string, token: string }) => void | Promise<void>} onLockAcquired @param {() => Promise<T>} fn @param {NodeJS.Platform} platform @returns {Promise<T>} */
+async function withLockAsync(lockFile, waitMs, onBeforeStaleTakeover, onLockAcquired, fn, platform) {
+  const token = await acquireLockAsync(lockFile, waitMs, sleepAsync, onBeforeStaleTakeover, platform);
   try {
     await onLockAcquired({ lockFile, token });
     return await fn();
   } finally {
-    releaseLock(lockFile, token);
+    releaseLock(lockFile, token, platform);
   }
 }
 
 // Owns projects.json (main checkout paths) and dashboard.json (pid, port and version of the running server) in one folder. Nothing here throws: a problem is passed to warn.
-/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number, idOf?: (projectPath: string) => string, stagingHex?: () => string, onBeforeStaleTakeover?: (ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void, onLockAcquired?: (ctx: { lockFile: string, token: string }) => void | Promise<void> }} [options] */
+/** @param {{ dir?: string, warn?: (message: string) => void, lockWaitMs?: number, idOf?: (projectPath: string) => string, stagingHex?: () => string, onBeforeStaleTakeover?: (ctx: { lockFile: string, staleToken: string, staleMtimeMs: number }) => void, onLockAcquired?: (ctx: { lockFile: string, token: string }) => void | Promise<void>, platform?: NodeJS.Platform }} [options] */
 export function openProjectRegistry({
   dir = factoryConfigDir(),
   warn = () => {},
@@ -268,6 +282,7 @@ export function openProjectRegistry({
   stagingHex = () => randomBytes(8).toString('hex'),
   onBeforeStaleTakeover = () => {},
   onLockAcquired = () => {},
+  platform = process.platform,
 } = {}) {
   const registryFile = path.join(dir, 'projects.json');
   const lockFile = `${registryFile}.lock`;
@@ -305,19 +320,26 @@ export function openProjectRegistry({
       try {
         const main = mainCheckout(projectDir).dir;
         const id = idOf(main);
-        withLock(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, () => {
-          const { paths, corrupt } = read();
-          if (corrupt) {
-            fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
-            warn(`kept the unreadable registry as ${registryFile}.corrupt`);
-          }
-          const collision = paths.find((p) => p !== main && idOf(p) === id);
-          if (collision) {
-            warn(`cannot register ${main} in ${registryFile}: ${collision} has the same id (${id})`);
-            return;
-          }
-          if (!paths.includes(main)) save([...paths, main]);
-        });
+        withLock(
+          lockFile,
+          lockWaitMs,
+          onBeforeStaleTakeover,
+          onLockAcquired,
+          () => {
+            const { paths, corrupt } = read();
+            if (corrupt) {
+              fs.copyFileSync(registryFile, `${registryFile}.corrupt`);
+              warn(`kept the unreadable registry as ${registryFile}.corrupt`);
+            }
+            const collision = paths.find((p) => p !== main && idOf(p) === id);
+            if (collision) {
+              warn(`cannot register ${main} in ${registryFile}: ${collision} has the same id (${id})`);
+              return;
+            }
+            if (!paths.includes(main)) save([...paths, main]);
+          },
+          platform,
+        );
         if (read().paths.includes(main)) return { id, path: main };
         return undefined;
       } catch (err) {
@@ -328,13 +350,20 @@ export function openProjectRegistry({
     /** @param {string} id */
     remove(id) {
       try {
-        return withLock(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, () => {
-          const { paths } = read();
-          const kept = paths.filter((p) => idOf(p) !== id);
-          if (kept.length === paths.length) return false;
-          save(kept);
-          return true;
-        });
+        return withLock(
+          lockFile,
+          lockWaitMs,
+          onBeforeStaleTakeover,
+          onLockAcquired,
+          () => {
+            const { paths } = read();
+            const kept = paths.filter((p) => idOf(p) !== id);
+            if (kept.length === paths.length) return false;
+            save(kept);
+            return true;
+          },
+          platform,
+        );
       } catch (err) {
         warn(`cannot update ${registryFile}: ${messageOf(err)}`);
         return false;
@@ -343,13 +372,20 @@ export function openProjectRegistry({
     /** @param {string} id */
     async removeAsync(id) {
       try {
-        return await withLockAsync(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, async () => {
-          const { paths } = read();
-          const kept = paths.filter((p) => idOf(p) !== id);
-          if (kept.length === paths.length) return false;
-          save(kept);
-          return true;
-        });
+        return await withLockAsync(
+          lockFile,
+          lockWaitMs,
+          onBeforeStaleTakeover,
+          onLockAcquired,
+          async () => {
+            const { paths } = read();
+            const kept = paths.filter((p) => idOf(p) !== id);
+            if (kept.length === paths.length) return false;
+            save(kept);
+            return true;
+          },
+          platform,
+        );
       } catch (err) {
         warn(`cannot update ${registryFile}: ${messageOf(err)}`);
         return false;
@@ -358,15 +394,22 @@ export function openProjectRegistry({
     /** Removes every registry entry whose folder is currently missing. @returns {Promise<string[]>} */
     async removeMissingAsync() {
       try {
-        return await withLockAsync(lockFile, lockWaitMs, onBeforeStaleTakeover, onLockAcquired, async () => {
-          const { paths } = read();
-          const gone = new Set(paths.filter((p) => !fs.existsSync(p)));
-          const removed = paths.filter((p) => gone.has(p));
-          if (!removed.length) return [];
-          const kept = paths.filter((p) => !gone.has(p));
-          save(kept);
-          return removed;
-        });
+        return await withLockAsync(
+          lockFile,
+          lockWaitMs,
+          onBeforeStaleTakeover,
+          onLockAcquired,
+          async () => {
+            const { paths } = read();
+            const gone = new Set(paths.filter((p) => !fs.existsSync(p)));
+            const removed = paths.filter((p) => gone.has(p));
+            if (!removed.length) return [];
+            const kept = paths.filter((p) => !gone.has(p));
+            save(kept);
+            return removed;
+          },
+          platform,
+        );
       } catch (err) {
         warn(`cannot update ${registryFile}: ${messageOf(err)}`);
         return [];

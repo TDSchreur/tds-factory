@@ -65,6 +65,7 @@ export function fixture({ agent, verify = 'exit 0' }) {
   const env = {
     ...process.env,
     PATH: `${EVAL_BIN}:${process.env.PATH}`,
+    TDS_FACTORY_CONFIG_DIR: join(root, 'factory-config'), // a Run started here must not join the Project registry of the person running the eval
     EVAL_ACTION_LOG: actionLog,
     EVAL_GH_STATE: join(root, 'gh-state.json'),
   };

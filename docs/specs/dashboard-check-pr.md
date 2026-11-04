@@ -1,0 +1,66 @@
+# Dashboard: Check PR and Fix instead of Merge
+
+## Problem Statement
+
+The Dashboard offers a Merge button on Done cards. Real pull requests are blocked by CI and review, so the button either fails or invites a merge that review has not approved. What the user needs after Finish is to see what blocks the pull request (conflicts, failing checks, unresolved review threads) and to send the agent back to fix one of those, without leaving the Dashboard.
+
+## Solution
+
+Remove every way to merge from the Dashboard. Add a **Check PR** button (the name avoids a clash with the Check Stage) that reads the pull request fresh and shows its problems in the Run detail drawer. For GitHub, the drawer has one **Fix** button per Follow-up scope (conflicts, checks, comments). A click starts Follow-up scoped to that one problem, the Run goes back to Build as a Rework, and the card offers "Copy agent prompt" (`/factory continue <run id>`) so the user hands the Rework to an agent. At the Check loop limit the button reads "Grant extra loop and fix" and one click grants the loop and starts the Fix. The decisions are in [ADR 0034](../adr/0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md), which extends [ADR 0024](../adr/0024-the-user-can-grant-an-extra-check-loop.md).
+
+Azure DevOps got only setup help in this Run; its detail reads and Fix are in [Azure DevOps: Check PR details and Follow-up Fix](azure-devops-details-and-follow-up.md).
+
+## User Stories
+
+1. As a user, I want no Merge button, no "Merge it in ..." note and no merge route on the Dashboard, so that nothing merges a pull request that CI and review have not cleared.
+2. As a user, I want a **Check PR** button on a Done Run with an open pull request and on a Run in Follow-up, so that I can see what blocks the pull request.
+3. As a user, I want a click to do a fresh lookup of the pull request, not read the cache, so that I see the state of now.
+4. As a user, I want the Run detail drawer to show the PR state and whether it is a draft, so that I know what I am looking at.
+5. As a user, I want the drawer to say whether the pull request has merge conflicts with the base branch, so that I know whether to resolve them.
+6. As a user, I want each failing check listed by name with a link to its run, so that I can open the log.
+7. As a user, I want pending checks listed, so that I know to wait.
+8. As a user, I want each unresolved review thread listed with its file path, a shortened first comment and a link, so that I can judge it without leaving the Dashboard.
+9. As a user, I want a merged or closed pull request to show its state and nothing else new, so that the drawer does not suggest work that cannot be done.
+10. As a user, I want review text and check names shown as plain text, so that a hostile comment cannot inject markup or script into the Dashboard.
+11. As a user, when `gh` or `az` is missing or not signed in, I want the drawer to show the setup steps for that host, so that I can fix it myself; the same steps are in `docs/install.md`.
+12. As a user, I want a **Fix conflicts**, **Fix checks** and **Fix comments** button next to the matching problem for a GitHub or Azure DevOps pull request, so that I choose what the agent works on.
+13. As a user, I want a Fix click to start Follow-up scoped to that one problem and move the Run to Build as a Rework, so that the agent changes only what I chose; problems outside the scope stay on the pull request for a later Fix.
+14. As a user, I want the Run to wait with the reason "Follow-up Rework ready for an agent" and a **Copy agent prompt** button on the card that copies `/factory continue <run id>`, so that I hand it to an agent in one paste.
+15. As a user, I want the other Fix buttons disabled, with that reason shown, while a Follow-up Rework is in progress, so that there is one Rework at a time.
+16. As a user, when Follow-up refuses because of the Run's state (worktree cleaned, uncommitted changes, head differs from the pull request head), I want the button to stay clickable and to show the refusal and how to resolve it, with no way around it.
+17. As a user, at the Check loop limit I want the button to read "Grant extra loop and fix", and one click to raise `extra_loops` by one and then start the Fix, so that the Factory never blocks me.
+18. As a user, I want that grant in the Event log as an `extra-loop` event, as for a grant in Check.
+19. As an agent user, I want `tds-factory run follow-up --id <id> --scope conflicts|checks|comments`, so that I can scope a Follow-up from the command line too.
+20. As an agent, I want `/factory continue <run id>` to resume an existing Run from its current Stage, including a Follow-up Rework started from the Dashboard.
+21. As an agent, for a `conflicts` Rework I start with `run sync`, resolve the conflicts, then run the Exit checklist, Verify and Check as usual.
+22. As an agent, for a `comments` Rework I change code where a comment asks for it, list in `follow-up-N.md` each comment I judged to need no change with the reason, and never post replies or resolve threads on the host.
+23. As a maintainer, I want the Fix route behind the same guard as every Dashboard write, and comments and checks treated as untrusted data, so that a web page or a review comment cannot start work.
+
+## Implementation Decisions
+
+- Removed: the Merge button on Done cards, the "Merge it in ..." note, `POST .../merge`, `GET .../merge-checks`, `prMerge` and `prCanMerge` (handlers, context, `dashboard.js` options, view fields, the `RunView` type), the PR provider's `merge` capability (`ghPrMerge`, `PrProvider.merge`, the `OPERATIONS` entry, the GitHub adapter's `merge`), the Merge entry in `dashboard/help.js`, `.merge-note` in `style.css`, and the mentions in `docs/dashboard.md`, `docs/usage.md`, `docs/capabilities.md` and `GLOSSARY.md`. `mergeEligibilityAsync` stays if Accept still uses it. The PR status line "Merge: no conflicts / conflicts" is a different thing and stays.
+- Follow-up scope: `followUpRun(projectDir, id, { scope })` with `scope` one of `conflicts`, `checks`, `comments`; the CLI gets `--scope` (required for a Rework, one scope per Rework). The snapshot `follow_up` gains merge conflicts (`conflicts: boolean`) as a finding that `observe` reads. Only findings of the chosen scope send the Run to Build; the rest stay in the snapshot. The loop cap check, the clean worktree at PR head check and the Rework count are unchanged. A merged PR still ends Follow-up as Done and a clean or pending observation stays in Follow-up.
+- PR details: the GitHub adapter gains a `details(url)` read (async, per ADR 0030 style) returning state, draft, conflicts, failing checks (name and link to the run), pending check names and unresolved review threads (path, first comment, link), reusing the `observe` queries where it can. `GET /api/projects/<id>/runs/<run-id>/pr-details` answers it fresh, bypassing the PR status cache; it never writes to the cache. A failure is classified: `gh`/`az` missing, not signed in or other; the first two carry the host's setup steps (GitHub: install from cli.github.com, `gh auth login`; Azure DevOps: install Azure CLI, `az extension add --name azure-devops`, `az login`, `az devops configure --defaults organization=<url> project=<name>`). Azure DevOps answers from its existing status read (state, draft, conflicts) and the setup steps; thread and failing build policy reads are out of scope here.
+- Untrusted text: names, comments and paths are sent as strings and rendered by Preact as text children, never as HTML or through the Markdown renderer; the first comment is cut to a fixed length.
+- Fix route: `POST /api/projects/<id>/runs/<run-id>/follow-up?scope=<scope>&updated=<time>` behind the guard of ADR 0017, scoped to the Project. A new store operation does the Follow-up and, in the same Run lock, sets the Run `waiting` with `waiting_reason` "Follow-up Rework ready for an agent" and `waiting_on_human` false. `updated` must equal the record time the page showed, as for the extra loop. It must follow ADR 0030 so the Dashboard server never blocks on the sync git and `gh` calls. A refusal is HTTP 409 with the reason and how to resolve it; no bypass exists.
+- One Rework at a time: the route refuses, and the page disables the other Fix buttons with the reason, while the Run is in a Follow-up Rework (stage Build or Check with a retained `follow_up` snapshot and the waiting reason or a running Rework).
+- Grant and fix: when the Run is at `loopCap`, the page shows "Grant extra loop and fix" and sends `grant=true`. The store raises `extra_loops` by one with the `extra-loop` Event log event of ADR 0024 and then starts the Fix, in one operation; if the Fix is refused after the grant, the grant stands and is recorded. `grantLoopRun` keeps refusing outside Check; the new operation is the second way to grant, user-only through the guarded route, with no CLI command that grants.
+- Card: a **Copy agent prompt** button on a Run waiting with the reason above copies `/factory continue <run id>` with the Clipboard API and shows a polite status; when the Clipboard API is not available, the text is shown selected.
+- Skill: `skills/factory/SKILL.md` gets a short "Continue" paragraph and `references/continue.md` holds the detail: `/factory continue <run id>` reads the Run record, resumes at its current Stage and, for a Follow-up Rework, follows `references/follow-up.md`. `references/follow-up.md` gets the scope, the conflicts Rework (starts with `run sync`), the comments rules and the no-reply rule. SKILL.md stays under the 18 KB limit of `docs/development.md` (it is 17.9 KB now, so the new paragraph needs a matching cut or the detail goes to the reference). The committed skill copies stay in step (ADR 0001).
+- Docs: `docs/install.md` gets the setup steps under the GitHub and Azure DevOps rows; `docs/dashboard.md` documents Check PR, Fix, the new routes and the removed ones; `docs/usage.md` drops "press Merge"; the help panel and the glossary say the same. A changelog fragment `changelog.d/<name>.md` is added.
+- Documents (Sweep of Merge, merge-checks, prCanMerge, Check again, Follow-up, extra loop and follow-up scope): `GLOSSARY.md`; ADRs `docs/adr/0014-follow-up-reopens-a-published-run.md`, `0017`, `0020-pr-providers-sit-behind-one-seam.md`, `0024-the-user-can-grant-an-extra-check-loop.md`, `0030`; canonical specs `docs/specs/follow-up-stage.md`, `dashboard-extra-loop.md`, `dashboard-pr-status.md`, `dashboard-azure-devops.md`, `pr-provider-seam.md`, `pr-status-no-red-for-no-conflicts.md`, `reduce-pr-merge-conflicts.md`, `dashboard-help.md`; guides `docs/dashboard.md`, `docs/usage.md`, `docs/install.md`, `docs/capabilities.md`, `README.md`; the Skill `skills/factory/SKILL.md` and `skills/factory/references/follow-up.md`, `check.md`, `progress-commands.md`, `run-schema.md`; help text in `dashboard/help.js` and the usage text of `bin/tds-factory.js`.
+
+## Testing Decisions
+
+Test seams: the PR provider (`gh` is faked with `test/fake-command.js`, as in `test/pr-github-status.test.js`), the Run store (`test/run-follow-up.test.js`), the Dashboard HTTP server (`test/dashboard-*.test.js`, fake `prState`/`prInfo` injected through `startDashboard`) and the page in a browser (`test/*-browser.test.js`). Tests name behaviour, not internals.
+
+- Merge removal: the POST route answers 405 and the GET route 404, `/api/views` has no `prCanMerge`, the page has no Merge button or note on any Done card, the help panel has no Merge entry; a test that no provider has a `merge`.
+- Follow-up scope: each scope sends only its own findings to Build; the other findings stay in the snapshot; conflicts are read into the snapshot; `--scope` is required and validated; the loop cap and worktree refusals are unchanged; a merged PR ends Done.
+- PR details: parsing of failing, pending and unresolved-thread fixtures; merged and closed PRs; a missing `gh` and a signed-out `gh` give the setup steps; the route bypasses the cache; hostile text (angle brackets, `javascript:` links, very long text) is returned as strings and renders as text in the browser.
+- Fix route: refused without the session token (403) and with a foreign Origin; 409 for a stale `updated`, a second Rework, a dirty worktree, a head that differs and a cleaned worktree, each with its resolution text; success sets the waiting reason; the grant at the cap raises `extra_loops` once and writes the `extra-loop` event, also when the Fix is then refused; no CLI command grants.
+- Browser: Check PR visible only for a Done Run with an open PR and for a Run in Follow-up; the drawer sections; one Fix button per problem; disabled Fix buttons with the reason; the "Grant extra loop and fix" label at the cap; the refusal dialog; Copy agent prompt copies the exact text.
+- Skill and docs: the existing checks on the Skill size, links, Glossary Avoid terms and ADR numbers pass; a test that `references/continue.md` is linked from SKILL.md.
+
+## Out of Scope
+
+Merging from the Dashboard in any form; replying to or resolving review threads on the host; Fix from a Run whose pull request is merged or closed; running several scoped Reworks at once; a ceiling on extra loops; a bypass of a Follow-up refusal.

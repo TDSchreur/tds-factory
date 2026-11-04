@@ -43,12 +43,12 @@ test('the CI browser job requires a browser instead of skipping', () => {
   assert.match(browser, /run: npm run test:browser/);
 });
 
-test('the CI workflow lints every shell and PowerShell script with pinned tools and runs install.ps1 on PowerShell 7 on Windows', () => {
+test('the CI workflow lints every shell and PowerShell script with pinned tools', () => {
   const shellcheck = ci.slice(ci.indexOf('  shellcheck:'), ci.indexOf('  psscriptanalyzer:'));
   assert.match(shellcheck, /SHELLCHECK_SHA256: [0-9a-f]{64}/, 'the shellcheck download is checksum-verified');
   assert.match(shellcheck, /sha256sum --check/);
   assert.match(shellcheck, /shellcheck-v\d+\.\d+\.\d+\/shellcheck" scripts\/\*\.sh/);
-  const analyzer = ci.slice(ci.indexOf('  psscriptanalyzer:'), ci.indexOf('  install-windows:'));
+  const analyzer = ci.slice(ci.indexOf('  psscriptanalyzer:'), ci.indexOf('  # One stable name'));
   assert.match(
     analyzer,
     /Install-Module PSScriptAnalyzer -RequiredVersion \d+\.\d+\.\d+/,
@@ -56,23 +56,17 @@ test('the CI workflow lints every shell and PowerShell script with pinned tools 
   );
   assert.match(analyzer, /Invoke-ScriptAnalyzer -Path scripts -Recurse/);
   assert.match(analyzer, /if \(\$findings\) \{ exit 1 \}/, 'findings fail the job');
-  const windows = ci.slice(ci.indexOf('  install-windows:'));
-  assert.match(windows, /runs-on: windows-latest/);
-  assert.match(windows, /REQUIRE_POWERSHELL: 1/);
-  assert.doesNotMatch(windows, /INSTALL_PS1_SHELL|Windows PowerShell 5\.1/, 'only PowerShell 7 is tested');
-  assert.match(windows, /run: node --test test\/install-ps1\.test\.js/);
 });
 
 test('every third-party action in the CI workflow is pinned to a commit SHA', () => {
   for (const [, ref] of ci.matchAll(/uses: \S+@(\S+)/g)) assert.match(ref, /^[0-9a-f]{40}$/);
 });
 
-test('the Windows unit tests run in two shards and only the first shard runs the static checks', () => {
-  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
-  const job = workflow.slice(workflow.indexOf('  windows:'), workflow.indexOf('  package:'));
-  assert.match(job, /shard: \[1, 2\]/);
-  assert.match(job, /if: matrix\.shard == 1\n\s+run: npm run check/);
-  assert.match(job, /npm run test:unit -- --test-shard=\$\{\{ matrix\.shard \}\}\/2/);
+test('no CI job runs on Windows, and ci-ok needs only jobs that exist', () => {
+  assert.doesNotMatch(ci, /windows/i);
+  const needs = /needs: \[([^\]]+)\]/.exec(ci.slice(ci.indexOf('  ci-ok:')));
+  assert.ok(needs);
+  for (const job of needs[1].split(',').map((name) => name.trim())) assert.match(ci, new RegExp(`^  ${job}:`, 'm'));
 });
 
 test('CI and release test only the active LTS lines, matching engines', () => {

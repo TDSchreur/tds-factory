@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -16,6 +16,11 @@ export function tempDir(prefix) {
   return dir;
 }
 
+// Git settings injected through the environment (GIT_CONFIG_COUNT and its KEY_n and VALUE_n, as some agent hosts and CI setups do) override the repository's own config, for example core.fsmonitor, so a test would give another result there than on a developer's machine.
+for (const name of Object.keys(process.env))
+  if (name === 'GIT_CONFIG_COUNT' || name === 'GIT_CONFIG_PARAMETERS' || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name))
+    delete process.env[name];
+
 if (!process.env.TDS_FACTORY_CONFIG_DIR) process.env.TDS_FACTORY_CONFIG_DIR = tempDir('factory-config-');
 
 /**
@@ -26,12 +31,23 @@ if (!process.env.TDS_FACTORY_CONFIG_DIR) process.env.TDS_FACTORY_CONFIG_DIR = te
 export const git = (cwd, ...args) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' }).trim();
 
-// A real git repository with one commit on `main`.
+/** @type {string | undefined} */
+let template;
+
+// A real git repository with one commit on `main`, whose `origin` is itself.
+// The first call makes the repository with git; every other call copies it and writes the remote into its config, which is much cheaper than starting git three times.
 export function repo() {
+  if (!template) {
+    template = tempDir('git-repo-template-');
+    git(template, 'init', '-q', '-b', 'main');
+    git(template, 'commit', '-q', '--allow-empty', '-m', 'init');
+  }
   const main = tempDir('git-repo-');
-  git(main, 'init', '-q', '-b', 'main');
-  git(main, 'commit', '-q', '--allow-empty', '-m', 'init');
-  git(main, 'remote', 'add', 'origin', main);
+  cpSync(template, main, { recursive: true });
+  appendFileSync(
+    join(main, '.git', 'config'),
+    `[remote "origin"]\n\turl = ${main.replaceAll('\\', '\\\\')}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n`,
+  );
   return main;
 }
 

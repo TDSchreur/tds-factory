@@ -8,8 +8,10 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import http from 'node:http';
 import { update, compareVersions } from '../src/update.js';
+import { cli } from './cli-runner.js';
 import { defined } from './run-view.js';
 import './git-repo.js';
+import { waitUntil } from './wait-until.js';
 
 const API = 'https://api.github.com/repos/TDSchreur/tds-factory/releases/latest';
 const PAGE = 'https://github.com/TDSchreur/tds-factory/releases/latest';
@@ -384,6 +386,7 @@ test('the failing update command exits with 1 and prints the error', () => {
       `import { FactoryError } from ${JSON.stringify(pathToFileURL(resolve('src/errors.js')).href)};\n` +
         "globalThis.fetch = async () => { throw new FactoryError('offline', { code: 'http-permanent' }); };\n",
     );
+    // Spawned: the stub of `fetch` has to be loaded into the process that runs the command (`--import`).
     const result = spawnSync(
       process.execPath,
       ['--import', pathToFileURL(stub).href, resolve('bin/tds-factory.js'), 'update'],
@@ -526,10 +529,10 @@ test('versions compare as semver and a prerelease sorts below its release', () =
   assert.throws(() => compareVersions('nope', '1.0.0'), /Cannot parse version/);
 });
 
-test('the usage text lists update and the CLI dispatches it', () => {
-  const result = spawnSync(process.execPath, [resolve('bin/tds-factory.js')], { encoding: 'utf8' });
+test('the usage text lists update and the CLI dispatches it', async () => {
+  const result = await cli(process.cwd());
   assert.match(result.stdout, /tds-factory update \[--no-force\]/);
-  assert.match(readFileSync(resolve('bin/tds-factory.js'), 'utf8'), /command === 'update'/);
+  assert.match(readFileSync(resolve('src/cli.js'), 'utf8'), /command === 'update'/);
 });
 
 // A server that takes the connection and then says nothing, or stops halfway through the body. fetchFn points every URL at it.
@@ -631,9 +634,12 @@ test('the download may take four times as long as the other requests', async () 
   };
   try {
     await update({ installed: '0.3.0', ...w.options, fetchFn, timeoutMs: 40 });
-    await new Promise((done) => setTimeout(done, 250));
+    const download = tgzUrl('v0.4.0');
+    await waitUntil(() => budgets[API] !== undefined && budgets[download] !== undefined, {
+      message: 'both requests timed out',
+    });
     assert.ok((budgets[API] ?? 0) < 100, `API budget ${budgets[API]}`);
-    assert.ok((budgets[tgzUrl('v0.4.0')] ?? 0) >= 120, `download budget ${budgets[tgzUrl('v0.4.0')]}`);
+    assert.ok((budgets[download] ?? 0) >= 120, `download budget ${budgets[download]}`);
   } finally {
     w.cleanup();
   }

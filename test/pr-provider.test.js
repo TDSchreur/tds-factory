@@ -43,6 +43,13 @@ test('only the provider adapter calls the gh command', () => {
   assert.deepEqual(callers, ['pr-github.js']);
 });
 
+test('no provider can merge a PR', async () => {
+  for (const url of ['https://github.com/o/r/pull/1', 'https://dev.azure.com/o/p/_git/r/pullrequest/1']) {
+    assert.equal(can(url, 'merge'), false, url);
+    assert.equal(Reflect.has(Object(providerFor(url)), 'merge'), false, url);
+  }
+});
+
 test('an Azure DevOps link and remote have the Azure DevOps adapter', () => {
   assert.equal(providerFor('https://dev.azure.com/o/p/_git/r/pullrequest/12')?.name, 'azure-devops');
   const found = present(remoteRepo('https://dev.azure.com/o/p/_git/r'), 'the remote is a repository');
@@ -52,21 +59,11 @@ test('an Azure DevOps link and remote have the Azure DevOps adapter', () => {
 test('can tells which operations the adapter of a link has: Azure DevOps reads only', () => {
   const github = 'https://github.com/o/r/pull/1',
     azure = 'https://dev.azure.com/o/p/_git/r/pullrequest/1';
-  for (const op of [
-    'statusAsync',
-    'stateAsync',
-    'view',
-    'merge',
-    'viewAsync',
-    'checksSummary',
-    'strictView',
-    'observe',
-    'listByHead',
-  ])
+  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync', 'details', 'strictView', 'observe', 'listByHead'])
     assert.equal(can(github, op), true, op);
-  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync']) assert.equal(can(azure, op), true, op);
-  for (const op of ['merge', 'checksSummary', 'strictView', 'observe', 'listByHead'])
-    assert.equal(can(azure, op), false, op);
+  for (const op of ['statusAsync', 'stateAsync', 'view', 'viewAsync', 'details'])
+    assert.equal(can(azure, op), true, op);
+  for (const op of ['strictView', 'observe', 'listByHead']) assert.equal(can(azure, op), false, op);
   for (const url of ['https://example.com/pr/1', '', undefined, null])
     assert.equal(Reflect.apply(can, undefined, [url, 'statusAsync']), false);
   assert.equal(can(github, 'toString'), false, 'only exported operations count');

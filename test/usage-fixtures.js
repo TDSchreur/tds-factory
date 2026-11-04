@@ -1,13 +1,11 @@
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import { cliWith } from './cli-runner.js';
 import { usageOf } from './run-view.js';
 
 /** @import { AgentName, Run, UsageRow } from '../src/run-record.js' */
-
-const cli = resolve('bin/tds-factory.js');
 
 // A project, a home folder for the fixture session logs, and the CLI run against both.
 /** @param {AgentName} [agent] */
@@ -24,29 +22,30 @@ export function world(agent = 'claude') {
      * @param {...string} args
      */
     run(cwd, ...args) {
-      return spawnSync(process.execPath, [cli, 'run', ...args], {
+      return cliWith(
+        { env: { ...process.env, HOME: home, USERPROFILE: home, CLAUDE_CODE_SESSION_ID: this.sessionId ?? '' } },
         cwd,
-        encoding: 'utf8',
-        env: { ...process.env, HOME: home, USERPROFILE: home, CLAUDE_CODE_SESSION_ID: this.sessionId ?? '' },
-      });
+        'run',
+        ...args,
+      );
     },
     /**
      * @param {string} cwd
      * @param {...string} args
-     * @returns {string} The trimmed stdout.
+     * @returns {Promise<string>} The trimmed stdout.
      */
-    command(cwd, ...args) {
-      const r = this.run(cwd, ...args);
+    async command(cwd, ...args) {
+      const r = await this.run(cwd, ...args);
       if (r.status !== 0) throw new Error(`run ${args.join(' ')} failed: ${r.stderr}`);
       return r.stdout.trim();
     },
     /**
      * @param {string} cwd
      * @param {string} [title]
-     * @returns {string} The new Run's id.
+     * @returns {Promise<string>} The new Run's id.
      */
-    start(cwd, title = 'Usage') {
-      return this.command(
+    async start(cwd, title = 'Usage') {
+      return await this.command(
         cwd,
         'start',
         '--data',
@@ -58,16 +57,16 @@ export function world(agent = 'claude') {
      * @param {string} id
      * @param {object} data
      */
-    update(cwd, id, data) {
-      return this.command(cwd, 'update', '--id', id, '--data', JSON.stringify(data));
+    async update(cwd, id, data) {
+      return await this.command(cwd, 'update', '--id', id, '--data', JSON.stringify(data));
     },
     /**
      * @param {string} cwd
      * @param {string} id
      * @param {string} to
      */
-    move(cwd, id, to) {
-      return this.command(cwd, 'transition', '--id', id, '--to', to);
+    async move(cwd, id, to) {
+      return await this.command(cwd, 'transition', '--id', id, '--to', to);
     },
     /**
      * @param {string} cwd

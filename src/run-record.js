@@ -75,11 +75,13 @@ import { stages, targets, isStage } from './flow.js';
  */
 
 /**
- * The latest GitHub observation of the PR, set by `run follow-up`.
+ * The latest observation of the PR on its host (GitHub or Azure DevOps), set by `run follow-up`.
  * @typedef {object} FollowUp
  * @property {string} pr
  * @property {string} head
  * @property {string} observed
+ * @property {boolean} conflicts Whether the PR has merge conflicts with its base branch.
+ * @property {'conflicts' | 'checks' | 'comments'} [scope] The scope of the Rework this observation started; absent when none started.
  * @property {Check[]} checks
  * @property {Check[]} failures
  * @property {boolean} pending
@@ -194,6 +196,7 @@ import { stages, targets, isStage } from './flow.js';
  * @property {FollowUp} [follow_up]
  * @property {Track} [track]
  * @property {number} [extra_loops]
+ * @property {string} [size_accepted] ISO time at which the user accepted the Run size (ADR 0035).
  * @property {number} [check_loops]
  * @property {Metrics} [metrics]
  * @property {string} worktree Set by `run start`.
@@ -228,6 +231,7 @@ const strings = [
   'pr',
   'worktree',
   'base_sha',
+  'size_accepted',
   'requested_model',
   'requested_effort',
   'observed_model',
@@ -249,7 +253,17 @@ export const trackOf = (record) => (record?.track === 'fast' ? 'fast' : 'full');
 /** @param {string} axis @param {Run | undefined | null} record */
 export const skippable = (axis, record) => axis === 'infrastructure' || (axis === 'spec' && trackOf(record) === 'fast');
 // Only the store's own operations (start, transitions) may change these; plain update rejects them.
-export const gated = ['stage', 'track', 'check_loops', 'extra_loops', ...verdicts, 'worktree', 'base_sha', 'follow_up'];
+export const gated = [
+  'stage',
+  'track',
+  'check_loops',
+  'extra_loops',
+  'size_accepted',
+  ...verdicts,
+  'worktree',
+  'base_sha',
+  'follow_up',
+];
 // How many times Check and Follow-up may send a Run back to Build. The factory Skill, the docs and the Dashboard chip say the same number.
 export const MAX_CHECK_LOOPS = 4;
 // A model belongs to the Stage worker that was asked for or reported it, so a change of Stage clears the three fields and
@@ -376,3 +390,8 @@ export const loopCap = (record) =>
   Math.min(record?.project_config?.max_check_loops ?? MAX_CHECK_LOOPS, MAX_CHECK_LOOPS) + extraLoops(record);
 /** @param {Run} record */
 export const attempt = (record) => loops(record) + 1;
+
+// Whether a Follow-up Rework is under way: a Run back in Build or Check with the Follow-up snapshot it started from.
+/** @param {Pick<Run, 'stage' | 'follow_up'>} record */
+export const reworkInProgress = (record) =>
+  ['build', 'check'].includes(String(record.stage)) && !!record.follow_up && typeof record.follow_up === 'object';

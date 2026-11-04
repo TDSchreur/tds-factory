@@ -1,0 +1,37 @@
+---
+description: 'Rules for tests that give the same result on every run and every platform, Windows included'
+applyTo: 'test/**'
+---
+
+# Reliable Tests
+
+A test that passes on Linux and fails once in twenty runs on Windows costs more than the bug it guards against. These rules remove the usual causes: timing, shared state and platform assumptions. Fix the cause of a flaky test; never add a blind retry and never raise a timeout without knowing why it was too short.
+
+## Waiting
+
+- Never use a fixed sleep (`setTimeout`, `delay`) to wait for work. Wait for the thing itself: an event, a returned promise, or a condition with `waitUntil` from `test/wait-until.js`. A fixed time is too short on a slow Windows runner and wastes time everywhere else.
+- Give every wait a deadline and a `message`, so a hang fails with a reason instead of a timeout of the whole run.
+- To assert that something did not happen, wait for a signal that the other side had its chance (a second request answered, a later event seen), then assert. A bare delay proves nothing. If a short delay is the only option, say why in a comment.
+- Do not compare timestamps from two writes made in the same millisecond. Wait until the clock has advanced, or control the clock.
+- Do not assert on elapsed time with a tight bound. Assert a generous upper bound or no bound at all.
+
+## Shared state
+
+- Ask the OS for a free port (port 0) and read the port back; never hard-code one.
+- Give every test its own temporary folder through the helpers in `test/git-repo.js`; never share a fixed path, file name or environment variable between tests, and restore what you change in `process.env`.
+- Run the CLI in process with `cli()` or `cliWith()` from `test/cli-runner.js`, and spawn `bin/tds-factory.js` only for what a real process changes (its exit code and streams, signals, the Dashboard launch, a `--import` stub), with a comment that says why. A call waits for a clock tick before and after it, so a command's timestamps differ from those of the files a test writes around it.
+- Do not inherit the environment of the machine: `test/git-repo.js` removes the `GIT_CONFIG_*` variables, so a setting injected by an agent host or CI cannot override a test repository's own config. Set what a test needs explicitly.
+- Do not depend on test order or on a file another test leaves behind. Tests in one file may run in any order.
+- A process or server a test starts is stopped in `finally` or `t.after`, and the test waits for it to exit before it removes its files.
+
+## Windows
+
+- A file that was just closed, or a folder a process just left, can stay locked for a moment. Remove with `rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })`.
+- Build paths with `path.join` or `path.resolve`; compare paths after `path.normalize`; never assume `/` or `\n` in output or in a file you did not write.
+- Windows has no POSIX signals, symbolic links without privilege, executable bits or `mkfifo`. Skip such a test with `{ skip: 'reason' }` when `process.platform === 'win32'`; never skip silently and never skip without a reason.
+- Starting a process is slower on Windows. Do not give a spawned command a time budget measured in tens of milliseconds.
+
+## Before you finish
+
+- Run the changed test file at least 30 times in a row (`for i in $(seq 30); do node --test test/<file>.test.js || break; done`), once more under load, and with `--test-concurrency=1`. A failure on any run is a bug in the test, not bad luck.
+- CI does not run Windows jobs, so it does not repeat the changed unit tests. Run `node scripts/repeat-changed-tests.js` yourself before you open a pull request, and treat a red repeat as a real failure.

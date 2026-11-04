@@ -1,0 +1,574 @@
+{
+  "count": 8,
+  "value": [
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1879"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1879/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1879"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread with status active",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:45.277Z",
+          "lastUpdatedDate": "2026-11-03T18:07:45.277Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:45.277Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1879,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:45.277Z",
+      "properties": {
+        "Microsoft.TeamFoundation.Discussion.UniqueID": {
+          "$type": "System.String",
+          "$value": "054ed6e80bbd4725bc421220e25b69d1"
+        }
+      },
+      "publishedDate": "2026-11-03T18:07:45.277Z",
+      "pullRequestThreadContext": {
+        "changeTrackingId": 1,
+        "iterationContext": {
+          "firstComparingIteration": 1,
+          "secondComparingIteration": 1
+        }
+      },
+      "status": "active",
+      "threadContext": {
+        "filePath": "/throwaway-notes.txt",
+        "rightFileEnd": {
+          "line": 1,
+          "offset": 5
+        },
+        "rightFileStart": {
+          "line": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1880"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1880/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1880"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread with status pending",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:46.9Z",
+          "lastUpdatedDate": "2026-11-03T18:07:46.9Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:46.9Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1880,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:46.9Z",
+      "properties": null,
+      "publishedDate": "2026-11-03T18:07:46.9Z",
+      "pullRequestThreadContext": null,
+      "status": "pending",
+      "threadContext": null
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1881"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1881/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1881"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread with status fixed",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:48.653Z",
+          "lastUpdatedDate": "2026-11-03T18:07:48.653Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:48.653Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1881,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:48.653Z",
+      "properties": {
+        "Microsoft.TeamFoundation.Discussion.UniqueID": {
+          "$type": "System.String",
+          "$value": "4932ecb0de084a19a641571355e735d7"
+        }
+      },
+      "publishedDate": "2026-11-03T18:07:48.653Z",
+      "pullRequestThreadContext": {
+        "changeTrackingId": 1,
+        "iterationContext": {
+          "firstComparingIteration": 1,
+          "secondComparingIteration": 1
+        }
+      },
+      "status": "fixed",
+      "threadContext": {
+        "filePath": "/throwaway-notes.txt",
+        "rightFileEnd": {
+          "line": 1,
+          "offset": 5
+        },
+        "rightFileStart": {
+          "line": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1882"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1882/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1882"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread with status closed",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:50.057Z",
+          "lastUpdatedDate": "2026-11-03T18:07:50.057Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:50.057Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1882,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:50.057Z",
+      "properties": {
+        "Microsoft.TeamFoundation.Discussion.UniqueID": {
+          "$type": "System.String",
+          "$value": "8a821125f42746df9cc14235e470d2dd"
+        }
+      },
+      "publishedDate": "2026-11-03T18:07:50.057Z",
+      "pullRequestThreadContext": {
+        "changeTrackingId": 1,
+        "iterationContext": {
+          "firstComparingIteration": 1,
+          "secondComparingIteration": 1
+        }
+      },
+      "status": "closed",
+      "threadContext": {
+        "filePath": "/throwaway-notes.txt",
+        "rightFileEnd": {
+          "line": 1,
+          "offset": 5
+        },
+        "rightFileStart": {
+          "line": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1883"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1883/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1883"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread with status byDesign",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:51.65Z",
+          "lastUpdatedDate": "2026-11-03T18:07:51.65Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:51.65Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1883,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:51.65Z",
+      "properties": {
+        "Microsoft.TeamFoundation.Discussion.UniqueID": {
+          "$type": "System.String",
+          "$value": "c38d0bdb734f41c49866896fde9eb966"
+        }
+      },
+      "publishedDate": "2026-11-03T18:07:51.65Z",
+      "pullRequestThreadContext": {
+        "changeTrackingId": 1,
+        "iterationContext": {
+          "firstComparingIteration": 1,
+          "secondComparingIteration": 1
+        }
+      },
+      "status": "byDesign",
+      "threadContext": {
+        "filePath": "/throwaway-notes.txt",
+        "rightFileEnd": {
+          "line": 1,
+          "offset": 5
+        },
+        "rightFileStart": {
+          "line": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1884"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1884/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1884"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread with status wontFix",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:53.29Z",
+          "lastUpdatedDate": "2026-11-03T18:07:53.29Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:53.29Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1884,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:53.29Z",
+      "properties": {
+        "Microsoft.TeamFoundation.Discussion.UniqueID": {
+          "$type": "System.String",
+          "$value": "01f1c70179ab4ae6bd91fd0b09fa3969"
+        }
+      },
+      "publishedDate": "2026-11-03T18:07:53.29Z",
+      "pullRequestThreadContext": {
+        "changeTrackingId": 1,
+        "iterationContext": {
+          "firstComparingIteration": 1,
+          "secondComparingIteration": 1
+        }
+      },
+      "status": "wontFix",
+      "threadContext": {
+        "filePath": "/throwaway-notes.txt",
+        "rightFileEnd": {
+          "line": 1,
+          "offset": 5
+        },
+        "rightFileStart": {
+          "line": 1,
+          "offset": 1
+        }
+      }
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1885"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1885/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1885"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Whole-PR thread, active",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:07:55.05Z",
+          "lastUpdatedDate": "2026-11-03T18:07:55.05Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:07:55.05Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1885,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:07:55.05Z",
+      "properties": null,
+      "publishedDate": "2026-11-03T18:07:55.05Z",
+      "pullRequestThreadContext": null,
+      "status": "active",
+      "threadContext": null
+    },
+    {
+      "_links": {
+        "repository": {
+          "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+        },
+        "self": {
+          "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1886"
+        }
+      },
+      "comments": [
+        {
+          "_links": {
+            "pullRequests": {
+              "href": "https://dev.azure.com/example-org/_apis/git/pullRequests/533"
+            },
+            "repository": {
+              "href": "https://dev.azure.com/example-org/00000000-0000-4000-8000-000000000001/_apis/git/repositories/00000000-0000-4000-8000-000000000002"
+            },
+            "self": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1886/comments/1"
+            },
+            "threads": {
+              "href": "https://dev.azure.com/example-org/_apis/git/repositories/00000000-0000-4000-8000-000000000002/pullRequests/533/threads/1886"
+            }
+          },
+          "author": {
+            "_links": {
+              "avatar": {
+                "href": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED"
+              }
+            },
+            "descriptor": "aad.REDACTED",
+            "displayName": "Fixture User",
+            "id": "00000000-0000-4000-8000-000000000003",
+            "imageUrl": "https://dev.azure.com/example-org/_apis/GraphProfile/MemberAvatars/aad.REDACTED",
+            "uniqueName": "fixture.user@example.test",
+            "url": "https://spsprodweu6.vssps.visualstudio.com/A00000000-0000-4000-8000-000000000004/_apis/Identities/00000000-0000-4000-8000-000000000003"
+          },
+          "commentType": "text",
+          "content": "Thread to be deleted",
+          "id": 1,
+          "lastContentUpdatedDate": "2026-11-03T18:08:03.41Z",
+          "lastUpdatedDate": "2026-11-03T18:08:03.41Z",
+          "parentCommentId": 0,
+          "publishedDate": "2026-11-03T18:08:03.41Z",
+          "usersLiked": []
+        }
+      ],
+      "id": 1886,
+      "identities": null,
+      "isDeleted": false,
+      "lastUpdatedDate": "2026-11-03T18:08:03.41Z",
+      "properties": null,
+      "publishedDate": "2026-11-03T18:08:03.41Z",
+      "pullRequestThreadContext": null,
+      "status": "active",
+      "threadContext": null
+    }
+  ]
+}

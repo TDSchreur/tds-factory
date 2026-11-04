@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { openRunStore, loopCap } from '../src/run-store.js';
 import { readEvents } from '../src/run-events.js';
+import { cli } from './cli-runner.js';
 import { repo } from './git-repo.js';
 import { fromJson } from './run-view.js';
 
@@ -123,14 +123,13 @@ test('the grant is refused outside its one case', () => {
   assert.equal(read(fresh.main, fresh.id).extra_loops, 1);
 });
 
-test('the loop limit cannot be raised any other way', () => {
+test('the loop limit cannot be raised any other way', async () => {
   const { main, store, id } = atLimit({ status: 'running', waiting_on_human: false });
   for (const data of [{ extra_loops: 1 }, { check_loops: 0 }])
     assert.throws(() => store.update(id, data), /can only change through a Run transition/);
   assert.equal(read(main, id).extra_loops, undefined);
-  const cli = resolve('bin/tds-factory.js');
   for (const command of ['extra-loop', 'grant', 'grant-loop', 'loop']) {
-    const out = spawnSync(process.execPath, [cli, 'run', command, '--id', id], { cwd: main, encoding: 'utf8' });
+    const out = await cli(main, 'run', command, '--id', id);
     assert.notEqual(out.status, 0, command);
   }
   assert.equal(read(main, id).extra_loops, undefined);

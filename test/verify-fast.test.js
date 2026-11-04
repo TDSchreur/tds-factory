@@ -1,21 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { cli as runCli } from './cli-runner.js';
 import { repo } from './git-repo.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 /** @param {string} cwd */
-const start = (cwd, extra = {}) => {
-  const result = run(
+const start = async (cwd, extra = {}) => {
+  const result = await run(
     cwd,
     'start',
     '--data',
@@ -37,11 +36,11 @@ const start = (cwd, extra = {}) => {
  */
 const record = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8'));
 
-test('a Run records the fast Verify command given at start, and rejects an unusable one', () => {
+test('a Run records the fast Verify command given at start, and rejects an unusable one', async () => {
   const cwd = repo();
-  const id = start(cwd, { fast_commands: 'node -e "process.exit(0)"' });
+  const id = await start(cwd, { fast_commands: 'node -e "process.exit(0)"' });
   assert.equal(record(cwd, id).fast_commands, 'node -e "process.exit(0)"');
-  const bad = run(
+  const bad = await run(
     cwd,
     'start',
     '--data',
@@ -51,10 +50,10 @@ test('a Run records the fast Verify command given at start, and rejects an unusa
   assert.match(bad.stderr, /fast Verify command/);
 });
 
-test('verify --fast runs the fast command, keeps its own log and records no Verify result', () => {
+test('verify --fast runs the fast command, keeps its own log and records no Verify result', async () => {
   const cwd = repo();
-  const id = start(cwd, { fast_commands: 'node -e "console.log(\'quick\')"' });
-  const result = run(cwd, 'verify', '--id', id, '--fast');
+  const id = await start(cwd, { fast_commands: 'node -e "console.log(\'quick\')"' });
+  const result = await run(cwd, 'verify', '--id', id, '--fast');
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /fast verify passed/);
   assert.match(result.stdout, /not Evidence/);
@@ -63,36 +62,36 @@ test('verify --fast runs the fast command, keeps its own log and records no Veri
   assert.equal(existsSync(join(cwd, '.factory', 'runs', id, 'verify.log')), false);
 });
 
-test('a failing fast Verify exits non-zero and still records nothing', () => {
+test('a failing fast Verify exits non-zero and still records nothing', async () => {
   const cwd = repo();
-  const id = start(cwd, { fast_commands: 'node -e "process.exit(4)"' });
-  const result = run(cwd, 'verify', '--id', id, '--fast');
+  const id = await start(cwd, { fast_commands: 'node -e "process.exit(4)"' });
+  const result = await run(cwd, 'verify', '--id', id, '--fast');
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /fast verify failed \(exit 4\)/);
   assert.equal(record(cwd, id).verify, undefined);
 });
 
-test('verify --fast without a fast command refuses and names the full Verify', () => {
+test('verify --fast without a fast command refuses and names the full Verify', async () => {
   const cwd = repo();
-  const id = start(cwd);
-  const result = run(cwd, 'verify', '--id', id, '--fast');
+  const id = await start(cwd);
+  const result = await run(cwd, 'verify', '--id', id, '--fast');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /no fast Verify command/);
   assert.match(result.stderr, /run verify --id/);
 });
 
-test('the full Verify is unchanged and still records the Evidence', () => {
+test('the full Verify is unchanged and still records the Evidence', async () => {
   const cwd = repo();
-  const id = start(cwd, { fast_commands: 'node -e "process.exit(1)"' });
-  const result = run(cwd, 'verify', '--id', id);
+  const id = await start(cwd, { fast_commands: 'node -e "process.exit(1)"' });
+  const result = await run(cwd, 'verify', '--id', id);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(record(cwd, id).verify?.exit_code, 0);
 });
 
-test('run update cannot set the fast command after the Run has started', () => {
+test('run update cannot set the fast command after the Run has started', async () => {
   const cwd = repo();
-  const id = start(cwd);
-  const result = run(cwd, 'update', '--id', id, '--data', JSON.stringify({ fast_commands: 'npm run test:unit' }));
+  const id = await start(cwd);
+  const result = await run(cwd, 'update', '--id', id, '--data', JSON.stringify({ fast_commands: 'npm run test:unit' }));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /fast Verify command is set when the Run starts/);
   assert.equal(record(cwd, id).fast_commands, undefined);

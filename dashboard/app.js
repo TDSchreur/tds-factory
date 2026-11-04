@@ -1,11 +1,12 @@
 // State, polling and actions of the Dashboard page; components.js holds the markup.
-/** @import { RunView, ProjectView } from './model.js' */
+/** @import { RunView, ProjectView, PrDetailsState } from './model.js' */
 /** @import { ConfirmRequest, Actions } from './components.js' */
 import { render } from 'preact';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Board, ConfirmDialog, Detail, Header, HelpPanel, Welcome, html } from './components.js';
 import {
   COLUMNS,
+  atLoopCap,
   POLL_MS,
   folderName,
   loadCollapsed,
@@ -48,6 +49,8 @@ function App() {
   const [opened, setOpened] = useState(() => new Set(linked ? [linked] : []));
   const [request, setRequest] = useState(/** @type {ConfirmRequest | null} */ (null));
   const [helpOpen, setHelpOpen] = useState(false);
+  const [prDetails, setPrDetails] = useState(/** @type {PrDetailsState | null} */ (null)); // the last Check PR answer
+  const detailsCall = useRef(0); // a slow answer of an earlier Check PR never replaces a later one
   const [onlyWaiting, setOnlyWaiting] = useState(false); // the Needs you filter; not saved
   const queue = useRef(Promise.resolve());
   /** @type {{ current: ConfirmRequest | null }} */
@@ -149,13 +152,14 @@ function App() {
    * @param {string} action
    * @param {boolean} [danger]
    * @param {boolean} [notice]
+   * @param {string[]} [links]
    * @returns {Promise<boolean>}
    */
-  const ask = (title, message, action, danger, notice) => {
+  const ask = (title, message, action, danger, notice, links) => {
     const result = queue.current.then(
       () =>
         new Promise((/** @type {(confirmed: boolean) => void} */ resolve) =>
-          setRequest({ title, message, action, danger, notice, resolve }),
+          setRequest({ title, message, action, danger, notice, links, resolve }),
         ),
     );
     queue.current = result.then(() => {});
@@ -188,40 +192,44 @@ function App() {
    */
   const runAction = async (run, name, title, message, action, done, query = '') => {
     if (!(await ask(title, message, action, false))) return;
+    const failed =
+      'Could not ' +
+      ({
+        sync: 'sync the Run',
+        clean: 'clean up the Run',
+        'extra-loop': 'grant the extra loop',
+        split: 'split the Run',
+        continue: 'continue the Run',
+      }[/** @type {'sync' | 'clean' | 'extra-loop' | 'split' | 'continue'} */ (name)] ?? 'accept the Check');
     try {
       const response = await write('POST', runPath(run) + '/' + name + query);
       const text = await response.text();
+      // A split answers with the moved links, one per line; they show as links only when they are safe URLs.
+      const links =
+        name === 'split' && response.ok
+          ? text
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .filter(Boolean)
+          : undefined;
       await ask(
-        response.ok
-          ? done
-          : 'Could not ' +
-              (name === 'sync'
-                ? 'sync the Run'
-                : name === 'clean'
-                  ? 'clean up the Run'
-                  : name === 'extra-loop'
-                    ? 'grant the extra loop'
-                    : 'accept the Check'),
-        response.ok ? (name === 'clean' ? text : done + '.') : text,
+        response.ok ? done : failed,
+        !response.ok
+          ? text
+          : name === 'clean'
+            ? text
+            : links
+              ? links.length
+                ? 'Moved to a new Run:'
+                : 'Nothing was left to move.'
+              : done + (name === 'continue' ? '. The agent picks it up on its next step.' : '.'),
         'Close',
         false,
         true,
+        links,
       );
     } catch {
-      await ask(
-        'Could not ' +
-          (name === 'sync'
-            ? 'sync the Run'
-            : name === 'clean'
-              ? 'clean up the Run'
-              : name === 'extra-loop'
-                ? 'grant the extra loop'
-                : 'accept the Check'),
-        run.title,
-        'Close',
-        false,
-        true,
-      );
+      await ask(failed, run.title, 'Close', false, true);
     }
     poll();
   };
@@ -271,6 +279,50 @@ function App() {
     );
   };
 
+  // Fix: starts a Follow-up scoped to one problem of the pull request; at the Check loop limit the click also grants an extra loop.
+  const fixRun = async (/** @type {RunView} */ run, /** @type {string} */ scope) => {
+    const grant = atLoopCap(run);
+    const what = { conflicts: 'merge conflicts', checks: 'failing checks', comments: 'unresolved review comments' }[
+      /** @type {'conflicts' | 'checks' | 'comments'} */ (scope)
+    ];
+    if (
+      !(await ask(
+        grant ? 'Grant an extra loop and fix?' : 'Fix ' + scope + '?',
+        '"' +
+          run.title +
+          '" goes back to Build as a Rework for the ' +
+          what +
+          ' only; other problems stay on the pull request.' +
+          (grant
+            ? ' It has used its ' +
+              run.loopCap +
+              ' Check loops, so this first raises the limit to ' +
+              ((run.loopCap ?? 0) + 1) +
+              '.'
+            : '') +
+          ' Then hand it to an agent with the prompt the card offers.',
+        grant ? 'Grant extra loop and fix' : 'Fix ' + scope,
+        false,
+      ))
+    )
+      return;
+    const query =
+      '?scope=' +
+      encodeURIComponent(scope) +
+      '&updated=' +
+      encodeURIComponent(run.updated) +
+      (grant ? '&grant=true' : '');
+    try {
+      const response = await write('POST', runPath(run) + '/follow-up' + query);
+      const text = await response.text();
+      await ask(response.ok ? 'Fix started' : 'Could not start the Fix', text, 'Close', false, true);
+      if (response.ok) setPrDetails(null); // what was shown is out of date now
+    } catch {
+      await ask('Could not start the Fix', run.title, 'Close', false, true);
+    }
+    poll();
+  };
+
   const grantRun = (/** @type {RunView} */ run) =>
     runAction(
       run,
@@ -287,6 +339,33 @@ function App() {
       'Extra loop granted',
       '?updated=' + encodeURIComponent(run.updated),
     );
+  // The answers to the Run size question (ADR 0035); the server refuses a Run that changed since the page showed it.
+  const continueRun = (/** @type {RunView} */ run) =>
+    runAction(
+      run,
+      'continue',
+      'Accept the size and continue Build?',
+      '"' + run.title + '" goes on in this Run; the size question is not asked again.',
+      'Continue',
+      'Continued',
+      '?updated=' + encodeURIComponent(run.updated),
+    );
+  const splitRun = (/** @type {RunView} */ run) => {
+    const total = Math.max(0, run.ticketsTotal ?? 0);
+    const done = Math.min(Math.max(0, run.ticketsDone ?? 0), total);
+    return runAction(
+      run,
+      'split',
+      'Split the Run?',
+      (total
+        ? done + ' of ' + total + ' Tickets are done and stay; the other ' + (total - done) + ' move to a new Run.'
+        : 'The Tickets that are done stay; the others move to a new Run.') +
+        ' The Run then waits for an agent; hand it over with Copy agent prompt.',
+      'Split',
+      'Run split',
+      '?updated=' + encodeURIComponent(run.updated),
+    );
+  };
   /**
    * @param {RunView[]} doomed
    * @param {string} message
@@ -362,30 +441,6 @@ function App() {
       if (!response.ok) await ask('Could not remove missing Projects', await response.text(), 'Close', false, true);
     } catch {
       await ask('Could not remove missing Projects', 'Try again.', 'Close', false, true);
-    }
-    poll();
-  };
-
-  const mergeRun = async (/** @type {RunView} */ run) => {
-    let checks = 'GitHub checks: unavailable';
-    try {
-      const response = await fetch(runPath(run) + '/merge-checks', { cache: 'no-store' });
-      if (response.ok) checks = await response.text();
-    } catch {}
-    if (
-      !(await ask(
-        'Squash and merge?',
-        'Merge the pull request for "' + run.title + '"?\n' + run.pr + '\n\n' + checks,
-        'Squash and merge',
-        false,
-      ))
-    )
-      return;
-    try {
-      const response = await write('POST', runPath(run) + '/merge');
-      if (!response.ok) await ask('Could not merge', await response.text(), 'Close', false, true);
-    } catch {
-      await ask('Could not merge', run.title, 'Close', false, true);
     }
     poll();
   };
@@ -485,11 +540,31 @@ function App() {
       } catch {}
       poll();
     },
-    merge: mergeRun,
+    checkDetails: async (run) => {
+      const key = runKey(run);
+      const call = ++detailsCall.current;
+      const settle = (/** @type {Omit<PrDetailsState, 'key'>} */ next) => {
+        if (call === detailsCall.current) setPrDetails({ key, ...next });
+      };
+      setSelectedStage(run.column);
+      setSelectedKey(key); // opens the Run detail on the Pull request section
+      setPrDetails({ key, loading: true });
+      try {
+        const response = await fetch(runPath(run) + '/pr-details', { cache: 'no-store' });
+        const text = await response.text();
+        if (!response.ok) return settle({ loading: false, error: text || 'HTTP ' + response.status });
+        settle({ loading: false, data: JSON.parse(text) });
+      } catch (err) {
+        settle({ loading: false, error: err instanceof Error ? err.message : 'the server cannot be reached' });
+      }
+    },
+    fix: fixRun,
     sync: syncRun,
     clean: cleanRun,
     accept: acceptRun,
     grant: grantRun,
+    split: splitRun,
+    continueRun,
     remove: (run) =>
       removeRuns(
         [run],
@@ -522,7 +597,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onGrant=${actions.grant} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

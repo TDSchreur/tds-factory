@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
+import { waitUntil } from './wait-until.js';
 
 /** @import { Page, RunStub } from './browser.js' */
 
@@ -13,7 +14,7 @@ const POLL_WAIT = 2400;
  * @param {number} count
  */
 async function waitForCalls(page, count) {
-  for (let i = 0; i < 50 && page.calls.length < count; i++) await new Promise((r) => setTimeout(r, 100));
+  await waitUntil(() => page.calls.length >= count, { message: `${count} calls recorded` });
 }
 
 test('the board explains itself and flags Runs that wait on the user', async (t) => {
@@ -142,7 +143,7 @@ test('Done cards start collapsed, expand in place and stay expanded after a refr
   }
 });
 
-test('a Done card shows the PR state, and only an open PR can be merged after confirming', async (t) => {
+test('a Done card shows the PR state and offers no Merge button or note', async (t) => {
   /**
    * @param {string} id
    * @param {string} prState
@@ -157,96 +158,14 @@ test('a Done card shows the PR state, and only an open PR can be merged after co
       'Pull request Merged',
       'Pull request Open',
     ]);
-    assert.equal(
-      await page.execute('return document.querySelectorAll(\'[aria-label^="Squash and merge"]\').length'),
-      1,
-    );
     assert.equal(await page.execute("return document.querySelector('.pr a').href"), 'https://github.com/a/b/pull/1');
-    await page.execute('document.querySelector(\'[aria-label^="Squash and merge"]\').click()');
-    await page.waitFor("return document.getElementById('dialog').open");
-    assert.match(
-      await page.execute("return document.getElementById('dialog-message').textContent"),
-      /Merge the pull request for "open"/,
-    );
-    await page.execute("document.getElementById('dialog-cancel').click()");
-    assert.deepEqual(page.calls, []);
-    await page.execute('document.querySelector(\'[aria-label^="Squash and merge"]\').click()');
-    await page.waitFor("return document.getElementById('dialog').open");
-    await page.execute("document.getElementById('dialog-confirm').click()");
-    await page.wait(200);
-    assert.deepEqual(page.calls, ['POST /api/projects/p/runs/open/merge']);
-  } finally {
-    await page.close();
-  }
-});
-
-test('merge confirmation shows failing and pending GitHub checks', async (t) => {
-  const page = await openPage(t, {
-    runs: [
-      run({
-        id: 'r',
-        title: 'Example',
-        column: 'done',
-        status: 'done',
-        pr: 'https://github.com/a/b/pull/1',
-        prState: 'open',
-      }),
-    ],
-    checks: 'GitHub checks: CI: failing; Lint: pending',
-  });
-  if (!page) return;
-  try {
-    await page.execute("document.querySelector('.card [aria-expanded]').click()");
-    await page.execute('document.querySelector(\'[aria-label^="Squash and merge"]\').click()');
-    await page.waitFor("return document.getElementById('dialog').open");
-    assert.match(
-      await page.execute("return document.getElementById('dialog-message').textContent"),
-      /CI: failing; Lint: pending/,
-    );
-    await page.execute("document.getElementById('dialog-cancel').click()");
-    assert.deepEqual(page.calls, []);
-  } finally {
-    await page.close();
-  }
-});
-
-test('Escape cancels a confirmation, and the Merge button keeps keyboard focus across refreshes', async (t) => {
-  const page = await openPage(t, {
-    runs: [
-      run({
-        id: 'r',
-        title: 'Example',
-        column: 'done',
-        status: 'done',
-        pr: 'https://github.com/a/b/pull/1',
-        prState: 'open',
-      }),
-    ],
-  });
-  if (!page) return;
-  try {
-    await page.execute("document.querySelector('.card [aria-expanded]').click()");
-    await page.waitFor("return !document.querySelector('.details').hidden");
-    await page.execute(
-      'document.querySelector(\'[aria-label^="Squash and merge"]\').focus(); document.activeElement.click();',
-    );
-    await page.waitFor("return document.querySelector('#dialog').open");
     assert.equal(
       await page.execute(
-        "return document.querySelector('#dialog').open && document.activeElement.textContent === 'Cancel'",
+        "return [...document.querySelectorAll('.card button')].filter(b => /^merge$|squash and merge/i.test(b.textContent + ' ' + b.getAttribute('aria-label'))).length",
       ),
-      true,
+      0,
     );
-    await page.key(ESCAPE);
-    await page.wait(200);
-    assert.equal(
-      await page.execute(
-        "return !document.querySelector('#dialog').open && document.activeElement.textContent === 'Merge'",
-      ),
-      true,
-    );
-    await page.wait(POLL_WAIT);
-    assert.equal(await page.execute("return document.activeElement.textContent === 'Merge'"), true);
+    assert.equal(await page.execute("return document.querySelector('.merge-note')"), null);
     assert.deepEqual(page.calls, []);
   } finally {
     await page.close();
@@ -663,14 +582,15 @@ test('a failed refresh keeps the last data and says so', async (t) => {
   }
 });
 
-test('card buttons are visibly distinct: filled Merge, warning Delete, link-style toggle', async (t) => {
+test('card buttons are visibly distinct: filled Accept Check, warning Delete, link-style toggle', async (t) => {
   const page = await openPage(t, {
     runs: [
       run({
         id: 'o',
         title: 'Open',
-        column: 'done',
-        status: 'done',
+        column: 'check',
+        status: 'waiting',
+        waiting: true,
         pr: 'https://github.com/o/r/pull/1',
         prState: 'open',
       }),
@@ -678,8 +598,6 @@ test('card buttons are visibly distinct: filled Merge, warning Delete, link-styl
   });
   if (!page) return;
   try {
-    await page.execute("document.querySelector('.card [aria-expanded]').click()");
-    await page.waitFor("return !document.querySelector('.details').hidden");
     /**
      * @param {string} sel
      * @param {string} prop
@@ -693,7 +611,6 @@ test('card buttons are visibly distinct: filled Merge, warning Delete, link-styl
     assert.notEqual(merge, card);
     assert.notEqual(merge, await css('.actions .danger', 'backgroundColor'));
     assert.notEqual(del, await css('.card', 'color'));
-    assert.equal(await page.execute("return document.querySelector('.pr .badge.open').textContent"), 'Open');
     assert.equal(await page.execute("return document.querySelector('.meta .updated') !== null"), true);
   } finally {
     await page.close();

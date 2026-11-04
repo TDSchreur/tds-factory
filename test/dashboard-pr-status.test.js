@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 import { startDashboard } from '../src/dashboard.js';
 import { viewsOf } from './run-view.js';
 import './git-repo.js';
+import { waitUntil } from './wait-until.js';
 
 /** @import { PrStatus } from '../src/pr-provider.js' */
 /** @import { Run } from '../src/run-record.js' */
@@ -62,7 +62,16 @@ async function withDashboard(records, prStatus, body, options = {}) {
     await dash.close();
   }
 }
-const settle = () => delay(30);
+/**
+ * The status lookup runs in the background; wait until a view shows its result.
+ * @param {Page['views']} views
+ * @param {(status: { checking?: boolean, unavailable?: string, state?: string }) => boolean} done
+ */
+const settled = (views, done) =>
+  waitUntil(async () => (await views()).every((r) => !r.prStatus || done(r.prStatus)), {
+    message: 'the PR status settled',
+  });
+const notChecking = (/** @type {{ checking?: boolean }} */ status) => !status.checking;
 
 test('a poll never waits for the provider: checking first, then the cached answer', async () => {
   /** @type {() => void} */
@@ -83,7 +92,7 @@ test('a poll never waits for the provider: checking first, then the cached answe
       assert.deepEqual((await views())[0].prStatus, { checking: true });
       assert.deepEqual((await views())[0].prStatus, { checking: true });
       release();
-      await settle();
+      await settled(views, notChecking);
       assert.deepEqual((await views())[0].prStatus, OPEN);
       assert.deepEqual((await views())[0].prStatus, OPEN);
       assert.deepEqual(calls, [GH]);
@@ -116,7 +125,7 @@ test('Finish, Follow-up and Done Runs get a status; other Runs and links get non
         first.map((r) => r.prStatus === null),
         [false, false, false, true, true, true, true],
       );
-      await settle();
+      await waitUntil(() => calls.length === 3, { message: 'three lookups' });
       assert.deepEqual(calls.sort(), [
         'https://github.com/o/r/pull/1',
         'https://github.com/o/r/pull/2',
@@ -136,7 +145,7 @@ test('a provider failure becomes an unavailable status with its reason, never an
     },
     async ({ views, get }) => {
       await views();
-      await settle();
+      await settled(views, notChecking);
       assert.deepEqual((await views())[0].prStatus, { unavailable: 'rate-limited' });
       mode = '';
       // A plain poll keeps the cached failure; the user's refresh asks again.
@@ -156,7 +165,7 @@ test('an unknown failure reason is reported as error, and a throwing provider do
     },
     async ({ views }) => {
       await views();
-      await settle();
+      await settled(views, notChecking);
       const list = await views();
       assert.deepEqual(list[0].prStatus, { unavailable: 'error' });
       assert.equal(list.length, 2);
@@ -198,7 +207,7 @@ test('a merged PR is not looked up again within ten minutes', async () => {
     },
     async ({ views }) => {
       await views();
-      await settle();
+      await waitUntil(() => calls.length === 1, { message: 'the merged lookup' });
       await views();
       await views();
       assert.equal((await views())[0].prStatus?.state, 'merged');
@@ -225,13 +234,13 @@ test('an Azure DevOps PR gets a status from the same cache and shows its host an
     },
     async ({ views }) => {
       await views();
-      await settle();
+      await settled(views, notChecking);
       const list = await views();
       assert.deepEqual(
-        list.map((r) => [r.prHost, r.prCanMerge, r.prStatus?.unavailable ?? r.prStatus?.state]),
+        list.map((r) => [r.prHost, r.prStatus?.unavailable ?? r.prStatus?.state]),
         [
-          ['azure-devops', false, 'open'],
-          ['azure-devops', false, 'az-extension-missing'],
+          ['azure-devops', 'open'],
+          ['azure-devops', 'az-extension-missing'],
         ],
       );
       assert.deepEqual(
@@ -250,7 +259,7 @@ test('an unknown reason of a provider shows as a plain error', async () => {
     },
     async ({ views }) => {
       await views();
-      await settle();
+      await settled(views, notChecking);
       assert.deepEqual((await views())[0].prStatus, { unavailable: 'error' });
     },
   );

@@ -1,20 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { cli as runCli } from './cli-runner.js';
 import { git, repo } from './git-repo.js';
 import { metricsOf } from './run-view.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
-/** @param {import('node:child_process').SpawnSyncReturns<string>} result */
+const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
+/** @param {import('./cli-runner.js').CliResult} result */
 const ok = (result) => {
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
@@ -29,7 +28,7 @@ const read = (cwd, id) => JSON.parse(readFileSync(join(cwd, '.factory', 'runs', 
 const data = (value) => JSON.stringify(value);
 
 // A Run in Check with a clean Check for its current head, on top of `origin` (the same repository).
-function checked() {
+async function checked() {
   const cwd = repo();
   git(cwd, 'config', 'user.name', 't');
   git(cwd, 'config', 'user.email', 't@t');
@@ -38,33 +37,40 @@ function checked() {
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'shared');
   const id = ok(
-    run(cwd, 'start', '--data', data({ title: 'Sync', agent: 'claude', commands: 'true', conventions: [] })),
+    await run(cwd, 'start', '--data', data({ title: 'Sync', agent: 'claude', commands: 'true', conventions: [] })),
   );
   const wt = read(cwd, id).worktree;
   ok(
-    run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })),
+    await run(
+      cwd,
+      'update',
+      '--id',
+      id,
+      '--data',
+      data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 }),
+    ),
   );
-  ok(run(cwd, 'transition', '--id', id, '--to', 'build'));
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'build'));
   writeFileSync(join(wt, 'mine.txt'), 'mine\n');
   git(wt, 'add', '-A');
   git(wt, 'commit', '-q', '-m', 'mine');
-  ok(run(cwd, 'update', '--id', id, '--data', data({ tickets_done: 1 })));
-  ok(run(cwd, 'transition', '--id', id, '--to', 'check'));
+  ok(await run(cwd, 'update', '--id', id, '--data', data({ tickets_done: 1 })));
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'check'));
   return { cwd, id, wt };
 }
 /**
  * @param {string} cwd
  * @param {string} id
  */
-const review = (cwd, id) => {
-  ok(run(cwd, 'verify', '--id', id));
+const review = async (cwd, id) => {
+  ok(await run(cwd, 'verify', '--id', id));
   for (const [axis, value] of [
     ['standards', 'pass'],
     ['spec', 'pass'],
     ['security', 'pass'],
     ['infrastructure', 'skipped'],
   ])
-    ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
+    ok(await run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
 /**
  * @param {string} cwd
@@ -78,12 +84,12 @@ const advance = (cwd, file, text, message) => {
   git(cwd, 'commit', '-q', '-m', message);
 };
 
-test('sync rebases onto the moved base, records it and clears the Evidence', () => {
-  const { cwd, id, wt } = checked();
-  review(cwd, id);
+test('sync rebases onto the moved base, records it and clears the Evidence', async () => {
+  const { cwd, id, wt } = await checked();
+  await review(cwd, id);
   const before = read(cwd, id);
   advance(cwd, 'other.txt', 'other\n', 'other work');
-  ok(run(cwd, 'sync', '--id', id));
+  ok(await run(cwd, 'sync', '--id', id));
   const after = read(cwd, id);
   assert.equal(after.base_sha, git(cwd, 'rev-parse', 'main'));
   assert.equal(git(wt, 'rev-parse', 'HEAD~1'), after.base_sha);
@@ -102,66 +108,66 @@ test('sync rebases onto the moved base, records it and clears the Evidence', () 
   assert.deepEqual(metricsOf(after).verdicts, metricsOf(before).verdicts, 'observed Check history stays');
   assert.equal(after.title, before.title);
   assert.notEqual(
-    run(cwd, 'transition', '--id', id, '--to', 'finish').status,
+    (await run(cwd, 'transition', '--id', id, '--to', 'finish')).status,
     0,
     'cleared Evidence cannot authorize Finish',
   );
 });
 
-test('sync keeps the Evidence when the base has not moved', () => {
-  const { cwd, id } = checked();
-  review(cwd, id);
+test('sync keeps the Evidence when the base has not moved', async () => {
+  const { cwd, id } = await checked();
+  await review(cwd, id);
   const before = read(cwd, id);
-  ok(run(cwd, 'sync', '--id', id));
+  ok(await run(cwd, 'sync', '--id', id));
   const after = read(cwd, id);
   for (const key of /** @type {const} */ (['standards', 'spec', 'security', 'infrastructure', 'verify', 'reviewed']))
     assert.deepEqual(after[key], before[key], key);
 });
 
-test('sync names the conflicting files and leaves the branch alone', () => {
-  const { cwd, id, wt } = checked();
+test('sync names the conflicting files and leaves the branch alone', async () => {
+  const { cwd, id, wt } = await checked();
   writeFileSync(join(wt, 'shared.txt'), 'one\nmine\nthree\n');
   git(wt, 'commit', '-q', '-am', 'edit shared');
   advance(cwd, 'shared.txt', 'one\ntheirs\nthree\n', 'edit shared on main');
   const head = git(wt, 'rev-parse', 'HEAD');
-  const result = run(cwd, 'sync', '--id', id);
+  const result = await run(cwd, 'sync', '--id', id);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /conflicts in shared\.txt/);
   assert.equal(git(wt, 'rev-parse', 'HEAD'), head);
   assert.equal(git(wt, 'status', '--porcelain'), '');
 });
 
-test('sync does not touch a rebase the user left open', () => {
-  const { cwd, id, wt } = checked();
+test('sync does not touch a rebase the user left open', async () => {
+  const { cwd, id, wt } = await checked();
   writeFileSync(join(wt, 'shared.txt'), 'one\nmine\nthree\n');
   git(wt, 'commit', '-q', '-am', 'edit shared');
   advance(cwd, 'shared.txt', 'one\ntheirs\nthree\n', 'edit shared on main');
   assert.throws(() => git(wt, 'rebase', git(cwd, 'rev-parse', 'main')));
   writeFileSync(join(wt, 'shared.txt'), 'one\nboth\nthree\n');
   git(wt, 'add', '-A');
-  const refused = run(cwd, 'sync', '--id', id);
+  const refused = await run(cwd, 'sync', '--id', id);
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /rebase is already in progress/);
   assert.equal(git(wt, 'diff', '--cached', '--name-only'), 'shared.txt');
 });
 
-test('sync refuses uncommitted changes and Runs outside Build and Check', () => {
-  const { cwd, id, wt } = checked();
+test('sync refuses uncommitted changes and Runs outside Build and Check', async () => {
+  const { cwd, id, wt } = await checked();
   writeFileSync(join(wt, 'dirty.txt'), 'x\n');
-  assert.match(run(cwd, 'sync', '--id', id).stderr, /uncommitted/);
+  assert.match((await run(cwd, 'sync', '--id', id)).stderr, /uncommitted/);
   const define = ok(
-    run(cwd, 'start', '--data', data({ title: 'Other', agent: 'claude', commands: 'true', conventions: [] })),
+    await run(cwd, 'start', '--data', data({ title: 'Other', agent: 'claude', commands: 'true', conventions: [] })),
   );
-  assert.match(run(cwd, 'sync', '--id', define).stderr, /Build or Check/);
+  assert.match((await run(cwd, 'sync', '--id', define)).stderr, /Build or Check/);
 });
 
-test('Finish refuses a branch that conflicts with origin, even when accepted, and passes once it is resolved and reviewed again', () => {
-  const { cwd, id, wt } = checked();
+test('Finish refuses a branch that conflicts with origin, even when accepted, and passes once it is resolved and reviewed again', async () => {
+  const { cwd, id, wt } = await checked();
   writeFileSync(join(wt, 'shared.txt'), 'one\nmine\nthree\n');
   git(wt, 'commit', '-q', '-am', 'edit shared');
   advance(cwd, 'shared.txt', 'one\ntheirs\nthree\n', 'edit shared on main');
-  review(cwd, id);
-  const refused = run(cwd, 'transition', '--id', id, '--to', 'finish');
+  await review(cwd, id);
+  const refused = await run(cwd, 'transition', '--id', id, '--to', 'finish');
   assert.notEqual(refused.status, 0);
   assert.match(
     refused.stderr,
@@ -170,23 +176,23 @@ test('Finish refuses a branch that conflicts with origin, even when accepted, an
   assert.doesNotMatch(refused.stderr, /CONFLICT|Auto-merging/);
   assert.equal(read(cwd, id).stage, 'check');
   // An Accepted Check does not excuse the conflict.
-  ok(run(cwd, 'accept', '--id', id, '--data', data({ findings: 'none', decision: 'go' })));
-  assert.match(run(cwd, 'transition', '--id', id, '--to', 'finish').stderr, /merges cleanly/);
+  ok(await run(cwd, 'accept', '--id', id, '--data', data({ findings: 'none', decision: 'go' })));
+  assert.match((await run(cwd, 'transition', '--id', id, '--to', 'finish')).stderr, /merges cleanly/);
   // Resolving it by hand and syncing again clears the gate once the Check is redone.
-  assert.notEqual(run(cwd, 'sync', '--id', id).status, 0);
+  assert.notEqual((await run(cwd, 'sync', '--id', id)).status, 0);
   assert.throws(() => git(wt, 'rebase', git(cwd, 'rev-parse', 'main')));
   writeFileSync(join(wt, 'shared.txt'), 'one\nmine\ntheirs\nthree\n');
   git(wt, 'add', '-A');
   git(wt, '-c', 'core.editor=true', 'rebase', '--continue');
-  ok(run(cwd, 'sync', '--id', id));
-  review(cwd, id);
-  ok(run(cwd, 'transition', '--id', id, '--to', 'finish'));
+  ok(await run(cwd, 'sync', '--id', id));
+  await review(cwd, id);
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'finish'));
 });
 
-test('Finish accepts a branch whose base moved without a conflict, keeping the Evidence', () => {
-  const { cwd, id } = checked();
-  review(cwd, id);
+test('Finish accepts a branch whose base moved without a conflict, keeping the Evidence', async () => {
+  const { cwd, id } = await checked();
+  await review(cwd, id);
   advance(cwd, 'other.txt', 'other\n', 'other work');
-  ok(run(cwd, 'transition', '--id', id, '--to', 'finish'));
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'finish'));
   assert.equal(read(cwd, id).stage, 'finish');
 });

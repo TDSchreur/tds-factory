@@ -7,6 +7,7 @@ import { startDashboard } from '../src/dashboard.js';
 import { openProjectRegistry, projectId } from '../src/project-registry.js';
 import { writeHeaders } from './dashboard-token.js';
 import './git-repo.js';
+import { waitUntil } from './wait-until.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
@@ -258,9 +259,9 @@ test('removing a Project waits asynchronously for the lock and does not block /a
     const removing = fetch(`${dash.url}/api/projects/${projectId(a)}`, { method: 'DELETE', headers }).finally(
       () => (settled = true),
     );
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    assert.equal(settled, false);
+    // The server answers while the removal waits for the lock, so this proves the lock does not block it.
     assert.equal((await fetch(`${dash.url}/api/info`)).status, 200);
+    assert.equal(settled, false);
     rmSync(lock, { force: true });
     assert.equal((await removing).status, 200);
   });
@@ -340,14 +341,19 @@ test('GitHub and Azure DevOps Projects sit side by side, each with its own PR pr
     });
     const first = await projectsOf(dash);
     assert.deepEqual(
-      first.map((/** @type {any} */ p) => [p.runs[0].prHost, p.runs[0].prCanMerge, p.runs[0].prStatus]),
+      first.map((/** @type {any} */ p) => [p.runs[0].prHost, p.runs[0].prStatus]),
       [
-        ['github', true, { checking: true }],
-        ['azure-devops', false, { checking: true }],
+        ['github', { checking: true }],
+        ['azure-devops', { checking: true }],
       ],
     );
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const second = await projectsOf(dash);
+    const second = await waitUntil(
+      async () => {
+        const projects = await projectsOf(dash);
+        return projects.every((/** @type {any} */ p) => !p.runs[0].prStatus?.checking) && projects;
+      },
+      { message: 'the PR statuses settled' },
+    );
     assert.deepEqual(
       second.map((/** @type {any} */ p) => p.runs[0].prStatus),
       [open, open],

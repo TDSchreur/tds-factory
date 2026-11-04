@@ -68,12 +68,12 @@ flowchart TB
     F -.->|not clean, or loop cap reached: ask first| G
 ```
 
-Work runs on the Full track by default. The Fast track is a lighter Flow for bug fixes and tiny changes: Define asks one confirmation (a bug goes through `diagnosing-bugs`), writes a one-paragraph Spec and cuts a single Ticket, and Check still requires Standards and Security. Define recommends it for a bug fix, a documentation or test-title change, or a diff of at most about five files without a new public interface, schema or dependency, and names the criterion. You choose the track, or confirm the recommendation; it is never applied silently. The track is recorded in `run.json`, shown on the Dashboard and splits `tds-factory run stats`.
+Work runs on the Full track by default. The Fast track is a lighter Flow for bug fixes and tiny changes: Define asks one confirmation (a bug goes through `diagnosing-bugs`), writes a one-paragraph Spec and cuts a single Ticket, and Check still requires Standards and Security. Define recommends it for a bug fix, a documentation or test-title change, or a diff of at most about five files without a new public interface, schema or dependency, and names the criterion. You choose the track, or confirm the recommendation; it is never applied silently. When Define's estimate of the diff passes the size limit, the confirmation says so and proposes the Full track instead. The track is recorded in `run.json`, shown on the Dashboard and splits `tds-factory run stats`.
 
 Each Stage produces one result.
 
 - Define writes a Spec in `docs/specs/` and a Ticket per task in the project's Issue tracker.
-- Build finishes every Ticket test-first, with one commit each. After the last Ticket and after every Rework it works through an Exit checklist: the project's static checks, a term sweep (`tds-factory run sweep`, which ends with the list of documents still to read), the required artifacts, a story trace, a security check, a hostile-input step and a self-check of its own diff.
+- Build finishes every Ticket test-first, with one commit each. After the last Ticket and after every Rework it works through an Exit checklist: the project's static checks, a term sweep (`tds-factory run sweep`, which ends with the list of documents still to read), the required artifacts, a story trace, a security check, a hostile-input step, a repeat of every changed test file and a self-check of its own diff.
 - Check gives Standards, Spec, Security and Infrastructure verdicts from fresh read-only subagents. Infrastructure is skipped when no infrastructure file changed. Projects can add independent source or interactive reviews. Only Blocking findings send the Run back to Build; LOW and INFO items, code smells and style judgement are Left open and listed in the pull request.
 - Finish opens the pull request.
 - Follow-up reads PR feedback on request and sends scoped Rework through Build and Check.

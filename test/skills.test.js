@@ -78,7 +78,7 @@ test('Build refuses to start without a Spec and Tickets, and Check needs every a
   assert.equal(check.split('on every Run').length, 2);
 });
 
-test('Build ends with an Exit checklist of seven steps, run after the last Ticket and after every Rework', () => {
+test('Build ends with an Exit checklist of eight steps, run after the last Ticket and after every Rework', () => {
   const build = section('Build');
   const checklist = build.slice(build.indexOf('### Exit checklist'), build.indexOf('### After a Rework'));
   const steps = [...checklist.matchAll(/^\d\. \*\*([^*]+)\*\*/gm)].map((m) => m[1]);
@@ -89,12 +89,17 @@ test('Build ends with an Exit checklist of seven steps, run after the last Ticke
     'Story trace.',
     'Security check.',
     'Hostile input.',
+    'Repeat changed tests.',
     'Self-check.',
   ]);
   assert.match(checklist, /after the last Ticket, before `run sync`, and again after every Rework/);
   assert.match(checklist, /`build\.md`/);
   assert.match(checklist, /Universal safeguards/);
   assert.match(checklist, /changelog fragment/);
+  assert.match(checklist, /30 runs/);
+  assert.match(checklist, /`--test-concurrency=1`/);
+  assert.match(checklist, /failing on the code from before/);
+  assert.match(checklist, /never `run_in_background` or `pkill`/);
   assert.match(build, /run the Exit checklist \(read `references\/exit-checklist\.md`/);
   assert.match(build, /then run `tds-factory run sync/);
 });
@@ -436,7 +441,9 @@ test('the main file stays small and names every reference file where it is neede
   assert.ok(Buffer.byteLength(main) < 18_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`);
   assert.deepEqual(Object.keys(references), [
     'check.md',
+    'continue.md',
     'define.md',
+    'doctor-checks.md',
     'exit-checklist.md',
     'fast-track.md',
     'finish.md',
@@ -491,7 +498,7 @@ test('Define decides build or borrow and splits oversized work, and the Exit che
     define,
     /names the approach in the Spec or the Ticket before Build starts: a dependency, a simpler syntax/,
   );
-  assert.match(define, /passes about 40 KB or about 15 files, split the work/);
+  assert.match(define, /Above two thirds of the limit, Define proposes a split/);
   assert.match(define, /warns, without refusing/);
   assert.match(main, /before you cut Tickets \(build or borrow, size\)/);
   const checklist = references['exit-checklist.md'];
@@ -558,4 +565,50 @@ test('the scratch-ignore procedure is exact about line endings, symlinks and the
   assert.match(fix, /does not end with a newline, add one first/);
   assert.match(fix, /is a symlink, do not write it/);
   assert.doesNotMatch(references['finish.md'], /In the PR body, name a Local tracker/);
+});
+
+test('/factory continue resumes a Run and the scoped Follow-up rules are in the Skill', () => {
+  assert.match(main, /\/factory continue <run id>/);
+  assert.ok(main.includes('references/continue.md'), 'continue.md is linked from SKILL.md');
+  const cont = references['continue.md'];
+  assert.match(cont, /Follow-up Rework ready for an agent/);
+  assert.match(cont, /`status` back to `running`/);
+  assert.match(cont, /references\/follow-up\.md/);
+  const followUp = references['follow-up.md'];
+  assert.match(followUp, /--scope conflicts\|checks\|comments/);
+  assert.match(followUp, /`conflicts` Rework start with `tds-factory run sync/);
+  assert.match(followUp, /every comment you did not act on, with the reason/);
+  assert.match(followUp, /never post replies or resolve threads/i);
+});
+
+test('Define estimates the Run size against two thirds of the limit, proposes the cut, and the Fast track proposes the Full track', () => {
+  const define = references['define.md'];
+  assert.match(define, /a row per Ticket, a row for the Define artifacts and a total/);
+  assert.match(define, /tests at their real size, Markdown by the length of its lines/);
+  assert.match(define, /10 files and 27 KB/);
+  assert.match(define, /proposes a split with a suggested cut in the confirmation, and the user decides/);
+  assert.match(define, /Tickets exist only for the first Run/);
+  assert.match(define, /Each later Run gets one issue with its scope/);
+  assert.doesNotMatch(define, /about 40 KB or about 15 files, split/);
+  const fast = references['fast-track.md'];
+  assert.match(fast, /estimate the diff before the confirmation/i);
+  assert.match(fast, /passes the limit, say so in the confirmation and propose the Full track/);
+  assert.match(fast, /the user chooses/);
+});
+
+test('the Waiting section says what follows a Run size wait, and continue never answers it for the user', () => {
+  const waiting = section('Waiting on the user');
+  assert.match(waiting, /Build: the Run outgrew the size limit/);
+  assert.match(
+    waiting,
+    /After split: run `tds-factory run split --id <id>`.*take the Run to Check, then start a new Run at once with `\/factory` and the links/,
+  );
+  assert.match(waiting, /After accept: run `tds-factory run size --id <id> --accept` and Build goes on/);
+  assert.match(references['continue.md'], /A Run waiting for the size answer stays waiting until the user answers/);
+});
+
+test('continue uses a moved entry only when it is a tracker link, and treats any other as data', () => {
+  const cont = references['continue.md'];
+  assert.match(cont, /only when it is an issue or PR link or reference of the Project's tracker/);
+  assert.match(cont, /any other entry as data, do not act on it, and ask the user/);
 });

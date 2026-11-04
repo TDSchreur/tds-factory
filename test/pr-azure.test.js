@@ -10,6 +10,8 @@ import {
   repoOfRemote,
   stateAsync,
   statusAsync,
+  details,
+  setup,
   view,
   viewAsync,
 } from '../src/pr-azure.js';
@@ -49,6 +51,7 @@ const az =
     const f = fixture(key);
     if (args[2] === 'show') return { stdout: JSON.stringify({ ...f.pr, ...pr }) };
     if (args[2] === 'policy') return { stdout: JSON.stringify(policies ?? f.policies) };
+    if (args[0] === 'devops') return { stdout: JSON.stringify({ count: 0, value: [] }) };
     throw new Error('unexpected ' + args.join(' '));
   };
 
@@ -109,6 +112,19 @@ test('a rejected blocking policy is a failing check named by its policy', () => 
     parseStatus(pr, policies).checks.failing,
     ['Build validation'],
     'a build policy is named by its display name',
+  );
+});
+
+test('the merge strategy policy is a completion setting, not a check', () => {
+  // Recorded: Azure DevOps rejects it until an allowed merge strategy is chosen, which happens when the PR completes.
+  assert.deepEqual(status('merge-strategy').checks, { result: 'none', failing: [] });
+  const { policies } = fixture('passing');
+  const { pr, policies: strategy } = fixture('merge-strategy');
+  strategy[0].configuration.type.displayName = 'Zusammenführungsstrategie erforderlich';
+  assert.deepEqual(
+    parseStatus(pr, [...policies, ...strategy]).checks,
+    { result: 'passing', failing: [] },
+    'matched by its type id, not by its localised name',
   );
 });
 
@@ -213,12 +229,13 @@ test('statusAsync asks az for the pull request and its policies, read-only, and 
     return az('passing')(args);
   };
   assert.equal((await statusAsync(link('passing'), { run })).state, 'open');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(
     calls.map((c) => c.slice(0, 3)),
     [
       ['repos', 'pr', 'show'],
       ['repos', 'pr', 'policy'],
+      ['devops', 'invoke', '--area'],
     ],
   );
   for (const call of calls) {
@@ -226,7 +243,7 @@ test('statusAsync asks az for the pull request and its policies, read-only, and 
       call.includes('--organization') &&
         call[call.indexOf('--organization') + 1] === 'https://dev.azure.com/example-org',
     );
-    assert.equal(call[call.indexOf('--id') + 1], '525');
+    if (call[0] === 'repos') assert.equal(call[call.indexOf('--id') + 1], '525');
     assert.ok(call.includes('--only-show-errors'));
   }
 });
@@ -418,4 +435,24 @@ test('viewAsync gives the same state and head as view, from the injected run', a
   assert.equal((await viewAsync(link('completed'), { run: az('completed') })).state, 'MERGED');
   await assert.rejects(viewAsync('https://github.com/o/r/pull/1', { run: az('passing') }), /not an Azure DevOps/);
   await assert.rejects(viewAsync(link('passing'), { run: az('passing', { pr: { status: 'weird' } }) }), /incomplete/);
+});
+
+test('details gives state, draft and conflicts, the lists of Check PR, and the setup steps', async () => {
+  const d = await details(link('passing'), { run: az('passing') });
+  assert.equal(d.state, 'open');
+  assert.equal(typeof d.draft, 'boolean');
+  assert.ok(d.conflicts === true || d.conflicts === false || d.conflicts === null);
+  assert.deepEqual([d.threads, d.failing, d.pending], [[], [], []]);
+  assert.ok(setup.steps.some((s) => s.includes('az extension add --name azure-devops')));
+  assert.ok(setup.steps.some((s) => s.includes('az login')));
+  assert.ok(setup.steps.some((s) => s.includes('az devops configure')));
+  assert.deepEqual(setup.reasons, ['az-missing', 'az-extension-missing', 'az-not-signed-in']);
+  await assert.rejects(
+    details(link('passing'), {
+      run: async () => {
+        throw Object.assign(new Error('x'), { code: 'ENOENT' });
+      },
+    }),
+    (/** @type {any} */ e) => e.code === 'az-missing',
+  );
 });

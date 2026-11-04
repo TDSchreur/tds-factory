@@ -22,7 +22,7 @@ A Run leaves its worktree under `.factory/worktrees/` and its local branch behin
 ## Implementation Decisions
 
 - A Run counts as merged when its recorded `pr` link is in state `MERGED` according to `gh pr view`. The lookup is injectable so tests need no network; when `gh` fails, the Run is skipped with the reason.
-- The branch is deleted by compare-and-delete of its tip (`git update-ref -d`; a squash merge leaves it unmerged to git) only when its head equals the merged PR's head commit and no other worktree has it checked out. Any other head is kept and reported.
+- The branch is deleted by compare-and-delete of its tip (`git update-ref -d`; a squash merge leaves it unmerged to git) only when its head equals the merged PR's head commit or is an ancestor of it (the host may have added commits, for example with "Update branch") and no other worktree has it checked out. Any other head is kept and reported; a merged PR head that is not in the repository yet keeps the Run with a hint to fetch it.
 - Only a Run whose status is `done` is cleaned, so that `inspect` does not report a missing worktree for a Run still going. The branch head is checked again under the lock.
 - The worktree is removed after the same status check `remove` uses (untracked files visible, submodules inspected). Git needs `--force` for a worktree with an initialised submodule, as in this repository, and that deletes the submodules' repositories, so the worktree is kept when a submodule has commits no remote has or a stash. The Run record must name the store's own worktree path. Only the store's own worktree path is touched, never a symlinked or adopted one.
 - `clean` takes the Run lock, keeps `run.json` and the summaries, and is idempotent: a Run already cleaned reports `already clean`.
@@ -34,7 +34,7 @@ A Run leaves its worktree under `.factory/worktrees/` and its local branch behin
 ## Testing Decisions
 
 - Seam: the Run store (`openRunStore(...).clean`) over a real temporary git repository with injected PR state, plus the CLI for the output lines and the hint; Doctor over a temporary project like the existing Doctor tests.
-- Cases: merged and clean is removed with its branch; open, closed, missing PR kept; dirty worktree kept; branch head differing from the PR head kept; run from inside the worktree refused; record kept and `inspect` reports no problems after; `--all` mixes; second clean is `already clean`; Doctor note appears with `ok` unchanged.
+- Cases: merged and clean is removed with its branch; open, closed, missing PR kept; dirty worktree kept; branch head ahead of the PR head or diverged from it kept; PR head ahead of the branch cleaned; PR head missing locally kept with a fetch hint; run from inside the worktree refused; record kept and `inspect` reports no problems after; `--all` mixes; second clean is `already clean`; Doctor note appears with `ok` unchanged.
 
 ## Out of Scope
 

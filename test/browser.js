@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { createServer as createPortServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { waitUntil } from './wait-until.js';
 
 /** @import { IncomingMessage } from 'node:http' */
 /** @import { AddressInfo } from 'node:net' */
@@ -20,10 +21,12 @@ import { setTimeout as delay } from 'node:timers/promises';
  * @property {{ id: string, name: string, path?: string, missing?: boolean, runs?: RunStub[] }[]} [projects] Served as /api/views instead of `runs`, in this order.
  * @property {Record<string, string>} [files] Served as /files/<run>/<name>.
  * @property {(req: IncomingMessage) => { status: number, body: string, headers?: Record<string, string> } | undefined} [respond] Answers DELETE and POST requests.
- * @property {string} [checks] The text of /api/projects/p/runs/<id>/merge-checks.
  * @property {string[]} [statusCalls] The pr-status URLs that were read.
  * @property {() => void} [statusReply] Runs on each pr-status read.
  * @property {unknown} [statusBody] The JSON of a pr-status read.
+ * @property {string[]} [detailsCalls] The pr-details URLs that were read.
+ * @property {unknown} [detailsBody] The JSON of a pr-details read.
+ * @property {number} [detailsStatus] The HTTP status of a pr-details read (200 when not set).
  * @property {boolean} [failViews] Makes /api/views answer 500.
  * @property {string} [project]
  * @property {string} [version]
@@ -191,13 +194,20 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     if (routePath === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
     if (ASSET.test(routePath))
       return send(200, TYPES[routePath.split('.').pop() ?? ''], readFileSync(new URL(routePath.slice(1), DASHBOARD)));
-    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/merge-checks$/.test(routePath))
-      return send(200, 'text/plain', state.checks ?? 'GitHub checks: unavailable');
     // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
     if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/pr-status$/.test(routePath)) {
       (state.statusCalls ??= []).push(req.url ?? '');
       state.statusReply?.();
       return send(200, 'application/json', JSON.stringify(state.statusBody ?? {}));
+    }
+    if (/^\/api\/projects\/[^/]+\/runs\/[^/]+\/pr-details$/.test(routePath)) {
+      (state.detailsCalls ??= []).push(req.url ?? '');
+      const body = state.detailsBody;
+      return send(
+        state.detailsStatus ?? 200,
+        typeof body === 'string' ? 'text/plain' : 'application/json',
+        typeof body === 'string' ? body : JSON.stringify(body ?? {}),
+      );
     }
     if (routePath === '/api/info')
       return send(
@@ -266,9 +276,32 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   let closing;
   /** @type {string[] | null} */
   let leftovers = null;
+  /** @type {number | undefined} */
+  let browserPid;
   const close = () =>
     (closing ??= (async () => {
       try {
+        // ChromeDriver deletes its temporary profile right after it ends the session. When Chromium still writes into
+        // it (a loaded machine), the delete stops half way and leaves a scoped directory behind that nothing removes.
+        // So Chromium is closed and awaited first. A browser that does not leave within the deadline is killed with
+        // the driver below, and the leftovers check reports what stayed.
+        if (session && browserPid !== undefined) {
+          const pid = browserPid;
+          await request('POST', `/session/${session}/${browser.cdp}/cdp/execute`, { cmd: 'Browser.close' }, 5000).catch(
+            () => {},
+          );
+          await waitUntil(
+            () => {
+              try {
+                process.kill(pid, 0);
+                return false;
+              } catch {
+                return true;
+              }
+            },
+            { message: `Chromium (pid ${pid}) exits` },
+          ).catch(() => {});
+        }
         if (session) await request('DELETE', '/session/' + session, undefined, 5000).catch(() => {});
         await stopDriver(driver, driverPort);
         if (driver.pid !== undefined) live.delete(driver.pid);
@@ -288,32 +321,34 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       }
     })());
   try {
-    for (let i = 0; i < 50; i++) {
-      try {
-        await request('GET', '/status');
-        break;
-      } catch {
-        await delay(100);
-      }
-    }
-    session = (
-      await request('POST', '/session', {
-        capabilities: {
-          alwaysMatch: {
-            browserName: browser.name,
-            [browser.options]: {
-              args: [
-                '--headless',
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                `--window-size=${width},${height}`,
-                ...args,
-              ],
-            },
+    await waitUntil(
+      () =>
+        request('GET', '/status').then(
+          () => true,
+          () => false,
+        ),
+      {
+        message: 'the driver answers /status',
+      },
+    );
+    const created = await request('POST', '/session', {
+      capabilities: {
+        alwaysMatch: {
+          browserName: browser.name,
+          [browser.options]: {
+            args: [
+              '--headless',
+              '--no-sandbox',
+              '--disable-dev-shm-usage',
+              `--window-size=${width},${height}`,
+              ...args,
+            ],
           },
         },
-      })
-    ).sessionId;
+      },
+    });
+    session = created.sessionId;
+    browserPid = created.capabilities?.['goog:processID'];
     const base = '/session/' + session;
     // Window sizing is clamped by Chromium (a 375px window can have a 500px viewport).
     // Set CSS viewport dimensions through browser emulation before responsive assertions.
@@ -342,11 +377,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       // Resolves when the script returns something truthy; fails with the script after five seconds.
       /** @param {string} script */
       async waitFor(script) {
-        for (let i = 0; i < 50; i++) {
-          if (await execute(script)) return;
-          await delay(100);
-        }
-        throw new Error('Timed out waiting for: ' + script);
+        await waitUntil(() => execute(script), { intervalMs: 100, message: script });
       },
       load: () => request('POST', base + '/url', { url: `http://127.0.0.1:${portOf(server)}/${query}` }),
       /**

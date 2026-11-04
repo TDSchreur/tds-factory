@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import './git-repo.js';
 
+// These tests spawn the real binary: what they check is how a process starts, prints and ends.
 const cli = resolve('bin/tds-factory.js');
 const { version } = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
 

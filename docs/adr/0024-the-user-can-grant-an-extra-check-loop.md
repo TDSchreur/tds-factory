@@ -1,5 +1,7 @@
 # The user can grant an extra Check loop
 
+> Extended by [ADR 0034](0034-the-dashboard-checks-and-fixes-a-pr-but-never-merges.md): the user can also grant an extra loop together with a Follow-up Fix from the Dashboard.
+
 A Run that has used its Check loops (four, or the lower cap the project set) and still has Blocking findings stops and waits for permission to continue to Finish. The user may want one more Rework instead ([milestone v0.6.0](https://github.com/TDSchreur/tds-factory/milestone/2), Dashboard item D4). The limit exists so that a Run does not loop for ever on an agent's own judgement, so the way past it must be the user's own act.
 
 **The limit moves, the count does not.** The Run record gets `extra_loops`, a whole number from 0 (absent means 0). `loopCap` becomes the frozen cap, never above the Factory maximum of four, plus `extra_loops`. Every place that stops a Rework already asks `loopCap`: `run rework`, Follow-up and the Dashboard chip, so they follow without a change, and the chip reads "loop 4/5". We did not lower or reset `check_loops` to make room, because the count is what [Run metrics](0013-run-metrics-preserve-observed-history.md) report. The record validation no longer caps the stored count at four; the Rework operation enforces the cap.

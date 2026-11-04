@@ -154,7 +154,16 @@ export function* cleanRunFlow(projectDir, callerDir, rawId, prState = ghPrInfo) 
   const pr = yield* callStep(() => prState(/** @type {string} */ (record.pr)));
   if (!pr) return kept('cannot read the PR state from its host');
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
-  if (head && head !== pr.head) return kept('the branch has commits that are not in the merged PR');
+  if (head && head !== pr.head) {
+    // "Update branch" on the host adds commits to the PR, so the local tip may be an ancestor of the merged head.
+    // The host's answer is untrusted: only a full hex object id reaches git, never a ref name or an option.
+    if (!pr.head || !/^[0-9a-f]{40,64}$/i.test(pr.head))
+      return kept('the branch has commits that are not in the merged PR');
+    const known = yield* git('cat-file', '-e', `${pr.head}^{commit}`);
+    if (known.status !== 0) return kept('the merged PR head is not in this repository: fetch it, then run clean again');
+    const ancestor = yield* git('merge-base', '--is-ancestor', head, pr.head);
+    if (ancestor.status !== 0) return kept('the branch has commits that are not in the merged PR');
+  }
   if (own && (!own.safe || own.branch !== id)) return kept('the Run worktree is not the one this store created');
   if (record.worktree !== path.join(projectDir, '.factory', 'worktrees', id))
     return kept('the Run record does not name the worktree this store created');

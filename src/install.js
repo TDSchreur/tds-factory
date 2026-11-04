@@ -11,16 +11,24 @@ import { hashLine, modifiedLocally } from './tree-hash.js';
 
 // Copilot reads the Claude and Codex directories, so `all` skips it to avoid duplicates.
 /**
- * @param {{ agent: string, project?: boolean, force?: boolean, dryRun?: boolean }} options
+ * @param {{ agent: string, project?: boolean, force?: boolean, dryRun?: boolean, cwd?: string, log?: (message: string) => void, warn?: (message: string) => void }} options
  */
-export function install({ agent, project, force, dryRun = false }) {
+export function install({
+  agent,
+  project,
+  force,
+  dryRun = false,
+  cwd = process.cwd(),
+  log = console.log,
+  warn = console.warn,
+}) {
   const all = agentNames;
   const requested = agent === 'all' ? all.filter((name) => name !== 'copilot') : [agent];
   for (const name of requested) {
     if (!isAgent(name)) throw new Error(`unknown agent "${name}" (${agentNames.join(', ')}, all)`);
   }
   const names = requested.filter(isAgent);
-  const base = project ? process.cwd() : os.homedir();
+  const base = project ? cwd : os.homedir();
   const skills = fs
     .readdirSync(SKILLS_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory() && fs.existsSync(path.join(SKILLS_DIR, e.name, 'SKILL.md')))
@@ -34,11 +42,11 @@ export function install({ agent, project, force, dryRun = false }) {
       // A symlink is another installer's link to the same skill; replace it, not its target.
       const replaceable = force || fs.lstatSync(dest, { throwIfNoEntry: false })?.isSymbolicLink();
       if (fs.existsSync(dest) && !replaceable && !fs.existsSync(path.join(dest, MARKER))) {
-        console.warn(`skip ${name}/${skill}: exists and was not installed by tds-factory (use --force)`);
+        warn(`skip ${name}/${skill}: exists and was not installed by tds-factory (use --force)`);
         continue;
       }
       if (!replaceable && fs.existsSync(dest) && modifiedLocally(dest)) {
-        console.warn(`skip ${name}/${skill}: edited locally (use --force to replace)`);
+        warn(`skip ${name}/${skill}: edited locally (use --force to replace)`);
         continue;
       }
       if (!dryRun) {
@@ -47,14 +55,14 @@ export function install({ agent, project, force, dryRun = false }) {
           fs.writeFileSync(path.join(staging, MARKER), hashLine(staging));
         });
       }
-      console.log(`${dryRun ? 'would install' : 'installed'} ${name}/${skill} -> ${dest}`);
+      log(`${dryRun ? 'would install' : 'installed'} ${name}/${skill} -> ${dest}`);
     }
     // Marked folders that are no longer shipped are ours to remove; unmarked ones never are.
     for (const e of fs.existsSync(targetDir) ? fs.readdirSync(targetDir, { withFileTypes: true }) : []) {
       const stale = path.join(targetDir, e.name);
       if (e.isDirectory() && !skills.includes(e.name) && fs.existsSync(path.join(stale, MARKER))) {
         if (!dryRun) fs.rmSync(stale, { recursive: true, force: true });
-        console.log(`${dryRun ? 'would remove' : 'removed'} ${name}/${e.name}`);
+        log(`${dryRun ? 'would remove' : 'removed'} ${name}/${e.name}`);
       }
     }
   }
@@ -65,6 +73,7 @@ export function install({ agent, project, force, dryRun = false }) {
       project ? path.join(base, targets[name].projectAgents) : userDir(name, 'agents', base),
       force,
       dryRun,
+      { log, warn },
     );
   }
 }
@@ -80,8 +89,9 @@ const sha = (file) => createHash('sha256').update(fs.readFileSync(file)).digest(
  * @param {string} targetDir
  * @param {boolean | undefined} force
  * @param {boolean} dryRun
+ * @param {{ log: (message: string) => void, warn: (message: string) => void }} output
  */
-function installAgents(name, targetDir, force, dryRun) {
+function installAgents(name, targetDir, force, dryRun, { log, warn }) {
   const sourceDir = path.join(AGENTS_DIR, name);
   if (!dryRun) fs.mkdirSync(targetDir, { recursive: true });
   const recordFile = path.join(targetDir, AGENT_RECORD);
@@ -104,7 +114,7 @@ function installAgents(name, targetDir, force, dryRun) {
     const existing = fs.lstatSync(dest, { throwIfNoEntry: false });
     const pristine = existing?.isFile() && (sha(dest) === record[file] || sha(dest) === sha(src));
     if (existing && !force && !pristine) {
-      console.warn(`skip ${name}/${file}: edited locally, keeping your configuration (use --force to replace)`);
+      warn(`skip ${name}/${file}: edited locally, keeping your configuration (use --force to replace)`);
       continue;
     }
     if (!dryRun) {
@@ -112,7 +122,7 @@ function installAgents(name, targetDir, force, dryRun) {
       fs.copyFileSync(src, dest);
       record[file] = sha(dest);
     }
-    console.log(`${dryRun ? 'would install' : 'installed'} ${name}/${file} -> ${dest}`);
+    log(`${dryRun ? 'would install' : 'installed'} ${name}/${file} -> ${dest}`);
   }
   if (!dryRun) fs.writeFileSync(recordFile, JSON.stringify(record, null, 2) + '\n');
 }

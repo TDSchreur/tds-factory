@@ -1,7 +1,7 @@
 /** @import { Run } from './run-record.js' */
 /** @import { PrLookup, SyncPrLookup } from './run-clean.js' */
 import path from 'node:path';
-import { followUpRun } from './run-follow-up.js';
+import { followUpRun, fixRunFlow } from './run-follow-up.js';
 import { summarizeMetrics, totalMetrics } from './run-metrics.js';
 import { totalUsage } from './run-usage.js';
 import { reviewPlan } from './project-reviews.js';
@@ -17,6 +17,8 @@ import {
   transitionRun,
   acceptRun,
   grantLoopRun,
+  splitRun,
+  sizeRun,
   syncRun,
   syncRunFlow,
   acceptRunFlow,
@@ -27,11 +29,21 @@ import { repairPlan, repairApply, inspectRuns } from './run-repair.js';
 import { removeRun, removeRunFlow, cleanRun, cleanRunFlow, cleanAll, ghPrInfoAsync } from './run-clean.js';
 import { sweepRun } from './run-sweep.js';
 import { guidesRun } from './guides.js';
-import { sizeWarnings } from './run-size.js';
+import { sizeWarnings, SIZE_WAIT_REASON } from './run-size.js';
+
+export { SIZE_WAIT_REASON };
 
 export { summarizeMetrics, formatMetrics } from './run-metrics.js';
-export { MAX_CHECK_LOOPS, loopCap, verifyCommandProblem, fastCommandProblem, trackOf } from './run-record.js';
+export {
+  MAX_CHECK_LOOPS,
+  loopCap,
+  reworkInProgress,
+  verifyCommandProblem,
+  fastCommandProblem,
+  trackOf,
+} from './run-record.js';
 export { mergedLeftovers } from './run-clean.js';
+export { FOLLOW_UP_SCOPES } from './run-follow-up.js';
 
 /** @param {Run} record @param {{ head: string, dirty: boolean }} state */
 const eligibility = (record, state) => ({
@@ -56,9 +68,12 @@ export function openRunStore(callerDir) {
     /** @param {string | undefined} id @param {string | undefined} to @param {{ activity?: string }} [data] */
     transition: (id, to, data) => transitionRun(projectDir, id, to, data),
     /** @param {string | undefined} id */
-    followUp: (id) => followUpRun(projectDir, id),
+    followUp: (/** @type {string | undefined} */ id, /** @type {{ scope?: string }} */ options = {}) =>
+      followUpRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] @param {string[]} [causes] */
     rework: (id, data, causes) => reworkRun(projectDir, id, data, causes),
+    /** @param {string | undefined} id @param {{ scope?: string, updated?: string, grant?: boolean }} [options] */
+    fixAsync: (id, options) => runAsync(fixRunFlow(projectDir, id, options)),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] */
     sync: (id, data) => syncRun(projectDir, id, data),
     /** @param {string | undefined} id @param {{ activity?: string }} [data] */
@@ -67,6 +82,10 @@ export function openRunStore(callerDir) {
     accept: (id, data) => acceptRun(projectDir, id, data),
     /** @param {string | undefined} id @param {{ updated?: string }} [data] */
     grantLoop: (id, data) => grantLoopRun(projectDir, id, data),
+    /** @param {string | undefined} id @param {{ updated?: string, handOver?: boolean, warn?: (message: string) => void }} [options] */
+    split: (id, options) => splitRun(projectDir, id, options),
+    /** @param {string | undefined} id @param {{ accept?: boolean, updated?: string, warn?: (message: string) => void }} [options] */
+    size: (id, options) => sizeRun(projectDir, id, options),
     /** @param {string | undefined} id @param {{ fast?: boolean }} [options] */
     verify: (id, options) => verifyRun(projectDir, id, options),
     /** @param {string | undefined} id @param {string | undefined} axis @param {string | undefined} value @param {{ carried?: boolean }} [options] */

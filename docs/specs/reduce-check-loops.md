@@ -1,6 +1,6 @@
 # Reduce the number of Check loops per Run
 
-_The Sweep now also searches the command line help and the Dashboard help text, ends with the list of documents still to read, and Define and Build gain steps for documents: see [Stale documents in Build](stale-documents-in-build.md) and [ADR 0027](../adr/0027-stale-documents-are-caught-in-build-with-a-closing-sweep-list-a-documentation-ticket-and-counted-rework-causes.md)._
+_The Sweep now also searches the command line help and the Dashboard help text, ends with the list of documents still to read, and Define and Build gain steps for documents: see [Stale documents in Build](stale-documents-in-build.md) and [ADR 0027](../adr/0027-stale-documents-are-caught-in-build-with-a-closing-sweep-list-a-documentation-ticket-and-counted-rework-causes.md). Define now estimates each Ticket and proposes a split above two thirds of the size limit, and Build waits on the user when a Run outgrows the limit: see [Run size gate](run-size-gate.md), [Run size gate, Run B](run-size-gate-b.md) and [ADR 0035](../adr/0035-build-waits-on-the-user-when-a-run-outgrows-the-size-limit.md)._
 
 ## Problem Statement
 
@@ -20,7 +20,7 @@ Five changes, each cutting one cause. The Sweep finds stale numbers, removed hea
 6. As Build, I want the Exit checklist to require an adversarial test for every parser, matcher or path-handling function over untrusted input, also after a Rework, so that hostile input is tested before Check.
 7. As Build, I want a short hit list of the usual Check findings in the self-check, so that I look for stale documents, symlinks, control characters, stated caps and silent drops.
 8. As Define, I want to name the approach (dependency, simpler syntax, or hand-rolled with a required adversarial test) when a Ticket needs a security-sensitive primitive the platform lacks, so that Build does not decide it alone.
-9. As Define, I want to split work into separate Runs or Tickets when the estimate passes about 40 KB of diff or about 15 files, so that Check can review the whole diff in one pass.
+9. As Define, I want to estimate each Ticket and propose a split into several Runs when the estimate passes two thirds of the size limit (about 10 files or 27 KB of a limit of 15 files and 40 KB), so that Check can review the whole diff in one pass.
 10. As a maintainer, I want `run transition --to check` to warn, without refusing, when the diff passes about 40 KB or 15 files or the branch has fewer commits than Tickets, so that an oversized Run is visible before Check.
 11. As a maintainer, I want Check's Blocking rules unchanged, so that quality does not drop.
 
@@ -42,7 +42,7 @@ Five changes, each cutting one cause. The Sweep finds stale numbers, removed hea
 
 ## Out of Scope
 
-- Refusing a transition on size.
+- Refusing a transition on size. (The size is also checked during Build and the Run waits on the user; see [ADR 0035](../adr/0035-build-waits-on-the-user-when-a-run-outgrows-the-size-limit.md).)
 - Changing Check's Blocking rules, loop cap or reviewer assignment.
 - Sweeping non-Markdown files other than the command line help and the Dashboard help text (added by [Stale documents in Build](stale-documents-in-build.md)), or plain (unquoted) comma lists.
 

@@ -1,23 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { cli as runCli } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
 
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 
 // A project with a Run whose worktree starts from `files`; `change` then edits and commits inside the Run worktree.
 /**
  * @param {Record<string, string>} files
  * @param {Record<string, string>} change
  */
-function project(files, change) {
+async function project(files, change) {
   const cwd = repo();
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(dirname(join(cwd, name)), { recursive: true });
@@ -25,7 +24,7 @@ function project(files, change) {
   }
   git(cwd, 'add', '.');
   git(cwd, 'commit', '-q', '-m', 'docs');
-  const started = run(
+  const started = await run(
     cwd,
     'start',
     '--data',
@@ -46,14 +45,14 @@ function project(files, change) {
  * @param {{ cwd: string, id: string }} p
  * @param {...string} args
  */
-const sweep = (p, ...args) => run(p.cwd, 'sweep', '--id', p.id, ...args);
+const sweep = async (p, ...args) => await run(p.cwd, 'sweep', '--id', p.id, ...args);
 
-test('the sweep finds a stale use of an identifier the Run changed, and tags hits in changed files', () => {
-  const p = project(
+test('the sweep finds a stale use of an identifier the Run changed, and tags hits in changed files', async () => {
+  const p = await project(
     { 'docs/usage.md': 'Use `old_flag` to start.\n', 'docs/guide.md': 'Remember old_flag when you start.\n' },
     { 'docs/usage.md': 'Use `new_flag` to start.\n' },
   );
-  const result = sweep(p);
+  const result = await sweep(p);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /old_flag/);
   assert.match(result.stdout, /docs\/guide\.md:1\b.*Remember old_flag/);
@@ -61,19 +60,19 @@ test('the sweep finds a stale use of an identifier the Run changed, and tags hit
   assert.doesNotMatch(result.stdout, /docs\/guide\.md:1.*\[changed\]/);
 });
 
-test('--term adds a synonym the diff does not contain', () => {
-  const p = project(
+test('--term adds a synonym the diff does not contain', async () => {
+  const p = await project(
     { 'README.md': 'It defaults to Claude.\n', 'docs/a.md': 'x\n' },
     { 'docs/a.md': 'y with `other_term`\n' },
   );
-  const result = sweep(p, '--term', 'defaults to claude');
+  const result = await sweep(p, '--term', 'defaults to claude');
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /defaults to claude/i);
   assert.match(result.stdout, /README\.md:1\b.*defaults to Claude/);
 });
 
-test('a hit in a file marked as replaced by a newer Spec, or in the archive, is listed apart', () => {
-  const p = project(
+test('a hit in a file marked as replaced by a newer Spec, or in the archive, is listed apart', async () => {
+  const p = await project(
     {
       'docs/specs/old.md': '# Old\n\n_This was replaced by [new](new.md)._\n\nUse old_flag here.\n',
       'docs/specs/archive/ancient.md': 'old_flag is how it began.\n',
@@ -81,7 +80,7 @@ test('a hit in a file marked as replaced by a newer Spec, or in the archive, is 
     },
     { 'docs/new.md': 'Use `new_flag` instead of `old_flag`.\n' },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   const [current, replaced] = out.split(/marked as replaced/i);
   assert.match(current, /docs\/current\.md:1/);
   assert.doesNotMatch(current, /docs\/specs\/old\.md/);
@@ -89,21 +88,21 @@ test('a hit in a file marked as replaced by a newer Spec, or in the archive, is 
   assert.match(replaced, /docs\/specs\/archive\/ancient\.md:1/);
 });
 
-test('the sweep is read-only, strips control characters and never follows links', () => {
-  const p = project({ 'docs/a.md': 'old_flag \u001b[2J here\n' }, { 'docs/b.md': 'now `new_flag`\n' });
+test('the sweep is read-only, strips control characters and never follows links', async () => {
+  const p = await project({ 'docs/a.md': 'old_flag \u001b[2J here\n' }, { 'docs/b.md': 'now `new_flag`\n' });
   const before = git(p.worktree, 'status', '--porcelain');
-  const result = sweep(p, '--term', 'old_flag');
+  const result = await sweep(p, '--term', 'old_flag');
   assert.doesNotMatch(result.stdout, /\u001b/);
   assert.match(result.stdout, /old_flag \?\[2J here/);
   assert.equal(git(p.worktree, 'status', '--porcelain'), before);
 });
 
-test('the output is bounded and says what was left out', () => {
+test('the output is bounded and says what was left out', async () => {
   /** @type {Record<string, string>} */
   const files = {};
   for (let i = 0; i < 60; i += 1) files[`docs/f${i}.md`] = `${'x'.repeat(300)} common_term ${i}\n`;
-  const p = project(files, { 'docs/z.md': 'adds `common_term`\n' });
-  const out = sweep(p).stdout;
+  const p = await project(files, { 'docs/z.md': 'adds `common_term`\n' });
+  const out = (await sweep(p)).stdout;
   const lines = out.split('\n').filter((l) => /^docs\/f\d+\.md:1/.test(l.trim()) || /^ +docs\/f\d+\.md:1/.test(l));
   assert.ok(lines.length <= 40, `${lines.length} hit lines for one term`);
   assert.ok(
@@ -113,25 +112,25 @@ test('the output is bounded and says what was left out', () => {
   assert.match(out, /\d+ more hit/);
 });
 
-test('a Run whose diff has no terms says so and exits 0', () => {
-  const p = project({ 'docs/a.md': 'text\n' }, { 'docs/a.md': 'text more words\n' });
-  const result = sweep(p);
+test('a Run whose diff has no terms says so and exits 0', async () => {
+  const p = await project({ 'docs/a.md': 'text\n' }, { 'docs/a.md': 'text more words\n' });
+  const result = await sweep(p);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /no terms/i);
 });
 
-test('an unknown Run is refused', () => {
+test('an unknown Run is refused', async () => {
   const cwd = repo();
-  const result = run(cwd, 'sweep', '--id', 'no-such-run');
+  const result = await run(cwd, 'sweep', '--id', 'no-such-run');
   assert.notEqual(result.status, 0);
 });
 
-test('a term that occurs everywhere is not listed and says so', () => {
+test('a term that occurs everywhere is not listed and says so', async () => {
   /** @type {Record<string, string>} */
   const files = {};
   for (let i = 0; i < 120; i += 1) files[`docs/g${i}.md`] = 'shared_word appears here\n';
-  const p = project(files, { 'docs/z.md': 'uses `shared_word`\n' });
-  const out = sweep(p).stdout;
+  const p = await project(files, { 'docs/z.md': 'uses `shared_word`\n' });
+  const out = (await sweep(p)).stdout;
   assert.match(out, /== shared_word: 121 hit\(s\)/);
   assert.match(out, /too common to list \(121 hits\)/);
   assert.doesNotMatch(out, /docs\/g1\.md:1/);
@@ -144,8 +143,8 @@ test(
       process.platform === 'win32' &&
       'needs file names with control characters and symbolic links, which Windows does not allow',
   },
-  () => {
-    const p = project(
+  async () => {
+    const p = await project(
       {
         'docs/real.md': 'unique_marker_xyz is here\n',
         'docs/we\u001bird.md': 'unique_marker_xyz again\n',
@@ -156,7 +155,7 @@ test(
     symlinkSync(join(p.worktree, 'docs', 'real.md'), join(p.worktree, 'docs', 'link.md'));
     git(p.worktree, 'add', '.');
     git(p.worktree, 'commit', '-q', '-m', 'link');
-    const out = sweep(p).stdout;
+    const out = (await sweep(p)).stdout;
     assert.doesNotMatch(out, /\u001b/);
     assert.doesNotMatch(out, /docs\/link\.md/);
     assert.match(out, /docs\/we\?ird\.md:1/);
@@ -164,23 +163,25 @@ test(
   },
 );
 
-test('the total of listed hits is bounded and the rest is counted', () => {
+test('the total of listed hits is bounded and the rest is counted', async () => {
   /** @type {Record<string, string>} */
   const files = {};
   for (let i = 0; i < 50; i += 1) files[`docs/t${i}.md`] = 'tm1_x tm2_x tm3_x tm4_x tm5_x tm6_x tm7_x tm8_x\n';
-  const p = project(files, { 'docs/z.md': 'adds `tm1_x` `tm2_x` `tm3_x` `tm4_x` `tm5_x` `tm6_x` `tm7_x` `tm8_x`\n' });
-  const out = sweep(p).stdout;
+  const p = await project(files, {
+    'docs/z.md': 'adds `tm1_x` `tm2_x` `tm3_x` `tm4_x` `tm5_x` `tm6_x` `tm7_x` `tm8_x`\n',
+  });
+  const out = (await sweep(p)).stdout;
   const listed = out.split('\n').filter((l) => /^ {4}docs\/t\d+\.md:1:/.test(l));
   assert.ok(listed.length <= 250, `${listed.length} hits listed`);
   assert.match(out, /\d+ hit\(s\) left out in total/);
 });
 
-test('a Run without a usable base commit is refused', () => {
-  const p = project({ 'docs/a.md': 'x\n' }, { 'docs/a.md': 'y `term_a`\n' });
+test('a Run without a usable base commit is refused', async () => {
+  const p = await project({ 'docs/a.md': 'x\n' }, { 'docs/a.md': 'y `term_a`\n' });
   const file = join(p.cwd, '.factory', 'runs', p.id, 'run.json');
   const record = JSON.parse(readFileSync(file, 'utf8'));
   writeFileSync(file, JSON.stringify({ ...record, base_sha: '--output=/tmp/x' }));
-  const result = sweep(p);
+  const result = await sweep(p);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /no usable base commit/);
 });
@@ -188,55 +189,55 @@ test('a Run without a usable base commit is refused', () => {
 test(
   'a file name with a newline cannot add lines, and a non-ASCII name still gets the changed tag',
   { skip: process.platform === 'win32' && 'needs a file name with a newline, which Windows does not allow' },
-  () => {
-    const p = project(
+  async () => {
+    const p = await project(
       { 'docs/x\n== fake header.md': 'shared_name_term in a odd file\n' },
       { 'docs/\u00e9.md': 'adds `shared_name_term`\n' },
     );
-    const out = sweep(p).stdout;
+    const out = (await sweep(p)).stdout;
     assert.doesNotMatch(out, /\n== fake header/);
     assert.match(out, /docs\/x\?== fake header\.md:1/);
     assert.match(out, /docs\/\u00e9\.md:1:.*\[changed\]/);
   },
 );
 
-test('the sweep lists documents that still hold a number with a unit the diff removed', () => {
-  const p = project(
+test('the sweep lists documents that still hold a number with a unit the diff removed', async () => {
+  const p = await project(
     { 'docs/a.md': 'Keep the file under 21 KB.\n', 'docs/b.md': 'The cap is 21 KB.\nUp to 40 KB is fine.\n' },
     { 'docs/a.md': 'Keep the file under 18 KB.\n' },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.match(out, /== 21 KB: 1 hit/);
   assert.match(out, /docs\/b\.md:1\b.*21 KB/);
   assert.doesNotMatch(out, /== 40 KB/);
 });
 
-test('a number that is still on an added line is not a stale number', () => {
-  const p = project(
+test('a number that is still on an added line is not a stale number', async () => {
+  const p = await project(
     { 'docs/a.md': 'Limit 21 KB.\n', 'docs/b.md': 'Limit 21 KB.\n' },
     { 'docs/a.md': 'Limit 21 KB, see below.\nOther note.\n' },
   );
-  assert.doesNotMatch(sweep(p).stdout, /== 21 KB/);
+  assert.doesNotMatch((await sweep(p)).stdout, /== 21 KB/);
 });
 
-test('the sweep lists a pointer to a heading the diff removed, by its text and by its anchor', () => {
-  const p = project(
+test('the sweep lists a pointer to a heading the diff removed, by its text and by its anchor', async () => {
+  const p = await project(
     { 'docs/a.md': '## Old section\n\nText.\n', 'docs/b.md': 'See [it](a.md#old-section) in the Old section.\n' },
     { 'docs/a.md': '## New section\n\nText.\n' },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.match(out, /== #old-section: 1 hit/);
   assert.match(out, /== Old section: 1 hit/);
   assert.match(out, /docs\/b\.md:1\b/);
 });
 
-test('hostile input does not slow the sweep or add lines', () => {
-  const p = project(
+test('hostile input does not slow the sweep or add lines', async () => {
+  const p = await project(
     { 'docs/a.md': `${'9'.repeat(200000)}\n${'#'.repeat(200000)}\n`, 'docs/b.md': 'x\n' },
     { 'docs/a.md': `1 KB\x1b[31m\n${'1'.repeat(200000)} KB\n` },
   );
   const started = Date.now();
-  const result = sweep(p);
+  const result = await sweep(p);
   assert.equal(result.status, 0, result.stderr);
   assert.ok(Date.now() - started < 10000);
   assert.doesNotMatch(result.stdout, /\x1b/);
@@ -245,8 +246,8 @@ test('hostile input does not slow the sweep or add lines', () => {
 /** @param {string} out */
 const sections = (out) => (out.split('== lists that miss')[1] ?? '').split('== documents to read')[0];
 
-test('a list that misses a member the diff added is listed, and one that has it is not', () => {
-  const p = project(
+test('a list that misses a member the diff added is listed, and one that has it is not', async () => {
+  const p = await project(
     {
       'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n',
       'docs/b.md': 'The report holds `cli`, `git` and `tracker` checks.\n',
@@ -254,27 +255,42 @@ test('a list that misses a member the diff added is listed, and one that has it 
     },
     { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' },
   );
-  const lists = sections(sweep(p).stdout);
+  const lists = sections((await sweep(p)).stdout);
   assert.match(lists, /added `guides`/);
   assert.match(lists, /docs\/b\.md:1\b/);
   assert.doesNotMatch(lists, /docs\/c\.md/);
 });
 
-test('a list that still holds a member the diff removed is listed', () => {
-  const p = project(
+test('the lists section gives the same answer under diff.mnemonicprefix and diff.noprefix', async () => {
+  const files = {
+    'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n',
+    'docs/b.md': 'The report holds `cli`, `git` and `tracker` checks.\n',
+  };
+  const change = { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' };
+  for (const setting of ['diff.mnemonicprefix', 'diff.noprefix']) {
+    const p = await project(files, change);
+    git(p.cwd, 'config', setting, 'true');
+    const lists = sections((await sweep(p)).stdout);
+    assert.match(lists, /added `guides`/, setting);
+    assert.match(lists, /docs\/b\.md:1\b/, setting);
+  }
+});
+
+test('a list that still holds a member the diff removed is listed', async () => {
+  const p = await project(
     {
       'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n',
       'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `old`.\n',
     },
     { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n' },
   );
-  const lists = sections(sweep(p).stdout);
+  const lists = sections((await sweep(p)).stdout);
   assert.match(lists, /removed `old`/);
   assert.match(lists, /docs\/b\.md:1\b/);
 });
 
-test('added lines that claim linear or safe behaviour are listed, tests are not', () => {
-  const p = project(
+test('added lines that claim linear or safe behaviour are listed, tests are not', async () => {
+  const p = await project(
     { 'docs/a.md': 'x\n' },
     {
       'src/m.js': '// matching is linear in the input\n',
@@ -282,54 +298,54 @@ test('added lines that claim linear or safe behaviour are listed, tests are not'
       'docs/a.md': 'plain\n',
     },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.match(out, /claims in added lines/);
   assert.match(out, /src\/m\.js: \/\/ matching is linear/);
   assert.doesNotMatch(out, /test\/m\.test\.js/);
 });
 
-test('a line with thousands of backticks and a control character in a name stay bounded and clean', () => {
+test('a line with thousands of backticks and a control character in a name stay bounded and clean', async () => {
   const many = '`x` '.repeat(5000);
-  const p = project(
+  const p = await project(
     { 'docs/a.md': many + '\n`a`, `b`, `c`\n' },
     { 'docs/a.md': many + '\n`a`, `b`, `c`, `d\x1b[31m`\n' },
   );
   const started = Date.now();
-  const result = sweep(p);
+  const result = await sweep(p);
   assert.equal(result.status, 0, result.stderr);
   assert.ok(Date.now() - started < 10000);
   assert.doesNotMatch(result.stdout, /\x1b/);
 });
 
-test('a heading followed by a very long run of spaces does not hang the sweep', () => {
-  const p = project(
+test('a heading followed by a very long run of spaces does not hang the sweep', async () => {
+  const p = await project(
     { 'docs/a.md': 'x\n' },
     { 'docs/a.md': '# a' + ' '.repeat(300000) + 'x\n## ok ' + '\t'.repeat(300000) + '\n' },
   );
   const started = Date.now();
-  const result = sweep(p);
+  const result = await sweep(p);
   assert.equal(result.status, 0, result.stderr);
   assert.ok(Date.now() - started < 10000);
 });
 
-test('added text that looks like a diff header cannot hide a claim from the claims section', () => {
-  const p = project(
+test('added text that looks like a diff header cannot hide a claim from the claims section', async () => {
+  const p = await project(
     { 'docs/a.md': 'x\n' },
     { 'src/m.js': '++ b/test/m.test.js\n// this is linear\n', 'docs/a.md': 'plain\n' },
   );
-  assert.match(sweep(p).stdout, /src\/m\.js: \/\/ this is linear/);
+  assert.match((await sweep(p)).stdout, /src\/m\.js: \/\/ this is linear/);
 });
 
-test('bidi controls in a document line are not printed', () => {
-  const p = project({ 'docs/a.md': 'x\n', 'docs/b.md': 'see old_flag ‮evil\n' }, { 'docs/a.md': 'old_flag\n' });
-  assert.doesNotMatch(sweep(p).stdout, /‮/);
+test('bidi controls in a document line are not printed', async () => {
+  const p = await project({ 'docs/a.md': 'x\n', 'docs/b.md': 'see old_flag ‮evil\n' }, { 'docs/a.md': 'old_flag\n' });
+  assert.doesNotMatch((await sweep(p)).stdout, /‮/);
 });
 
 /** @param {string} out */
 const toRead = (out) => out.slice(out.indexOf('== documents to read')).split('\n').slice(1);
 
-test('the sweep ends with the documents still to read: not the changed ones, most hits first', () => {
-  const p = project(
+test('the sweep ends with the documents still to read: not the changed ones, most hits first', async () => {
+  const p = await project(
     {
       'docs/many.md': 'old_flag one\nold_flag two\nold_flag three\n',
       'docs/few.md': 'old_flag once\n',
@@ -337,7 +353,7 @@ test('the sweep ends with the documents still to read: not the changed ones, mos
     },
     { 'docs/touched.md': 'now `new_flag`\n' },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.match(out, /== documents to read \(not changed in this Run\)/);
   const list = toRead(out).filter(Boolean);
   assert.deepEqual(
@@ -347,12 +363,12 @@ test('the sweep ends with the documents still to read: not the changed ones, mos
   assert.ok(out.trimEnd().endsWith(list.at(-1) ?? ''), 'the list is the end of the output');
 });
 
-test('--files prints only that list, and the list is capped with a count of the rest', () => {
+test('--files prints only that list, and the list is capped with a count of the rest', async () => {
   /** @type {Record<string, string>} */
   const files = { 'docs/z.md': 'Use `old_flag`.\n' };
   for (let i = 0; i < 20; i += 1) files[`docs/f${String(i).padStart(2, '0')}.md`] = 'old_flag\n';
-  const p = project(files, { 'docs/z.md': 'Use `new_flag`.\n' });
-  const result = sweep(p, '--files');
+  const p = await project(files, { 'docs/z.md': 'Use `new_flag`.\n' });
+  const result = await sweep(p, '--files');
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stdout, /^== old_flag/m);
   const shown = result.stdout.split('\n').filter((l) => /^\s+docs\/f\d+\.md: /.test(l));
@@ -360,14 +376,14 @@ test('--files prints only that list, and the list is capped with a count of the 
   assert.match(result.stdout, /5 more documents/);
 });
 
-test('the closing list is empty-safe: a Run with nothing to read says so', () => {
-  const p = project({ 'docs/a.md': 'text\n' }, { 'docs/a.md': 'text, now with `new_flag`\n' });
-  const out = sweep(p, '--files').stdout;
+test('the closing list is empty-safe: a Run with nothing to read says so', async () => {
+  const p = await project({ 'docs/a.md': 'text\n' }, { 'docs/a.md': 'text, now with `new_flag`\n' });
+  const out = (await sweep(p, '--files')).stdout;
   assert.match(out, /no other document holds a changed term/i);
 });
 
-test('the sweep finds a changed term in the command line help and the Dashboard help, tagged as code, and in no other source file', () => {
-  const p = project(
+test('the sweep finds a changed term in the command line help and the Dashboard help, tagged as code, and in no other source file', async () => {
+  const p = await project(
     {
       'bin/tds-factory.js': 'const USAGE = `\n  tds-factory run thing --old_flag\n`;\n',
       'dashboard/help.js': "export const help = [{ term: 'x', text: 'use old_flag' }];\n",
@@ -376,7 +392,7 @@ test('the sweep finds a changed term in the command line help and the Dashboard 
     },
     { 'docs/a.md': 'Use `new_flag`.\n' },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.match(out, /bin\/tds-factory\.js:2: .*old_flag.*\[code\]/);
   assert.match(out, /dashboard\/help\.js:1: .*old_flag.*\[code\]/);
   assert.doesNotMatch(out, /src\/other\.js/);
@@ -385,8 +401,8 @@ test('the sweep finds a changed term in the command line help and the Dashboard 
   assert.match(list, /dashboard\/help\.js: 1 hit\(s\)/);
 });
 
-test('an oversized or linked code file is skipped, and code lines never make a list hit', () => {
-  const p = project(
+test('an oversized or linked code file is skipped, and code lines never make a list hit', async () => {
+  const p = await project(
     {
       'bin/tds-factory.js': 'Checks: `cli`, `git`, `tracker`.\n',
       'dashboard/help.js': `${'x'.repeat(1 << 20)} old_flag\n`,
@@ -394,25 +410,25 @@ test('an oversized or linked code file is skipped, and code lines never make a l
     },
     { 'docs/a.md': 'Use `new_flag`.\n', 'docs/b.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' },
   );
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.doesNotMatch(out, /dashboard\/help\.js/);
   assert.doesNotMatch(out.split('== lists that miss')[1] ?? '', /bin\/tds-factory\.js/);
 });
 
-test('a linked code file is never followed', () => {
-  const p = project(
+test('a linked code file is never followed', async () => {
+  const p = await project(
     { 'bin/tds-factory.js': 'plain\n', 'docs/a.md': 'Use `old_flag`.\n' },
     { 'docs/a.md': 'Use `new_flag`.\n' },
   );
   writeFileSync(join(p.cwd, 'secret.txt'), 'old_flag in a file outside the Run\n');
   rmSync(join(p.worktree, 'bin', 'tds-factory.js'));
   symlinkSync(join(p.cwd, 'secret.txt'), join(p.worktree, 'bin', 'tds-factory.js'));
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
 });
 
-test('a linked folder around a code file is never followed, and a line matched by two terms counts once', () => {
-  const p = project(
+test('a linked folder around a code file is never followed, and a line matched by two terms counts once', async () => {
+  const p = await project(
     {
       'bin/tds-factory.js': 'plain\n',
       'docs/a.md': 'Use `old_flag` and `old_other`.\n',
@@ -424,7 +440,7 @@ test('a linked folder around a code file is never followed, and a line matched b
   writeFileSync(join(p.cwd, 'elsewhere', 'tds-factory.js'), 'old_flag in a folder outside the Run\n');
   rmSync(join(p.worktree, 'bin'), { recursive: true });
   symlinkSync(join(p.cwd, 'elsewhere'), join(p.worktree, 'bin'));
-  const out = sweep(p).stdout;
+  const out = (await sweep(p)).stdout;
   assert.doesNotMatch(out, /outside the Run|bin\/tds-factory\.js/);
   assert.match(toRead(out).join('\n'), /docs\/b\.md: 1 hit\(s\)/);
 });

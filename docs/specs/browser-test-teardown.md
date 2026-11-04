@@ -14,7 +14,7 @@ Make the harness teardown end ChromeDriver and every Chromium process it started
 
 ## Implementation Decisions
 
-- Teardown order: delete the WebDriver session (with a timeout), ask ChromeDriver to shut down, wait a bounded time for exit, then kill the whole ChromeDriver process group and wait a bounded time.
+- Teardown order: close the browser over the DevTools protocol and wait until its process is gone (ChromeDriver deletes its profile after it ends the session, and a delete that races a running Chromium stops half way and leaves a scoped directory; see [browser-close-before-profile-removal.md](browser-close-before-profile-removal.md)), delete the WebDriver session (with a timeout), ask ChromeDriver to shut down, wait a bounded time for exit, then kill the whole ChromeDriver process group and wait a bounded time.
 - ChromeDriver starts in its own process group so the fallback kill also reaches Chromium children.
 - Teardown is idempotent and exported as a helper so it can be tested without a browser.
 - No age-based cleanup of `/tmp`; only processes the harness started are touched.
