@@ -263,3 +263,27 @@ test('saving an implicit Claude selection respects the configured directory', ()
   });
   assert.deepEqual(readSelection({ file, home, cwd: home }), [{ agent: 'claude', configDir: path.join(home, 'work') }]);
 });
+
+test(
+  'unreadable selection records fail reads and writes without changing the record',
+  {
+    skip:
+      process.platform === 'win32' || process.getuid?.() === 0
+        ? 'POSIX permission checks require a non-root user'
+        : false,
+  },
+  () => {
+    const home = tempDir('selection-home-');
+    const file = path.join(home, 'selection.json');
+    const original = JSON.stringify({ version: 1, selected: [{ agent: 'codex' }] });
+    fs.writeFileSync(file, original);
+    fs.chmodSync(file, 0);
+    try {
+      assert.throws(() => readSelection({ file, home, cwd: home }), /record/);
+      assert.throws(() => saveSelection({ file, home, cwd: home, selected: [], trustedPaths: true }), /record/);
+    } finally {
+      fs.chmodSync(file, 0o600);
+    }
+    assert.equal(fs.readFileSync(file, 'utf8'), original);
+  },
+);
