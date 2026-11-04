@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { cliWith } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
 import { envWith, fakeCommand } from './fake-command.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
 // A finished Run with a worktree at its PR head and a fake `gh` that answers from gh.json; shared by the Follow-up and Fix tests.
-export const cli = resolve('bin/tds-factory.js');
 /**
  * @param {unknown[]} nodes
  * @param {boolean} [next]
@@ -23,12 +22,8 @@ export const page = (nodes, next = false, cursor = null) => ({
  * @param {...string} args
  */
 export const run = (cwd, ...args) =>
-  spawnSync(process.execPath, [cli, 'run', ...args], {
-    cwd,
-    encoding: 'utf8',
-    env: envWith(join(cwd, 'fake-bin'), { FAKE_GH: join(cwd, 'gh.json') }),
-  });
-export function fixture() {
+  cliWith({ env: envWith(join(cwd, 'fake-bin'), { FAKE_GH: join(cwd, 'gh.json') }) }, cwd, 'run', ...args);
+export async function fixture() {
   const cwd = repo();
   mkdirSync(join(cwd, 'fake-bin'));
   fakeCommand(
@@ -36,7 +31,7 @@ export function fixture() {
     'gh',
     `const fs = require('fs');\nconst s = JSON.parse(fs.readFileSync(process.env.FAKE_GH));\nconst args = process.argv.slice(2);\nfs.appendFileSync(process.env.FAKE_GH + '.log', JSON.stringify(args) + '\\n');\nif (s.error) { process.exit(1); }\nif (args[0] === 'pr') console.log(JSON.stringify(s.pr));\nelse { const q = args.find(x => x.startsWith('query=')) || ''; const key = q.includes('FollowUpChecks') ? 'checks' : q.includes('FollowUpThreads') ? 'threads' : 'comments'; const cursor = (args.find(x => x.startsWith('cursor=')) || 'cursor=').slice(7); const id = (args.find(x => x.startsWith('thread=')) || 'thread=').slice(7); console.log(JSON.stringify((s[key][id ? id + ':' + cursor : cursor]))); }\n`,
   );
-  const out = run(
+  const out = await run(
     cwd,
     'start',
     '--data',

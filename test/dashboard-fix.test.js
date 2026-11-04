@@ -16,7 +16,7 @@ after(() => {
   Object.assign(process.env, saved);
 });
 
-/** @param {ReturnType<typeof fixture>} f */
+/** @param {Awaited<ReturnType<typeof fixture>>} f */
 async function withFix(f) {
   Object.assign(process.env, envWith(join(f.cwd, 'fake-bin'), { FAKE_GH: join(f.cwd, 'gh.json') }));
   const dash = await startDashboard({ projectDir: f.cwd, port: 0 });
@@ -36,7 +36,7 @@ async function withFix(f) {
 const WAITING = 'Follow-up Rework ready for an agent';
 
 test('a Fix starts the scoped Rework and leaves the Run waiting for an agent, keeping the snapshot', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix, view } = await withFix(f);
   try {
     const answer = await fix();
@@ -57,7 +57,7 @@ test('a Fix starts the scoped Rework and leaves the Run waiting for an agent, ke
 });
 
 test('a Fix is refused without the session token and with a foreign Origin', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix } = await withFix(f);
   try {
     const own = await writeHeaders(dash);
@@ -70,7 +70,7 @@ test('a Fix is refused without the session token and with a foreign Origin', asy
 });
 
 test('a Fix is refused for a stale record time and for a second Rework, with how to go on', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix } = await withFix(f);
   try {
     const stale = await fix('?scope=checks&updated=2000-01-01T00%3A00%3A00.000Z');
@@ -92,7 +92,7 @@ test('a Fix is refused for a stale record time and for a second Rework, with how
 });
 
 test('a dirty worktree, a head that differs and a cleaned worktree are refused with the way out', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix } = await withFix(f);
   const worktree = f.read().worktree;
   try {
@@ -117,7 +117,7 @@ test('a dirty worktree, a head that differs and a cleaned worktree are refused w
 });
 
 test('a scope without findings and an unknown scope start nothing', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix } = await withFix(f);
   try {
     const none = await fix(`?scope=conflicts&updated=${encodeURIComponent(f.read().updated ?? '')}`);
@@ -133,7 +133,7 @@ test('a scope without findings and an unknown scope start nothing', async () => 
 });
 
 test('a pull request of a host without an adapter is refused', async () => {
-  const f = fixture();
+  const f = await fixture();
   writeFileSync(f.file, JSON.stringify({ ...f.read(), pr: 'https://gitlab.example/o/r/-/merge_requests/7' }));
   const { dash, fix } = await withFix(f);
   try {
@@ -145,11 +145,11 @@ test('a pull request of a host without an adapter is refused', async () => {
   }
 });
 
-/** @param {ReturnType<typeof fixture>} f */
+/** @param {Awaited<ReturnType<typeof fixture>>} f */
 const atCap = (f) => writeFileSync(f.file, JSON.stringify({ ...f.read(), check_loops: 4 }));
 
 test('at the limit a Fix needs the grant, which raises extra_loops once and writes the event', async () => {
-  const f = fixture();
+  const f = await fixture();
   atCap(f);
   const { dash, fix, view } = await withFix(f);
   try {
@@ -176,7 +176,7 @@ test('at the limit a Fix needs the grant, which raises extra_loops once and writ
 });
 
 test('the grant stands when the Fix is refused afterwards, and a grant below the limit is refused', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix, view } = await withFix(f);
   try {
     const below = await fix(`?scope=checks&updated=${encodeURIComponent((await view())?.updated ?? '')}&grant=true`);
@@ -196,15 +196,15 @@ test('the grant stands when the Fix is refused afterwards, and a grant below the
   }
 });
 
-test('no command line option grants a loop', () => {
-  const f = fixture();
-  const result = run(f.cwd, 'follow-up', '--id', f.id, '--scope', 'checks', '--grant');
+test('no command line option grants a loop', async () => {
+  const f = await fixture();
+  const result = await run(f.cwd, 'follow-up', '--id', f.id, '--scope', 'checks', '--grant');
   assert.notEqual(result.status, 0);
   assert.equal(f.read().extra_loops, undefined);
 });
 
 test('hostile scope, grant and updated query values start nothing', async () => {
-  const f = fixture();
+  const f = await fixture();
   const { dash, fix } = await withFix(f);
   const before = JSON.stringify(f.read());
   try {

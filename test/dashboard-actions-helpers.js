@@ -1,23 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { git, repo } from './git-repo.js';
+import { cli as runCli } from './cli-runner.js';
 import { writeHeaders } from './dashboard-token.js';
 import { viewsOf } from './run-view.js';
 import { waitUntil } from './wait-until.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
-export const cli = resolve('bin/tds-factory.js');
-
 /**
  * @param {string} cwd
  * @param {string[]} args
  */
-export const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+export const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 
-/** @param {import('node:child_process').SpawnSyncReturns<string>} result */
+/** @param {import('./cli-runner.js').CliResult} result */
 export const ok = (result) => {
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
@@ -37,7 +35,7 @@ export const PR = 'https://github.com/o/r/pull/1';
 
 // A Run in Check on top of `origin` (the same repository).
 /** @param {string} [existing] @param {string} [title] */
-export function checked(existing, title = 'Actions') {
+export async function checked(existing, title = 'Actions') {
   const cwd = existing ?? repo();
   if (!existing) {
     git(cwd, 'config', 'user.name', 't'); // the rebase in sync commits, and CI has no global identity
@@ -46,17 +44,24 @@ export function checked(existing, title = 'Actions') {
     git(cwd, 'add', '-A');
     git(cwd, 'commit', '-q', '-m', 'ignore');
   }
-  const id = ok(run(cwd, 'start', '--data', data({ title, agent: 'claude', commands: 'true', conventions: [] })));
+  const id = ok(await run(cwd, 'start', '--data', data({ title, agent: 'claude', commands: 'true', conventions: [] })));
   const wt = read(cwd, id).worktree;
   ok(
-    run(cwd, 'update', '--id', id, '--data', data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 })),
+    await run(
+      cwd,
+      'update',
+      '--id',
+      id,
+      '--data',
+      data({ spec_link: 'docs/specs/x.md', tickets: ['1'], tickets_total: 1 }),
+    ),
   );
-  ok(run(cwd, 'transition', '--id', id, '--to', 'build'));
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'build'));
   writeFileSync(join(wt, 'mine.txt'), 'mine\n');
   git(wt, 'add', '-A');
   git(wt, 'commit', '-q', '-m', 'mine');
-  ok(run(cwd, 'update', '--id', id, '--data', data({ tickets_done: 1 })));
-  ok(run(cwd, 'transition', '--id', id, '--to', 'check'));
+  ok(await run(cwd, 'update', '--id', id, '--data', data({ tickets_done: 1 })));
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'check'));
   return { cwd, id, wt };
 }
 
@@ -65,23 +70,23 @@ export function checked(existing, title = 'Actions') {
  * @param {string} id
  * @param {string} [security]
  */
-export const review = (cwd, id, security = 'pass') => {
-  ok(run(cwd, 'verify', '--id', id));
+export const review = async (cwd, id, security = 'pass') => {
+  ok(await run(cwd, 'verify', '--id', id));
   for (const [axis, value] of [
     ['standards', 'pass'],
     ['spec', 'pass'],
     ['security', security],
     ['infrastructure', 'skipped'],
   ])
-    ok(run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
+    ok(await run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value));
 };
 
 /**
  * @param {string} cwd
  * @param {string} id
  */
-export const waiting = (cwd, id) =>
-  ok(run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
+export const waiting = async (cwd, id) =>
+  ok(await run(cwd, 'update', '--id', id, '--data', data({ status: 'waiting', waiting_reason: 'accept the Check' })));
 
 /**
  * @param {{ url: string, projectId: string }} dash
@@ -102,8 +107,8 @@ export async function post(dash, id, action, updated) {
 }
 
 // ADR 0024: the extra loop. A Run in Check that waits on the user at its loop limit.
-export function atLimit() {
-  const { cwd, id, wt } = checked();
+export async function atLimit() {
+  const { cwd, id, wt } = await checked();
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
   writeFileSync(
     file,
@@ -140,12 +145,12 @@ export const grant = async (dash, id, query, headers) => {
 
 // A finished Run with a PR, so that clean asks the PR lookup.
 /** @param {string} [cwd] @param {string} [title] */
-export function finished(cwd, title) {
-  const made = checked(cwd, title);
-  review(made.cwd, made.id);
-  ok(run(made.cwd, 'transition', '--id', made.id, '--to', 'finish'));
-  ok(run(made.cwd, 'update', '--id', made.id, '--data', data({ pr: PR })));
-  ok(run(made.cwd, 'complete', '--id', made.id));
+export async function finished(cwd, title) {
+  const made = await checked(cwd, title);
+  await review(made.cwd, made.id);
+  ok(await run(made.cwd, 'transition', '--id', made.id, '--to', 'finish'));
+  ok(await run(made.cwd, 'update', '--id', made.id, '--data', data({ pr: PR })));
+  ok(await run(made.cwd, 'complete', '--id', made.id));
   return { ...made, tip: git(made.wt, 'rev-parse', 'HEAD') };
 }
 

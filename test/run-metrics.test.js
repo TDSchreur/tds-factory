@@ -1,25 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { cli as runCli } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
 import { metricsOf, defined, entryOf } from './run-view.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const command = (cwd, ...args) => {
-  const r = run(cwd, ...args);
+const command = async (cwd, ...args) => {
+  const r = await run(cwd, ...args);
   assert.equal(r.status, 0, r.stderr);
   return r.stdout.trim();
 };
@@ -35,8 +34,8 @@ const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
  */
 const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
 /** @param {string} cwd */
-const start = (cwd) =>
-  command(
+const start = async (cwd) =>
+  await command(
     cwd,
     'start',
     '--data',
@@ -47,30 +46,30 @@ const start = (cwd) =>
  * @param {string} id
  * @param {Record<string, unknown>} data
  */
-const update = (cwd, id, data) => command(cwd, 'update', '--id', id, '--data', JSON.stringify(data));
+const update = async (cwd, id, data) => await command(cwd, 'update', '--id', id, '--data', JSON.stringify(data));
 /**
  * @param {string} cwd
  * @param {string} id
  * @param {string} to
  */
-const move = (cwd, id, to) => command(cwd, 'transition', '--id', id, '--to', to);
+const move = async (cwd, id, to) => await command(cwd, 'transition', '--id', id, '--to', to);
 
-test('named transitions preserve visits, verdicts, and the first Check outcome across Rework', () => {
+test('named transitions preserve visits, verdicts, and the first Check outcome across Rework', async () => {
   const cwd = repo(),
-    id = start(cwd);
+    id = await start(cwd);
   let record = read(cwd, id);
   assert.equal(metricsOf(record).visits[0].stage, 'define');
   assert.ok(Date.parse(metricsOf(record).visits[0].started));
   const before = JSON.stringify(record);
-  assert.notEqual(run(cwd, 'transition', '--id', id, '--to', 'check').status, 0);
+  assert.notEqual((await run(cwd, 'transition', '--id', id, '--to', 'check')).status, 0);
   assert.equal(JSON.stringify(read(cwd, id)), before);
-  assert.notEqual(run(cwd, 'update', '--id', id, '--data', JSON.stringify({ metrics: {} })).status, 0);
-  update(cwd, id, { spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
-  move(cwd, id, 'build');
-  move(cwd, id, 'check');
-  command(cwd, 'verdict', '--id', id, '--axis', 'standards', '--value', 'fail');
-  command(cwd, 'verdict', '--id', id, '--axis', 'standards', '--value', 'pass');
-  command(cwd, 'rework', '--id', id);
+  assert.notEqual((await run(cwd, 'update', '--id', id, '--data', JSON.stringify({ metrics: {} }))).status, 0);
+  await update(cwd, id, { spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
+  await move(cwd, id, 'build');
+  await move(cwd, id, 'check');
+  await command(cwd, 'verdict', '--id', id, '--axis', 'standards', '--value', 'fail');
+  await command(cwd, 'verdict', '--id', id, '--axis', 'standards', '--value', 'pass');
+  await command(cwd, 'rework', '--id', id);
   record = read(cwd, id);
   assert.deepEqual(
     metricsOf(record).visits.map((v) => v.stage),
@@ -92,24 +91,24 @@ test('named transitions preserve visits, verdicts, and the first Check outcome a
   assert.equal(metricsOf(record).first_check, 'unclean');
   assert.equal(record.check_loops, 1);
   assert.equal(record.standards, undefined);
-  move(cwd, id, 'check');
-  command(cwd, 'verify', '--id', id);
+  await move(cwd, id, 'check');
+  await command(cwd, 'verify', '--id', id);
   for (const [axis, value] of [
     ['standards', 'pass'],
     ['spec', 'pass'],
     ['security', 'pass'],
     ['infrastructure', 'skipped'],
   ])
-    command(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value);
-  move(cwd, id, 'finish');
+    await command(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value);
+  await move(cwd, id, 'finish');
   assert.equal(metricsOf(read(cwd, id)).first_check, 'unclean');
-  update(cwd, id, { status: 'abandoned' });
+  await update(cwd, id, { status: 'abandoned' });
   assert.ok(Date.parse(defined(metricsOf(read(cwd, id)).visits.at(-1)?.ended, 'the last visit has ended')));
 });
 
-test('stats report observed durations, clean outcomes and missing data without changing records', () => {
+test('stats report observed durations, clean outcomes and missing data without changing records', async () => {
   const cwd = repo(),
-    id = start(cwd),
+    id = await start(cwd),
     record = read(cwd, id);
   metricsOf(record).visits = [
     { stage: 'define', started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:01:00.000Z' },
@@ -125,49 +124,49 @@ test('stats report observed durations, clean outcomes and missing data without c
   mkdirSync(brokenDir);
   writeFileSync(join(brokenDir, 'run.json'), '{');
   const before = readFileSync(file(cwd, id), 'utf8');
-  const one = command(cwd, 'stats', '--id', id);
+  const one = await command(cwd, 'stats', '--id', id);
   assert.match(one, /Define: 1m 0s/);
   assert.match(one, /Build: 3m 0s/);
   assert.match(one, /Check: no data/);
   assert.match(one, /First-pass clean rate: 100% \(1\/1\)/);
   assert.match(one, /Tokens: not tracked/);
   assert.match(one, /Cost: not tracked/);
-  const all = command(cwd, 'stats', '--all');
+  const all = await command(cwd, 'stats', '--all');
   assert.match(all, /legacy/);
   assert.match(all, /broken: unreadable \(no data\)/);
   assert.match(all, /missing or unreadable data/);
   assert.match(all, /Reworks: 2/);
   assert.match(all, /First-pass clean rate: 100% \(1\/1\)/);
   assert.equal(readFileSync(file(cwd, id), 'utf8'), before);
-  assert.notEqual(run(cwd, 'stats', '--id', 'missing').status, 0);
-  assert.notEqual(run(cwd, 'stats', '--id', id, '--all').status, 0);
-  assert.notEqual(run(cwd, 'stats').status, 0);
+  assert.notEqual((await run(cwd, 'stats', '--id', 'missing')).status, 0);
+  assert.notEqual((await run(cwd, 'stats', '--id', id, '--all')).status, 0);
+  assert.notEqual((await run(cwd, 'stats')).status, 0);
 });
 
-test('first Check rate distinguishes clean and Accepted nonclean outcomes and excludes unresolved Runs', () => {
+test('first Check rate distinguishes clean and Accepted nonclean outcomes and excludes unresolved Runs', async () => {
   const cwd = repo();
-  const prepare = () => {
-    const id = start(cwd);
-    update(cwd, id, { spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
-    move(cwd, id, 'build');
-    move(cwd, id, 'check');
+  const prepare = async () => {
+    const id = await start(cwd);
+    await update(cwd, id, { spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
+    await move(cwd, id, 'build');
+    await move(cwd, id, 'check');
     return id;
   };
-  const clean = prepare();
-  command(cwd, 'verify', '--id', clean);
+  const clean = await prepare();
+  await command(cwd, 'verify', '--id', clean);
   for (const [axis, value] of [
     ['standards', 'pass'],
     ['spec', 'pass'],
     ['security', 'pass'],
     ['infrastructure', 'skipped'],
   ])
-    command(cwd, 'verdict', '--id', clean, '--axis', axis, '--value', value);
-  move(cwd, clean, 'finish');
-  update(cwd, clean, { pr: 'https://example.test/pr/1' });
-  command(cwd, 'complete', '--id', clean);
+    await command(cwd, 'verdict', '--id', clean, '--axis', axis, '--value', value);
+  await move(cwd, clean, 'finish');
+  await update(cwd, clean, { pr: 'https://example.test/pr/1' });
+  await command(cwd, 'complete', '--id', clean);
   assert.ok(metricsOf(read(cwd, clean)).visits.at(-1)?.ended);
-  const accepted = prepare();
-  command(
+  const accepted = await prepare();
+  await command(
     cwd,
     'accept',
     '--id',
@@ -175,9 +174,9 @@ test('first Check rate distinguishes clean and Accepted nonclean outcomes and ex
     '--data',
     JSON.stringify({ findings: 'missing reviews', decision: 'continue' }),
   );
-  move(cwd, accepted, 'finish');
-  prepare();
-  const all = command(cwd, 'stats', '--all');
+  await move(cwd, accepted, 'finish');
+  await prepare();
+  const all = await command(cwd, 'stats', '--all');
   assert.match(all, /First-pass clean rate: 50% \(1\/2\)/);
   assert.equal(metricsOf(read(cwd, accepted)).first_check, 'unclean');
 });
@@ -214,32 +213,32 @@ test('Dashboard view shares the stats summary and tolerates missing or malformed
   }
 });
 
-test('legacy updates leave history unknown and linked worktrees can read stats without a Run worktree', () => {
+test('legacy updates leave history unknown and linked worktrees can read stats without a Run worktree', async () => {
   const cwd = repo(),
-    id = start(cwd),
+    id = await start(cwd),
     record = read(cwd, id);
   delete record.metrics;
   writeFileSync(file(cwd, id), JSON.stringify(record));
-  update(cwd, id, { spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
-  move(cwd, id, 'build');
-  move(cwd, id, 'check');
-  command(cwd, 'verdict', '--id', id, '--axis', 'security', '--value', 'fail');
-  command(cwd, 'rework', '--id', id);
+  await update(cwd, id, { spec_link: 'spec.md', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
+  await move(cwd, id, 'build');
+  await move(cwd, id, 'check');
+  await command(cwd, 'verdict', '--id', id, '--axis', 'security', '--value', 'fail');
+  await command(cwd, 'rework', '--id', id);
   assert.equal(read(cwd, id).metrics, undefined);
-  const stats = command(read(cwd, id).worktree, 'stats', '--id', id);
+  const stats = await command(read(cwd, id).worktree, 'stats', '--id', id);
   assert.match(stats, /Build: no data/);
   assert.match(stats, /Reworks: 1/);
   assert.match(stats, /First-pass clean rate: no data/);
   git(cwd, 'worktree', 'remove', record.worktree);
-  assert.match(command(cwd, 'stats', '--id', id), /Reworks: 1/);
+  assert.match(await command(cwd, 'stats', '--id', id), /Reworks: 1/);
 });
 
-test('open Stage time includes waiting and is labeled ongoing', () => {
+test('open Stage time includes waiting and is labeled ongoing', async () => {
   const cwd = repo(),
-    id = start(cwd);
-  update(cwd, id, { status: 'waiting', waiting_reason: 'answer' });
+    id = await start(cwd);
+  await update(cwd, id, { status: 'waiting', waiting_reason: 'answer' });
   const record = read(cwd, id);
   assert.equal(metricsOf(record).visits.length, 1);
   assert.equal(metricsOf(record).visits[0].ended, undefined);
-  assert.match(command(cwd, 'stats', '--id', id), /Define: \d+s \(ongoing\)/);
+  assert.match(await command(cwd, 'stats', '--id', id), /Define: \d+s \(ongoing\)/);
 });

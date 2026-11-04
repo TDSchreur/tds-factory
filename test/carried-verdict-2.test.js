@@ -7,8 +7,8 @@ import { run, read, force, verdict, afterRework } from './carried-verdict-helper
 
 /** @import { Run } from '../src/run-record.js' */
 
-test('a carried verdict is refused when anything outside the allowlist changed', () => {
-  const { cwd, id, change, reset } = afterRework();
+test('a carried verdict is refused when anything outside the allowlist changed', async () => {
+  const { cwd, id, change, reset } = await afterRework();
   for (const [name, why] of [
     ['src/a.js', 'code'],
     ['test/a.test.js', 'a test'],
@@ -18,7 +18,7 @@ test('a carried verdict is refused when anything outside the allowlist changed',
   ]) {
     change('docs/guide.md');
     change(name);
-    const result = verdict(cwd, id, 'security', 'pass', '--carried');
+    const result = await verdict(cwd, id, 'security', 'pass', '--carried');
     assert.notEqual(result.status, 0, why);
     assert.ok(result.stderr.includes(name), `${why}: ${result.stderr}`);
     assert.equal(read(cwd, id).security, undefined, `${why}: nothing recorded`);
@@ -26,37 +26,39 @@ test('a carried verdict is refused when anything outside the allowlist changed',
   }
 });
 
-test('a carried verdict needs an earlier verdict with the same value, an ancestor head and a clean worktree', () => {
-  let r = afterRework();
+test('a carried verdict needs an earlier verdict with the same value, an ancestor head and a clean worktree', async () => {
+  let r = await afterRework();
   r.change('docs/guide.md');
   assert.notEqual(
-    verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried').status,
+    (await verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried')).status,
     0,
     'the earlier value was skipped',
   );
-  assert.match(verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried').stderr, /same value|skipped/);
+  assert.match((await verdict(r.cwd, r.id, 'infrastructure', 'pass', '--carried')).stderr, /same value|skipped/);
   writeFileSync(join(r.worktree, 'docs', 'dirty.md'), 'x\n');
-  assert.match(verdict(r.cwd, r.id, 'security', 'pass', '--carried').stderr, /uncommitted/);
+  assert.match((await verdict(r.cwd, r.id, 'security', 'pass', '--carried')).stderr, /uncommitted/);
 
-  r = afterRework();
+  r = await afterRework();
   git(r.worktree, 'commit', '-q', '--allow-empty', '--amend', '-m', 'rewritten');
-  const rebased = verdict(r.cwd, r.id, 'security', 'pass', '--carried');
+  const rebased = await verdict(r.cwd, r.id, 'security', 'pass', '--carried');
   assert.notEqual(rebased.status, 0);
   assert.match(rebased.stderr, /ancestor/);
 
   const cwd = repo();
-  const id = run(
-    cwd,
-    'start',
-    '--data',
-    JSON.stringify({ title: 'None', agent: 'codex', commands: 'true', conventions: [] }),
+  const id = (
+    await run(
+      cwd,
+      'start',
+      '--data',
+      JSON.stringify({ title: 'None', agent: 'codex', commands: 'true', conventions: [] }),
+    )
   ).stdout.trim();
   force(cwd, id, { stage: 'check' });
-  assert.match(verdict(cwd, id, 'security', 'pass', '--carried').stderr, /no earlier/);
+  assert.match((await verdict(cwd, id, 'security', 'pass', '--carried')).stderr, /no earlier/);
 });
 
-test('instruction files and every Skill or agent folder are refused, in this repository and in an installed project', () => {
-  const { cwd, id, change, reset } = afterRework();
+test('instruction files and every Skill or agent folder are refused, in this repository and in an installed project', async () => {
+  const { cwd, id, change, reset } = await afterRework();
   for (const name of [
     'AGENTS.md',
     'CLAUDE.md',
@@ -87,25 +89,25 @@ test('instruction files and every Skill or agent folder are refused, in this rep
     'docs/instructions/x.md',
   ]) {
     change(name);
-    const result = verdict(cwd, id, 'security', 'pass', '--carried');
+    const result = await verdict(cwd, id, 'security', 'pass', '--carried');
     assert.notEqual(result.status, 0, name);
     assert.ok(result.stderr.includes(name), `${name}: ${result.stderr}`);
     reset();
   }
 });
 
-test('a deleted code file behind a Markdown path is refused', () => {
-  const gone = afterRework({ 'src/old.js': 'x\n' });
+test('a deleted code file behind a Markdown path is refused', async () => {
+  const gone = await afterRework({ 'src/old.js': 'x\n' });
   git(gone.worktree, 'rm', '-q', 'src/old.js');
   git(gone.worktree, 'commit', '-q', '-m', 'delete code');
-  assert.match(verdict(gone.cwd, gone.id, 'security', 'pass', '--carried').stderr, /src\/old\.js/);
+  assert.match((await verdict(gone.cwd, gone.id, 'security', 'pass', '--carried')).stderr, /src\/old\.js/);
 });
 
-test('a fail recorded at the current head is not replaced by a carried pass', () => {
-  const { cwd, id, change } = afterRework();
+test('a fail recorded at the current head is not replaced by a carried pass', async () => {
+  const { cwd, id, change } = await afterRework();
   change('docs/guide.md');
-  assert.equal(verdict(cwd, id, 'security', 'fail').status, 0);
-  const result = verdict(cwd, id, 'security', 'pass', '--carried');
+  assert.equal((await verdict(cwd, id, 'security', 'fail')).status, 0);
+  const result = await verdict(cwd, id, 'security', 'pass', '--carried');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /already failed at this head/);
 });

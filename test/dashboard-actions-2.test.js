@@ -10,12 +10,12 @@ import { read, checked, review, waiting, post, atLimit, grant, finished, gate } 
 /** @import { Run } from '../src/run-record.js' */
 
 test('accepting is refused for a clean Check, a Run that is not waiting and an unknown Run', async () => {
-  const { cwd, id } = checked();
-  review(cwd, id);
+  const { cwd, id } = await checked();
+  await review(cwd, id);
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     assert.match((await post(dash, id, 'accept')).text, /waits on you/);
-    waiting(cwd, id);
+    await waiting(cwd, id);
     const clean = await post(dash, id, 'accept');
     assert.equal(clean.status, 409);
     assert.match(clean.text, /already clean/);
@@ -27,7 +27,7 @@ test('accepting is refused for a clean Check, a Run that is not waiting and an u
 });
 
 test('sync reports a refusal and leaves the Run alone', async () => {
-  const { cwd, id, wt } = checked();
+  const { cwd, id, wt } = await checked();
   writeFileSync(join(wt, 'dirty.txt'), 'x\n');
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
@@ -40,9 +40,9 @@ test('sync reports a refusal and leaves the Run alone', async () => {
 });
 
 test('a failed accept puts the Run back to waiting with its reason', async () => {
-  const { cwd, id, wt } = checked();
-  review(cwd, id, 'fail');
-  waiting(cwd, id);
+  const { cwd, id, wt } = await checked();
+  await review(cwd, id, 'fail');
+  await waiting(cwd, id);
   writeFileSync(join(wt, 'dirty.txt'), 'x\n');
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
@@ -60,8 +60,8 @@ test('a failed accept puts the Run back to waiting with its reason', async () =>
 test('the extra loop is refused for every Run that is not at its limit in Check and waiting', async () => {
   /** @param {string} cwd */
   const dash = async (cwd) => startDashboard({ projectDir: cwd, port: 0 });
-  const below = checked();
-  waiting(below.cwd, below.id);
+  const below = await checked();
+  await waiting(below.cwd, below.id);
   let d = await dash(below.cwd);
   try {
     const r = await grant(d, below.id);
@@ -70,7 +70,7 @@ test('the extra loop is refused for every Run that is not at its limit in Check 
   } finally {
     await d.close();
   }
-  const running = checked();
+  const running = await checked();
   d = await dash(running.cwd);
   try {
     const r = await grant(d, running.id);
@@ -80,7 +80,7 @@ test('the extra loop is refused for every Run that is not at its limit in Check 
   } finally {
     await d.close();
   }
-  const stale = atLimit();
+  const stale = await atLimit();
   d = await dash(stale.cwd);
   try {
     const old = await grant(d, stale.id, '?updated=2000-01-01T00%3A00%3A00.000Z');
@@ -94,7 +94,7 @@ test('the extra loop is refused for every Run that is not at its limit in Check 
 });
 
 test('a second action on a busy Run is answered 409 and the Run is released afterwards', async () => {
-  const { cwd, id, tip } = finished();
+  const { cwd, id, tip } = await finished();
   const held = gate();
   const dash = await startDashboard({
     projectDir: cwd,
@@ -130,7 +130,7 @@ test('a second action on a busy Run is answered 409 and the Run is released afte
 });
 
 test('the Dashboard answers another request while the PR lookup of a clean-up is pending', async () => {
-  const { cwd, id, tip } = finished();
+  const { cwd, id, tip } = await finished();
   const held = gate();
   const dash = await startDashboard({
     projectDir: cwd,

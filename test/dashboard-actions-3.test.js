@@ -23,8 +23,8 @@ import {
 /** @import { Run } from '../src/run-record.js' */
 
 test('sync rebases the Run onto the moved origin and clears the Evidence', async () => {
-  const { cwd, id, wt } = checked();
-  review(cwd, id);
+  const { cwd, id, wt } = await checked();
+  await review(cwd, id);
   writeFileSync(join(cwd, 'upstream.txt'), 'x\n');
   git(cwd, 'add', '-A');
   git(cwd, 'commit', '-q', '-m', 'upstream');
@@ -41,11 +41,11 @@ test('sync rebases the Run onto the moved origin and clears the Evidence', async
 });
 
 test('clean-up keeps a Run whose PR is not merged and removes one whose PR is merged', async () => {
-  const { cwd, id, wt } = checked();
-  review(cwd, id);
-  ok(run(cwd, 'transition', '--id', id, '--to', 'finish'));
-  ok(run(cwd, 'update', '--id', id, '--data', data({ pr: PR })));
-  ok(run(cwd, 'complete', '--id', id));
+  const { cwd, id, wt } = await checked();
+  await review(cwd, id);
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'finish'));
+  ok(await run(cwd, 'update', '--id', id, '--data', data({ pr: PR })));
+  ok(await run(cwd, 'complete', '--id', id));
   const tip = git(wt, 'rev-parse', 'HEAD');
   let state = 'OPEN';
   const dash = await startDashboard({ projectDir: cwd, port: 0, prInfo: () => ({ state, head: tip }) });
@@ -64,7 +64,7 @@ test('clean-up keeps a Run whose PR is not merged and removes one whose PR is me
 });
 
 test('the Dashboard grants an extra loop to a Run in Check that waits at its limit', async () => {
-  const { cwd, id } = atLimit();
+  const { cwd, id } = await atLimit();
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     assert.deepEqual(await grant(dash, id), { status: 200, text: 'granted' });
@@ -83,7 +83,7 @@ test('the Dashboard grants an extra loop to a Run in Check that waits at its lim
 });
 
 test('the Dashboard answers another request while a git call of an action is still running', async () => {
-  const { cwd, id } = checked();
+  const { cwd, id } = await checked();
   // Git runs this hook when sync's fetch updates a ref; it holds the call until the test releases it.
   const started = join(cwd, 'hook-started');
   const release = join(cwd, 'hook-release');
@@ -120,9 +120,9 @@ test(
   'a failing rollback after a failed accept goes to stderr and the answer keeps the accept error',
   { skip: process.platform === 'win32' || process.getuid?.() === 0 },
   async () => {
-    const { cwd, id, wt } = checked();
-    review(cwd, id, 'fail');
-    waiting(cwd, id);
+    const { cwd, id, wt } = await checked();
+    await review(cwd, id, 'fail');
+    await waiting(cwd, id);
     writeFileSync(join(wt, 'dirty.txt'), 'x\n');
     // `git status` in the Run worktree runs this command; once the Run is running it makes the Run folder read-only, so the compensating update cannot be written (POSIX; a Windows folder stays writable).
     const folder = join(cwd, '.factory', 'runs', id);

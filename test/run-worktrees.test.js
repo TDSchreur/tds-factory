@@ -1,3 +1,4 @@
+import { cli } from './cli-runner.js';
 import { writeHeaders } from './dashboard-token.js';
 import { test } from 'node:test';
 import fs from 'node:fs';
@@ -14,8 +15,8 @@ import {
   renameSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import childProcess, { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import { openRunStore } from '../src/run-store.js';
 import { startDashboard } from '../src/dashboard.js';
@@ -25,12 +26,11 @@ import { git, repo, linked } from './git-repo.js';
 
 /** @type {Partial<Run>} */
 const start = { title: 'Example', agent: 'claude', commands: 'npm test', conventions: [] };
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const runCli = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+const runCli = async (cwd, ...args) => await cli(cwd, 'run', ...args);
 
 test('start and update from a linked worktree use the main checkout Run store', () => {
   const main = repo();
@@ -45,10 +45,10 @@ test('start and update from a linked worktree use the main checkout Run store', 
   );
 });
 
-test('the CLI from a linked worktree writes to the main checkout Run store', () => {
+test('the CLI from a linked worktree writes to the main checkout Run store', async () => {
   const main = repo();
   const wt = linked(main);
-  const result = runCli(wt, 'start', '--data', JSON.stringify(start));
+  const result = await runCli(wt, 'start', '--data', JSON.stringify(start));
   assert.equal(result.status, 0, result.stderr);
   assert.ok(existsSync(join(main, '.factory', 'runs', result.stdout.trim(), 'run.json')));
 });
@@ -157,8 +157,13 @@ test('start fails clearly outside a git repository and in a repository with no c
   assert.ok(!existsSync(join(empty, '.factory', 'runs')) || readdirSync(join(empty, '.factory', 'runs')).length === 0);
 });
 
-test('the CLI start in a non-git directory exits non-zero with the message', () => {
-  const result = runCli(mkdtempSync(join(tmpdir(), 'run-worktrees-plain-')), 'start', '--data', JSON.stringify(start));
+test('the CLI start in a non-git directory exits non-zero with the message', async () => {
+  const result = await runCli(
+    mkdtempSync(join(tmpdir(), 'run-worktrees-plain-')),
+    'start',
+    '--data',
+    JSON.stringify(start),
+  );
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /git repository/);
 });

@@ -13,7 +13,8 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { cli, cliWith } from './cli-runner.js';
 import { repo, git, tempDir } from './git-repo.js';
 
 // Git reads no config of the developer's machine: its global and system files are replaced by ones inside the home.
@@ -31,7 +32,6 @@ import { defined } from './run-view.js';
 
 /** @typedef {ReturnType<typeof import('../src/doctor.js').doctor>} Report */
 
-const cli = resolve('bin/tds-factory.js');
 const AGENTS = '# Agents\n\n## Agent skills\n\nsee docs\n\n## Commands\n\n- Verify: `npm test`\n';
 
 // A ready project, with an empty home so no Skills are found unless a test installs them.
@@ -46,30 +46,28 @@ function project(agents = AGENTS) {
  * @param {string} dir
  * @param {...string} args
  */
-const doctor = (dir, ...args) => doctorAt(tempDir('doctor-home-'), dir, ...args);
+const doctor = async (dir, ...args) => await doctorAt(tempDir('doctor-home-'), dir, ...args);
 /**
  * @param {string} home
  * @param {string} dir
  * @param {...string} args
  */
-function doctorAt(home, dir, ...args) {
-  const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
-    cwd: dir,
-    encoding: 'utf8',
-    env: { ...process.env, ...isolated(home) },
-  });
+async function doctorAt(home, dir, ...args) {
+  const result = await cliWith({ env: { ...process.env, ...isolated(home) } }, dir, 'doctor', '--json', ...args);
   /** @type {Report} */
   const report = result.stdout ? JSON.parse(result.stdout) : null;
   return { status: result.status, report, stderr: result.stderr };
 }
 // The doctor report without blocking this process, so a server started by the test can answer the doctor's git.
+// This one spawns the binary: in process, the doctor's synchronous git calls would block the event loop the server needs.
+const cliBinary = resolve('bin/tds-factory.js');
 /**
  * @param {string} dir
  * @param {...string} args
  */
 async function doctorAsync(dir, ...args) {
   const home = tempDir('doctor-home-');
-  const child = spawn(process.execPath, [cli, 'doctor', '--json', ...args], {
+  const child = spawn(process.execPath, [cliBinary, 'doctor', '--json', ...args], {
     cwd: dir,
     env: { ...process.env, ...isolated(home) },
   });
@@ -122,38 +120,40 @@ function pathWith(...commands) {
  * @param {string} dir
  * @param {...string} args
  */
-function doctorOn(path, dir, home = tempDir('doctor-home-'), ...args) {
-  const result = spawnSync(process.execPath, [cli, 'doctor', '--json', ...args], {
-    cwd: dir,
-    encoding: 'utf8',
-    env: { ...process.env, ...isolated(home), PATH: path, Path: path },
-  });
+async function doctorOn(path, dir, home = tempDir('doctor-home-'), ...args) {
+  const result = await cliWith(
+    { env: { ...process.env, ...isolated(home), PATH: path, Path: path } },
+    dir,
+    'doctor',
+    '--json',
+    ...args,
+  );
   /** @type {Report} */
   const report = result.stdout ? JSON.parse(result.stdout) : null;
   return { status: result.status, report, stdout: result.stdout };
 }
 
-test('doctor passes the project checks of a ready project and changes nothing', () => {
+test('doctor passes the project checks of a ready project and changes nothing', async () => {
   const dir = project();
   const before = git(dir, 'status', '--porcelain');
-  const { report } = doctor(dir);
+  const { report } = await doctor(dir);
   for (const id of ['cli', 'tracker', 'git', 'verify-command']) assert.equal(check(report, id).status, 'pass', id);
   assert.match(check(report, 'git').message, /main/);
   assert.equal(git(dir, 'status', '--porcelain'), before);
 });
 
-test('doctor discovers the project from a nested directory', () => {
+test('doctor discovers the project from a nested directory', async () => {
   const dir = project(`${AGENTS}- Verify-fast: \`npm run test:unit\`\n`);
   const nested = join(dir, 'deep', 'nested');
   mkdirSync(nested, { recursive: true });
   install(dir, 'codex');
   const home = tempDir('doctor-home-');
-  const root = doctorAt(home, dir, '--agent', 'codex');
-  const child = doctorAt(home, nested, '--agent', 'codex');
+  const root = await doctorAt(home, dir, '--agent', 'codex');
+  const child = await doctorAt(home, nested, '--agent', 'codex');
   assert.deepEqual(child, root);
 });
 
-test('doctor uses the linked worktree rather than the main checkout', () => {
+test('doctor uses the linked worktree rather than the main checkout', async () => {
   const main = repo();
   const linked = join(mkdtempSync(join(tmpdir(), 'doctor-worktree-')), 'linked');
   git(main, 'worktree', 'add', '-b', 'doctor-test', linked);
@@ -163,14 +163,14 @@ test('doctor uses the linked worktree rather than the main checkout', () => {
   const nested = join(linked, 'nested');
   mkdirSync(nested);
   const home = tempDir('doctor-home-');
-  assert.deepEqual(doctorAt(home, nested, '--agent', 'codex'), doctorAt(home, linked, '--agent', 'codex'));
-  assert.equal(check(doctorAt(home, nested, '--agent', 'codex').report, 'tracker').status, 'pass');
+  assert.deepEqual(await doctorAt(home, nested, '--agent', 'codex'), await doctorAt(home, linked, '--agent', 'codex'));
+  assert.equal(check((await doctorAt(home, nested, '--agent', 'codex')).report, 'tracker').status, 'pass');
 });
 
 test(
   'doctor preserves spaces at the end of the worktree path',
   { skip: process.platform === 'win32' && 'Windows cannot create a folder whose name ends in a space' },
-  () => {
+  async () => {
     const main = repo();
     const linked = join(mkdtempSync(join(tmpdir(), 'doctor-space-')), 'project ');
     git(main, 'worktree', 'add', '-b', 'doctor-space', linked);
@@ -179,35 +179,35 @@ test(
     writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
     const nested = join(linked, 'nested');
     mkdirSync(nested);
-    assert.equal(check(doctor(nested, '--agent', 'codex').report, 'tracker').status, 'pass');
+    assert.equal(check((await doctor(nested, '--agent', 'codex')).report, 'tracker').status, 'pass');
   },
 );
 
 test(
   'doctor preserves a trailing carriage return in a POSIX worktree path',
   { skip: process.platform === 'win32' },
-  () => {
+  async () => {
     const main = repo();
     const linked = join(mkdtempSync(join(tmpdir(), 'doctor-cr-')), 'project\r');
     git(main, 'worktree', 'add', '-b', 'doctor-cr', linked);
     mkdirSync(join(linked, 'docs', 'agents'), { recursive: true });
     for (const f of ['issue-tracker.md', 'domain.md']) writeFileSync(join(linked, 'docs', 'agents', f), '# x\n');
     writeFileSync(join(linked, 'AGENTS.md'), AGENTS);
-    assert.equal(check(doctor(linked, '--agent', 'codex').report, 'tracker').status, 'pass');
+    assert.equal(check((await doctor(linked, '--agent', 'codex')).report, 'tracker').status, 'pass');
   },
 );
 
-test('doctor tells a user outside Git why it cannot pass', () => {
+test('doctor tells a user outside Git why it cannot pass', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'doctor-outside-'));
-  const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
+  const result = await cli(dir, 'doctor');
   assert.equal(result.status, 1);
   assert.match(result.stdout, /fail +git: not a git repository/);
 });
 
-test('doctor names the missing tracker setup without naming a setup command', () => {
+test('doctor names the missing tracker setup without naming a setup command', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'doctor-bare-'));
   writeFileSync(join(dir, 'AGENTS.md'), '# Agents\n');
-  const { status, report } = doctor(dir);
+  const { status, report } = await doctor(dir);
   const tracker = check(report, 'tracker');
   assert.equal(tracker.status, 'missing');
   assert.match(tracker.message, /issue-tracker\.md/);
@@ -216,15 +216,15 @@ test('doctor names the missing tracker setup without naming a setup command', ()
   assert.equal(status, 1);
 });
 
-test('doctor fails the git check without a repository, a commit or an origin', () => {
+test('doctor fails the git check without a repository, a commit or an origin', async () => {
   const plain = mkdtempSync(join(tmpdir(), 'doctor-plain-'));
-  assert.match(check(doctor(plain).report, 'git').message, /not a git repository/);
+  assert.match(check((await doctor(plain)).report, 'git').message, /not a git repository/);
   const noCommit = mkdtempSync(join(tmpdir(), 'doctor-nocommit-'));
   git(noCommit, 'init', '-q');
-  assert.match(check(doctor(noCommit).report, 'git').message, /no commit/);
+  assert.match(check((await doctor(noCommit)).report, 'git').message, /no commit/);
   const dir = project();
   git(dir, 'remote', 'remove', 'origin');
-  const result = check(doctor(dir).report, 'git');
+  const result = check((await doctor(dir)).report, 'git');
   assert.equal(result.status, 'fail');
   assert.match(result.message, /origin/);
 });
@@ -265,10 +265,10 @@ test(
   },
 );
 
-test('doctor tells a missing Verify command from a malformed or unusable one', () => {
-  assert.equal(check(doctor(project('# A\n\n## Agent skills\n')).report, 'verify-command').status, 'missing');
+test('doctor tells a missing Verify command from a malformed or unusable one', async () => {
+  assert.equal(check((await doctor(project('# A\n\n## Agent skills\n'))).report, 'verify-command').status, 'missing');
   const noBullet = check(
-    doctor(project('## Commands\n\n```powershell\n# Required after code changes\n.\\build.ps1\n```\n')).report,
+    (await doctor(project('## Commands\n\n```powershell\n# Required after code changes\n.\\build.ps1\n```\n'))).report,
     'verify-command',
   );
   assert.equal(
@@ -277,38 +277,48 @@ test('doctor tells a missing Verify command from a malformed or unusable one', (
     'a Commands section without a "- Verify:" line is missing, not an empty command',
   );
   assert.match(noBullet.message, /- Verify:/);
-  assert.equal(check(doctor(project('## Commands\n\n- Verify: ``\n')).report, 'verify-command').status, 'fail');
-  assert.match(check(doctor(project('## Commands\n\n- Verify: `   `\n')).report, 'verify-command').message, /empty/);
+  assert.equal(check((await doctor(project('## Commands\n\n- Verify: ``\n'))).report, 'verify-command').status, 'fail');
   assert.match(
-    check(doctor(project('## Commands\n\n- Verify: `npm\0 test`\n')).report, 'verify-command').message,
+    check((await doctor(project('## Commands\n\n- Verify: `   `\n'))).report, 'verify-command').message,
+    /empty/,
+  );
+  assert.match(
+    check((await doctor(project('## Commands\n\n- Verify: `npm\0 test`\n'))).report, 'verify-command').message,
     /NUL/,
   );
-  const absent = check(doctor(project('## Commands\n\n- Verify: `no-such-tool-xyz test`\n')).report, 'verify-command');
+  const absent = check(
+    (await doctor(project('## Commands\n\n- Verify: `no-such-tool-xyz test`\n'))).report,
+    'verify-command',
+  );
   assert.equal(absent.status, 'fail');
   assert.match(absent.message, /was not found/);
   // The guide's plain form is accepted too.
   assert.match(
-    check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').message,
+    check((await doctor(project('## Commands\n\n- Verify: npm test\n'))).report, 'verify-command').message,
     /npm test/,
   );
-  assert.equal(check(doctor(project('## Commands\n\n- Verify: npm test\n')).report, 'verify-command').status, 'pass');
+  assert.equal(
+    check((await doctor(project('## Commands\n\n- Verify: npm test\n'))).report, 'verify-command').status,
+    'pass',
+  );
   // Shell syntax is not probed.
   assert.equal(
-    check(doctor(project('## Commands\n\n- Verify: `cd app && no-such-tool-xyz`\n')).report, 'verify-command').status,
+    check((await doctor(project('## Commands\n\n- Verify: `cd app && no-such-tool-xyz`\n'))).report, 'verify-command')
+      .status,
     'pass',
   );
 });
 
-test('doctor prints one line per check and exits non-zero when a shared check is not pass or no agent is usable', () => {
+test('doctor prints one line per check and exits non-zero when a shared check is not pass or no agent is usable', async () => {
   const dir = project('# A\n');
-  const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
+  const result = await cli(dir, 'doctor');
   assert.equal(result.status, 1);
   assert.match(result.stdout, /^missing verify-command: /m);
   assert.match(result.stdout, /^pass +cli: /m);
 });
 
-test('doctor rejects an unknown Agent target and lists the valid ones', () => {
-  const result = doctor(project(), '--agent', 'nope');
+test('doctor rejects an unknown Agent target and lists the valid ones', async () => {
+  const result = await doctor(project(), '--agent', 'nope');
   assert.equal(result.status, 1);
   assert.match(result.stderr, /claude, codex, copilot/);
 });
@@ -332,8 +342,8 @@ function install(home, agent, skip = []) {
     cpSync(join(AGENTS_DIR, agent, file), join(agents, file));
 }
 
-test('doctor lists every required Skill that is not installed', () => {
-  const none = check(doctor(project()).report, 'skills');
+test('doctor lists every required Skill that is not installed', async () => {
+  const none = check((await doctor(project())).report, 'skills');
   assert.equal(none.status, 'fail');
   for (const name of [
     'factory',
@@ -350,48 +360,48 @@ test('doctor lists every required Skill that is not installed', () => {
     assert.ok(none.message.includes(name), name);
   const home = tempDir('doctor-home-');
   install(home, 'claude', ['tdd']);
-  assert.match(check(doctorAt(home, project()).report, 'skills').message, /: tdd$/);
+  assert.match(check((await doctorAt(home, project())).report, 'skills').message, /: tdd$/);
 });
 
-test('doctor passes skills and review for every Agent target once the Factory is installed, globally or in the project', () => {
+test('doctor passes skills and review for every Agent target once the Factory is installed, globally or in the project', async () => {
   for (const agent of agentNames) {
     const home = tempDir('doctor-home-');
     install(home, agent);
-    const { report } = doctorAt(home, project(), '--agent', agent);
+    const { report } = await doctorAt(home, project(), '--agent', agent);
     assert.equal(check(report, 'skills').status, 'pass', agent);
     assert.equal(check(report, 'review').status, 'pass', agent);
   }
   const dir = project();
   install(dir, 'codex');
-  assert.equal(check(doctor(dir, '--agent', 'codex').report, 'skills').status, 'pass');
+  assert.equal(check((await doctor(dir, '--agent', 'codex')).report, 'skills').status, 'pass');
 });
 
-test('doctor for Copilot finds Skills in the Claude and Codex folders, where the default install puts them', () => {
+test('doctor for Copilot finds Skills in the Claude and Codex folders, where the default install puts them', async () => {
   for (const skillsFrom of /** @type {const} */ (['claude', 'codex'])) {
     const home = tempDir('doctor-home-');
     install(home, skillsFrom);
     install(home, 'copilot'); // Copilot's own folders hold the Stage agents, not the Skills
     rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
-    const { report } = doctorAt(home, project(), '--agent', 'copilot');
+    const { report } = await doctorAt(home, project(), '--agent', 'copilot');
     assert.equal(check(report, 'skills').status, 'pass', skillsFrom);
     assert.equal(check(report, 'review').status, 'pass', skillsFrom);
   }
 });
 
-test('doctor for Copilot also finds Skills in the project Claude and Codex folders', () => {
+test('doctor for Copilot also finds Skills in the project Claude and Codex folders', async () => {
   for (const skillsFrom of /** @type {const} */ (['claude', 'codex'])) {
     const dir = project(),
       home = tempDir('doctor-home-');
     install(dir, skillsFrom);
     install(home, 'copilot');
     rmSync(join(home, targets.copilot.global), { recursive: true, force: true });
-    const { report } = doctorAt(home, dir, '--agent', 'copilot');
+    const { report } = await doctorAt(home, dir, '--agent', 'copilot');
     assert.equal(check(report, 'skills').status, 'pass', skillsFrom);
     assert.equal(check(report, 'review').status, 'pass', skillsFrom);
   }
 });
 
-test('doctor for Claude and Codex ignores Skills that are only in another Agent target folder', () => {
+test('doctor for Claude and Codex ignores Skills that are only in another Agent target folder', async () => {
   const home = tempDir('doctor-home-');
   install(home, 'claude');
   install(home, 'codex');
@@ -401,32 +411,32 @@ test('doctor for Claude and Codex ignores Skills that are only in another Agent 
   rmSync(join(home, targets.codex.global), { recursive: true, force: true });
   // Skills now exist only in the Copilot folder, so Claude and Codex must still report them missing.
   for (const agent of ['claude', 'codex'])
-    assert.equal(check(doctorAt(home, project(), '--agent', agent).report, 'skills').status, 'fail', agent);
+    assert.equal(check((await doctorAt(home, project(), '--agent', agent)).report, 'skills').status, 'fail', agent);
   // And the Copilot folder alone does satisfy Copilot itself.
-  assert.equal(check(doctorAt(home, project(), '--agent', 'copilot').report, 'skills').status, 'pass');
+  assert.equal(check((await doctorAt(home, project(), '--agent', 'copilot')).report, 'skills').status, 'pass');
   const other = tempDir('doctor-home-');
   install(other, 'claude');
-  assert.equal(check(doctorAt(other, project(), '--agent', 'codex').report, 'skills').status, 'fail');
+  assert.equal(check((await doctorAt(other, project(), '--agent', 'codex')).report, 'skills').status, 'fail');
 });
 
-test('doctor reports review as unavailable without the review Skills or the factory-check agent', () => {
+test('doctor reports review as unavailable without the review Skills or the factory-check agent', async () => {
   const skills = tempDir('doctor-home-');
   install(skills, 'claude', ['code-review']);
-  assert.match(check(doctorAt(skills, project()).report, 'review').message, /code-review/);
+  assert.match(check((await doctorAt(skills, project())).report, 'review').message, /code-review/);
   const agent = tempDir('doctor-home-');
   install(agent, 'claude', ['factory-check']);
-  const review = check(doctorAt(agent, project()).report, 'review');
+  const review = check((await doctorAt(agent, project())).report, 'review');
   assert.equal(review.status, 'fail');
   assert.match(review.message, /factory-check\.md/);
 });
 
-test('doctor does not read a conventions file that is not a regular file, or is huge', () => {
+test('doctor does not read a conventions file that is not a regular file, or is huge', async () => {
   const linked = project();
   rmSync(join(linked, 'AGENTS.md'));
   symlinkSync('/dev/zero', join(linked, 'AGENTS.md'));
-  assert.equal(check(doctor(linked).report, 'tracker').status, 'missing');
+  assert.equal(check((await doctor(linked)).report, 'tracker').status, 'missing');
   const huge = project('x'.repeat((1 << 20) + 1));
-  const { status, report } = doctor(huge);
+  const { status, report } = await doctor(huge);
   assert.equal(status, 1);
   assert.match(check(report, 'tracker').message, /larger than 1 MiB/);
   assert.equal(report.checks.filter((c) => c.id !== 'agents').length, 7);
@@ -436,12 +446,12 @@ test('doctor does not read a conventions file that is not a regular file, or is 
   rmSync(join(shared, 'AGENTS.md'));
   writeFileSync(join(shared, 'real.md'), AGENTS);
   symlinkSync('real.md', join(shared, 'AGENTS.md'));
-  assert.equal(check(doctor(shared).report, 'verify-command').status, 'pass');
+  assert.equal(check((await doctor(shared)).report, 'verify-command').status, 'pass');
 });
 
-test('doctor text output does not pass terminal escapes through', () => {
+test('doctor text output does not pass terminal escapes through', async () => {
   const dir = project('## Commands\n\n- Verify: `no-such-tool\u001b[2J`\n');
-  const result = spawnSync(process.execPath, [cli, 'doctor'], { cwd: dir, encoding: 'utf8' });
+  const result = await cli(dir, 'doctor');
   assert.doesNotMatch(result.stdout, /\u001b/);
 });
 
@@ -482,7 +492,7 @@ test('doctor notes merged Runs that still hold a worktree or branch, without fai
   assert.deepEqual(run({ projectDir: dir, homeDir: home, prState }).notes, []);
 });
 
-test('Doctor requires an interactive review agent when an interactive project review is configured', () => {
+test('Doctor requires an interactive review agent when an interactive project review is configured', async () => {
   const home = tempDir('doctor-home-');
   install(home, 'codex', ['factory-interactive-check']);
   const dir = project();
@@ -503,15 +513,15 @@ test('Doctor requires an interactive review agent when an interactive project re
       ],
     }),
   );
-  const unavailable = check(doctorAt(home, dir, '--agent', 'codex').report, 'review');
+  const unavailable = check((await doctorAt(home, dir, '--agent', 'codex')).report, 'review');
   assert.equal(unavailable.status, 'fail');
   assert.match(unavailable.message, /factory-interactive-check/);
   install(home, 'codex');
-  assert.equal(check(doctorAt(home, dir, '--agent', 'codex').report, 'review').status, 'pass');
+  assert.equal(check((await doctorAt(home, dir, '--agent', 'codex')).report, 'review').status, 'pass');
 });
 
-test('doctor reports claude, codex and copilot in that order by default, shared checks once', () => {
-  const { report } = doctorOn(pathWith('claude'), project());
+test('doctor reports claude, codex and copilot in that order by default, shared checks once', async () => {
+  const { report } = await doctorOn(pathWith('claude'), project());
   assert.deepEqual(
     report.agents.map((a) => a.id),
     ['claude', 'codex', 'copilot'],
@@ -528,10 +538,10 @@ test('doctor reports claude, codex and copilot in that order by default, shared 
     );
 });
 
-test('a missing agent binary is missing, never fail, and a usable agent keeps the report ok', () => {
+test('a missing agent binary is missing, never fail, and a usable agent keeps the report ok', async () => {
   const home = tempDir('doctor-home-');
   install(home, 'codex');
-  const { report, status } = doctorOn(pathWith('codex'), project(), home);
+  const { report, status } = await doctorOn(pathWith('codex'), project(), home);
   assert.equal(entry(report, 'codex').usable, true);
   assert.equal(entry(report, 'claude').usable, false);
   assert.equal(check(report, 'binary', 'claude').status, 'missing');
@@ -541,42 +551,38 @@ test('a missing agent binary is missing, never fail, and a usable agent keeps th
   assert.equal(status, 0);
 });
 
-test('an agent whose command is on PATH but whose Skills are missing is not usable', () => {
-  const { report } = doctorOn(pathWith('claude'), project());
+test('an agent whose command is on PATH but whose Skills are missing is not usable', async () => {
+  const { report } = await doctorOn(pathWith('claude'), project());
   assert.equal(check(report, 'binary', 'claude').status, 'pass');
   assert.equal(check(report, 'skills', 'claude').status, 'fail');
   assert.equal(entry(report, 'claude').usable, false);
 });
 
-test('doctor fails when no agent is usable and says what to do', () => {
-  const { report, status } = doctorOn(pathWith(), project());
+test('doctor fails when no agent is usable and says what to do', async () => {
+  const { report, status } = await doctorOn(pathWith(), project());
   assert.equal(report.ok, false);
   assert.equal(status, 1);
   const line = report.checks.find((c) => c.id === 'agents');
   assert.ok(line, 'the report has an agents line');
   assert.equal(line.status, 'fail');
   assert.equal(line.message, 'no agent is usable: install claude, codex or copilot and run tds-factory install');
-  const text = spawnSync(process.execPath, [cli, 'doctor'], {
-    cwd: project(),
-    encoding: 'utf8',
-    env: { ...process.env, PATH: pathWith() },
-  });
+  const text = await cliWith({ env: { ...process.env, PATH: pathWith() } }, project(), 'doctor');
   assert.match(text.stdout, /^fail +agents: no agent is usable/m);
 });
 
-test('doctor fails when a shared check fails even though an agent is usable', () => {
+test('doctor fails when a shared check fails even though an agent is usable', async () => {
   const home = tempDir('doctor-home-');
   install(home, 'claude');
-  const { report, status } = doctorOn(pathWith('claude'), project('# A\n'), home);
+  const { report, status } = await doctorOn(pathWith('claude'), project('# A\n'), home);
   assert.equal(entry(report, 'claude').usable, true);
   assert.equal(report.ok, false);
   assert.equal(status, 1);
 });
 
-test('doctor --agent reports only that agent and ignores its missing binary', () => {
+test('doctor --agent reports only that agent and ignores its missing binary', async () => {
   const home = tempDir('doctor-home-');
   install(home, 'copilot');
-  const { report, status } = doctorOn(pathWith(), project(), home, '--agent', 'copilot');
+  const { report, status } = await doctorOn(pathWith(), project(), home, '--agent', 'copilot');
   assert.deepEqual(
     report.agents.map((a) => a.id),
     ['copilot'],
@@ -590,19 +596,15 @@ test('doctor --agent reports only that agent and ignores its missing binary', ()
   );
 });
 
-test('doctor --agent still needs that agent Skills, review and config to pass', () => {
-  const { report, status } = doctorOn(pathWith('codex'), project(), undefined, '--agent', 'codex');
+test('doctor --agent still needs that agent Skills, review and config to pass', async () => {
+  const { report, status } = await doctorOn(pathWith('codex'), project(), undefined, '--agent', 'codex');
   assert.equal(check(report, 'skills').status, 'fail');
   assert.equal(report.ok, false);
   assert.equal(status, 1);
 });
 
-test('doctor text output groups the checks under each agent', () => {
-  const result = spawnSync(process.execPath, [cli, 'doctor'], {
-    cwd: project(),
-    encoding: 'utf8',
-    env: { ...process.env, PATH: pathWith('codex') },
-  });
+test('doctor text output groups the checks under each agent', async () => {
+  const result = await cliWith({ env: { ...process.env, PATH: pathWith('codex') } }, project(), 'doctor');
   for (const id of ['claude', 'codex', 'copilot'])
     assert.match(result.stdout, new RegExp(`^${id}: (not )?usable$`, 'm'), id);
   assert.match(result.stdout, /^ +pass +binary: codex/m);
@@ -641,38 +643,38 @@ test('on Windows the agent command is found with a PATHEXT extension', async () 
   }
 });
 
-test('doctor reports the optional Verify-fast command like the Verify command', () => {
+test('doctor reports the optional Verify-fast command like the Verify command', async () => {
   /** @param {string} line */
   const project_ = (line) => project(`## Agent skills\n\nsee docs\n\n## Commands\n\n- Verify: \`npm test\`\n${line}`);
-  const none = check(doctor(project_('')).report, 'verify-fast');
+  const none = check((await doctor(project_(''))).report, 'verify-fast');
   assert.equal(none.status, 'pass');
   assert.match(none.message, /no Verify-fast command/);
-  const set = check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-fast');
+  const set = check((await doctor(project_('- Verify-fast: `npm run test:unit`\n'))).report, 'verify-fast');
   assert.equal(set.status, 'pass');
   assert.match(set.message, /Verify-fast command: npm run test:unit/);
-  const missing = check(doctor(project_('- Verify-fast: `no-such-tool-xyz --quick`\n')).report, 'verify-fast');
+  const missing = check((await doctor(project_('- Verify-fast: `no-such-tool-xyz --quick`\n'))).report, 'verify-fast');
   assert.equal(missing.status, 'fail');
   assert.match(missing.message, /no-such-tool-xyz.*not found/);
   // An unusable optional command is shown but never fails the report.
   const home = tempDir('doctor-home-');
   install(home, 'claude');
-  const shown = doctorOn(pathWith('claude'), project_('- Verify-fast: `no-such-tool-xyz --quick`\n'), home);
+  const shown = await doctorOn(pathWith('claude'), project_('- Verify-fast: `no-such-tool-xyz --quick`\n'), home);
   assert.equal(check(shown.report, 'verify-fast').status, 'fail');
   assert.equal(shown.report.ok, true);
   assert.equal(shown.status, 0);
   // The full Verify line is still the one `verify-command` reads.
   assert.match(
-    check(doctor(project_('- Verify-fast: `npm run test:unit`\n')).report, 'verify-command').message,
+    check((await doctor(project_('- Verify-fast: `npm run test:unit`\n'))).report, 'verify-command').message,
     /Verify command: npm test$/,
   );
 });
 
-test('doctor fails the skills check when the installed factory Skill lacks its reference files', () => {
+test('doctor fails the skills check when the installed factory Skill lacks its reference files', async () => {
   const home = tempDir('doctor-home-');
   install(home, 'claude');
-  assert.equal(check(doctorAt(home, project(), '--agent', 'claude').report, 'skills').status, 'pass');
+  assert.equal(check((await doctorAt(home, project(), '--agent', 'claude')).report, 'skills').status, 'pass');
   rmSync(join(home, targets.claude.global, 'factory', 'references', 'check.md'));
-  const skills = check(doctorAt(home, project(), '--agent', 'claude').report, 'skills');
+  const skills = check((await doctorAt(home, project(), '--agent', 'claude')).report, 'skills');
   assert.equal(skills.status, 'fail');
   assert.match(skills.message, /factory Skill is missing its reference files: check\.md/);
   assert.match(skills.message, /tds-factory install/);
@@ -683,81 +685,78 @@ test('doctor fails the skills check when the installed factory Skill lacks its r
  * @param {string} tracker
  * @param {(dir: string) => void} [prepare]
  */
-function scratchReport(tracker, prepare) {
+async function scratchReport(tracker, prepare) {
   const dir = project();
   if (tracker === null) rmSync(join(dir, 'docs', 'agents', 'issue-tracker.md'));
   else writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), tracker);
   prepare?.(dir);
-  return doctor(dir).report;
+  return (await doctor(dir)).report;
 }
 
-test('scratch-ignore is missing for a local tracker without an ignore, and never changes ok or the files', () => {
+test('scratch-ignore is missing for a local tracker without an ignore, and never changes ok or the files', async () => {
   const dir = project();
   writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), '# Tracker\n\nLocal Markdown in `.scratch/`.\n');
-  const { report } = doctor(dir);
+  const { report } = await doctor(dir);
   const found = check(report, 'scratch-ignore');
   assert.equal(found.status, 'missing');
   assert.match(found.message, /\.gitignore/);
   assert.equal(existsSync(join(dir, '.gitignore')), false);
   const home = tempDir('doctor-home-');
   install(home, 'claude');
-  const ready = doctorOn(pathWith('claude'), dir, home);
+  const ready = await doctorOn(pathWith('claude'), dir, home);
   assert.equal(check(ready.report, 'scratch-ignore').status, 'missing');
   assert.equal(ready.report.ok, true);
   assert.equal(ready.status, 0);
 });
 
-test('scratch-ignore passes when any rule ignores .scratch/', () => {
+test('scratch-ignore passes when any rule ignores .scratch/', async () => {
   const tracker = '# Tracker\n\nIssues are local Markdown files.\n';
   for (const rule of ['.scratch', '/.scratch/', '.scratch/'])
     assert.equal(
-      check(
-        scratchReport(tracker, (d) => writeFileSync(join(d, '.gitignore'), `${rule}\n`)),
-        'scratch-ignore',
-      ).status,
+      check(await scratchReport(tracker, (d) => writeFileSync(join(d, '.gitignore'), `${rule}\n`)), 'scratch-ignore')
+        .status,
       'pass',
       rule,
     );
   assert.equal(
     check(
-      scratchReport(tracker, (d) => writeFileSync(join(d, '.git', 'info', 'exclude'), '.scratch/\n')),
+      await scratchReport(tracker, (d) => writeFileSync(join(d, '.git', 'info', 'exclude'), '.scratch/\n')),
       'scratch-ignore',
     ).status,
     'pass',
   );
 });
 
-test('scratch-ignore honours a global excludes file', () => {
+test('scratch-ignore honours a global excludes file', async () => {
   const dir = project();
   writeFileSync(join(dir, 'docs', 'agents', 'issue-tracker.md'), '# Tracker\n\nLocal Markdown.\n');
   const home = tempDir('doctor-home-');
   mkdirSync(join(home, '.config', 'git'), { recursive: true });
   writeFileSync(join(home, '.config', 'git', 'ignore'), '.scratch/\n');
-  const result = spawnSync(process.execPath, [cli, 'doctor', '--json'], {
-    cwd: dir,
-    encoding: 'utf8',
-    env: { ...process.env, ...isolated(home) },
-  });
+  const result = await cliWith({ env: { ...process.env, ...isolated(home) } }, dir, 'doctor', '--json');
   assert.equal(check(JSON.parse(result.stdout), 'scratch-ignore').status, 'pass');
 });
 
-test('scratch-ignore passes for a remote tracker, a missing tracker file and an unnamed tracker is local', () => {
+test('scratch-ignore passes for a remote tracker, a missing tracker file and an unnamed tracker is local', async () => {
   for (const text of ['# Tracker\n\nGitHub Issues.\n', 'Azure DevOps boards', 'Jira', 'Linear']) {
-    const found = check(scratchReport(text), 'scratch-ignore');
+    const found = check(await scratchReport(text), 'scratch-ignore');
     assert.equal(found.status, 'pass', text);
   }
-  assert.equal(check(scratchReport(/** @type {any} */ (null)), 'scratch-ignore').status, 'pass');
-  assert.equal(check(scratchReport('# x\n'), 'scratch-ignore').status, 'missing');
+  assert.equal(check(await scratchReport(/** @type {any} */ (null)), 'scratch-ignore').status, 'pass');
+  assert.equal(check(await scratchReport('# x\n'), 'scratch-ignore').status, 'missing');
 });
 
-test('scratch-ignore reads hostile tracker text safely', () => {
+test('scratch-ignore reads hostile tracker text safely', async () => {
   // A remote tracker named next to .scratch/ wins; control bytes and huge files do not crash the report.
-  assert.equal(check(scratchReport('Use .scratch/ files, not an online board.\n'), 'scratch-ignore').status, 'missing');
-  assert.equal(check(scratchReport('\u0000\u001b[31mx\n'), 'scratch-ignore').status, 'missing');
-  assert.equal(check(scratchReport('x'.repeat((1 << 20) + 1)), 'scratch-ignore').status, 'fail');
+  assert.equal(
+    check(await scratchReport('Use .scratch/ files, not an online board.\n'), 'scratch-ignore').status,
+    'missing',
+  );
+  assert.equal(check(await scratchReport('\u0000\u001b[31mx\n'), 'scratch-ignore').status, 'missing');
+  assert.equal(check(await scratchReport('x'.repeat((1 << 20) + 1)), 'scratch-ignore').status, 'fail');
 });
 
-test('scratch-ignore decides the tracker kind: a named remote tracker wins, an unnamed one is local', () => {
+test('scratch-ignore decides the tracker kind: a named remote tracker wins, an unnamed one is local', async () => {
   /** @type {[string, string][]} */
   const cases = [
     ['# Tracker\n\nGitHub Issues. Scratch notes may live in .scratch/ for now.\n', 'pass'],
@@ -771,5 +770,6 @@ test('scratch-ignore decides the tracker kind: a named remote tracker wins, an u
     ['', 'missing'],
     ['# Issue tracker\n\nNo tracker is named here.\n', 'missing'],
   ];
-  for (const [text, status] of cases) assert.equal(check(scratchReport(text), 'scratch-ignore').status, status, text);
+  for (const [text, status] of cases)
+    assert.equal(check(await scratchReport(text), 'scratch-ignore').status, status, text);
 });

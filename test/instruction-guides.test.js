@@ -2,19 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { cli as runCli } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
 import { parseGuide, matchesGlob, loadGuides, guidesCheck, guidesForFiles, MAX_GLOB_LENGTH } from '../src/guides.js';
 import { ruleFor } from '../src/rules.js';
 import { invokedByFactory } from '../src/sync.js';
 import { SKILLS_DIR } from '../src/paths.js';
 
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 
 /** @param {Record<string, string>} files */
 function project(files) {
@@ -109,11 +108,11 @@ test('a backticked path that does not exist, or a link outside the project, is i
   assert.deepEqual(loadGuides(dir), []);
 });
 
-test('run guides lists the guides recorded in the Run conventions that apply to its diff', () => {
+test('run guides lists the guides recorded in the Run conventions that apply to its diff', async () => {
   const cwd = guides();
   git(cwd, 'add', '.');
   git(cwd, 'commit', '-q', '-m', 'guides');
-  const started = run(
+  const started = await run(
     cwd,
     'start',
     '--data',
@@ -131,7 +130,7 @@ test('run guides lists the guides recorded in the Run conventions that apply to 
   writeFileSync(join(worktree, 'dashboard', 'a.js'), 'x\n');
   git(worktree, 'add', '.');
   git(worktree, 'commit', '-q', '-m', 'change');
-  const result = run(cwd, 'guides', '--id', id);
+  const result = await run(cwd, 'guides', '--id', id);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /docs\/dashboard\.md \(applyTo dashboard\/\*\*, src\/dashboard\.js\)/);
   assert.match(result.stdout, /docs\/plain\.md \(unscoped\)/);
@@ -169,7 +168,7 @@ test('an oversized conventions file fails the guides check instead of passing as
   assert.throws(() => guidesCheck(dir), /at most 1 MiB/);
 });
 
-test('run guides sees the old path of a renamed file', () => {
+test('run guides sees the old path of a renamed file', async () => {
   const cwd = project({
     'AGENTS.md': '[o](docs/old.md)\n',
     'docs/old.md': '---\napplyTo: old/**\n---\n',
@@ -177,7 +176,7 @@ test('run guides sees the old path of a renamed file', () => {
   });
   git(cwd, 'add', '.');
   git(cwd, 'commit', '-q', '-m', 'g');
-  const started = run(
+  const started = await run(
     cwd,
     'start',
     '--data',
@@ -188,7 +187,7 @@ test('run guides sees the old path of a renamed file', () => {
   mkdirSync(join(worktree, 'new'));
   git(worktree, 'mv', 'old/a.js', 'new/a.js');
   git(worktree, 'commit', '-q', '-m', 'move');
-  assert.match(run(cwd, 'guides', '--id', id).stdout, /docs\/old\.md \(applyTo old\/\*\*\)/);
+  assert.match((await run(cwd, 'guides', '--id', id)).stdout, /docs\/old\.md \(applyTo old\/\*\*\)/);
 });
 
 test('the Skills the factory invokes are found in its reference files too', () => {

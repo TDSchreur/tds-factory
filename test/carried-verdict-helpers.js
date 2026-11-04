@@ -1,18 +1,16 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
 import { git, repo } from './git-repo.js';
+import { cli as runCli } from './cli-runner.js';
 
 /** @import { Run } from '../src/run-record.js' */
-
-export const cli = resolve('bin/tds-factory.js');
 
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-export const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+export const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 
 /**
  * @param {string} cwd
@@ -41,13 +39,13 @@ export const force = (cwd, id, data) => writeFileSync(file(cwd, id), JSON.string
  * @param {string} value
  * @param {...string} more
  */
-export const verdict = (cwd, id, axis, value, ...more) =>
-  run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value, ...more);
+export const verdict = async (cwd, id, axis, value, ...more) =>
+  await run(cwd, 'verdict', '--id', id, '--axis', axis, '--value', value, ...more);
 
 // A Run in Check whose first pass gave Security pass and Infrastructure skipped; a Rework then sent it back and returned it to Check.
-export function afterRework(initial = {}) {
+export async function afterRework(initial = {}) {
   const cwd = repo();
-  const started = run(
+  const started = await run(
     cwd,
     'start',
     '--data',
@@ -65,10 +63,10 @@ export function afterRework(initial = {}) {
     git(worktree, 'commit', '-q', '-m', 'initial');
   }
   force(cwd, id, { stage: 'check' });
-  assert.equal(verdict(cwd, id, 'security', 'pass').status, 0);
-  assert.equal(verdict(cwd, id, 'infrastructure', 'skipped').status, 0);
+  assert.equal((await verdict(cwd, id, 'security', 'pass')).status, 0);
+  assert.equal((await verdict(cwd, id, 'infrastructure', 'skipped')).status, 0);
   const first = git(worktree, 'rev-parse', 'HEAD');
-  assert.equal(run(cwd, 'rework', '--id', id).status, 0);
+  assert.equal((await run(cwd, 'rework', '--id', id)).status, 0);
   force(cwd, id, { stage: 'check' });
   const base = git(worktree, 'rev-parse', 'HEAD');
   // Lets a test try many changes on one Run; each start costs several processes, which is slow on Windows.
