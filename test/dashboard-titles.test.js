@@ -30,6 +30,20 @@ const TICKETS = [
   'https://github.com/o/r/issues/7',
 ];
 
+/**
+ * @template T
+ * @param {string} prefix
+ * @param {(dir: string) => Promise<T>} body
+ */
+async function withDir(prefix, body) {
+  const dir = tempDir(prefix);
+  try {
+    return await body(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+}
+
 /** @param {string} root @param {string} rel @param {string} body */
 function put(root, rel, body) {
   mkdirSync(join(root, rel, '..'), { recursive: true });
@@ -121,20 +135,15 @@ test('a changed file shows its new title on the next view', async () => {
 });
 
 /** @param {string} body */
-async function oneTitle(body) {
-  const dir = tempDir('titles-unit-');
-  try {
+function oneTitle(body) {
+  return withDir('titles-unit-', async (dir) => {
     put(dir, 'a.md', body);
-    const titles = createLinkedTitles();
-    return (await titles.of(dir, { spec_link: 'a.md' }))['a.md'];
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
+    return (await createLinkedTitles().of(dir, { spec_link: 'a.md' }))['a.md'];
+  });
 }
 
-test('a file is read again only when its size or modification time changes', async () => {
-  const dir = tempDir('titles-cache-');
-  try {
+test('a file is read again only when its size or modification time changes', () =>
+  withDir('titles-cache-', async (dir) => {
     put(dir, 'a.md', '# One\n');
     /** @type {string[]} */
     const reads = [];
@@ -154,14 +163,10 @@ test('a file is read again only when its size or modification time changes', asy
     utimesSync(join(dir, 'a.md'), new Date(2002, 0, 1), new Date(2002, 0, 1));
     await titles.of(dir, record);
     assert.equal(reads.length, 3);
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
-});
+  }));
 
-test('the cache stays within its bound and drops the oldest entry first', async () => {
-  const dir = tempDir('titles-bound-');
-  try {
+test('the cache stays within its bound and drops the oldest entry first', () =>
+  withDir('titles-bound-', async (dir) => {
     const rels = ['a.md', 'b.md', 'c.md', 'd.md'];
     for (const rel of rels) put(dir, rel, `# ${rel}\n`);
     /** @type {string[]} */
@@ -180,10 +185,7 @@ test('the cache stays within its bound and drops the oldest entry first', async 
     assert.equal(reads.length, 0, 'the newest entry is kept');
     await titles.of(dir, { tickets: ['a.md'] });
     assert.equal(reads.length, 1, 'the oldest entry was dropped');
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
-});
+  }));
 
 const NO_TITLE = [
   ['no heading', 'just text\n'],
@@ -234,14 +236,11 @@ for (const [name, body, expected] of TITLES)
   });
 
 /** @param {string} name */
-async function labelOf(name) {
-  const dir = tempDir('titles-digits-');
-  try {
+function labelOf(name) {
+  return withDir('titles-digits-', async (dir) => {
     put(dir, name, '# Title\n');
     return (await createLinkedTitles().of(dir, { tickets: [name] }))[name];
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
+  });
 }
 
 test('the digit prefix of a file name has 1 to 6 digits', async () => {
@@ -264,20 +263,6 @@ test('many unclosed emphasis marks in 4 KB do not hang the parser', () => {
   titleOf(`# ${'`'.repeat(4000)}\n`);
   assert.ok(Number(process.hrtime.bigint() - started) / 1e9 < 5);
 });
-
-/**
- * @template T
- * @param {string} prefix
- * @param {(dir: string) => Promise<T>} body
- */
-async function withDir(prefix, body) {
-  const dir = tempDir(prefix);
-  try {
-    return await body(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
-}
 
 test('a directory or a FIFO in the worktree falls through to the main checkout copy', async (t) => {
   await withDir('titles-special-', async (dir) => {

@@ -58,17 +58,17 @@ export function Link({ href, children }) {
     : html`<span>${children}</span>`;
 }
 
-// A Spec or Ticket: a path opens in the Run detail (the title, or else the file name, is the text, the path the tooltip); anything else is a Link.
-/** @param {{ href: unknown, onOpen: (path: string) => void, children?: unknown }} props */
-function DocLink({ href, onOpen, children }) {
+// A Spec or Ticket: a path opens in the Run detail (the title, or else the file name, is the text; the tooltip is the path unless given); anything else is a Link.
+/** @param {{ href: unknown, onOpen: (path: string) => void, tooltip?: string, children: unknown }} props */
+function DocLink({ href, onOpen, tooltip, children }) {
   if (!isLocalDocument(href)) return html`<${Link} href=${href}>${children}<//>`;
   const docPath = String(href);
-  return html`<button type="button" class="doc-link" data-doc=${docPath} title=${docPath} onClick=${(
+  return html`<button type="button" class="doc-link" data-doc=${docPath} title=${tooltip ?? docPath} onClick=${(
     /** @type {Event} */ e,
   ) => {
     stop(e);
     onOpen(docPath);
-  }} onKeyDown=${stop}>${children ?? ticketLabel(docPath)}</button>`;
+  }} onKeyDown=${stop}>${children}</button>`;
 }
 
 /**
@@ -322,7 +322,7 @@ function Tickets({ run, onOpenDoc }) {
     ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => {
         const id = `usage-${run.projectId}-${run.id}-${t.key}`.replace(/[^A-Za-z0-9_-]/g, '-');
         return html`<li key=${t.key} class=${'ticket ' + t.state}>
-          <div class="ticket-head"><span aria-hidden="true">${mark[t.state]}</span> ${t.href ? html`<${DocLink} href=${t.href} onOpen=${(/** @type {string} */ path) => onOpenDoc(run, path)}>${t.label}<//>` : t.label}<span class="sr"> (${t.state})</span></div>
+          <div class="ticket-head"><span aria-hidden="true">${mark[t.state]}</span> ${t.href ? html`<${DocLink} href=${t.href} tooltip=${t.tooltip} onOpen=${(/** @type {string} */ path) => onOpenDoc(run, path)}>${t.label}<//>` : t.label}<span class="sr"> (${t.state})</span></div>
           ${
             t.usage &&
             html`<div class="ticket-usage" tabindex="0" aria-describedby=${id}>

@@ -31,7 +31,7 @@ function createServices(
     inFlight: new Set(),
     prInfo,
     statusRefreshMs,
-    prViews: createPrViews({ prState, prStatus, prDetails }),
+    prViews: createPrViews({ prState, prStatus, prDetails, titles: store.titles }),
   };
 }
 
