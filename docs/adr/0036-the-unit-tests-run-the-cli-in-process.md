@@ -1,0 +1,13 @@
+# The unit tests run the CLI in process
+
+About a third of the test files started `node bin/tds-factory.js` for every CLI call. A start costs about 85 ms of wall time and 100 ms of CPU, and a Run test makes 6 to 20 calls, so the slowest files bound the whole suite however many cores it has.
+
+**One entry point.** `main(argv, context)` in `src/cli.js` holds the dispatch of every command and resolves to the exit code. `context` has `cwd`, `env`, `stdout` and `stderr`, each defaulting to the real process. `bin/tds-factory.js` stays a thin wrapper: it enables the compile cache before importing `main`, passes the real process values, sets `process.exitCode` and registers the signals that stop the Dashboard. `main` itself never sets `process.exitCode` or calls `process.exit`, so a test's own exit code is never changed.
+
+**Output through sinks, state through the process.** Commands print through the `stdout` and `stderr` sinks (modules that print take a `log` or `warn` parameter), so no code patches `console` and a test reads exactly what a command printed. The commands read `process.cwd()` and `process.env` in many places, so a call that brings its own `cwd` or `env` has them applied to the process and restored in a `finally`. Calls wait for each other in a queue: two overlapping calls would otherwise see each other's state.
+
+**One helper for the tests.** `cli(cwd, ...args)` and `cliWith({ env }, cwd, ...args)` in `test/cli-runner.js` call `main` and resolve to `{ status, stdout, stderr }`. They are async, because several commands are (and the commands import their code lazily); a migrated test adds `await` at its call sites. Each call starts and ends on a clock tick of its own: a spawned process takes tens of milliseconds, but in process a command can finish inside one millisecond, and Usage and the Stage durations order events by timestamp.
+
+**What stays spawned.** A test that checks how a real process starts, prints and ends spawns `bin/tds-factory.js` and says why in a comment: the exit code and streams of a real process (`--version`, the usage text), the Dashboard launch, the `--import` stub of `update`, and a Doctor run that must not block the event loop a test server uses. `test/cli-parity.test.js` runs several commands both ways and compares status, stdout and stderr, so the two cannot drift apart.
+
+**Trade-offs.** The first call in a test process pays for the imports; the rest do not. A command that throws an error nobody catches rejects `main` instead of ending a process. In exchange the unit tests use about a third of the CPU they used, and the suite no longer waits on the process starts of its slowest files.
