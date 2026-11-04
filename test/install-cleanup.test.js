@@ -2,6 +2,7 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { tempDir } from './git-repo.js';
 import { hashLine } from '../src/tree-hash.js';
 import { cleanupDestination } from '../src/install-cleanup.js';
@@ -15,7 +16,15 @@ function fixture() {
   fs.mkdirSync(agentsDir);
   /** @type {string[]} */
   const output = [];
-  return { root, skillsDir, agentsDir, backupRoot, log: (/** @type {string} */ line) => output.push(line), output };
+  return {
+    trustedPaths: true,
+    root,
+    skillsDir,
+    agentsDir,
+    backupRoot,
+    log: (/** @type {string} */ line) => output.push(line),
+    output,
+  };
 }
 
 /** @param {ReturnType<typeof fixture>} f @param {string} name */
@@ -294,4 +303,76 @@ test('a nested symlink cycle is backed up as a link without traversing it', syml
   assert.ok(result.backupDir);
   assert.equal(fs.readlinkSync(path.join(result.backupDir, 'skills/factory/self')), dir);
   assert.equal(fs.existsSync(dir), false);
+});
+
+test('cleanup refuses callers that have not established trusted filesystem paths', () => {
+  const f = fixture();
+  const dir = skill(f);
+  assert.throws(() => cleanupDestination({ ...f, trustedPaths: false }), /trusted/);
+  assert.equal(fs.existsSync(dir), true);
+});
+
+test('directory replacement during backup reporting is detected before any removal', symlinkOptions, () => {
+  const f = fixture();
+  const dir = skill(f);
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), 'edited');
+  const outside = path.join(f.root, 'outside');
+  fs.mkdirSync(path.join(outside, 'factory'), { recursive: true });
+  fs.writeFileSync(path.join(outside, 'factory', 'private'), 'untouched');
+  const moved = path.join(f.root, 'moved');
+  assert.throws(
+    () =>
+      cleanupDestination({
+        ...f,
+        log: (line) => {
+          if (line.startsWith('backed up')) {
+            fs.renameSync(f.skillsDir, moved);
+            fs.symlinkSync(outside, f.skillsDir);
+          }
+        },
+      }),
+    /symbolic link|changed/,
+  );
+  assert.equal(fs.readFileSync(path.join(outside, 'factory', 'private'), 'utf8'), 'untouched');
+  assert.equal(fs.readFileSync(path.join(moved, 'factory', 'SKILL.md'), 'utf8'), 'edited');
+});
+
+test('content edits after backup abort deletion of all originals', () => {
+  const f = fixture();
+  const dir = skill(f);
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), 'edited');
+  const pristine = skill(f, 'pristine');
+  assert.throws(
+    () =>
+      cleanupDestination({
+        ...f,
+        log: (line) => {
+          if (line.startsWith('backed up')) fs.writeFileSync(path.join(dir, 'SKILL.md'), 'newer edit');
+        },
+      }),
+    /changed/,
+  );
+  assert.equal(fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8'), 'newer edit');
+  assert.equal(fs.existsSync(pristine), true);
+});
+
+test('an empty directory added to a marked skill is preserved in its backup', () => {
+  const f = fixture();
+  const dir = skill(f);
+  fs.mkdirSync(path.join(dir, 'my-empty-folder'));
+  const result = cleanupDestination(f);
+  assert.ok(result.backupDir);
+  assert.equal(fs.statSync(path.join(result.backupDir, 'skills/factory/my-empty-folder')).isDirectory(), true);
+});
+
+test('special files in a marked skill refuse cleanup before writes or removal', symlinkOptions, (t) => {
+  const f = fixture();
+  const dir = skill(f);
+  // A real FIFO exercises the disk boundary; Windows has no mkfifo.
+  const made = spawnSync('mkfifo', [path.join(dir, 'pipe')], { encoding: 'utf8', timeout: 5000 });
+  if (made.error && 'code' in made.error && made.error.code === 'ENOENT') return t.skip('mkfifo is unavailable');
+  assert.equal(made.status, 0, made.stderr);
+  assert.throws(() => cleanupDestination(f), /special file/);
+  assert.equal(fs.existsSync(dir), true);
+  assert.equal(fs.existsSync(f.backupRoot), false);
 });

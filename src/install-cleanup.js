@@ -59,8 +59,45 @@ function agentRecord(file) {
   }
 }
 
-/** @param {{ skillsDir: string, agentsDir: string, backupRoot: string, dryRun?: boolean, log?: (message: string) => void }} options */
-export function cleanupDestination({ skillsDir, agentsDir, backupRoot, dryRun = false, log = console.log }) {
+// Snapshots include entries the historical install hash omits, such as empty directories and links.
+/** @param {string} file */
+function snapshot(file) {
+  const stat = fs.lstatSync(file);
+  const hash = createHash('sha256');
+  /** @type {string[]} */
+  const pending = [file];
+  let emptyDirectory = false;
+  let hasLinks = false;
+  while (pending.length) {
+    const current = /** @type {string} */ (pending.pop());
+    const entry = fs.lstatSync(current);
+    hash.update(`${path.relative(file, current)}\0`);
+    if (entry.isSymbolicLink()) {
+      hasLinks = true;
+      hash.update(`link:${fs.readlinkSync(current)}\0`);
+    } else if (entry.isFile()) hash.update('file:').update(fs.readFileSync(current)).update('\0');
+    else if (entry.isDirectory()) {
+      const children = fs.readdirSync(current).sort();
+      emptyDirectory ||= children.length === 0;
+      hash.update('directory\0');
+      pending.push(...children.map((name) => path.join(current, name)));
+    } else throw new Error(`cleanup refuses special file: ${printable(current)}`);
+  }
+  return { identity: `${stat.dev}:${stat.ino}`, content: hash.digest('hex'), emptyDirectory, hasLinks };
+}
+
+// Callers must establish that another security principal cannot replace these paths.
+// Rechecks detect ordinary edits; they do not provide atomic isolation from a concurrent writer.
+/** @param {{ skillsDir: string, agentsDir: string, backupRoot: string, trustedPaths?: boolean, dryRun?: boolean, log?: (message: string) => void }} options */
+export function cleanupDestination({
+  skillsDir,
+  agentsDir,
+  backupRoot,
+  trustedPaths = false,
+  dryRun = false,
+  log = console.log,
+}) {
+  if (trustedPaths !== true) throw new Error('cleanup requires trusted filesystem paths established by the caller');
   skillsDir = directory(skillsDir);
   agentsDir = directory(agentsDir);
   backupRoot = directory(backupRoot);
@@ -80,8 +117,8 @@ export function cleanupDestination({ skillsDir, agentsDir, backupRoot, dryRun = 
     const evidence = fs.lstatSync(marker, { throwIfNoEntry: false });
     if (evidence?.isSymbolicLink()) throw new Error(`cleanup refuses symbolic link: ${printable(marker)}`);
     if (evidence?.isFile()) {
-      const hasLinks = fs.readdirSync(dir, { recursive: true, withFileTypes: true }).some((e) => e.isSymbolicLink());
-      const backup = hasLinks || fs.readFileSync(marker, 'utf8') !== hashLine(dir);
+      const state = snapshot(dir);
+      const backup = state.emptyDirectory || state.hasLinks || fs.readFileSync(marker, 'utf8') !== hashLine(dir);
       owned.push({ file: dir, backup, relative: path.join('skills', entry.name) });
     }
   }
@@ -100,6 +137,20 @@ export function cleanupDestination({ skillsDir, agentsDir, backupRoot, dryRun = 
   const backupRecord = owned.some((entry) => entry.backup && path.dirname(entry.file) === agentsDir);
   if (record && !keepRecord)
     owned.push({ file: recordFile, backup: backupRecord, relative: path.join('agents', AGENT_RECORD) });
+  const original = new Map(owned.map((entry) => [entry.file, snapshot(entry.file)]));
+  /** @param {string} file */
+  const unchanged = (file) => {
+    directory(skillsDir);
+    directory(agentsDir);
+    directory(backupRoot);
+    directory(path.dirname(file));
+    const before = original.get(file);
+    const stat = fs.lstatSync(file, { throwIfNoEntry: false });
+    if (!stat || stat.isSymbolicLink()) throw new Error(`cleanup path changed: ${printable(file)}`);
+    const now = snapshot(file);
+    if (before?.identity !== now.identity || before.content !== now.content)
+      throw new Error(`cleanup content changed: ${printable(file)}`);
+  };
   const planned = owned.map((entry) => entry.file);
   const preserved = [skillsDir, agentsDir].flatMap((dir) =>
     (fs.existsSync(dir) ? fs.readdirSync(dir) : [])
@@ -112,6 +163,7 @@ export function cleanupDestination({ skillsDir, agentsDir, backupRoot, dryRun = 
     fs.mkdirSync(backupRoot, { recursive: true, mode: 0o700 });
     backupDir = fs.mkdtempSync(path.join(backupRoot, 'cleanup-'));
     for (const item of owned.filter((entry) => entry.backup)) {
+      unchanged(item.file);
       const dest = path.join(backupDir, item.relative);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.cpSync(item.file, dest, { recursive: true, dereference: false, verbatimSymlinks: true });
@@ -120,7 +172,9 @@ export function cleanupDestination({ skillsDir, agentsDir, backupRoot, dryRun = 
     log(`backed up edited Factory files -> ${printable(backupDir)}`);
   }
   for (const item of owned.filter((entry) => entry.backup)) if (dryRun) log(`would back up ${printable(item.file)}`);
+  for (const item of owned) unchanged(item.file);
   for (const item of owned) {
+    unchanged(item.file);
     if (!dryRun) fs.rmSync(item.file, { recursive: true });
     log(`${dryRun ? 'would remove' : 'removed'} ${printable(item.file)}`);
   }
