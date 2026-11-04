@@ -351,12 +351,14 @@ export async function readLinkedDocument(projectDir, runId, rawPath) {
     if (parts.some((part) => part.includes('/') || part.includes('\\'))) return null;
     rel = parts.join('/');
   } catch {
+    // A malformed escape in the path is no document.
     return null;
   }
   let record;
   try {
     record = readRun(projectDir, runId).record;
   } catch {
+    // An unknown Run or an unreadable record lists no document.
     return null;
   }
   const isSpec = listedPaths(record.spec_link).includes(rel);
