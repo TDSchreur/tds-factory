@@ -61,33 +61,192 @@ function atxHeading(line) {
   return { level, content: closing ? text.slice(0, close).trim() : text };
 }
 
+// Block helpers, also hand scans (see above). `isWhite` is the `\s` of a regular expression.
+/** @param {string | undefined} c */
+const isWhite = (c) => c !== undefined && /\s/.test(c);
+/** @param {string | undefined} c */
+const isDigit = (c) => c !== undefined && c >= '0' && c <= '9';
+// A thematic break: 3 or more `-` or `*` (one kind), indentation and trailing whitespace only.
+/** @param {string} line */
+function isRule(line) {
+  const start = skipSpace(line);
+  const char = line[start];
+  if (char !== '-' && char !== '*') return false;
+  const end = runEnd(line, start, char);
+  return end - start >= 3 && skipSpace(line.slice(end)) === line.length - end;
+}
+// A block quote line: `>` after any indentation. Returns the text after the marker and one optional whitespace character.
+/** @param {string} line */
+function quoteText(line) {
+  const start = skipSpace(line);
+  if (line[start] !== '>') return null;
+  return line.slice(start + 1 + (isWhite(line[start + 1]) ? 1 : 0));
+}
+// A list item: indentation, a bullet or `digits.`, at least one whitespace character, then the text.
+/** @param {string} line */
+function listItem(line) {
+  const indent = skipSpace(line);
+  let end = indent + 1;
+  const first = line[indent];
+  if (first === '-' || first === '*' || first === '+') {
+    // A one-character bullet.
+  } else if (isDigit(first)) {
+    while (isDigit(line[end])) end++;
+    if (line[end] !== '.') return null;
+    end++;
+  } else return null;
+  if (!isWhite(line[end])) return null;
+  return { indent, ordered: isDigit(first), text: line.slice(end).trim() };
+}
+// A table separator row: cells of dashes with optional colons, between optional outer pipes.
+/** @param {string} line */
+function isTableSeparator(line) {
+  let t = line.trim();
+  if (t[0] === '|') t = t.slice(1);
+  if (t.endsWith('|')) t = t.slice(0, -1);
+  return t.split('|').every((cell) => {
+    let c = cell.trim();
+    if (c[0] === ':') c = c.slice(1);
+    if (c.endsWith(':')) c = c.slice(0, -1);
+    return c.length > 0 && runEnd(c, 0, '-') === c.length;
+  });
+}
+
+// The next index at or after `from` where `find` succeeds, remembered so that starts moving to the right never scan the same stretch twice.
+/** @param {(from: number) => number} find */
+function remember(find) {
+  let from = -1;
+  let found = -1;
+  return (/** @type {number} */ at) => {
+    if (from < 0 || at < from || (found >= 0 && found < at)) {
+      found = find(at);
+      from = at;
+    }
+    return found;
+  };
+}
+/** @param {string} src @param {number} from */
+function nextLineEnd(src, from) {
+  for (let i = from; i < src.length; i++) {
+    const c = src.charCodeAt(i);
+    if (c === 10 || c === 13 || c === 0x2028 || c === 0x2029) return i;
+  }
+  return -1;
+}
+// The end of a link target `(...)` that starts after `from`: non-paren, non-whitespace characters and balanced `(...)` items without nesting, closed by `)`. -1 when it is none.
+/** @param {string} src @param {number} from */
+function linkTargetEnd(src, from) {
+  let i = from;
+  let items = 0;
+  for (;;) {
+    const c = src[i];
+    if (c === '(') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== '(' && src[j] !== ')' && !isWhite(src[j])) j++;
+      if (src[j] !== ')') return -1;
+      i = j + 1;
+    } else if (c === ')') return items > 0 ? i + 1 : -1;
+    else if (c === undefined || isWhite(c)) return -1;
+    else i++;
+    items++;
+  }
+}
+
 /**
  * @param {string} text
  * @returns {Block[]}
  */
 export function parseMarkdown(text) {
   /**
+   * Walks the text once, left to right, and tries the same four forms in the same order at each start: code span, strong, emphasis, link. Every search that could rescan a long stretch from each start is remembered, so the whole walk is linear.
    * @param {string} src
    * @returns {Span[]}
    */
   function inline(src) {
     /** @type {Span[]} */
     const out = [];
-    const re = /`([^`]+)`|\*\*(.+?)\*\*|\*([^\s*](?:.*?[^\s*])?)\*|\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
-    let last = 0;
-    let m;
+    const nextTick = remember((at) => src.indexOf('`', at));
+    const nextStrong = remember((at) => src.indexOf('**', at));
+    const nextBracket = remember((at) => src.indexOf(']', at));
+    const nextBreak = remember((at) => nextLineEnd(src, at));
+    /** @type {number[] | null} */
+    let ends = null;
+    let endAt = 0;
+    /** @type {Map<number, number>} */
+    const targets = new Map();
+    /** @param {number} from The first index an emphasis may end on (its last text character). */
+    function nextEmphasisEnd(from) {
+      if (ends === null) {
+        ends = [];
+        for (let i = 0; i + 1 < src.length; i++)
+          if (src[i + 1] === '*' && src[i] !== '*' && !isWhite(src[i])) ends.push(i);
+      }
+      while (endAt > 0 && ends[endAt - 1] >= from) endAt--;
+      while (endAt < ends.length && ends[endAt] < from) endAt++;
+      return endAt < ends.length ? ends[endAt] : -1;
+    }
     /** @param {string} v */
     function plain(v) {
       if (v) out.push({ t: 'text', v: v });
     }
-    while ((m = re.exec(src))) {
-      plain(src.slice(last, m.index));
-      last = re.lastIndex;
-      if (m[1]) out.push({ t: 'code', v: m[1] });
-      else if (m[2]) out.push({ t: 'strong', c: inline(m[2]) });
-      else if (m[3]) out.push({ t: 'em', c: inline(m[3]) });
-      else if (/^https?:\/\//i.test(m[5])) out.push({ t: 'link', href: m[5], c: inline(m[4]) });
-      else plain(m[4]);
+    let last = 0;
+    let p = 0;
+    while (p < src.length) {
+      const c = src[p];
+      /** @type {Span | null} */
+      let span = null;
+      let end = p + 1;
+      if (c === '`' && p + 1 < src.length && src[p + 1] !== '`') {
+        const close = nextTick(p + 1);
+        if (close >= 0) {
+          span = { t: 'code', v: src.slice(p + 1, close) };
+          end = close + 1;
+        }
+      }
+      if (c === '*' && src[p + 1] === '*' && p + 2 < src.length) {
+        const close = nextStrong(p + 3);
+        const stop = nextBreak(p + 2);
+        if (close >= 0 && (stop < 0 || stop >= close)) {
+          span = { t: 'strong', c: inline(src.slice(p + 2, close)) };
+          end = close + 2;
+        }
+      }
+      if (c === '*' && span === null && p + 1 < src.length && src[p + 1] !== '*' && !isWhite(src[p + 1])) {
+        const q = nextEmphasisEnd(p + 2);
+        const stop = nextBreak(p + 2);
+        if (q >= 0 && (stop < 0 || q < stop)) {
+          span = { t: 'em', c: inline(src.slice(p + 1, q + 1)) };
+          end = q + 2;
+        } else if (src[p + 2] === '*') {
+          span = { t: 'em', c: inline(src[p + 1]) };
+          end = p + 3;
+        }
+      }
+      if (c === '[' && p + 1 < src.length && src[p + 1] !== ']') {
+        const close = nextBracket(p + 1);
+        if (close >= 0 && src[close + 1] === '(') {
+          let after = targets.get(close);
+          if (after === undefined) {
+            after = linkTargetEnd(src, close + 2);
+            targets.set(close, after);
+          }
+          if (after >= 0) {
+            const href = src.slice(close + 2, after - 1);
+            const label = src.slice(p + 1, close);
+            end = after;
+            span = /^https?:\/\//i.test(href) ? { t: 'link', href: href, c: inline(label) } : { t: 'text', v: label };
+          }
+        }
+      }
+      if (span === null) {
+        p++;
+        continue;
+      }
+      plain(src.slice(last, p));
+      if (span.t === 'text') plain(span.v);
+      else out.push(span);
+      last = end;
+      p = end;
     }
     plain(src.slice(last));
     return out;
@@ -106,8 +265,6 @@ export function parseMarkdown(text) {
   const blocks = [];
   const lines = String(text).split(/\r?\n/);
   let i = 0;
-  /** @type {RegExpExecArray | null} */
-  let m;
   while (i < lines.length) {
     const line = lines[i];
     if (!line.trim()) {
@@ -125,30 +282,31 @@ export function parseMarkdown(text) {
     } else if (heading) {
       blocks.push({ type: 'heading', level: heading.level, inline: inline(heading.content) });
       i++;
-    } else if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
+    } else if (isRule(line)) {
       blocks.push({ type: 'rule' });
       i++;
-    } else if (line.indexOf('|') >= 0 && /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(lines[i + 1] || '')) {
+    } else if (line.indexOf('|') >= 0 && isTableSeparator(lines[i + 1] ?? '')) {
       const head = cells(line),
         /** @type {Span[][][]} */
         rows = [];
       for (i += 2; i < lines.length && lines[i].indexOf('|') >= 0; i++) rows.push(cells(lines[i]));
       blocks.push({ type: 'table', head: head, rows: rows });
-    } else if (/^\s*>/.test(line)) {
+    } else if (quoteText(line) !== null) {
       /** @type {string[]} */
       const quote = [];
-      for (; i < lines.length && /^\s*>/.test(lines[i]); i++) quote.push(lines[i].replace(/^\s*>\s?/, ''));
+      for (let q; i < lines.length && (q = quoteText(lines[i])) !== null; i++) quote.push(q);
       blocks.push({ type: 'quote', inline: inline(quote.join(' ')) });
-    } else if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+    } else if (listItem(line)) {
       /** @type {ListItem[]} */
       const items = [],
-        ordered = /^\s*\d+\./.test(line),
-        base = (/^\s*/.exec(line) ?? [''])[0].length;
-      for (; i < lines.length && (m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i])); i++) {
-        const item = { inline: inline(m[3].trim()) };
-        if (m[1].length > base && items.length) {
+        first = listItem(line),
+        ordered = first?.ordered ?? false,
+        base = first?.indent ?? 0;
+      for (let entry; i < lines.length && (entry = listItem(lines[i])); i++) {
+        const item = { inline: inline(entry.text) };
+        if (entry.indent > base && items.length) {
           const parent = items[items.length - 1];
-          parent.sub = parent.sub || { ordered: /\d/.test(m[2]), items: [] };
+          parent.sub = parent.sub || { ordered: entry.ordered, items: [] };
           parent.sub.items.push(item);
         } else items.push(item);
       }
@@ -162,7 +320,9 @@ export function parseMarkdown(text) {
         lines[i].trim() &&
         !fenceOpen(lines[i]) &&
         !atxHeading(lines[i]) &&
-        !/^\s*(>|([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(lines[i]);
+        quoteText(lines[i]) === null &&
+        !listItem(lines[i]) &&
+        !isRule(lines[i]);
         i++
       )
         para.push(lines[i].trim());

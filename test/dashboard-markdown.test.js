@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { Worker } from 'node:worker_threads';
 import { parseMarkdown } from '../dashboard/markdown.js';
 
 /** @param {string} text */
@@ -151,6 +152,36 @@ test('an indented hash line does not end a paragraph', () => {
   assert.deepEqual(types('text\n    # more'), ['paragraph']);
 });
 
+// A worker runs the parse, so a parser that does not finish fails after the budget instead of hanging the test run.
+const PARSE_BUDGET_MS = 5000;
+/** @param {string} text */
+function parseWithin(text) {
+  const url = new URL('../dashboard/markdown.js', import.meta.url).href;
+  const worker = new Worker(
+    "const { parentPort, workerData } = require('node:worker_threads'); import(workerData.url).then((m) => { m.parseMarkdown(workerData.text); parentPort.postMessage('done'); });",
+    { eval: true, workerData: { url, text } },
+  );
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      void worker.terminate();
+      reject(new Error(`the parser did not finish within ${PARSE_BUDGET_MS} ms`));
+    }, PARSE_BUDGET_MS);
+    worker.once('message', () => {
+      clearTimeout(timer);
+      void worker.terminate();
+      resolve(undefined);
+    });
+    worker.once('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+const MIB = 1024 * 1024;
+const SP = ' '.repeat(MIB);
+const ENDS = ['', '\r', '\u2028', '\u2029'];
+/** @type {[string, string][]} */
 const HOSTILE = [
   ['spaces inside a heading', `# a${' '.repeat(200_000)}b`],
   ['spaces then hashes then text', `# a${' '.repeat(100_000)}${'#'.repeat(100_000)}x`],
@@ -159,35 +190,80 @@ const HOSTILE = [
   ['many unclosed fences of growing length', Array.from({ length: 3000 }, (_, i) => '`'.repeat(i + 3)).join('\n')],
   ['a very long fence line', `${'~'.repeat(300_000)} info`],
   ['many headings', '# a ##\n'.repeat(50_000)],
-  ['hash, spaces, then a lone CR', `#${' '.repeat(200_000)}\rx`],
-  ['hash, spaces, then U+2028', `#${' '.repeat(200_000)}\u2028`],
-  ['hash, spaces, then U+2029', `# ${' '.repeat(200_000)}\u2029x`],
-  ['indent, hash, spaces, then a lone CR', `   ###${' '.repeat(200_000)}\r`],
-  ['many backticks, then a lone CR', `${'`'.repeat(200_000)}\r`],
-  ['many tildes, then U+2028', `${'~'.repeat(200_000)}\u2028x`],
-  ['a closing fence of many backticks then a lone CR', `\`\`\`\n${'`'.repeat(200_000)}\r`],
-  ['spaces before a fence-like line', `${' '.repeat(200_000)}x`],
+  ['many lines of one space', ' \n'.repeat(MIB / 2)],
+  ['a thematic break of many dashes then text', `${'-'.repeat(MIB)}x`],
+  ['spaces then dashes', `${' '.repeat(MIB / 2)}${'-'.repeat(MIB / 2)}x`],
   ['control characters and NUL in a heading', '# a\u0000\u001b[31m b ##\r\n# c\u2028d'],
+  ['a quote of many spaces', `>${SP}x`],
+  ['spaces before a quote marker', `${SP}x`],
+  ['a long number then no dot', `${'9'.repeat(MIB)}x`],
+  ['many numbered lines', '1. a\n'.repeat(MIB / 6)],
+  ['many bullet lines', '- a\n'.repeat(MIB / 4)],
+  ['deeply indented bullet lines', Array.from({ length: 1500 }, (_, i) => `${' '.repeat(i)}- a`).join('\n')],
+  ['many table rows', '| a | b |\n|---|---|\n'.repeat(MIB / 20)],
+  ['a table separator of many cells', `a|b\n${'|---'.repeat(MIB / 4)}x`],
+  ['a table separator of many colons and dashes', `a|b\n${':-'.repeat(MIB / 2)}x`],
+  ['a link bracket run', '['.repeat(MIB)],
+  ['a bracket run then a link tail', `${'['.repeat(MIB / 2)}a](${'x'.repeat(MIB / 2)}`],
+  ['many link starts sharing one long target', `${'[a'.repeat(MIB / 4)}](${'x'.repeat(MIB / 2)}`],
+  ['many unclosed link targets', '[a](x'.repeat(MIB / 5)],
+  ['many link targets with open parentheses', '[a]( ('.repeat(MIB / 6)],
+  ['a link target of many parenthesis pairs', `[a](${'(x)'.repeat(MIB / 3)}`],
+  ['bracket and star pairs', '[*'.repeat(MIB / 2)],
+  ['star and bracket pairs', '*['.repeat(MIB / 2)],
+  ['unclosed emphasis stars', '*a '.repeat(300_000)],
+  ['unclosed strong marks', '**a '.repeat(250_000)],
+  ['star runs', '*'.repeat(MIB)],
+  ['a long strong span with no end', `**${'x'.repeat(MIB)}`],
+  ['many code span starts', '`a'.repeat(MIB / 2)],
+  ['a backtick run', '`'.repeat(MIB)],
+  ['bold and italic mixed', '***a** *b* '.repeat(MIB / 12)],
 ];
+for (const end of ENDS) {
+  const shown = JSON.stringify(end);
+  HOSTILE.push(
+    [`hash, spaces, then ${shown}`, `#${' '.repeat(200_000)}${end}x`],
+    [`indent, hash, spaces, then ${shown}`, `   ###${' '.repeat(200_000)}${end}`],
+    [`many backticks, then ${shown}`, `${'`'.repeat(200_000)}${end}x`],
+    [`many tildes, then ${shown}`, `${'~'.repeat(200_000)}${end}x`],
+    [`a closing fence of many backticks then ${shown}`, `\`\`\`\n${'`'.repeat(200_000)}${end}`],
+    [`a table separator line of spaces then ${shown}`, `|\n${SP}x${end}`],
+    [`a table separator of dashes then spaces then ${shown}`, `a|b\n|---${SP}x${end}`],
+    [`a bullet line of spaces then ${shown}`, `- ${SP}x${end}y`],
+    [`a numbered line of spaces then ${shown}`, `1.${SP}x${end}y`],
+    [`a nested bullet of spaces then ${shown}`, `- a\n  - ${SP}x${end}y`],
+    [`a quote of spaces then ${shown}`, `>${SP}${end}x`],
+    [`a thematic break of spaces then ${shown}`, `---${SP}${end}x`],
+    [`unclosed emphasis stars with ${shown} between`, `*a${end} `.repeat(250_000)],
+    [`unclosed strong marks with ${shown} between`, `**a${end}`.repeat(300_000)],
+    [`emphasis that must cross ${shown}`, `*a${end}b `.repeat(150_000)],
+  );
+}
 for (const [name, text] of HOSTILE)
-  test(`hostile input stays linear and does not throw: ${name}`, () => {
-    const started = process.hrtime.bigint();
-    parseMarkdown(text);
-    // A generous bound that only a quadratic regular expression breaks.
-    assert.ok(Number(process.hrtime.bigint() - started) / 1e9 < 5);
-  });
+  test(`hostile input stays linear and does not throw: ${name}`, () => parseWithin(text));
+
+/** @param {string} unit */
+const document = (unit) => unit.repeat(Math.ceil(MIB / unit.length));
+for (const end of ENDS) {
+  const shown = JSON.stringify(end);
+  for (const [name, unit] of /** @type {[string, string][]} */ ([
+    ['hash and space lines', `#${' '.repeat(1000)}${end}x\n`],
+    ['bullet lines', `- ${' '.repeat(1000)}x${end}y\n`],
+    ['table lines', `a|b\n|---${' '.repeat(1000)}x${end}\n`],
+    ['link and emphasis lines', `[a](x${end}*b ${end}**c\n`],
+  ]))
+    test(`a document of about 1 MiB of ${name} with ${shown} parses within the budget`, () =>
+      parseWithin(document(unit)));
+}
+
+test('a bullet line holding a lone CR ends in a list, not in a loop', () => {
+  assert.deepEqual(types('- a\rb\n- c'), ['list']);
+  assert.deepEqual(types('1. a\u2028b'), ['list']);
+});
 
 test('a closing sequence is removed in one linear pass from a heading of many spaces', () => {
   assert.deepEqual(headings(`# a${' '.repeat(50_000)}b ##`), [`a${' '.repeat(50_000)}b`]);
 });
-
-for (const end of ['\r', '\u2028', '\u2029'])
-  test(`a document of about 1 MiB of hash and space lines ending in ${JSON.stringify(end)} parses in bounded time`, () => {
-    const started = process.hrtime.bigint();
-    parseMarkdown(`#${' '.repeat(1000)}${end}x\n`.repeat(1000));
-    parseMarkdown(`#${' '.repeat(1_000_000)}${end}x`);
-    assert.ok(Number(process.hrtime.bigint() - started) / 1e9 < 5);
-  });
 
 test('a line terminator character other than newline is kept as heading text', () => {
   assert.deepEqual(headings('# a\rb'), ['a\rb']);
