@@ -9,8 +9,8 @@ Two changes in one Run, by the user's decision. Both come from the Runs of 4 Nov
 
 ## Solution
 
-1. The Exit checklist gets an eighth step, **Repeat changed tests**, between Hostile input and Self-check. For every changed test file and every changed test helper, Build runs the repeat step of the project's reliable-tests guide: 30 runs plain, 30 under load and 30 with `--test-concurrency=1`. A new test must be seen failing on the code from before the change, and the failing output goes in `build.md`. Build agents never use `run_in_background` or `pkill` for test runs: they run in the foreground with a finite timeout, and load comes from foreground commands that wait for their children. The three Build agent files, the Build paragraph of the `factory` Skill, the canonical Exit checklist spec and the glossary say the same.
-2. The flag list of the diff calls in `src/run-sweep.js` and `src/run-size.js` gets `--src-prefix=a/ --dst-prefix=b/`, so the prefixes no longer depend on the user's config. A regression test sets `diff.mnemonicprefix` in a test repository.
+1. The Exit checklist gets a new step 7, **Repeat changed tests**, between Hostile input and Self-check; Self-check becomes step 8 and the checklist has eight steps. For every changed test file and every changed test helper, Build runs the repeat step of the project's reliable-tests guide: 30 runs plain, 30 under load and 30 with `--test-concurrency=1`. A new test must be seen failing on the code from before the change, and the failing output goes in `build.md`. Build agents never use `run_in_background` or `pkill` for test runs: they run in the foreground with a finite timeout, and load comes from foreground commands that wait for their children. The three Build agent files, the Build paragraph of the `factory` Skill, the canonical Exit checklist spec and the glossary say the same.
+2. The flag list of the diff calls in `src/run-sweep.js` and `src/run-size.js` gets `--src-prefix=a/ --dst-prefix=b/`, so the prefixes no longer depend on the user's config. Regression tests set `diff.mnemonicprefix` and `diff.noprefix` in a test repository: the sweep's lists section and the byte count of `run size` must not change.
 
 ## User Stories
 
@@ -27,13 +27,13 @@ Two changes in one Run, by the user's decision. Both come from the Runs of 4 Nov
 - A project without a reliable-tests guide uses the same counts (30 plain, 30 under load, 30 with `--test-concurrency=1`). A change without a test file skips the step.
 - Under load, without `pkill` or background jobs: one foreground command starts the load as children of a shell and the repeat loop, waits for both, and has a finite timeout (for example `timeout 300`). The load stops by itself.
 - The pre-change code for the red run is a temporary `git worktree` at `base_sha` with the new test copied in, or the test written first and run before the fix (the `tdd` order).
-- The sweep fix touches only the two flag lists; `src/guides.js` and `src/project-reviews.js` read names only (`--name-only`, `-z`) and are unaffected.
+- The sweep fix touches only the two flag lists. `run-size.js` has no header parser, but its byte count includes the header lines, which `diff.noprefix` shortens, so it gets the flags too. `src/guides.js` and `src/project-reviews.js` read names only (`--name-only`, `-z`) and are unaffected.
 - Size estimate: Ticket 1 about 12 files and 9 KB (checklist reference, Skill, three agents, two tests, canonical spec, glossary, changelog fragment, this Spec), Ticket 2 about 4 files and 3 KB (two sources, one test, changelog fragment), Define artifacts counted in the first row. Total about 16 files and 12 KB, over two thirds of the limit; the user accepted one Run.
 
 ## Testing Decisions
 
 - `test/skills.test.js` asserts the eight step names in order; `test/agents-install.test.js` asserts the Build sentence on every target.
-- `test/run-sweep.test.js` gets a test that sets `diff.mnemonicprefix` in the test repository and expects the same output as without it; it must fail before the change.
+- `test/run-sweep.test.js` gets a test that sets `diff.mnemonicprefix` and `diff.noprefix` in a test repository and expects the same lists as without them; `test/run-size.test.js` gets the same for the measured files and bytes. Both must fail before the change.
 - Verify runs with the user's global git config; Ticket 2 makes that work.
 
 ## Out of Scope

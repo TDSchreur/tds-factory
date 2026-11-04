@@ -50,7 +50,8 @@ export function runSize(
   const { record } = readRun(projectDir, id);
   const base = record.base_sha;
   if (!record.worktree || !base || !/^[0-9a-f]{40,64}$/.test(base)) return undefined;
-  const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
+  // The prefixes are fixed because diff.noprefix and diff.mnemonicprefix change the header lines, and with them the byte count.
+  const plain = ['--no-ext-diff', '--no-textconv', '--no-color', '--src-prefix=a/', '--dst-prefix=b/'];
   /** @param {...string} args */
   const git = (...args) => run(record.worktree ?? '', args, { maxBuffer, timeout });
   const diff = git('diff', ...plain, base, 'HEAD', '--', ...PATHSPEC);
