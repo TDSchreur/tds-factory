@@ -27,6 +27,29 @@ test('pwsh is resolved from the fixed Program Files folder, never from PATH or t
   assert.throws(() => resolvePwsh({ ProgramFiles: 'relative', PATH: planted }), /not found/);
 });
 
+test('paths reach PowerShell as ASCII Base64 UTF-8, so no code page can change a name', () => {
+  const { root } = fakeProgramFiles();
+  const target = path.join(privateDir('.trust-test-'), 'ünï 日本語');
+  fs.mkdirSync(target);
+  /** @type {string | undefined} */
+  let input;
+  const spawn = /** @type {typeof spawnSync} */ (
+    /** @type {unknown} */ (
+      (/** @type {string} */ _command, /** @type {string[]} */ _args, /** @type {{input?: string}} */ options) => {
+        input = options.input;
+        return { status: 0, stdout: 'verified', stderr: '' };
+      }
+    )
+  );
+  verifyWindowsInstallPaths([target], false, { env: { ProgramFiles: root }, spawn });
+  assert.ok(input);
+  assert.match(input, /^[\x20-\x7e]*$/);
+  const sent = JSON.parse(input).map((/** @type {{path: string}} */ entry) =>
+    Buffer.from(entry.path, 'base64').toString('utf8'),
+  );
+  assert.ok(sent.includes(target));
+});
+
 test('a pwsh.exe that is a folder is not accepted', () => {
   const root = privateDir('.trust-test-');
   fs.mkdirSync(path.join(root, 'PowerShell', '7', 'pwsh.exe'), { recursive: true });
@@ -62,19 +85,20 @@ function icacls(...args) {
   return spawnSync('icacls', args, { encoding: 'utf8', timeout: 20000 });
 }
 
-/** Run a fixed PowerShell snippet that takes the folder as an argument, to build descriptors the Node API cannot.
+/** Run a fixed PowerShell snippet that reads the folder from the environment, to build descriptors the Node API cannot.
  * @param {string} script @param {string} dir */
 function pwshWith(script, dir) {
-  return spawnSync(resolvePwsh(process.env), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script, dir], {
+  return spawnSync(resolvePwsh(process.env), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
     encoding: 'utf8',
     timeout: 30000,
     cwd: process.env.SystemRoot,
+    env: { ...process.env, TDS_TEST_DIR: dir },
   });
 }
 
 test('a private folder in the home folder is accepted, also with hostile and confusing names', windows, () => {
   const base = privateDir('.trust-test-');
-  const names = ['[x] $(New-Item pwned) `;&', "it's {a} %PATH% ^!,=#@", '--help', 'con-1', 'ünï cödé'];
+  const names = ['[x] $(New-Item pwned) `;&', "it's {a} %PATH% ^!,=#@", '--help', 'con-1', 'ünï cödé', '日本語 фыв'];
   for (const name of names) fs.mkdirSync(path.join(base, name));
   assert.doesNotThrow(() => verifyWindowsInstallPaths([base], true));
   assert.equal(fs.existsSync(path.join(process.cwd(), 'pwned')), false);
@@ -124,7 +148,7 @@ test('a null DACL is refused', windows, (t) => {
   const dir = path.join(base, 'null-dacl');
   fs.mkdirSync(dir);
   const script =
-    '$d = $args[0]; $acl = Get-Acl -LiteralPath $d; $acl.SetSecurityDescriptorSddlForm("D:NO_ACCESS_CONTROL"); Set-Acl -LiteralPath $d -AclObject $acl';
+    '$d = $env:TDS_TEST_DIR; $acl = Get-Acl -LiteralPath $d; $acl.SetSecurityDescriptorSddlForm("D:NO_ACCESS_CONTROL"); Set-Acl -LiteralPath $d -AclObject $acl';
   const result = pwshWith(script, dir);
   if (result.status !== 0)
     return t.skip(`a null DACL cannot be set here (decision logic untested): ${result.stderr || result.stdout}`);

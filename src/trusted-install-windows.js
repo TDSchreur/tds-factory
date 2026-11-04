@@ -9,6 +9,8 @@ import { identityOf } from './install-identity.js';
 const SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
 try {
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
+# The input is ASCII JSON whose paths are Base64 UTF-8, so no console code page can turn one path into another.
 $paths = @(ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd()))
 if ($paths.Count -eq 0) { throw 'No paths' }
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -16,7 +18,7 @@ $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $trusted = @($user, 'S-1-5-18', 'S-1-5-32-544', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
 $unsafe = [int64]0x500D0156
 foreach ($entry in $paths) {
-  $p = $entry.path
+  $p = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($entry.path))
   $root = [System.IO.Path]::GetPathRoot($p)
   $drive = [System.IO.DriveInfo]::new($root)
   if ($drive.DriveType -ne [System.IO.DriveType]::Fixed -or $drive.DriveFormat -ne 'NTFS') { throw 'Unsupported volume' }
@@ -103,7 +105,12 @@ export function verifyWindowsInstallPaths(paths, recursive, { env = process.env,
   );
   const encoded = Buffer.from(SCRIPT, 'utf16le').toString('base64');
   const result = spawn(pwsh, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
-    input: JSON.stringify([...found].map(([file, checkInheritance]) => ({ path: file, checkInheritance }))),
+    input: JSON.stringify(
+      [...found].map(([file, checkInheritance]) => ({
+        path: Buffer.from(file, 'utf8').toString('base64'),
+        checkInheritance,
+      })),
+    ),
     encoding: 'utf8',
     timeout: 60000,
     maxBuffer: 1024 * 1024,

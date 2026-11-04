@@ -6,7 +6,7 @@ import { privateDir } from './private-dir.js';
 import { verifyInstallPaths } from '../src/trusted-install-paths.js';
 import { install } from '../src/install.js';
 
-const linuxOnly = { skip: process.platform !== 'linux' ? 'Linux POSIX permission policy' : false };
+const linuxOnly = { skip: !['linux', 'win32'].includes(process.platform) ? 'install needs Linux or Windows' : false };
 
 test('verification returns identities that a later check compares', linuxOnly, () => {
   const base = privateDir('.identity-test-');
@@ -24,7 +24,7 @@ test('a symbolic link that appears where nothing existed is refused', linuxOnly,
   const base = privateDir('.identity-test-');
   const dir = path.join(base, 'future');
   const guard = verifyInstallPaths([dir]);
-  fs.symlinkSync(base, dir);
+  fs.symlinkSync(base, dir, 'junction');
   assert.throws(() => guard.check(dir), /changed/);
 });
 
@@ -60,7 +60,7 @@ test('swapping the skills folder between verification and use stops the install'
           if (!swapped && message.startsWith('installed codex/')) {
             swapped = true;
             fs.renameSync(skills, path.join(base, 'old-skills'));
-            fs.symlinkSync(decoy, skills);
+            fs.symlinkSync(decoy, skills, 'junction');
           }
         },
       }),
@@ -69,4 +69,11 @@ test('swapping the skills folder between verification and use stops the install'
   assert.ok(swapped);
   assert.deepEqual(fs.readdirSync(decoy), []);
   t.diagnostic('the decoy folder stayed empty');
+});
+
+test('the identities are real file ids, not zero', linuxOnly, () => {
+  const base = privateDir('.identity-test-');
+  const guard = verifyInstallPaths([base]);
+  const identity = guard.known.get(base);
+  assert.match(identity ?? '', /^\d+:[1-9]\d*$/);
 });
