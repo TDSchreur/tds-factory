@@ -157,12 +157,13 @@ export function updateRun(projectDir, id, data) {
  * @param {string | undefined} id
  * @param {Run} old
  * @param {Run} next
+ * @param {import('./run-size.js').SizeOptions} [sizeOptions] for tests
  */
-function growsOverTheLimit(projectDir, id, old, next) {
+export function growsOverTheLimit(projectDir, id, old, next, sizeOptions) {
   if (next.stage !== 'build' || next.status !== 'running' || next.size_accepted) return false;
   const done = next.tickets_done ?? 0;
   if (done <= (old.tickets_done ?? 0) || done >= (next.tickets_total ?? 0)) return false;
-  const size = runSize(projectDir, id);
+  const size = runSize(projectDir, id, sizeOptions);
   return size !== undefined && overLimit(size);
 }
 
@@ -360,6 +361,9 @@ export const SPLIT_DONE_REASON = 'Split done: ready for an agent';
 /** @type {Partial<Run>} */
 const handedOver = { status: 'waiting', waiting_on_human: false, waiting_reason: SPLIT_DONE_REASON };
 
+/** @param {string} type */
+const lostEventNote = (type) => `note: the ${type} event could not be recorded; the Event log lacks the entry`;
+
 // Drops the Tickets not yet done from the Run and returns their links. The command line releases the Run to running. The Dashboard's `handOver` leaves it waiting for an agent instead, not on the user (like a Fix, ADR 0034), and `updated` is the record time the user saw: a Run that changed since is refused.
 /**
  * @param {string} projectDir
@@ -387,12 +391,8 @@ export function splitRun(projectDir, id, { updated, handOver = false, warn = con
       updated: new Date().toISOString(),
     };
   });
-  // The links are already computed: a failing event log must not hide them from the user.
-  try {
-    appendEvent(dir, { type: 'split', moved });
-  } catch (error) {
-    warn(`note: the split event could not be recorded (${error instanceof Error ? error.message : error})`);
-  }
+  // The links are already computed: a lost event must not hide them from the user, so it is reported and the command succeeds.
+  if (!appendEvent(dir, { type: 'split', moved })) warn(lostEventNote('split'));
   return moved;
 }
 
@@ -400,12 +400,12 @@ export function splitRun(projectDir, id, { updated, handOver = false, warn = con
 /**
  * @param {string} projectDir
  * @param {string | undefined} id
- * @param {{ accept?: boolean, updated?: string }} [options]
- * @returns {{ files: number, bytes: number } | undefined}
+ * @param {{ accept?: boolean, updated?: string, warn?: (message: string) => void }} [options]
+ * @returns {import('./run-size.js').RunSize | undefined}
  */
-export function sizeRun(projectDir, id, { accept = false, updated } = {}) {
+export function sizeRun(projectDir, id, { accept = false, updated, warn = console.error } = {}) {
   if (!accept) return runSize(projectDir, id);
-  /** @type {{ files: number, bytes: number } | undefined} */
+  /** @type {import('./run-size.js').RunSize | undefined} */
   let size;
   changeRun(projectDir, id, (old) => {
     size = runSize(projectDir, id);
@@ -422,7 +422,8 @@ export function sizeRun(projectDir, id, { accept = false, updated } = {}) {
       updated: now,
     };
   });
-  appendEvent(readRun(projectDir, id).dir, { type: 'size-accepted', ...size });
+  if (!appendEvent(readRun(projectDir, id).dir, { type: 'size-accepted', ...size }))
+    warn(lostEventNote('size-accepted'));
   return size;
 }
 

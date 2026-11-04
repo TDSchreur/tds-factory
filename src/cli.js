@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { messageOf } from './narrow.js';
+import { printable } from './printable.js';
 
 /** Where a command's output goes: `process.stdout` and `process.stderr` qualify, and so does a test's collector. @typedef {{ write(chunk: string): unknown }} Sink */
 /**
@@ -159,12 +160,12 @@ async function execute(argv, context) {
         store.transition(values.id, values.to, data);
         if (values.to === 'check') for (const warning of store.sizeWarnings(values.id)) err(`warning: ${warning}`);
       } else if (op === 'split') {
-        for (const link of store.split(values.id, { warn: err }))
-          out(link.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?'));
+        for (const link of store.split(values.id, { warn: err })) out(printable(link));
       } else if (op === 'size') {
-        const size = store.size(values.id, { accept: values.accept });
+        const { describeSize } = await import('./run-size.js');
+        const size = store.size(values.id, { accept: values.accept, warn: err });
         if (!size) out('The Run size is unknown (no base commit, or git failed)');
-        else out(`${size.files} file${size.files === 1 ? '' : 's'}, ${Math.round(size.bytes / 1024)} KB`);
+        else out(describeSize(size));
       } else if (op === 'follow-up') out(String(store.followUp(values.id, { scope: values.scope })));
       else if (op === 'rework') store.rework(values.id, data, values.cause ?? []);
       else if (op === 'sync') store.sync(values.id, data);

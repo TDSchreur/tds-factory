@@ -6,6 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { messageOf, oneOf } from './narrow.js';
+import { printable } from './printable.js';
 import { FOLLOW_UP_SCOPES, SIZE_WAIT_REASON } from './run-store.js';
 import { interpretRun, str } from './dashboard-view.js';
 import { can, providerFor } from './pr-provider.js';
@@ -210,7 +211,7 @@ function splitRun(ctx, id, v) {
   const updated = sizeAnswer(ctx, v);
   if (updated === undefined) return;
   const moved = ctx.store.split(id, { updated, handOver: true });
-  ctx.send(200, 'text/plain', moved.map((link) => link.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ')).join('\n'));
+  ctx.send(200, 'text/plain', moved.map(printable).join('\n'));
 }
 
 /** @param {DashboardContext} ctx @param {string} id @param {ReturnType<typeof interpretRun>} v */
