@@ -276,9 +276,32 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   let closing;
   /** @type {string[] | null} */
   let leftovers = null;
+  /** @type {number | undefined} */
+  let browserPid;
   const close = () =>
     (closing ??= (async () => {
       try {
+        // ChromeDriver deletes its temporary profile right after it ends the session. When Chromium still writes into
+        // it (a loaded machine), the delete stops half way and leaves a scoped directory behind that nothing removes.
+        // So Chromium is closed and awaited first. A browser that does not leave within the deadline is killed with
+        // the driver below, and the leftovers check reports what stayed.
+        if (session && browserPid !== undefined) {
+          const pid = browserPid;
+          await request('POST', `/session/${session}/${browser.cdp}/cdp/execute`, { cmd: 'Browser.close' }, 5000).catch(
+            () => {},
+          );
+          await waitUntil(
+            () => {
+              try {
+                process.kill(pid, 0);
+                return false;
+              } catch {
+                return true;
+              }
+            },
+            { message: `Chromium (pid ${pid}) exits` },
+          ).catch(() => {});
+        }
         if (session) await request('DELETE', '/session/' + session, undefined, 5000).catch(() => {});
         await stopDriver(driver, driverPort);
         if (driver.pid !== undefined) live.delete(driver.pid);
@@ -308,24 +331,24 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         message: 'the driver answers /status',
       },
     );
-    session = (
-      await request('POST', '/session', {
-        capabilities: {
-          alwaysMatch: {
-            browserName: browser.name,
-            [browser.options]: {
-              args: [
-                '--headless',
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                `--window-size=${width},${height}`,
-                ...args,
-              ],
-            },
+    const created = await request('POST', '/session', {
+      capabilities: {
+        alwaysMatch: {
+          browserName: browser.name,
+          [browser.options]: {
+            args: [
+              '--headless',
+              '--no-sandbox',
+              '--disable-dev-shm-usage',
+              `--window-size=${width},${height}`,
+              ...args,
+            ],
           },
         },
-      })
-    ).sessionId;
+      },
+    });
+    session = created.sessionId;
+    browserPid = created.capabilities?.['goog:processID'];
     const base = '/session/' + session;
     // Window sizing is clamped by Chromium (a 375px window can have a 500px viewport).
     // Set CSS viewport dimensions through browser emulation before responsive assertions.
