@@ -2,3 +2,10 @@
 
 - The Markdown parser behind every Dashboard Markdown view follows CommonMark for fenced code and headings: `~~~` fences are recognised and close only on a fence of the same character that is at least as long, a line indented four or more spaces is not a heading, a closing `#` sequence is removed from a heading, and a tab after `#` stays valid.
 - A Linked document title skips an empty first `# ` heading for the next non-empty level 1 heading, and the number taken from a file name has at most 6 digits.
+- The Linked document reader refuses a directory, FIFO, device or socket (and falls through to the next place to look), a file above 1 MiB and a final symlink, and checks after opening that it opened the file it located. The Run worktree counts as a place to look only under the Project's `.factory/worktrees/`.
+- Linked document titles are looked up once per Run record change instead of on every poll, and the title cache drops the least recently used entry.
+
+### Changed
+
+- A Ticket tile with a title shows `"<title> (<path>)"` as its tooltip, so a cut-off title is readable.
+- The fence and heading fixes show in every Markdown view of the Dashboard, not only in the titles.

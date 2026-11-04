@@ -57,14 +57,14 @@ Fix each item. The parser follows CommonMark for the cases above. The reader ref
 
 Counted as the Run size counts (no lockfiles, no fixtures), tests at real size, Markdown by line length. Estimates run low.
 
-| Row                                                                 | Files                                                                                                                           | KB       |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Ticket 1: parser and title rules                                    | 4 (markdown.js, run-folder.js, test/dashboard-markdown.test.js, test/dashboard-titles.test.js)                                  | 5.5      |
-| Ticket 2: reader hardening, worktree root, located-path cache, LRU  | 4 (run-folder.js, run-store.js, test/dashboard-documents.test.js, test/dashboard-titles.test.js)                                | 9.0      |
-| Ticket 3: tooltip and code tidy                                     | 6 (dashboard-pr-views.js, dashboard-handlers.js, components.js, test/dashboard-tickets.test.js, browser test, titles test)      | 4.0      |
-| Ticket 4: documentation                                             | 4 (docs/dashboard.md, linked-document-titles.md, one edited and one new changelog fragment)                     | 3.5      |
-| ADR 0038 amendment and Define artifacts (this Spec)                 | 2                                                                                                                               | 9.5      |
-| **Total (distinct files)**                                          | **17**                                                                                                                          | **31.5** |
+| Row                                                                | Files                                                                                                                      | KB       |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| Ticket 1: parser and title rules                                   | 4 (markdown.js, run-folder.js, test/dashboard-markdown.test.js, test/dashboard-titles.test.js)                             | 5.5      |
+| Ticket 2: reader hardening, worktree root, located-path cache, LRU | 4 (run-folder.js, run-store.js, test/dashboard-documents.test.js, test/dashboard-titles.test.js)                           | 9.0      |
+| Ticket 3: tooltip and code tidy                                    | 6 (dashboard-pr-views.js, dashboard-handlers.js, components.js, test/dashboard-tickets.test.js, browser test, titles test) | 4.0      |
+| Ticket 4: documentation                                            | 4 (docs/dashboard.md, linked-document-titles.md, one edited and one new changelog fragment)                                | 3.5      |
+| ADR 0038 amendment and Define artifacts (this Spec)                | 2                                                                                                                          | 9.5      |
+| **Total (distinct files)**                                         | **17**                                                                                                                     | **31.5** |
 
 Over the fit line (10 files, 27 KB): 7 files and 4.5 KB over, and the file count is above the Run limit (about 15 files, 40 KB), so Build may wait for the user. The files overlap across Tickets; 17 counts each once. The browser test file is likely unchanged, which would make it 16. Suggested cut, for the coordinator to decide (this Spec is not split): Run 1 carries Tickets 1, 2 and 4 (about 12 files, 27.5 KB), Run 2 carries Ticket 3 (tooltip and tidy, about 6 files, 4 KB) with its own docs line. Not applied.
 
