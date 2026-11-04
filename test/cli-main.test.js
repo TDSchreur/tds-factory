@@ -121,7 +121,7 @@ async function runWith(fast) {
 }
 
 test('the environment of the call reaches the commands it runs, and the process gets its own back', async () => {
-  const { cwd, id } = await runWith('echo "marker=$TDS_TEST_MARKER"');
+  const { cwd, id } = await runWith('node -p "\'marker=\' + process.env.TDS_TEST_MARKER"'); // cmd.exe on Windows does not expand $VARIABLE
   assert.equal(process.env.TDS_TEST_MARKER, undefined);
   const verified = await run(['run', 'verify', '--id', id, '--fast'], cwd, { ...process.env, TDS_TEST_MARKER: 'one' });
   assert.equal(verified.status, 0, verified.stderr);
