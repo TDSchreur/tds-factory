@@ -80,6 +80,61 @@ test('the adapter starts the absolute pwsh with a system working directory and f
   assert.throws(() => verifyWindowsInstallPaths([target], false, { env: {}, spawn: spawn('verified') }), /not found/);
 });
 
+test('a path that changes while PowerShell runs is refused', () => {
+  const { root } = fakeProgramFiles();
+  const base = privateDir('.trust-test-');
+  const target = path.join(base, 'dir');
+  fs.mkdirSync(target);
+  const spawn = /** @type {typeof spawnSync} */ (
+    /** @type {unknown} */ (
+      () => {
+        fs.renameSync(target, path.join(base, 'moved'));
+        fs.mkdirSync(target);
+        return { status: 0, stdout: 'verified', stderr: '' };
+      }
+    )
+  );
+  assert.throws(() => verifyWindowsInstallPaths([target], false, { env: { ProgramFiles: root }, spawn }), /changed/);
+});
+
+test('a path that does not survive UTF-8 is refused before PowerShell starts', () => {
+  const { root } = fakeProgramFiles();
+  const target = path.join(privateDir('.trust-test-'), 'bad\ud800name');
+  let started = false;
+  const spawn = /** @type {typeof spawnSync} */ (
+    /** @type {unknown} */ (
+      () => {
+        started = true;
+        return { status: 0, stdout: 'verified', stderr: '' };
+      }
+    )
+  );
+  assert.throws(() => verifyWindowsInstallPaths([target], false, { env: { ProgramFiles: root }, spawn }), /UTF-8/);
+  assert.equal(started, false);
+});
+
+test('PowerShell gets a minimal environment', () => {
+  const { root } = fakeProgramFiles();
+  const target = privateDir('.trust-test-');
+  /** @type {NodeJS.ProcessEnv | undefined} */
+  let given;
+  const spawn = /** @type {typeof spawnSync} */ (
+    /** @type {unknown} */ (
+      (/** @type {string} */ _c, /** @type {string[]} */ _a, /** @type {{env?: NodeJS.ProcessEnv}} */ options) => {
+        given = options.env;
+        return { status: 0, stdout: 'verified', stderr: '' };
+      }
+    )
+  );
+  const env = { ProgramFiles: root, SystemRoot: 'C:\\Windows', SECRET_TOKEN: 'x', PSModulePath: 'C:\\evil' };
+  verifyWindowsInstallPaths([target], false, { env, spawn });
+  assert.ok(given);
+  assert.equal(given.SECRET_TOKEN, undefined);
+  assert.equal(given.PSModulePath, undefined);
+  assert.equal(given.SystemRoot, 'C:\\Windows');
+  assert.equal(given.NoDefaultCurrentDirectoryInExePath, '1');
+});
+
 /** @param {string[]} args */
 function icacls(...args) {
   return spawnSync('icacls', args, { encoding: 'utf8', timeout: 20000 });

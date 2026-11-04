@@ -6,3 +6,4 @@
 ### Fixed
 
 - `tds-factory install` without a terminal shows the full command example, `--dry-run` refuses unsupported platforms, and typed `add:` paths are limited to 4096 characters.
+- Installing rechecks the backup folder before creating or copying into it, refuses a link when recording what it created, compares the folder identities from before and after the Windows PowerShell check, rejects paths that are not valid UTF-8 and starts PowerShell with a minimal environment.

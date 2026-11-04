@@ -5,6 +5,9 @@ import path from 'node:path';
 import { privateDir } from './private-dir.js';
 import { verifyInstallPaths } from '../src/trusted-install-paths.js';
 import { install } from '../src/install.js';
+import { cleanupDestination } from '../src/install-cleanup.js';
+import { hashLine } from '../src/tree-hash.js';
+import { identityGuard } from '../src/install-identity.js';
 
 const linuxOnly = { skip: !['linux', 'win32'].includes(process.platform) ? 'install needs Linux or Windows' : false };
 
@@ -76,4 +79,56 @@ test('the identities are real file ids, not zero', linuxOnly, () => {
   const guard = verifyInstallPaths([base]);
   const identity = guard.known.get(base);
   assert.match(identity ?? '', /^\d+:[1-9]\d*$/);
+});
+
+test(
+  'swapping the backup root for a link between verification and cleanup refuses and keeps the edited file',
+  linuxOnly,
+  () => {
+    const base = privateDir('.identity-test-');
+    const skillsDir = path.join(base, 'skills');
+    const agentsDir = path.join(base, 'agents');
+    const backupRoot = path.join(base, 'backups');
+    const decoy = path.join(base, 'decoy');
+    for (const dir of [skillsDir, agentsDir, backupRoot, decoy]) fs.mkdirSync(dir, { mode: 0o700 });
+    const skill = path.join(skillsDir, 'factory');
+    fs.mkdirSync(skill);
+    fs.writeFileSync(path.join(skill, 'SKILL.md'), 'original\n');
+    fs.writeFileSync(path.join(skill, '.tds-factory'), hashLine(skill));
+    fs.writeFileSync(path.join(skill, 'SKILL.md'), 'edited by the user\n');
+    const real = verifyInstallPaths([skillsDir, agentsDir, backupRoot]);
+    /** @type {string[]} */
+    const checked = [];
+    // The swap happens at the first recheck, the moment before the first backup write.
+    const guard = {
+      check(/** @type {string} */ file) {
+        if (!checked.length) {
+          fs.rmdirSync(backupRoot);
+          fs.symlinkSync(decoy, backupRoot, 'junction');
+        }
+        checked.push(file);
+        real.check(file);
+      },
+      adopt: real.adopt,
+    };
+    assert.throws(
+      () => cleanupDestination({ skillsDir, agentsDir, backupRoot, trustedPaths: true, log() {}, guard }),
+      /changed/,
+    );
+    assert.equal(checked[0], backupRoot);
+    assert.deepEqual(fs.readdirSync(decoy), []);
+    assert.equal(fs.readFileSync(path.join(skill, 'SKILL.md'), 'utf8'), 'edited by the user\n');
+  },
+);
+
+test('adopt refuses a link as the adopted path or a recorded ancestor', linuxOnly, () => {
+  const base = privateDir('.identity-test-');
+  const real = path.join(base, 'real');
+  fs.mkdirSync(real, { mode: 0o700 });
+  const link = path.join(base, 'link');
+  fs.symlinkSync(real, link, 'junction');
+  const guard = identityGuard();
+  assert.throws(() => guard.adopt(link), /link/);
+  fs.mkdirSync(path.join(real, 'child'));
+  assert.throws(() => guard.adopt(path.join(link, 'child')), /link/);
 });

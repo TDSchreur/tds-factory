@@ -88,7 +88,7 @@ function snapshot(file) {
 
 // Callers must establish that another security principal cannot replace these paths.
 // Rechecks detect ordinary edits; they do not provide atomic isolation from a concurrent writer.
-/** @param {{ skillsDir: string, agentsDir: string, backupRoot: string, trustedPaths?: boolean, dryRun?: boolean, log?: (message: string) => void, guard?: { check: (file: string) => void } }} options */
+/** @param {{ skillsDir: string, agentsDir: string, backupRoot: string, trustedPaths?: boolean, dryRun?: boolean, log?: (message: string) => void, guard?: { check: (file: string) => void, adopt: (file: string) => void } }} options */
 export function cleanupDestination({
   skillsDir,
   agentsDir,
@@ -161,10 +161,15 @@ export function cleanupDestination({
   /** @type {string | undefined} */
   let backupDir;
   if (!dryRun && owned.some((item) => item.backup)) {
+    guard?.check(backupRoot);
     fs.mkdirSync(backupRoot, { recursive: true, mode: 0o700 });
+    guard?.adopt(backupRoot);
+    guard?.check(backupRoot);
     backupDir = fs.mkdtempSync(path.join(backupRoot, 'cleanup-'));
+    guard?.adopt(backupDir);
     for (const item of owned.filter((entry) => entry.backup)) {
       guard?.check(item.file);
+      guard?.check(backupDir);
       unchanged(item.file);
       const dest = path.join(backupDir, item.relative);
       fs.mkdirSync(path.dirname(dest), { recursive: true });

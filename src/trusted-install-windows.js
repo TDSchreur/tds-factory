@@ -52,6 +52,27 @@ foreach ($entry in $paths) {
 }
 `;
 
+/** Only what pwsh needs to start; nothing that could load modules or code from the caller's environment.
+ * @param {NodeJS.ProcessEnv} env @param {string} systemDirectory */
+function minimalEnv(env, systemDirectory) {
+  /** @type {NodeJS.ProcessEnv} */
+  const minimal = { PATH: systemDirectory, NoDefaultCurrentDirectoryInExePath: '1', POWERSHELL_TELEMETRY_OPTOUT: '1' };
+  for (const key of [
+    'SystemRoot',
+    'windir',
+    'SystemDrive',
+    'TEMP',
+    'TMP',
+    'USERPROFILE',
+    'APPDATA',
+    'LOCALAPPDATA',
+    'ProgramFiles',
+    'ProgramW6432',
+  ])
+    if (env[key]) minimal[key] = env[key];
+  return minimal;
+}
+
 /**
  * PowerShell 7 at its fixed installation folder, never found through PATH or the current directory, where a planted
  * pwsh.exe could report any path as verified.
@@ -83,6 +104,8 @@ export function verifyWindowsInstallPaths(paths, recursive, { env = process.env,
   while (pending.length) {
     const requested = /** @type {string} */ (pending.pop());
     if (!path.isAbsolute(requested)) throw new Error('install path must be absolute');
+    if (Buffer.from(requested, 'utf8').toString('utf8') !== requested)
+      throw new Error('install path is not valid UTF-8 text and cannot be verified');
     let current = path.resolve(requested);
     const stat = fs.lstatSync(current, { throwIfNoEntry: false });
     let nearest = true;
@@ -98,6 +121,7 @@ export function verifyWindowsInstallPaths(paths, recursive, { env = process.env,
     if (recursive && stat?.isDirectory() && !stat.isSymbolicLink())
       pending.push(...fs.readdirSync(requested).map((name) => path.join(requested, name)));
   }
+  const before = new Map([...found.keys()].map((file) => [file, identityOf(file)]));
   const pwsh = resolvePwsh(env);
   const systemDirectory = path.join(
     env.SystemRoot && path.isAbsolute(env.SystemRoot) ? env.SystemRoot : 'C:\\Windows',
@@ -115,15 +139,17 @@ export function verifyWindowsInstallPaths(paths, recursive, { env = process.env,
     timeout: 60000,
     maxBuffer: 1024 * 1024,
     cwd: systemDirectory,
-    env: { ...env, NoDefaultCurrentDirectoryInExePath: '1' },
+    env: minimalEnv(env, systemDirectory),
     windowsHide: true,
   });
   if (result.error || result.status !== 0 || result.stdout !== 'verified') {
     const detail = result.stderr?.trim() || result.error?.message || 'unexpected verification output';
     throw new Error(`cannot verify Windows install paths: ${printable(detail)}`);
   }
+  for (const [file, identity] of before)
+    if (identityOf(file) !== identity) throw new Error(`install path changed during verification: ${printable(file)}`);
   return new Map([
-    ...[...found.keys()].map((file) => /** @type {const} */ ([file, identityOf(file)])),
+    ...[...before].map(([file, identity]) => /** @type {const} */ ([file, identity])),
     ...[...absent].map((file) => /** @type {const} */ ([file, undefined])),
   ]);
 }

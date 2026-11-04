@@ -22,7 +22,9 @@ const within = (a, b) => {
 /**
  * The identities of the paths a verification inspected. `check` runs immediately before a mutation and refuses when a
  * recorded path or one of its recorded ancestors is another object now, or when a link appeared where nothing existed.
- * `adopt` records what the installer itself created or replaced. It detects a swap; it does not make the mutation atomic.
+ * `adopt` records what the installer itself created or replaced and refuses a link. It detects a swap; it does not make
+ * the mutation atomic, and a replacement that reuses the same device and inode (for example a deleted and recreated
+ * folder on a filesystem that recycles inode numbers) cannot be told apart from the original.
  * @param {Map<string, string | undefined>} [known] Absent paths map to undefined.
  * @returns {IdentityGuard}
  */
@@ -46,6 +48,7 @@ export function identityGuard(known = new Map()) {
     while (true) {
       const identity = identityOf(current);
       if (identity === undefined) break;
+      if (identity.startsWith('link:')) throw new Error(`install path is a link: ${printable(current)}`);
       if (known.get(current) !== undefined && current !== target) break;
       known.set(current, identity);
       const parent = path.dirname(current);
