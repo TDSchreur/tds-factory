@@ -42,7 +42,7 @@ export const HELP_SECTIONS = [
     title: 'Specs and Tickets',
     items: [
       {
-        text: 'A Spec or Ticket of a Local tracker shows its file name; hover for the full path. A click or Enter opens it in the Run detail, and Back returns to the Run. Ticket tiles on a card open it too. GitHub and Azure DevOps Tickets open in a new tab.',
+        text: 'A Spec or Ticket of a Local tracker shows its title (the first level 1 heading, with the number of a file name such as 01-skeleton.md in front), or its file name when it has none; hover for the full path. A click or Enter opens it in the Run detail, and Back returns to the Run. Ticket tiles on a card open it too. GitHub and Azure DevOps Tickets open in a new tab.',
       },
     ],
   },

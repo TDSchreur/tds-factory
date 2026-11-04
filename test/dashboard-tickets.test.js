@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { folderName, ticketsOf } from '../dashboard/model.js';
+import { documentLabel, folderName, ticketsOf } from '../dashboard/model.js';
 import { interpretRun } from '../src/dashboard.js';
 import { entryOf, runView } from './run-view.js';
 
@@ -41,4 +41,24 @@ test('folderName keeps the last path segment for either separator and tolerates 
   assert.equal(folderName('/work/tds-factory/'), 'tds-factory');
   assert.equal(folderName('C:\\work\\tds-factory'), 'tds-factory');
   assert.equal(folderName(''), '');
+});
+
+test('a Ticket with a title in the Run view data is labelled with it, and a remote or untitled link keeps its label', () => {
+  const run = runView({
+    tickets: ['.scratch/f/issues/01-a.md', '.scratch/f/issues/02-b.md', 'https://github.com/o/r/issues/7', 'toString'],
+    titles: {
+      '.scratch/f/issues/01-a.md': '01 Skeleton and gh wrapper',
+      'https://github.com/o/r/issues/7': 'Should never show',
+    },
+  });
+  assert.deepEqual(
+    ticketsOf(run).map((t) => t.label),
+    ['01 Skeleton and gh wrapper', '02-b.md', '#7', 'toString'],
+  );
+});
+
+test('documentLabel falls back to the file name without titles', () => {
+  assert.equal(documentLabel(runView(), 'docs/specs/x.md'), 'x.md');
+  assert.equal(documentLabel(runView({ titles: { 'docs/specs/x.md': '' } }), 'docs/specs/x.md'), 'x.md');
+  assert.equal(documentLabel(runView({ titles: { 'docs/specs/x.md': 'The Spec' } }), 'docs/specs/x.md'), 'The Spec');
 });

@@ -29,6 +29,7 @@ import {
   documentPath,
   isLocalDocument,
   ticketLabel,
+  documentLabel,
   runKey,
   safeUrl,
   ticketTilesOf,
@@ -57,7 +58,7 @@ export function Link({ href, children }) {
     : html`<span>${children}</span>`;
 }
 
-// A Spec or Ticket: a path opens in the Run detail (the file name is the text, the path the tooltip); anything else is a Link.
+// A Spec or Ticket: a path opens in the Run detail (the title, or else the file name, is the text, the path the tooltip); anything else is a Link.
 /** @param {{ href: unknown, onOpen: (path: string) => void, children?: unknown }} props */
 function DocLink({ href, onOpen, children }) {
   if (!isLocalDocument(href)) return html`<${Link} href=${href}>${children}<//>`;
@@ -67,7 +68,7 @@ function DocLink({ href, onOpen, children }) {
   ) => {
     stop(e);
     onOpen(docPath);
-  }} onKeyDown=${stop}>${ticketLabel(docPath)}</button>`;
+  }} onKeyDown=${stop}>${children ?? ticketLabel(docPath)}</button>`;
 }
 
 /**
@@ -808,7 +809,7 @@ export function Detail({
   doc,
   onDoc,
 }) {
-  const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links]) : '';
+  const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links, run.titles]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ key: string, files: LoadedFile[] } | null} */ (null));
   /** @type {{ current: HTMLHeadingElement | null }} */
   const heading = useRef(null);
@@ -962,7 +963,7 @@ export function Detail({
     ${reviews.length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${reviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
     ${run.links.map((l) =>
       (l.label === 'Spec' || l.label === 'Ticket') && isLocalDocument(l.href)
-        ? html`<div class="link">${l.label + ': '}<${DocLink} href=${l.href} onOpen=${onDoc}>${l.href}<//></div>`
+        ? html`<div class="link">${l.label + ': '}<${DocLink} href=${l.href} onOpen=${onDoc}>${documentLabel(run, l.href)}<//></div>`
         : html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`,
     )}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}

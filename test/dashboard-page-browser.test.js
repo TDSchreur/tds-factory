@@ -678,6 +678,67 @@ test('cards and detail distinguish paused Runs from waiting on a person', async 
   }
 });
 
+test('a local Spec and Ticket show their title as link text, cut off on the tile, and HTML in a title stays text', async (t) => {
+  const long = 'A very long title '.repeat(30).trim();
+  const page = await openPage(t, {
+    runs: [
+      run({
+        id: 'r1',
+        title: 'Titled docs',
+        column: 'build',
+        ticketsTotal: 3,
+        ticketsDone: 0,
+        tickets: ['.scratch/f/issues/01-a.md', '.scratch/f/issues/02-b.md', 'https://github.com/o/r/issues/7'],
+        links: [
+          { label: 'Spec', href: 'docs/specs/x.md' },
+          { label: 'Ticket', href: '.scratch/f/issues/01-a.md' },
+          { label: 'Ticket', href: '.scratch/f/issues/02-b.md' },
+          { label: 'Ticket', href: 'https://github.com/o/r/issues/7' },
+        ],
+        titles: {
+          'docs/specs/x.md': 'The Spec title',
+          '.scratch/f/issues/01-a.md': '01 <img src=x onerror=alert(1)>',
+          '.scratch/f/issues/02-b.md': `02 ${long}`,
+        },
+      }),
+    ],
+    documents: { 'docs/specs/x.md': '# The Spec\n', '.scratch/f/issues/01-a.md': '# Ticket A\n' },
+  });
+  if (!page) return;
+  try {
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('.card .tickets .ticket-head')].map(h => { const el = h.querySelector('button.doc-link, a'); return [el.textContent, el.title]; })",
+      ),
+      [
+        ['01 <img src=x onerror=alert(1)>', '.scratch/f/issues/01-a.md'],
+        [`02 ${long}`, '.scratch/f/issues/02-b.md'],
+        ['#7', ''],
+      ],
+    );
+    assert.equal(await page.execute("return document.querySelector('.card .tickets img') === null"), true);
+    // The long title is cut off by CSS: one line, with an ellipsis.
+    assert.deepEqual(
+      await page.execute(
+        "const el = document.querySelectorAll('.card .tickets button.doc-link')[1]; const cs = getComputedStyle(el); return [cs.textOverflow, cs.whiteSpace, el.scrollWidth > el.clientWidth]",
+      ),
+      ['ellipsis', 'nowrap', true],
+    );
+    await page.execute("document.querySelector('[data-id=r1]').click()");
+    await page.waitFor("return document.getElementById('detail').open");
+    assert.deepEqual(
+      await page.execute("return [...document.querySelectorAll('#detail .link')].map(d => d.textContent).slice(0, 2)"),
+      ['Spec: The Spec title', 'Ticket: 01 <img src=x onerror=alert(1)>'],
+    );
+    // The opened document's heading stays the file name.
+    await page.execute("document.querySelector('#detail .link button.doc-link').click()");
+    await page.waitFor("return document.querySelector('#detail h3')?.textContent === 'The Spec'");
+    assert.equal(await page.execute("return document.querySelector('#detail h2').textContent"), 'x.md');
+  } finally {
+    await page.close();
+  }
+});
+
 test('a local Spec and Ticket open in the Run detail with a Back button, and an http Ticket stays an anchor', async (t) => {
   const page = await openPage(t, {
     runs: [
