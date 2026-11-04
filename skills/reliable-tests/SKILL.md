@@ -9,7 +9,7 @@ A flaky test fails without a change in the code. Treat it as a bug in the test (
 
 ## Diagnose
 
-1. **Reproduce.** Run the file in a loop (`for i in $(seq 30); do node --test test/<file>.test.js || break; done`), then again under CPU load (run several copies at once) and with `--test-concurrency=1`. If the failure only shows on Windows, run the Windows shard in CI, or the same loop in PowerShell 7 and Git for Windows. No reproduction yet is no fix yet: keep trying before you change code.
+1. **Reproduce.** Run the file in a loop (`for i in $(seq 30); do node --test test/<file>.test.js || break; done`), then again under CPU load (run several copies at once) and with `--test-concurrency=1`. If the failure only shows on Windows, run the same loop in PowerShell 7 and Git for Windows. No reproduction yet is no fix yet: keep trying before you change code.
 2. **Read the failure.** Take the first assertion that failed, not the last. Note the time it took and what ran before it.
 3. **Classify the cause.** One of:
    - **Timing**: a fixed sleep, a short time budget, an assertion on elapsed time or timestamp order.
