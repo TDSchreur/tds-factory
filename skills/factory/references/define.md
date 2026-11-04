@@ -20,4 +20,4 @@ The Spec's Documents bullet lists the files that describe the feature, not the k
 
 A Full track Run with three or more Tickets gets one last documentation Ticket, blocked by every other Ticket. Its input is the Sweep output at the end of Build: it brings every document, canonical spec, guide, glossary entry and help text the Sweep still lists in line with the finished feature, and it writes the Sweep paragraph in `build.md`. The Fast track and a Run with fewer than three Tickets get no extra Ticket; their Tickets update the documents they touch.
 
-A Local tracker keeps its Spec and Tickets under `.scratch/`, which Preflight keeps out of git (see Gitignore in `SKILL.md`). Do not commit or force-add `.scratch/`; `tickets` in the Run record keeps the repo-relative paths.
+A Local tracker keeps its Tickets under `.scratch/` (the Spec is a file in `docs/specs/`), which Preflight keeps out of git (see Gitignore in `SKILL.md`). Do not commit or force-add `.scratch/`; `tickets` in the Run record keeps the repo-relative paths.

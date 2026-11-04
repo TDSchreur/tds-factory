@@ -6,7 +6,7 @@ import { summarizeMetrics, totalMetrics } from './run-metrics.js';
 import { totalUsage } from './run-usage.js';
 import { reviewPlan } from './project-reviews.js';
 import { tracks } from './run-record.js';
-import { readRun, listRuns, readRunFile, mainCheckout } from './run-folder.js';
+import { readRun, listRuns, readRunFile, readLinkedDocument, mainCheckout } from './run-folder.js';
 import { worktreeState, worktreeStateFlow } from './worktrees.js';
 import { runAsync } from './git.js';
 import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeReview } from './evidence.js';
@@ -156,6 +156,8 @@ export function openRunStore(callerDir) {
     repairApply: (id, plan) => repairApply(projectDir, runsDir, id, plan),
     /** @param {string} rawPath */
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
+    /** @param {string} runId @param {string} rawPath */
+    readDocument: (runId, rawPath) => readLinkedDocument(projectDir, runId, rawPath),
     /** @param {string} id @param {(reason: string) => void} [why] @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options] */
     remove: (id, why, options) => removeRun(projectDir, id, why, options),
     /** @param {string | undefined} id @param {{ prState?: SyncPrLookup }} [options] */

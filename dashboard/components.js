@@ -26,6 +26,9 @@ import {
   prStatusOf,
   progressOf,
   filePath,
+  documentPath,
+  isLocalDocument,
+  ticketLabel,
   runKey,
   safeUrl,
   ticketTilesOf,
@@ -54,6 +57,19 @@ export function Link({ href, children }) {
     : html`<span>${children}</span>`;
 }
 
+// A Spec or Ticket: a path opens in the Run detail (the file name is the text, the path the tooltip); anything else is a Link.
+/** @param {{ href: unknown, onOpen: (path: string) => void, children?: unknown }} props */
+function DocLink({ href, onOpen, children }) {
+  if (!isLocalDocument(href)) return html`<${Link} href=${href}>${children}<//>`;
+  const docPath = String(href);
+  return html`<button type="button" class="doc-link" data-doc=${docPath} title=${docPath} onClick=${(
+    /** @type {Event} */ e,
+  ) => {
+    stop(e);
+    onOpen(docPath);
+  }} onKeyDown=${stop}>${ticketLabel(docPath)}</button>`;
+}
+
 /**
  * @param {Span[]} spans
  * @returns {unknown[]}
@@ -76,10 +92,11 @@ function MdList({ list }) {
 }
 
 // Text becomes Preact text nodes only, so file content can never inject markup.
-/** @param {{ text: string }} props */
-export function Markdown({ text }) {
+// `base` is the heading level of a `#`: 4 under the h3 of a Run file, 3 under the h2 of a document.
+/** @param {{ text: string, base?: number }} props */
+export function Markdown({ text, base = 4 }) {
   return html`<div class="md">${parseMarkdown(text).map((b) => {
-    if (b.type === 'heading') return h('h' + Math.min(6, b.level + 3), null, inline(b.inline));
+    if (b.type === 'heading') return h('h' + Math.min(6, b.level + base - 1), null, inline(b.inline));
     if (b.type === 'paragraph') return html`<p>${inline(b.inline)}</p>`;
     if (b.type === 'quote') return html`<blockquote>${inline(b.inline)}</blockquote>`;
     if (b.type === 'rule') return html`<hr />`;
@@ -295,8 +312,8 @@ function CheckPrButton({ run, onCheck, stopClick = true }) {
   }} onKeyDown=${stopClick ? stop : undefined}>Check PR</button>`;
 }
 
-/** @param {{ run: RunView }} props */
-function Tickets({ run }) {
+/** @param {{ run: RunView, onOpenDoc: (run: RunView, path: string) => void }} props */
+function Tickets({ run, onOpenDoc }) {
   const tickets = ticketTilesOf(run);
   /** @type {Record<string, string>} */
   const mark = { done: '✓', active: '▶', todo: '○', rework: '↻' };
@@ -304,7 +321,7 @@ function Tickets({ run }) {
     ? html`<ul class="tickets" aria-label="Tickets">${tickets.map((t) => {
         const id = `usage-${run.projectId}-${run.id}-${t.key}`.replace(/[^A-Za-z0-9_-]/g, '-');
         return html`<li key=${t.key} class=${'ticket ' + t.state}>
-          <div class="ticket-head"><span aria-hidden="true">${mark[t.state]}</span> ${t.href ? html`<${Link} href=${t.href}>${t.label}<//>` : t.label}<span class="sr"> (${t.state})</span></div>
+          <div class="ticket-head"><span aria-hidden="true">${mark[t.state]}</span> ${t.href ? html`<${DocLink} href=${t.href} onOpen=${(/** @type {string} */ path) => onOpenDoc(run, path)}>${t.label}<//>` : t.label}<span class="sr"> (${t.state})</span></div>
           ${
             t.usage &&
             html`<div class="ticket-usage" tabindex="0" aria-describedby=${id}>
@@ -346,6 +363,7 @@ const pauseLabel = (run) => {
  * @param {(run: RunView) => void} props.onClean
  * @param {(run: RunView) => void} props.onAccept
  * @param {(run: RunView) => void} props.onDelete
+ * @param {(run: RunView, path: string) => void} props.onOpenDoc
  */
 export function Card({
   run,
@@ -362,6 +380,7 @@ export function Card({
   onClean,
   onAccept,
   onDelete,
+  onOpenDoc,
 }) {
   const done = run.column === 'done';
   const age = ageMs(run.updated);
@@ -374,7 +393,7 @@ export function Card({
     run.activity && html`<div class="activity">${run.activity}</div>`,
     html`<${ModelLine} run=${run} />`,
     html`<${Progress} run=${run} />`,
-    html`<${Tickets} run=${run} />`,
+    html`<${Tickets} run=${run} onOpenDoc=${onOpenDoc} />`,
     html`<${Chips} run=${run} />`,
     html`<${PrStatus} run=${run} onCheckPr=${onCheckPr} />`,
     done &&
@@ -486,6 +505,7 @@ export function Welcome({ onHelp }) {
  * @typedef {object} Actions
  * @property {(run: RunView) => void} select
  * @property {(run: RunView) => void} toggle
+ * @property {(run: RunView, path: string) => void} openDocument
  * @property {(run: RunView) => Promise<void>} checkPr
  * @property {(run: RunView) => Promise<void>} checkDetails
  * @property {(run: RunView, scope: string) => Promise<void>} fix
@@ -559,7 +579,7 @@ function ProjectRow({ row, onlyWaiting, stage, selectedKey, expandedKeys, action
         return html`<div key=${c.key} role="group" class="column" data-stage=${c.key} data-active=${String(stage === c.key)} aria-labelledby=${'stage-' + c.key + ' ' + heading}>
         <div class="column-name" aria-hidden="true">${c.label}</div>
         ${c.key === 'done' && doneCount > 0 && html`<button type="button" aria-label=${'Delete all Done Runs of ' + project.name} onClick=${() => actions.deleteAll(project)}>Delete all</button>`}
-        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} />`)}</ul>
+        <ul class="cards">${mine.map((r) => html`<${Card} key=${r.id} run=${r} selected=${runKey(r) === selectedKey} expanded=${expandedKeys.has(runKey(r))} onSelect=${actions.select} onToggle=${actions.toggle} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} onSync=${actions.sync} onClean=${actions.clean} onAccept=${actions.accept} onDelete=${actions.remove} onOpenDoc=${actions.openDocument} />`)}</ul>
         ${!mine.length && html`<div class="empty">${onlyWaiting ? 'No runs waiting on you' : 'No runs'}</div>`}
       </div>`;
       })}</div>`
@@ -771,6 +791,8 @@ const labelSegments = (label) =>
  * @param {(run: RunView) => void} props.onGrant
  * @param {(run: RunView) => void} props.onSplit
  * @param {(run: RunView) => void} props.onContinue
+ * @param {string | null} props.doc the path of the Linked document shown instead of the Run view
+ * @param {(path: string | null) => void} props.onDoc
  */
 export function Detail({
   run,
@@ -783,6 +805,8 @@ export function Detail({
   onGrant,
   onSplit,
   onContinue,
+  doc,
+  onDoc,
 }) {
   const key = run ? JSON.stringify([runKey(run), run.title, run.updated, run.files, run.links]) : '';
   const [loaded, setLoaded] = useState(/** @type {{ key: string, files: LoadedFile[] } | null} */ (null));
@@ -836,7 +860,68 @@ export function Detail({
       live = false;
     };
   }, [key]);
+  const [docState, setDocState] = useState(
+    /** @type {{ key: string, text?: string, missing?: boolean, error?: string } | null} */ (null),
+  );
+  const docKey = run && doc ? runKey(run) + ' ' + doc : '';
+  /** @type {{ current: HTMLHeadingElement | null }} */
+  const docHeading = useRef(null);
+  /** @type {{ current: string | null }} */
+  const backTo = useRef(null); // the document whose link takes the focus back after Back
+  useEffect(() => {
+    if (!run || !doc) return undefined;
+    let live = true;
+    fetch(documentPath(run, doc), { cache: 'no-store' }).then(
+      async (res) => {
+        const next = res.ok
+          ? { key: docKey, text: await res.text() }
+          : res.status === 404
+            ? { key: docKey, missing: true }
+            : { key: docKey, error: 'HTTP ' + res.status };
+        if (live) setDocState(next);
+      },
+      (err) => {
+        if (live) setDocState({ key: docKey, error: String(err.message) });
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [docKey]);
+  useEffect(() => {
+    if (doc) docHeading.current?.focus({ preventScroll: true });
+    else if (backTo.current !== null) {
+      const back = elementsOf(document, '#detail [data-doc]').find((e) => e.dataset.doc === backTo.current);
+      backTo.current = null;
+      focus(back);
+    }
+  }, [doc]);
   if (!run) return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} hidden></dialog>`;
+  if (doc) {
+    const kind =
+      run.links.find((/** @type {{ href: string }} */ l) => l.href === doc)?.label === 'Spec' ? 'Spec' : 'Ticket';
+    const current = docState && docState.key === docKey ? docState : null;
+    return html`<dialog id="detail" ref=${dialog} aria-label="Run detail" onClose=${closed} onPointerDown=${press} onClick=${backdrop}>
+    <div class="detail-body">
+    <div class="doc-bar"><button type="button" class="doc-back" onClick=${() => {
+      backTo.current = doc;
+      onDoc(null);
+    }}><span aria-hidden="true">← </span>Back to ${run.title}</button><button type="button" class="close" aria-label="Close Run detail" onClick=${onClose}>✕</button></div>
+    <h2 ref=${docHeading} tabindex="-1">${ticketLabel(doc)}</h2>
+    <p class="doc-path">${doc}</p>
+    <div role="status" aria-live="polite">${
+      current === null
+        ? html`<p>Loading...</p>`
+        : current.missing
+          ? html`<p>This ${kind} is no longer on disk: ${doc}</p>`
+          : current.error
+            ? html`<p>Cannot load ${doc} (${current.error})</p>`
+            : null
+    }</div>
+    ${current?.text !== undefined && html`<${Markdown} text=${current.text} base=${3} />`}
+    </div>
+  </dialog>`;
+  }
   const updatedAge = ageMs(run.updated);
   const reviews = run.projectReviews ?? [];
   /** @type {LoadedFile[]} */
@@ -875,7 +960,11 @@ export function Detail({
     </section>`
     }
     ${reviews.length > 0 && html`<section aria-label="Project reviews"><h3>Project reviews</h3>${reviews.map((review) => html`<div key=${review.id}><strong>${review.name}: ${review.verdict || 'pending'}</strong>${review.reason && html`<p>${review.reason}</p>`}${review.findings.length > 0 && html`<ul>${review.findings.map((finding) => html`<li>${finding.severity}: ${finding.description} (${finding.location})</li>`)}</ul>`}</div>`)}</section>`}
-    ${run.links.map((l) => html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`)}
+    ${run.links.map((l) =>
+      (l.label === 'Spec' || l.label === 'Ticket') && isLocalDocument(l.href)
+        ? html`<div class="link">${l.label + ': '}<${DocLink} href=${l.href} onOpen=${onDoc}>${l.href}<//></div>`
+        : html`<div class="link"><${Link} href=${l.href}>${l.label + ': ' + l.href}<//></div>`,
+    )}
     ${!run.files.length && html`<div class="empty">No summaries yet</div>`}
     ${
       run.files.length > 0 &&

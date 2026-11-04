@@ -383,6 +383,11 @@
   .detail-body { padding: 0 var(--spacingHorizontalXL) var(--spacingVerticalXL); }
   #detail header { display: block; backdrop-filter: none; position: sticky; top: 0; z-index: 1; padding: var(--spacingVerticalXL) 0 var(--spacingVerticalM); background: var(--colorNeutralBackground1); border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2); }
   #detail .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--spacingHorizontalS); }
+  .doc-link { border: 0; background: none; padding: 0; font: inherit; color: var(--colorBrandForegroundLink); text-decoration: underline; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+  .doc-link:focus-visible { outline: 2px solid var(--colorBrandForegroundLink); outline-offset: 2px; }
+  #detail .doc-bar { display: flex; justify-content: space-between; align-items: center; gap: var(--spacingHorizontalM); }
+  #detail .doc-back { min-height: 44px; }
+  #detail .doc-path { color: var(--colorNeutralForeground3); overflow-wrap: anywhere; }
   #detail .close { flex: none; min-width: 44px; min-height: 44px; }
   #detail .compact-back { display: none; }
   #detail .head-row h2 { margin: 0; overflow-wrap: anywhere; }
@@ -431,7 +436,7 @@
     #help, #theme, #older, #notify, #needs-you { order: 3; }
     #status { min-width: 0; overflow-wrap: anywhere; }
     #project { max-width: min(16rem, 100%); }
-    #theme, #older, #notify, #needs-you, .column > button, .tickets a, .card .toggle, .actions button, .dialog-actions button, #help, .welcome .link { min-height: 44px; }
+    #theme, #older, #notify, #needs-you, .column > button, .tickets a, .tickets .doc-link, .card .toggle, .actions button, .dialog-actions button, #help, .welcome .link { min-height: 44px; }
     .tickets a, .card .toggle, .actions button { display: inline-flex; align-items: center; }
     #help-panel { width: 100%; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; }
     .stage-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: var(--spacingHorizontalS); padding: var(--spacingVerticalL) var(--spacingHorizontalL) 0; }

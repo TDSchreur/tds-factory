@@ -326,9 +326,10 @@ test('selecting a Run shows its Markdown files as text, never as markup', async 
       'https://example.com/pr/1',
       'https://example.com/',
     ]);
-    assert.match(
-      await page.execute("return document.querySelector('#detail').textContent"),
-      /Spec: docs\/specs\/x\.md/,
+    assert.match(await page.execute("return document.querySelector('#detail').textContent"), /Spec: x\.md/);
+    assert.equal(
+      await page.execute("return document.querySelector('#detail button.doc-link').title"),
+      'docs/specs/x.md',
     );
     await page.execute("document.querySelector('[data-id=r2]').click()");
     assert.match(await page.execute("return document.querySelector('#detail').textContent"), /No summaries yet/);
@@ -671,6 +672,76 @@ test('cards and detail distinguish paused Runs from waiting on a person', async 
     assert.equal(
       await page.execute("return document.querySelector('#detail .reason').textContent"),
       'Agent interrupted: signal',
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test('a local Spec and Ticket open in the Run detail with a Back button, and an http Ticket stays an anchor', async (t) => {
+  const page = await openPage(t, {
+    runs: [
+      run({
+        id: 'r1',
+        title: 'Local docs',
+        column: 'build',
+        ticketsTotal: 3,
+        ticketsDone: 0,
+        tickets: ['.scratch/f/issues/01-a.md', '.scratch/f/issues/02-gone.md', 'https://github.com/o/r/issues/7'],
+        links: [
+          { label: 'Spec', href: 'docs/specs/x.md' },
+          { label: 'Ticket', href: '.scratch/f/issues/01-a.md' },
+          { label: 'Ticket', href: '.scratch/f/issues/02-gone.md' },
+          { label: 'Ticket', href: 'https://github.com/o/r/issues/7' },
+        ],
+      }),
+    ],
+    documents: { 'docs/specs/x.md': '# The Spec\n\n- item', '.scratch/f/issues/01-a.md': '# Ticket A\n\nBody' },
+  });
+  if (!page) return;
+  try {
+    // The tile: file name as text, path as tooltip; the http Ticket keeps its label and its tab.
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('.card .tickets .ticket-head')].map(h => { const el = h.querySelector('button.doc-link, a'); return [el.tagName, el.textContent, el.title, el.getAttribute('target')]; })",
+      ),
+      [
+        ['BUTTON', '01-a.md', '.scratch/f/issues/01-a.md', null],
+        ['BUTTON', '02-gone.md', '.scratch/f/issues/02-gone.md', null],
+        ['A', '#7', '', '_blank'],
+      ],
+    );
+    await page.execute("document.querySelector('.card .tickets button.doc-link').click()");
+    await page.waitFor("return document.getElementById('detail').open && document.querySelector('#detail h3')");
+    assert.equal(await page.execute("return document.querySelector('#detail h3').textContent"), 'Ticket A');
+    assert.equal(await page.execute('return document.activeElement.tagName'), 'H2');
+    // The headings of the document view nest without a gap: the file name is h2, the document's `#` is h3.
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('#detail h2, #detail h3, #detail h4, #detail h5, #detail h6')].map(h => Number(h.tagName[1]))",
+      ),
+      [2, 3],
+    );
+    await page.execute("document.querySelector('#detail .doc-back').click()");
+    await page.waitFor(
+      "return document.activeElement && document.activeElement.dataset.doc === '.scratch/f/issues/01-a.md'",
+    );
+    // The Spec link in the detail opens the Spec and Back returns to the Run view.
+    await page.execute(
+      "[...document.querySelectorAll('#detail .link button.doc-link')].find(b => b.dataset.doc === 'docs/specs/x.md').click()",
+    );
+    await page.waitFor("return document.querySelector('#detail h3')?.textContent === 'The Spec'");
+    await page.execute("document.querySelector('#detail .doc-back').click()");
+    await page.waitFor("return document.activeElement?.dataset.doc === 'docs/specs/x.md'");
+    assert.match(await page.execute("return document.querySelector('#detail').textContent"), /Spec: x\.md/);
+    // A document that is gone says so, with its path.
+    await page.execute(
+      "[...document.querySelectorAll('#detail .link button.doc-link')].find(b => b.dataset.doc.endsWith('02-gone.md')).click()",
+    );
+    await page.waitFor("return /no longer on disk/.test(document.getElementById('detail').textContent)");
+    assert.equal(
+      await page.execute("return document.querySelector('#detail [role=status]').textContent"),
+      'This Ticket is no longer on disk: .scratch/f/issues/02-gone.md',
     );
   } finally {
     await page.close();
