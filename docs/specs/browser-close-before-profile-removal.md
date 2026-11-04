@@ -1,5 +1,7 @@
 # Browser close lets Chromium exit before ChromeDriver deletes the profile
 
+> Superseded in part: Chromium ignores `Browser.close` while ChromeDriver holds its session, so the wait below always ran to its deadline. `close()` now kills the Chromium process tree and waits for it to be gone; see [browser-test-close-is-fast.md](browser-test-close-is-fast.md).
+
 Fixes the flaky test "closing a page leaves no browser process and no scoped directory" in `test/dashboard-teardown-browser.test.js`, which failed in about 3 of 5 full `npm test` runs with "Chromium removed its scoped directories itself".
 
 ## Problem Statement

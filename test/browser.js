@@ -95,6 +95,43 @@ export const isRunning = (pid) => {
   }
 };
 
+// The browser process and all its descendants, from one snapshot of the process table (POSIX; the browser tests skip Windows).
+// Empty unless the browser is still a child of our own driver: a browser that already exited may have had its pid reused,
+// and an unrelated process must not be killed.
+/**
+ * @param {number} root
+ * @param {number | undefined} driverPid
+ */
+const processTree = (root, driverPid) => {
+  const table = spawnSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8' }).stdout ?? '';
+  const rows = table
+    .trim()
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/).map(Number));
+  if (!rows.some(([pid, parent]) => pid === root && parent === driverPid)) return [];
+  const pids = [root];
+  for (const pid of pids)
+    for (const [child, parent] of rows) if (parent === pid && !pids.includes(child)) pids.push(child);
+  return pids;
+};
+
+/** @param {number} pid */
+const killProcess = (pid) => {
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    /* already gone */
+  }
+};
+
+// Whether any of the processes still runs. A killed child stays a zombie until its parent (ChromeDriver) reaps it, and
+// process.kill(pid, 0) would report it as alive, so the process table is read (one call for all) and a zombie counts as gone.
+/** @param {number[]} pids */
+const anyLive = (pids) =>
+  (spawnSync('ps', ['-o', 'stat=', '-p', pids.join(',')], { encoding: 'utf8' }).stdout ?? '')
+    .split('\n')
+    .some((state) => state.trim() !== '' && !state.trim().startsWith('Z'));
+
 // Kills the process and its children: the whole process group on POSIX, the process tree through taskkill on Windows.
 /** @param {number} pid */
 export const killTree = (pid) => {
@@ -288,24 +325,16 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       try {
         // ChromeDriver deletes its temporary profile right after it ends the session. When Chromium still writes into
         // it (a loaded machine), the delete stops half way and leaves a scoped directory behind that nothing removes.
-        // So Chromium is closed and awaited first. A browser that does not leave within the deadline is killed with
-        // the driver below, and the leftovers check reports what stayed.
+        // Chromium ignores Browser.close for as long as ChromeDriver holds its session, so waiting for it to leave ran
+        // to its deadline in every test. So the Chromium processes are killed and awaited first: nothing writes into the
+        // profile any more when the session ends. A process that does not leave within the deadline is killed with the
+        // driver below, and the leftovers check reports what stayed.
         if (session && browserPid !== undefined) {
-          const pid = browserPid;
-          await request('POST', `/session/${session}/${browser.cdp}/cdp/execute`, { cmd: 'Browser.close' }, 5000).catch(
-            () => {},
-          );
-          await waitUntil(
-            () => {
-              try {
-                process.kill(pid, 0);
-                return false;
-              } catch {
-                return true;
-              }
-            },
-            { message: `Chromium (pid ${pid}) exits` },
-          ).catch(() => {});
+          const pids = processTree(browserPid, driver.pid);
+          for (const pid of pids) killProcess(pid);
+          await waitUntil(() => !anyLive(pids), {
+            message: `Chromium (pid ${browserPid}) and its processes exit`,
+          }).catch(() => {});
         }
         if (session) await request('DELETE', '/session/' + session, undefined, 5000).catch(() => {});
         await stopDriver(driver, driverPort);
