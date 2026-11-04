@@ -15,6 +15,12 @@ A folder with a `SKILL.md` that teaches an agent one capability.
 A coding agent the factory installs skills into: Claude, Codex or Copilot.
 _Avoid_: Backend, platform
 
+**Install destination**:
+One user-selected location where the Factory installs Skills and Stage agents for an Agent target. Separate Claude directories are separate install destinations, even though they use the same Agent target.
+
+**Install selection**:
+A user's chosen set of install destinations.
+
 **Flow**:
 The ordered Stages a piece of work moves through, encoded in the `factory` Skill.
 
