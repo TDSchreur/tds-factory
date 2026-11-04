@@ -6,10 +6,11 @@
 //   5. check the result with `tds-factory doctor`
 //   6. register the developer skills (not shipped to users) from vendor/ in ~/.claude/skills and ~/.agents/skills
 // Every step is safe to re-run. A failing step skips the steps that depend on it; the others still run.
-// Usage: node scripts/dev-install.js [--force] [--dry-run] [--skip-dev-skills]
+// Usage: node scripts/dev-install.js [--force] [--dry-run] [--skip-dev-skills] [--agent LIST] [--claude-dir PATH]... [--reuse-selection]
 //   --dry-run          print what would happen and change nothing
 //   --force            replace skills that this script or `tds-factory install` did not install
 //   --skip-dev-skills  leave out step 6
+//   --agent, --claude-dir (repeatable), --reuse-selection  passed on to `tds-factory install`, which asks on the terminal without them
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -45,10 +46,28 @@ const userRoot = (target) =>
   target === '.claude/skills' && process.env.CLAUDE_CONFIG_DIR
     ? path.join(path.resolve(process.env.CLAUDE_CONFIG_DIR), 'skills')
     : path.join(os.homedir(), target);
-const USAGE = 'Usage: node scripts/dev-install.js [--force] [--dry-run] [--skip-dev-skills]';
+const USAGE =
+  'Usage: node scripts/dev-install.js [--force] [--dry-run] [--skip-dev-skills] [--agent claude,codex,copilot|all] [--claude-dir PATH]... [--reuse-selection]';
 
 const args = process.argv.slice(2);
-const unknown = args.filter((a) => !['--force', '--dry-run', '--skip-dev-skills'].includes(a));
+// The destination flags go to `tds-factory install` as they are; it validates them.
+/** @type {string[]} */
+const choice = [];
+/** @type {string[]} */
+const unknown = [];
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg === '--agent' || arg === '--claude-dir') {
+    const value = args[i + 1];
+    if (value === undefined || value.startsWith('--')) {
+      console.error(`error: ${arg} needs a value\n${USAGE}`);
+      process.exit(1);
+    }
+    choice.push(arg, value);
+    i++;
+  } else if (arg === '--reuse-selection') choice.push(arg);
+  else if (!['--force', '--dry-run', '--skip-dev-skills'].includes(arg)) unknown.push(arg);
+}
 if (unknown.length) {
   console.error(`error: unknown option ${unknown.join(', ')}\n${USAGE}`);
   process.exit(1);
@@ -205,7 +224,7 @@ if (installed) {
       cli = factoryCommand();
       info(`tds-factory ${capture(cli, ['--version'])}`);
     }
-    stream(cli, ['install', ...(force ? ['--force'] : [])]);
+    stream(cli, ['install', ...(force ? ['--force'] : []), ...choice]);
   });
 } else skip('Register the Factory (tds-factory install)', 'the CLI was not installed');
 

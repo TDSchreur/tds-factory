@@ -110,3 +110,31 @@ test('rejects unknown options', () => {
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /unknown option/);
 });
+
+test('--agent, --claude-dir and --reuse-selection reach tds-factory install', { skip: !posix }, () => {
+  const s = setup();
+  const r = run(s, '--force', '--agent', 'claude,codex', '--claude-dir', '/a', '--claude-dir', '/b c');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(
+    readFileSync(s.log, 'utf8'),
+    /^tds-factory install --force --agent claude,codex --claude-dir \/a --claude-dir \/b c$/m,
+  );
+  const again = setup();
+  const reuse = run(again, '--reuse-selection');
+  assert.equal(reuse.status, 0, reuse.stdout + reuse.stderr);
+  assert.match(readFileSync(again.log, 'utf8'), /^tds-factory install --reuse-selection$/m);
+});
+
+test(
+  'a destination flag without its value, and unknown flags, still fail before anything runs',
+  { skip: !posix },
+  () => {
+    for (const flags of [['--agent'], ['--claude-dir'], ['--agent', '--force'], ['--bogus'], ['--project']]) {
+      const s = setup();
+      const r = run(s, ...flags);
+      assert.equal(r.status, 1, flags.join(' '));
+      assert.match(r.stderr, /error: (unknown option|.* needs a value)/);
+      assert.equal(existsSync(s.log), false, 'nothing ran');
+    }
+  },
+);
