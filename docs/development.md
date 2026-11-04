@@ -9,11 +9,11 @@ To work on the Factory itself, clone with `--recurse-submodules` and run `node s
 1. checks Node, git, npm and the checkout;
 2. initialises the `vendor/` submodules;
 3. fetches `origin`, packs its default branch and installs that globally, so you use what is on `develop` instead of the last Release (your checkout and working tree are not touched);
-4. registers the Factory with `tds-factory install`, which puts the skills and agents in `~/.claude` (or `$CLAUDE_CONFIG_DIR`) and `~/.agents`;
+4. registers the Factory with `tds-factory install`, which asks where to put the skills and agents (or takes `--agent`, `--claude-dir` and `--reuse-selection` from the command line, which `dev-install.js` passes on);
 5. checks the result with `tds-factory doctor` (findings are warnings);
 6. registers the developer skills described below.
 
-A failing step skips the steps that depend on it; the others still run, and the exit code is non-zero if a step failed. Options: `--dry-run` shows what would happen and changes nothing, `--force` replaces skills it did not install, `--skip-dev-skills` leaves out step 6.
+A failing step skips the steps that depend on it; the others still run, and the exit code is non-zero if a step failed. Options: `--dry-run` shows what would happen and changes nothing, `--force` replaces skills it did not install, `--skip-dev-skills` leaves out step 6, and `--agent claude,codex`, `--claude-dir PATH` (repeatable) and `--reuse-selection` choose the destinations of step 4 without the question.
 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/

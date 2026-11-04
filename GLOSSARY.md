@@ -258,9 +258,9 @@ A packaged build of the Factory published on GitHub when a maintainer chooses to
 _Avoid_: Package, Distribution
 
 **Update**:
-The `tds-factory update` command: it installs the latest Release when the installed version is older and never downgrades, then refreshes the Skills and Stage agents so they match the CLI.
+The `tds-factory update` command: it installs the latest Release when the installed version is older and never downgrades, then refreshes the Skills and Stage agents so they match the CLI. It asks for the destinations (or takes the `install` flags) before it downloads anything, so cancelling changes nothing.
 _Avoid_: Upgrade, Self-update
 
 **Bootstrap installer**:
-A script attached to every Release (`install.sh` for Linux, `install.ps1` for Windows, PowerShell 7) that a new user pipes into a shell to get the Factory. It only checks Node and npm, installs the Release with npm and runs `tds-factory install`.
+A script attached to every Release (`install.sh` for Linux, `install.ps1` for Windows, PowerShell 7) that a new user pipes into a shell to get the Factory. It only checks Node and npm, installs the Release with npm and runs `tds-factory install`, asking on the terminal through the CLI. `install.sh` also takes the destinations from its arguments or from `TDS_FACTORY_AGENT`, `TDS_FACTORY_CLAUDE_DIR` and `TDS_FACTORY_REUSE`; `install.ps1` does not yet.
 _Avoid_: Setup script

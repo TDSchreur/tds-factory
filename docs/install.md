@@ -26,7 +26,7 @@ On Windows (PowerShell 7, `pwsh`; install it from the [PowerShell download page]
 pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 ```
 
-The script checks that Node 24 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip part 3. It never installs Node, and it never asks for `sudo`.
+The script checks that Node 24 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, which asks where to install on your terminal, so you can skip part 3. It never installs Node, and it never asks for `sudo`.
 
 If you prefer to read before you run, open the script first (the same URL in a browser) or run the two commands yourself, which work the same on Linux and Windows. This is the install:
 
@@ -50,7 +50,7 @@ The Factory is a set of skills. Install them with:
 tds-factory install
 ```
 
-`tds-factory install` asks where to install. It never picks an agent for you. The scripts and `tds-factory update` call it too, so run them from a terminal; the update and Bootstrap changes that pass the choice through are tracked in issue #568 and are not part of this command yet.
+`tds-factory install` asks where to install. It never picks an agent for you. The one-line scripts, `tds-factory update` and `node scripts/dev-install.js` reach the same question or take the same flags, as described below and in part 4.
 
 ### Choose where to install
 
@@ -65,6 +65,28 @@ tds-factory install --agent claude,codex
 tds-factory install --agent claude --claude-dir ~/.claude --claude-dir ~/.claude-work
 tds-factory install --reuse-selection
 ```
+
+### Choose without a terminal with the one-line scripts
+
+`install.sh` forwards its arguments and reads the variables below. `install.ps1` does not take a destination choice yet: it still runs `tds-factory install` without flags, which asks on the console (`CONIN$`) and fails with an example command when there is no console, after npm has installed the CLI. On Windows without a console, set `TDS_FACTORY_SKIP_SKILLS=1` and then run `tds-factory install --agent claude,codex` yourself. `install.sh` translates them into `tds-factory install` flags without checking them: the CLI validates the choice before it changes anything. For `install.sh`, give a choice either as arguments or as variables, not both (the script refuses that before npm runs), and no list entry may be empty.
+
+| Variable                 | Effect                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `TDS_FACTORY_AGENT`      | The value of `--agent`: `claude`, `codex`, `copilot`, a comma-separated list or `all`. |
+| `TDS_FACTORY_CLAUDE_DIR` | Claude folders separated by `:`; each becomes `--claude-dir`.                          |
+| `TDS_FACTORY_REUSE`      | `1` repeats the saved selection (`--reuse-selection`).                                 |
+
+```sh
+curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh -s -- --agent claude,codex
+curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | TDS_FACTORY_AGENT=claude TDS_FACTORY_CLAUDE_DIR=~/.claude:~/.claude-work sh
+```
+
+```powershell
+$env:TDS_FACTORY_SKIP_SKILLS = '1'; irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex
+tds-factory install --agent claude,codex
+```
+
+Without a choice and without a terminal the CLI fails with an example command. If you cancel the question, the CLI may already be installed by then; no skills, agent files or saved choice change. `node scripts/dev-install.js` accepts `--agent`, `--claude-dir` (repeatable) and `--reuse-selection` and passes them to `tds-factory install`.
 
 Your answer is the complete selection. A destination you installed into before, or that holds Factory-owned skills from an earlier version, but that you did not select now is cleaned up: the Factory's own skills and agent files are removed, any you edited are first copied to a backup folder (`install-backups` next to the saved selection, in the Factory config folder) and everything else stays. If a Claude folder you chose before is unavailable (for example an unmounted drive), install keeps it and refuses the change until it is back or you choose it again. The choice is saved per user (global) and separately for each project, outside the project's files.
 
@@ -107,11 +129,11 @@ After you change a skill in `skills/`, run `install` again so the installed copy
 
 ## 4. Update
 
-Run `tds-factory update`. It looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and then runs `tds-factory install --force` so the skills and agents match the CLI. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades. Each request it makes ends after 30 seconds (the download after 120 seconds) and is retried like a server error, so an unreachable server ends the command with an error instead of leaving it hanging.
+Run `tds-factory update`. It first asks where to install, like `install` does (saved choices are marked; nothing is chosen silently), before it downloads anything: cancelling leaves the CLI, the installed files and your saved selection as they are. Without a terminal, name the choice with `--agent`, `--claude-dir` (repeatable) or `--reuse-selection`, for example `tds-factory update --agent claude,codex`; without a choice it fails with an example before any download. `update` has no `--project`. It then looks up the latest Release, installs it with npm when yours is older, checks the download against the Release's `tds-factory.tgz.sha256`, and runs `tds-factory install --force` with your choice as explicit flags, so the skills and agents match the CLI and you are not asked twice. The first update from a version before this change cannot ask first, because the old CLI still runs it: it chooses after the upgrade. If you are already on the latest version it skips the npm step and still refreshes the skills. It never downgrades. Each request it makes ends after 30 seconds (the download after 120 seconds) and is retried like a server error, so an unreachable server ends the command with an error instead of leaving it hanging.
 
 `--force` replaces agent files and skills you edited with the defaults, and any skill folder of the same name that `tds-factory` did not install. To keep them, run `tds-factory update --no-force`. To change the model of a Stage you do not need `--force` or edits to agent files: set it in the project's `.factory/config.json` (see [Set project options](usage.md#set-project-options)).
 
-Running the one-line install from part 2 again also updates, and keeps your edited agent files and skills unless you set `TDS_FACTORY_FORCE=1`. The manual way still works too:
+Running the one-line install from part 2 again also updates, and keeps your edited agent files and skills unless you set `TDS_FACTORY_FORCE=1`. In short: `update` replaces edited files by default (`--no-force` keeps them), the one-line scripts keep them unless `TDS_FACTORY_FORCE=1`, and `dev-install.js --force` replaces them when asked. The manual way still works too:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz

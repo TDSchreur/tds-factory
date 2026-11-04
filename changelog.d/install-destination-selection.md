@@ -6,7 +6,7 @@
 
 ### Changed
 
-- `tds-factory install` no longer defaults to all agents. `update` and the Bootstrap scripts still call it without a choice until issue #568 lands.
+- `tds-factory install` no longer defaults to all agents; `update` and the Bootstrap scripts pass it the choice.
 
 ### Removed
 

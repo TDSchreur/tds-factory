@@ -8,7 +8,7 @@
 
 Make `tds-factory install` ask for an Install selection and reconcile the result with Factory-owned installations. Discover `.claude`, `.claude-*` and `CLAUDE_CONFIG_DIR`, allow other Claude paths, and identify legacy installations. Remember global and per-Project choices separately. Cleanup is permitted only after the command establishes the filesystem trust boundary required by ADR 0037. Unsupported or unverifiable environments fail before any installation, cleanup or record change, with an actionable explanation.
 
-This Run implements the direct install command. Issue #568 separately handles the ordering and options needed by `update` and both Bootstrap installers; it must not claim those entry points are complete merely because they invoke `install`.
+This Run implements the direct install command. The [update and Bootstrap Spec](install-destination-selection-update-bootstrap.md) (issue #568) added the ordering and options that `update` and both Bootstrap installers need.
 
 ## User stories
 
@@ -53,7 +53,7 @@ Use real ACL and untrusted-principal fixtures on every claimed OS for writable p
 
 ## Out of scope
 
-Modifying `tds-factory update` to choose before npm, introducing Bootstrap-specific flags, or delivering the final two one-line workflows. Those are issue #568. Automatically removing unrelated files, installing Node or changing OS permissions for the user is also out of scope.
+Modifying `tds-factory update` to choose before npm, introducing Bootstrap-specific flags, or delivering the final two one-line workflows. Those are in the [update and Bootstrap Spec](install-destination-selection-update-bootstrap.md) (issue #568). Automatically removing unrelated files, installing Node or changing OS permissions for the user is also out of scope.
 
 ## Size estimate
 

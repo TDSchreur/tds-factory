@@ -2,6 +2,8 @@
 
 [Issue #568](https://github.com/TDSchreur/tds-factory/issues/568), Full track. Third of three Runs after the [cleanup foundation](install-destination-cleanup.md), the [selection foundation](install-destination-selection-foundation.md) and the [integration Spec](install-destination-selection-integration.md), which made `tds-factory install` ask for an Install selection.
 
+> Scope as built: `install.ps1` (Ticket 4, user story 5 and the PowerShell variables of story 6) was left out of this Run and is unchanged; it still runs `tds-factory install` without a choice.
+
 ## Problem statement
 
 `tds-factory update`, `scripts/install.sh`, `scripts/install.ps1` and `scripts/dev-install.js` still call `tds-factory install` without a choice. They work only in a terminal that can answer the prompt, and under `curl | sh`, `irm | iex` and in unattended use they cannot say where to install. `update` also cannot cancel before it has replaced the CLI.

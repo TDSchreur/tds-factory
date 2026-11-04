@@ -393,3 +393,19 @@ sys.exit(os.waitstatus_to_exitcode(status))
     }
   },
 );
+
+test('hostile variable values are passed on as plain arguments and never run', { skip }, () => {
+  const s = sandbox();
+  try {
+    const canary = join(s.dir, 'canary');
+    const dirs = [`$(touch ${canary})`, `\`touch ${canary}\``, 'a\nb', '-rf', '*', '~', ...Array(2000).fill('/x')];
+    const r = s.run({ TDS_FACTORY_AGENT: `claude;touch ${canary}`, TDS_FACTORY_CLAUDE_DIR: dirs.join(':') });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(existsSync(canary), false, 'nothing in a value was executed');
+    assert.deepEqual(r.argv.slice(0, 3), ['install', '--agent', `claude;touch ${canary}`]);
+    assert.equal(r.argv.filter((a) => a === '--claude-dir').length, dirs.length);
+    assert.ok(r.argv.includes('a'), 'a newline is not special; the CLI refuses the folder');
+  } finally {
+    s.cleanup();
+  }
+});

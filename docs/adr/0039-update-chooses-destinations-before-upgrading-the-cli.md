@@ -8,4 +8,4 @@
 
 A CLI from before this decision cannot ask first, so the first update from such a version chooses after the upgrade, through the new CLI's own prompt. The update that follows asks first.
 
-The Bootstrap installers cannot ask first, because they run before any Factory code exists. They install the CLI and then call `tds-factory install`; a cancelled prompt leaves the CLI installed and the Skills, agents and saved selection unchanged. They translate their arguments and `TDS_FACTORY_AGENT`, `TDS_FACTORY_CLAUDE_DIR` and `TDS_FACTORY_REUSE` into `install` flags and leave validation to the CLI.
+The Bootstrap installers cannot ask first, because they run before any Factory code exists. They install the CLI and then call `tds-factory install`; a cancelled prompt leaves the CLI installed and the Skills, agents and saved selection unchanged. `install.sh` translates its arguments and `TDS_FACTORY_AGENT`, `TDS_FACTORY_CLAUDE_DIR` and `TDS_FACTORY_REUSE` into `install` flags and leaves validation to the CLI. `install.ps1` does not translate a choice yet and still relies on the CLI's console prompt.

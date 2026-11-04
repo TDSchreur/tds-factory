@@ -1,6 +1,6 @@
 # Install selections own destination cleanup
 
-**Status: accepted.** `tds-factory install` implements this decision on Linux and Windows. `update` and the Bootstrap installers still call `install` without a choice until issue #568 lands.
+**Status: accepted.** `tds-factory install` implements this decision on Linux and Windows, and `update` and the Bootstrap installers pass the choice to it ([ADR 0039](0039-update-chooses-destinations-before-upgrading-the-cli.md)).
 
 The Factory used to install for every Agent target unless the user named one. Installs and Updates instead ask users to choose install destinations, remember that selection and ask for confirmation or changes next time. Separate Claude directories are separate destinations; discovered directories are candidates and are never selected automatically. Unattended use requires explicit destinations or an explicit request to reuse the saved selection.
 
