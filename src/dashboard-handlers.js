@@ -322,7 +322,12 @@ export async function views({ send, hub }) {
     hub.list().map(async ({ id, name, missing, path }) => {
       if (missing) return { id, name, path, missing, runs: [] };
       const { store, prViews } = hub.servicesOf({ id, path });
-      const viewed = await Promise.all((await store.list()).map(prViews.view));
+      const viewed = await Promise.all(
+        (await store.list()).map(async (entry) => ({
+          ...(await prViews.view(entry)),
+          titles: await store.titles(entry),
+        })),
+      );
       return { id, name, path, missing, runs: viewed.map((view) => ({ ...view, projectId: id })) };
     }),
   );

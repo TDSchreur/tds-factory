@@ -6,7 +6,7 @@ import { summarizeMetrics, totalMetrics } from './run-metrics.js';
 import { totalUsage } from './run-usage.js';
 import { reviewPlan } from './project-reviews.js';
 import { tracks } from './run-record.js';
-import { readRun, listRuns, readRunFile, readLinkedDocument, mainCheckout } from './run-folder.js';
+import { readRun, listRuns, readRunFile, readLinkedDocument, createLinkedTitles, mainCheckout } from './run-folder.js';
 import { worktreeState, worktreeStateFlow } from './worktrees.js';
 import { runAsync } from './git.js';
 import { finishProblems, verifyRun, verdictRun, projectReviewRun, materializeReview } from './evidence.js';
@@ -57,6 +57,7 @@ const eligibility = (record, state) => ({
 export function openRunStore(callerDir) {
   const { dir: projectDir } = mainCheckout(callerDir);
   const runsDir = path.resolve(projectDir, '.factory', 'runs');
+  const linkedTitles = createLinkedTitles();
   return {
     projectDir,
     /** @param {Partial<Run>} data */
@@ -158,6 +159,8 @@ export function openRunStore(callerDir) {
     readFile: (rawPath) => readRunFile(runsDir, rawPath),
     /** @param {string} runId @param {string} rawPath */
     readDocument: (runId, rawPath) => readLinkedDocument(projectDir, runId, rawPath),
+    /** @param {{ record?: unknown }} entry A store entry. */
+    titles: (entry) => linkedTitles.of(projectDir, entry.record),
     /** @param {string} id @param {(reason: string) => void} [why] @param {{ discardChanges?: boolean, doneOnly?: boolean }} [options] */
     remove: (id, why, options) => removeRun(projectDir, id, why, options),
     /** @param {string | undefined} id @param {{ prState?: SyncPrLookup }} [options] */

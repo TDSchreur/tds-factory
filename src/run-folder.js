@@ -10,6 +10,7 @@ import { stages, stageIndex } from './flow.js';
 import { validId, validate, write, withStageModel } from './run-record.js';
 import { appendEvent, deriveEvents, readEventsAsync } from './run-events.js';
 import { withUsage } from './run-usage.js';
+import { parseMarkdown } from '../dashboard/markdown.js';
 
 /**
  * @param {string} projectDir
@@ -321,22 +322,41 @@ const safeRelative = (p) =>
   !p.split('/').some((segment) => segment === '' || segment === '..');
 
 /**
+ * The real path of `rel` inside `root`, or null when it is missing or leads outside the root (a symlink).
  * @param {string} root
  * @param {string} rel
  */
-async function readInside(root, rel) {
+async function locateInside(root, rel) {
   try {
     const real = await fs.promises.realpath(root);
     const file = await fs.promises.realpath(path.resolve(real, rel));
-    if (!file.startsWith(real + path.sep)) return null;
-    return await fs.promises.readFile(file, 'utf8');
+    return file.startsWith(real + path.sep) ? file : null;
   } catch (err) {
     if (!isMissing(err) && codeOf(err) !== 'ENOTDIR' && codeOf(err) !== 'EISDIR') throw err;
     return null;
   }
 }
 
-// Returns the Markdown of a document the Run lists, or null for every refusal. Looks in the Run worktree, then the main checkout, then (Spec only) docs/specs/archive/ of the main checkout.
+// The one resolution of a Linked document, shared by the document route and the titles: the allow-list of the Run record, the path checks, the Run worktree, then the main checkout, then (Spec only) docs/specs/archive/ of the main checkout. Returns the real path of the file, or null for every refusal.
+/**
+ * @param {string} projectDir The main checkout.
+ * @param {Record<string, unknown>} record
+ * @param {string} rel The path as the record lists it.
+ */
+async function locateLinkedDocument(projectDir, record, rel) {
+  const isSpec = listedPaths(record.spec_link).includes(rel);
+  if (!isSpec && !listedPaths(record.tickets).includes(rel)) return null;
+  if (!safeRelative(rel)) return null;
+  const roots = [typeof record.worktree === 'string' ? record.worktree : '', projectDir].filter(Boolean);
+  for (const root of roots) {
+    const file = await locateInside(root, rel);
+    if (file !== null) return file;
+  }
+  if (!isSpec) return null;
+  return locateInside(projectDir, `docs/specs/archive/${path.posix.basename(rel)}`);
+}
+
+// Returns the Markdown of a document the Run lists, or null for every refusal.
 /**
  * @param {string} projectDir The main checkout.
  * @param {string} runId
@@ -361,16 +381,104 @@ export async function readLinkedDocument(projectDir, runId, rawPath) {
     // An unknown Run or an unreadable record lists no document.
     return null;
   }
-  const isSpec = listedPaths(record.spec_link).includes(rel);
-  if (!isSpec && !listedPaths(record.tickets).includes(rel)) return null;
-  if (!safeRelative(rel)) return null;
-  const roots = [typeof record.worktree === 'string' ? record.worktree : '', projectDir].filter(Boolean);
-  for (const root of roots) {
-    const body = await readInside(root, rel);
-    if (body !== null) return body;
+  const file = await locateLinkedDocument(projectDir, record, rel);
+  if (file === null) return null;
+  try {
+    return await fs.promises.readFile(file, 'utf8');
+  } catch (err) {
+    if (!isMissing(err) && codeOf(err) !== 'EISDIR') throw err;
+    return null;
   }
-  if (!isSpec) return null;
-  return readInside(projectDir, `docs/specs/archive/${path.posix.basename(rel)}`);
+}
+
+const TITLE_BYTES = 4096;
+const TITLE_CHARS = 120;
+const TITLE_CACHE_MAX = 500;
+
+/** @param {import('../dashboard/markdown.js').Span[]} spans @returns {string} */
+const plainText = (spans) => spans.map((span) => ('v' in span ? span.v : plainText(span.c))).join('');
+
+/**
+ * The title of a Markdown head: the first level 1 heading outside fenced code, as plain text; '' when there is none.
+ * @param {string} head
+ */
+export function titleOf(head) {
+  const heading = parseMarkdown(head).find((block) => block.type === 'heading' && block.level === 1);
+  if (heading?.type !== 'heading') return '';
+  const text = plainText(heading.inline)
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return Array.from(text).slice(0, TITLE_CHARS).join('').trim();
+}
+
+/** @param {string} file */
+async function readHead(file) {
+  const handle = await fs.promises.open(file, 'r');
+  try {
+    const buffer = Buffer.alloc(TITLE_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, TITLE_BYTES, 0);
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * The link text of the local Linked documents of Runs, with a bounded cache keyed on the real path, size and modification time.
+ * @param {{ max?: number, read?: (file: string) => Promise<string> }} [options]
+ */
+export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead } = {}) {
+  /** @type {Map<string, { size: number, mtimeMs: number, title: string }>} */
+  const cache = new Map();
+  /** @param {string} file */
+  async function titleOfFile(file) {
+    let stat;
+    try {
+      stat = await fs.promises.stat(file);
+    } catch (err) {
+      if (!isMissing(err)) throw err;
+      return '';
+    }
+    const hit = cache.get(file);
+    if (hit && hit.size === stat.size && hit.mtimeMs === stat.mtimeMs) return hit.title;
+    const title = titleOf(await read(file));
+    cache.delete(file);
+    cache.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, title });
+    while (cache.size > max) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) break;
+      cache.delete(oldest);
+    }
+    return title;
+  }
+  return {
+    size: () => cache.size,
+    /**
+     * Label per listed local document that has a title: the title, with the digits of the file name in front. A document that is not found, has no heading or cannot be read has no entry.
+     * @param {string} projectDir The main checkout.
+     * @param {unknown} record
+     * @returns {Promise<Record<string, string>>}
+     */
+    async of(projectDir, record) {
+      if (!record || typeof record !== 'object') return {};
+      const rec = /** @type {Record<string, unknown>} */ (record);
+      /** @type {Map<string, string>} */
+      const titles = new Map();
+      for (const rel of new Set([...listedPaths(rec.spec_link), ...listedPaths(rec.tickets)])) {
+        try {
+          const file = await locateLinkedDocument(projectDir, rec, rel);
+          const title = file === null ? '' : await titleOfFile(file);
+          if (!title) continue;
+          const digits = /^(\d+)-/.exec(path.posix.basename(rel))?.[1];
+          titles.set(rel, digits ? `${digits} ${title}` : title);
+        } catch {
+          // A document that cannot be read keeps its file name as link text.
+        }
+      }
+      return Object.fromEntries(titles);
+    },
+  };
 }
 
 /** @param {string} root */
