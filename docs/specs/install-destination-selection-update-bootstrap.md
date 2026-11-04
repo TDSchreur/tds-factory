@@ -39,7 +39,7 @@ Every entry point reaches the same choice logic as `install`: an interactive pro
 - `test/update.test.js` with injected fetch, runner and terminal: cancel and no-terminal before the first fetch and with the runner never called; flags and prompt answers reach the `install` child as explicit flags; no second prompt; `--reuse-selection` with and without a saved selection; the existing checksum, retry and no-downgrade cases unchanged.
 - `test/install-cli.test.js`: the serializer round trip for every destination kind.
 - `test/install-sh.test.js`: run the real script as a process, with stub `node`, `npm` and `tds-factory` on PATH, once with stdin as the script piped (`sh < install.sh`) and a controlling terminal supplied by `script` where available, and without a terminal. Cover arguments, variables, conflicts, cancellation after the npm step and unchanged skills.
-- `test/install-ps1.test.js`: the same on PowerShell 7 where `pwsh` exists, with the Windows console case on the real Windows CI job; Linux skips what needs a console.
+- `test/install-ps1.test.js` is not extended in this Run, because `install.ps1` is unchanged.
 - `test/dev-install.test.js`: flags reach the stubbed CLI.
 - Run `shellcheck scripts/*.sh`, PSScriptAnalyzer and `npm run check`.
 

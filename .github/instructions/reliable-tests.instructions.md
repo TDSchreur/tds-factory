@@ -34,4 +34,4 @@ A test that passes on Linux and fails once in twenty runs on Windows costs more 
 ## Before you finish
 
 - Run the changed test file at least 30 times in a row (`for i in $(seq 30); do node --test test/<file>.test.js || break; done`), once more under load, and with `--test-concurrency=1`. A failure on any run is a bug in the test, not bad luck.
-- CI runs only the "Install path trust" job on Windows and does not repeat the changed unit tests. Run `node scripts/repeat-changed-tests.js` yourself before you open a pull request, and treat a red repeat as a real failure.
+- CI runs Linux only and does not repeat the changed unit tests. Run `node scripts/repeat-changed-tests.js` yourself before you open a pull request, and treat a red repeat as a real failure.
