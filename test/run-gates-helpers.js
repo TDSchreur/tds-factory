@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { git } from './git-repo.js';
+import { cli as runCli } from './cli-runner.js';
 import { defined as present } from './run-view.js';
 
 /** @import { Run } from '../src/run-record.js' */
@@ -13,7 +13,7 @@ export const cli = resolve('bin/tds-factory.js');
  * @param {string} cwd
  * @param {...string} args
  */
-export const run = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+export const run = (cwd, ...args) => runCli(cwd, 'run', ...args);
 
 /** @param {unknown} value */
 export const json = (value) => JSON.stringify(value);
@@ -32,8 +32,13 @@ export const file = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
 export const read = (cwd, id) => JSON.parse(readFileSync(file(cwd, id), 'utf8'));
 
 /** @param {string} cwd */
-export const startRun = (cwd, commands = 'npm test') => {
-  const result = run(cwd, 'start', '--data', json({ title: 'Example', agent: 'codex', commands, conventions: [] }));
+export const startRun = async (cwd, commands = 'npm test') => {
+  const result = await run(
+    cwd,
+    'start',
+    '--data',
+    json({ title: 'Example', agent: 'codex', commands, conventions: [] }),
+  );
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.trim();
 };
@@ -61,9 +66,9 @@ export const force = (cwd, id, fields) => writeFileSync(file(cwd, id), json({ ..
 export const transition = (cwd, id, to) => run(cwd, 'transition', '--id', id, '--to', to);
 
 /** @param {string} cwd */
-export const defined = (cwd) => {
-  const id = startRun(cwd);
-  update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1', '2'], tickets_total: 2 });
+export const defined = async (cwd) => {
+  const id = await startRun(cwd);
+  await update(cwd, id, { spec_link: 'docs/specs/x.md', tickets: ['1', '2'], tickets_total: 2 });
   return id;
 };
 
@@ -107,17 +112,17 @@ export const commit = (cwd, id) => git(read(cwd, id).worktree, 'commit', '-q', '
 
 // A Run in Check whose Verify result and verdicts are all current and passing.
 /** @param {string} cwd */
-export const cleanCheck = (cwd, commands = 'true') => {
-  const id = startRun(cwd, commands);
+export const cleanCheck = async (cwd, commands = 'true') => {
+  const id = await startRun(cwd, commands);
   force(cwd, id, { stage: 'check', tickets: ['1'], tickets_total: 1, tickets_done: 1 });
-  verify(cwd, id);
+  await verify(cwd, id);
   for (const [axis, value] of [
     ['standards', 'pass'],
     ['spec', 'pass'],
     ['security', 'pass'],
     ['infrastructure', 'skipped'],
   ])
-    assert.equal(verdict(cwd, id, axis, value).status, 0);
+    assert.equal((await verdict(cwd, id, axis, value)).status, 0);
   return id;
 };
 
@@ -126,9 +131,9 @@ export const cleanCheck = (cwd, commands = 'true') => {
  * @param {string} id
  * @param {string} why
  */
-export const refusesFinish = (cwd, id, why) => {
+export const refusesFinish = async (cwd, id, why) => {
   const before = read(cwd, id);
-  assert.notEqual(transition(cwd, id, 'finish').status, 0, why);
+  assert.notEqual((await transition(cwd, id, 'finish')).status, 0, why);
   assert.deepEqual(read(cwd, id), before, why);
 };
 
@@ -142,8 +147,8 @@ export const inspect = (cwd, ...args) => run(cwd, 'inspect', '--json', ...args);
  * @param {string} cwd
  * @param {string} id
  */
-export const problems = (cwd, id) => {
-  const result = inspect(cwd);
+export const problems = async (cwd, id) => {
+  const result = await inspect(cwd);
   assert.equal(result.status, 0, result.stderr);
   /** @type {{ id: string, problems: { code: string }[] }[]} */
   const reports = JSON.parse(result.stdout);

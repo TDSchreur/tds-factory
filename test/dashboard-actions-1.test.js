@@ -25,9 +25,9 @@ import {
 /** @import { Run } from '../src/run-record.js' */
 
 test('accepting a not-clean Check records the decision for the current head', async () => {
-  const { cwd, id, wt } = checked();
-  review(cwd, id, 'fail');
-  waiting(cwd, id);
+  const { cwd, id, wt } = await checked();
+  await review(cwd, id, 'fail');
+  await waiting(cwd, id);
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     const result = await post(dash, id, 'accept');
@@ -39,7 +39,7 @@ test('accepting a not-clean Check records the decision for the current head', as
     assert.match(accepted.decision ?? '', /Dashboard/);
     assert.equal(read(cwd, id).status, 'running');
     assert.equal((await post(dash, id, 'accept')).status, 409);
-    waiting(cwd, id);
+    await waiting(cwd, id);
     const again = await post(dash, id, 'accept');
     assert.equal(again.status, 409);
     assert.match(again.text, /already clean or accepted/);
@@ -49,9 +49,9 @@ test('accepting a not-clean Check records the decision for the current head', as
 });
 
 test('accepting is refused when the Run changed since the page showed it', async () => {
-  const { cwd, id } = checked();
-  review(cwd, id, 'fail');
-  waiting(cwd, id);
+  const { cwd, id } = await checked();
+  await review(cwd, id, 'fail');
+  await waiting(cwd, id);
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     const stale = await post(dash, id, 'accept', '2000-01-01T00:00:00.000Z');
@@ -65,11 +65,11 @@ test('accepting is refused when the Run changed since the page showed it', async
 });
 
 test('clean-up works when the Dashboard was started inside a Run worktree', async () => {
-  const { cwd, id, wt } = checked();
-  review(cwd, id);
-  ok(run(cwd, 'transition', '--id', id, '--to', 'finish'));
-  ok(run(cwd, 'update', '--id', id, '--data', data({ pr: PR })));
-  ok(run(cwd, 'complete', '--id', id));
+  const { cwd, id, wt } = await checked();
+  await review(cwd, id);
+  ok(await run(cwd, 'transition', '--id', id, '--to', 'finish'));
+  ok(await run(cwd, 'update', '--id', id, '--data', data({ pr: PR })));
+  ok(await run(cwd, 'complete', '--id', id));
   const tip = git(wt, 'rev-parse', 'HEAD');
   const dash = await startDashboard({ projectDir: wt, port: 0, prInfo: () => ({ state: 'MERGED', head: tip }) });
   try {
@@ -81,7 +81,7 @@ test('clean-up works when the Dashboard was started inside a Run worktree', asyn
 });
 
 test('the extra loop route refuses a request without the session token, with a wrong one or from another Origin', async () => {
-  const { cwd, id } = atLimit();
+  const { cwd, id } = await atLimit();
   const dash = await startDashboard({ projectDir: cwd, port: 0 });
   try {
     const query = `?updated=${encodeURIComponent(await updatedOf(dash, id))}`;
@@ -105,8 +105,8 @@ test('the extra loop route refuses a request without the session token, with a w
 });
 
 test('the same action on two Runs runs at the same time, and two Dashboards do not block each other', async () => {
-  const first = finished(undefined, 'One');
-  const second = finished(first.cwd, 'Two');
+  const first = await finished(undefined, 'One');
+  const second = await finished(first.cwd, 'Two');
   const held = gate();
   const prInfo = async () => {
     held.enter();
