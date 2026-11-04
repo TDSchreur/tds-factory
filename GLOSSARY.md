@@ -159,12 +159,15 @@ _Avoid_: Standards
 The written definition of what to build, kept as a Markdown file in the repo under `docs/specs/` while the work is in flight, and moved to `docs/specs/archive/` once it has shipped.
 
 **Local tracker**:
-An Issue tracker whose Specs and Tickets are Markdown files in the project's `.scratch/` folder. Preflight keeps that folder out of git.
+An Issue tracker whose Tickets are Markdown files in the project's `.scratch/` folder. Preflight keeps that folder out of git.
 _Avoid_: Scratch tracker
 
 **Ticket**:
 One unit of work cut from a Spec, stored in the project's Issue tracker.
 _Avoid_: Task, story
+
+**Linked document**:
+The Spec or a Ticket that a Run record links to as a file in the Project, which the Dashboard can show. Not a Run file, which lives in the Run folder.
 
 **Run**:
 One pass of the Flow for one piece of work, from idea to pull request.
