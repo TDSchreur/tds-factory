@@ -6,4 +6,4 @@ The Windows CI jobs are switched off: the `windows` job (checks and unit tests i
 
 ## Documents
 
-`docs/development.md` (CI paragraph, "Working on Windows"), `changelog.d/disable-windows-ci.md`. `docs/specs/windows-friendly.md` and the other finished Specs stay as they are.
+`docs/development.md` (CI paragraph, "Working on Windows"), the `reliable-tests` guide (`.github/instructions/` and its `.claude/rules/` copy), `skills/reliable-tests/SKILL.md`, `changelog.d/disable-windows-ci.md`. `docs/specs/windows-friendly.md` and the other finished Specs stay as they are.
