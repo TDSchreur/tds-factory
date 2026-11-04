@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPage, run } from './browser.js';
-import { waitUntil } from './wait-until.js';
 
 test('a refresh of the open Run keeps the scroll position of its detail', async (t) => {
   /** @param {number} n */
@@ -23,13 +22,10 @@ test('a refresh of the open Run keeps the scroll position of its detail', async 
     );
     await page.execute("document.getElementById('detail').scrollTop = 800");
     for (let n = 1; n <= 3; n++) {
-      const reads = page.fileReads.length;
-      page.state.runs = [record(n)];
       // Each change of `updated` refreshes the open Run: the next poll brings it and the detail reads its files again.
-      await waitUntil(() => page.fileReads.length > reads, {
-        message: `refresh ${n}: the open Run reads its files again`,
+      await page.waitForFileReads(() => {
+        page.state.runs = [record(n)];
       });
-      await page.waitForFrame();
     }
     assert.equal(await page.execute("return Math.round(document.getElementById('detail').scrollTop)"), 800);
   } finally {

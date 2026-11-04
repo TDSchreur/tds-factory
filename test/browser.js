@@ -56,9 +56,9 @@ import { withPollMs } from './poll-interval.js';
  * @property {(cmd: string, params?: object) => Promise<PageValue>} cdp A DevTools protocol command.
  * @property {(value: string) => Promise<void>} key
  * @property {(modifier: string, value: string) => Promise<void>} keyChord
- * @property {string[]} fileReads The /files/ URLs the stub server served, in order; a refreshed detail reads its files again.
- * @property {() => Promise<void>} waitForFrame Resolves after the page has drawn one frame, so what an answer changed is on screen.
- * @property {(count?: number) => Promise<void>} waitForPolls Resolves after `count` more polls of /api/views have been answered and the page has drawn the last answer. Use it instead of a fixed sleep; with `pollMs` it is fast.
+ * @property {() => Promise<void>} waitForFrame Resolves after the page has drawn two frames, so what an answer changed is on screen.
+ * @property {(count?: number) => Promise<void>} waitForPolls Resolves after the page has received the complete answer of `count` more polls of /api/views and has drawn two frames. Use it instead of a fixed sleep; with `pollMs` it is fast.
+ * @property {(change: () => void | Promise<void>) => Promise<void>} waitForFileReads Runs `change` (a change of the served state), then resolves after the page has received one more /files/ answer (a refreshed detail reads its files again) and has drawn two frames. The count is taken before `change` runs, so a fast answer cannot be missed.
  * @property {typeof delay} wait
  */
 
@@ -191,6 +191,23 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
   await untilGone(killMs);
 }
 
+// Installed in every page before it loads. It counts the answers of /api/views and /files/ that the page has received in full,
+// without changing what the page sees: the page gets the same promise, and a clone of the response is read on the side.
+// A server-side count would only say that a request arrived, not that the page has the answer.
+const WATCH_FETCHES = `
+  window.__fetched = { views: 0, files: 0 };
+  const originalFetch = window.fetch;
+  window.fetch = function (input) {
+    const promise = originalFetch.apply(this, arguments);
+    const url = String(input && input.url ? input.url : input);
+    const kind = url.includes('/api/views') ? 'views' : url.includes('/files/') ? 'files' : null;
+    if (kind) {
+      const done = () => { window.__fetched[kind]++; };
+      promise.then((response) => response.clone().text()).then(done, done);
+    }
+    return promise;
+  };`;
+
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
 /**
@@ -213,11 +230,8 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
   // Built before anything starts: a missing constant or a bad value fails the test without a process to clean up.
   const modelSource =
     pollMs === undefined ? null : withPollMs(readFileSync(new URL('model.js', DASHBOARD), 'utf8'), pollMs);
-  let polls = 0; // the /api/views requests answered so far
   /** @type {string[]} */
   const calls = [];
-  /** @type {string[]} */
-  const fileReads = [];
   /** @type {(string | string[] | undefined)[]} */
   const tokens = []; // the X-Factory-Token header of each write
   const served = Object.assign(state, { runs: state.runs ?? [], files: state.files ?? {} });
@@ -264,7 +278,6 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         'application/json',
         JSON.stringify({ project: state.project ?? 'test', version: state.version, token: 'test-token' }),
       );
-    if (routePath === '/api/views') polls++;
     if (routePath === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
     if (routePath === '/api/views')
       return send(
@@ -283,7 +296,6 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         }),
       );
     if (routePath.startsWith('/files/')) {
-      fileReads.push(req.url ?? '');
       const text = served.files[decodeURIComponent(routePath.split('/').slice(3).join('/'))];
       return text === undefined ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', text);
     }
@@ -403,11 +415,35 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       cmd: 'Emulation.setDeviceMetricsOverride',
       params: { width, height, deviceScaleFactor: 1, mobile: false },
     });
+    await request('POST', `${base}/${browser.cdp}/cdp/execute`, {
+      cmd: 'Page.addScriptToEvaluateOnNewDocument',
+      params: { source: WATCH_FETCHES },
+    });
     /**
      * @param {string} script
      * @param {unknown[]} [scriptArgs]
      */
     const execute = (script, scriptArgs = []) => request('POST', base + '/execute/sync', { script, args: scriptArgs });
+    /**
+     * @param {'views' | 'files'} kind
+     * @param {number} count
+     * @param {() => void | Promise<void>} [change] Runs after the count is taken and before the wait starts.
+     */
+    const waitForFetches = async (kind, count, change) => {
+      const before = Number(await execute('return window.__fetched ? window.__fetched[arguments[0]] : 0', [kind]));
+      await change?.();
+      await waitUntil(
+        async () =>
+          Number(await execute('return window.__fetched ? window.__fetched[arguments[0]] : 0', [kind])) >=
+          before + count,
+        {
+          timeoutMs: 5000 + count * (pollMs ?? 2000),
+          intervalMs: 20,
+          message: `the page receives ${count} more answer(s) of ${kind === 'views' ? '/api/views' : '/files/'}`,
+        },
+      );
+      await page.waitForFrame();
+    };
     /** @type {Page} */
     const page = {
       driverPid: driver.pid,
@@ -417,7 +453,6 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       },
       state: served,
       calls,
-      fileReads,
       tokens,
       execute,
       close,
@@ -481,22 +516,19 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
             },
           ],
         }),
-      // The Dashboard polls on a timer and does not wait for an answer, so "the poll happened" is the stub server's count.
-      // One drawn frame after the last answer the page has processed it.
+      // The Dashboard polls on a timer and does not wait for an answer, so "the poll happened" is the page's own count of the
+      // answers it has received in full (WATCH_FETCHES), then two drawn frames for the redraw they cause.
       /** @param {number} [count] */
-      async waitForPolls(count = 1) {
-        const wanted = polls + count;
-        await waitUntil(() => polls >= wanted, {
-          timeoutMs: 5000 + count * (pollMs ?? 2000),
-          message: `${count} more poll(s) of /api/views`,
-        });
-        await page.waitForFrame();
+      waitForPolls: (count = 1) => waitForFetches('views', count),
+      /** @param {() => void | Promise<void>} change */
+      waitForFileReads: (change) => waitForFetches('files', 1, change),
+      waitForFrame: async () => {
+        for (let frame = 0; frame < 2; frame++)
+          await page.cdp('Runtime.evaluate', {
+            expression: 'new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)))',
+            awaitPromise: true,
+          });
       },
-      waitForFrame: () =>
-        page.cdp('Runtime.evaluate', {
-          expression: 'new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)))',
-          awaitPromise: true,
-        }),
       wait: delay,
     };
     await page.load();
