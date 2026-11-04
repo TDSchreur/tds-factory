@@ -226,7 +226,7 @@ function installDestination(item, skills, { force, dryRun, log, warn }) {
         fs.writeFileSync(path.join(staging, MARKER), hashLine(staging), { mode: 0o600 });
       });
     }
-    log(`${dryRun ? 'would install' : 'installed'} ${name}/${skill} -> ${dest}`);
+    log(`${dryRun ? 'would install' : 'installed'} ${name}/${skill} -> ${printable(dest)}`);
   }
   // Marked folders that are no longer shipped are ours to remove; unmarked ones never are.
   for (const e of fs.existsSync(targetDir) ? fs.readdirSync(targetDir, { withFileTypes: true }) : []) {
@@ -284,7 +284,7 @@ function installAgents(name, targetDir, force, dryRun, { log, warn }) {
       fs.writeFileSync(dest, fs.readFileSync(src), { mode: 0o600 });
       record[file] = sha(dest);
     }
-    log(`${dryRun ? 'would install' : 'installed'} ${name}/${file} -> ${dest}`);
+    log(`${dryRun ? 'would install' : 'installed'} ${name}/${file} -> ${printable(dest)}`);
   }
   if (!dryRun) fs.writeFileSync(recordFile, JSON.stringify(record, null, 2) + '\n', { mode: 0o600 });
 }

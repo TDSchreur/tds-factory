@@ -195,6 +195,11 @@ test(
     );
     assert.equal(fs.readFileSync(edited, 'utf8'), 'precious');
     assert.equal(fs.readFileSync(path.join(w.config, 'install', 'global.json'), 'utf8'), before);
+    // Running the command again after the cause is fixed finishes the cleanup and keeps the edit in a backup.
+    fs.chmodSync(backups, 0o700);
+    install(w.options({ agent: 'claude' }));
+    assert.equal(fs.existsSync(edited), false);
+    assert.deepEqual(w.record(), [{ agent: 'claude', configDir: path.join(w.home, '.claude') }]);
   },
 );
 

@@ -64,7 +64,10 @@ test('every third-party action in the CI workflow is pinned to a commit SHA', ()
 
 test('native trust tests run on Windows, and ci-ok needs only jobs that exist', () => {
   assert.match(ci, /os: \[windows-latest\]/);
-  assert.match(ci, /node --test test\/trusted-install-paths\.test\.js test\/install-prompt\.test\.js/);
+  assert.match(
+    ci,
+    /node --test test\/trusted-install-paths\.test\.js test\/install-prompt\.test\.js test\/install-reconcile\.test\.js/,
+  );
   const needs = /needs: \[([^\]]+)\]/.exec(ci.slice(ci.indexOf('  ci-ok:')));
   assert.ok(needs);
   assert.match(needs[1], /\btrust-platforms\b/);

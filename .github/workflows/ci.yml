@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: lts/*
-      - run: node --test test/trusted-install-paths.test.js test/install-prompt.test.js
+      - run: node --test test/trusted-install-paths.test.js test/install-prompt.test.js test/install-reconcile.test.js
 
   test:
     name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})

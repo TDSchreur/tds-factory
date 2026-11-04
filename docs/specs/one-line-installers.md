@@ -7,13 +7,13 @@ Installing the Factory is two commands, and updating it is the same two commands
 Add an Update command to the CLI and two Bootstrap installers attached to every Release.
 
 - `tds-factory update` looks up the latest Release, installs it with npm when the installed version is older, and then refreshes the Skills and Stage agents with `tds-factory install --force`. `--no-force` keeps edited agent files and skills.
-- `install.sh` (macOS, Linux) and `install.ps1` (Windows) are thin: check Node 24 or newer and npm, run the existing `npm install -g` command on the latest Release URL, run `tds-factory install`, print next steps.
+- `install.sh` (Linux; macOS is unsupported) and `install.ps1` (Windows) are thin: check Node 24 or newer and npm, run the existing `npm install -g` command on the latest Release URL, run `tds-factory install`, print next steps.
 - `release.yml` attaches `tds-factory.tgz.sha256`, `install.sh` and `install.ps1` to the Release in the same call that creates it, and the existing install URL checks cover them.
 - README and install guide start with the two one-liners and keep the manual commands.
 
 ## User Stories
 
-1. As a new user on macOS or Linux, I want one `curl | sh` line that installs the Factory and its Skills, so that I do not copy a long npm command.
+1. As a new user on Linux, I want one `curl | sh` line that installs the Factory and its Skills, so that I do not copy a long npm command.
 2. As a new user on Windows, I want one `irm | iex` line that does the same, so that I get the same result on every OS.
 3. As a user, I want `tds-factory update` to move me to the latest Release and refresh my Skills, so that CLI and Skills never drift apart.
 4. As a user who is already current, I want `update` to skip the npm install but still refresh the Skills, and to tell me which it did.
@@ -58,3 +58,7 @@ Add an Update command to the CLI and two Bootstrap installers attached to every 
 ## Further Notes
 
 Analysis and decisions came from comparing the external `Update-TdsFactory.ps1` with this repo's install flow. That script defaults to `--force`; here `update` does too, by the user's choice, while the bootstrap installers keep `--force` opt-in through `TDS_FACTORY_FORCE=1` because a first install has nothing to replace.
+
+## Limits until install destination selection reaches these entry points
+
+`tds-factory install` now asks for an Install selection (see the [integration Spec](install-destination-selection-integration.md)). `update`, `install.sh`, `install.ps1` and `scripts/dev-install.js` still call it without a choice, so they work from a terminal that can answer the prompt and fail otherwise. Passing the choice through them is issue #568.

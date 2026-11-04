@@ -31,7 +31,7 @@ The `factory` Skill is `skills/factory/SKILL.md`, which holds what every Run nee
 
 `scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/develop` and is skipped, with a reason, when that ref does not exist or shares no history with your branch, as in a shallow CI checkout; any other git failure fails the test. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
 
-PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24.4 and the latest LTS. CI has no macOS jobs, because GitHub's macOS runners queue unreliably. CI has no Windows jobs. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer.
+PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24.4 and the latest LTS. CI has no macOS jobs, because macOS is not supported. One Windows job, "Install path trust", runs the trusted-path and prompt tests (`test/trusted-install-paths.test.js`, `test/install-prompt.test.js`) against real Windows ACLs and the console; the other tests run on Linux only. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer.
 
 ## Working on Windows
 
@@ -79,7 +79,7 @@ Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter b
 
 ## Switching between the Release and your checkout
 
-Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude` (or `$CLAUDE_CONFIG_DIR`). You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
+Only one `tds-factory` is installed globally, and `tds-factory install` writes the skills and agents to the destinations you chose and saved. You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
 
 ```sh
 sh scripts/use-official.sh   # the latest Release from GitHub
