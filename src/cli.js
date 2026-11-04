@@ -72,13 +72,61 @@ const OPTIONS = /** @type {const} */ ({
   version: { type: 'boolean', default: false },
 });
 
+// The commands read the working directory and the environment of the process in many places (git, the Project registry, `gh`, the Verify command),
+// so a call that brings its own is run with them applied to the process. Calls wait for each other: two overlapping calls would otherwise see each other's state.
+let tail = Promise.resolve();
+/**
+ * @template T
+ * @param {() => Promise<T>} job
+ * @returns {Promise<T>}
+ */
+function exclusive(job) {
+  const result = tail.then(job);
+  tail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+/** Environment names are case-insensitive on Windows. @param {string} name */
+const envKey = (name) => (process.platform === 'win32' ? name.toUpperCase() : name);
+
+/** Makes `process.env` hold exactly the entries of `target`. @param {NodeJS.ProcessEnv} target */
+function replaceEnv(target) {
+  const wanted = new Map(Object.entries(target).map(([name, value]) => [envKey(name), value]));
+  for (const name of Object.keys(process.env)) if (!wanted.has(envKey(name))) delete process.env[name];
+  for (const [name, value] of Object.entries(target)) if (process.env[name] !== value) process.env[name] = value;
+}
+
 /**
  * Runs one tds-factory command and resolves to its exit code. It never sets `process.exitCode` and never calls `process.exit`.
+ * A `cwd` and an `env` in the context are applied to the process while the command runs and restored afterwards, also when it throws.
  * @param {string[]} argv The arguments after the script name.
  * @param {CliContext} [context]
  * @returns {Promise<number>}
  */
-export async function main(argv, context = {}) {
+export function main(argv, context = {}) {
+  return exclusive(async () => {
+    const cwd = process.cwd();
+    const env = { ...process.env };
+    try {
+      if (context.cwd !== undefined) process.chdir(context.cwd);
+      if (context.env !== undefined) replaceEnv(context.env);
+      return await execute(argv, context);
+    } finally {
+      process.chdir(cwd);
+      replaceEnv(env);
+    }
+  });
+}
+
+/**
+ * @param {string[]} argv
+ * @param {CliContext} context
+ * @returns {Promise<number>}
+ */
+async function execute(argv, context) {
   const {
     cwd = process.cwd(),
     env = process.env,

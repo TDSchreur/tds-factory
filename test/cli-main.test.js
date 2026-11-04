@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { resolve } from 'node:path';
 import { git, repo } from './git-repo.js';
 import { main } from '../src/cli.js';
@@ -18,11 +19,12 @@ const sink = () => {
  * Runs `main` with collecting sinks.
  * @param {string[]} argv
  * @param {string} [cwd]
+ * @param {NodeJS.ProcessEnv} [env]
  */
-async function run(argv, cwd) {
+async function run(argv, cwd, env) {
   const stdout = sink();
   const stderr = sink();
-  const status = await main(argv, { ...(cwd ? { cwd } : {}), stdout, stderr });
+  const status = await main(argv, { ...(cwd ? { cwd } : {}), ...(env ? { env } : {}), stdout, stderr });
   return { status, stdout: stdout.text(), stderr: stderr.text() };
 }
 
@@ -95,4 +97,94 @@ test('a command that prints from src/ prints to the sink and not to the console'
     console.log = log;
   }
   assert.deepEqual(written, []);
+});
+
+/**
+ * A repository with a Run that has a fast Verify command.
+ * @param {string} fast
+ */
+async function runWith(fast) {
+  const cwd = repo();
+  git(cwd, 'config', 'user.name', 't');
+  git(cwd, 'config', 'user.email', 't@t');
+  const started = await run(
+    [
+      'run',
+      'start',
+      '--data',
+      JSON.stringify({ title: 'Env', agent: 'claude', commands: 'true', fast_commands: fast, conventions: [] }),
+    ],
+    cwd,
+  );
+  assert.equal(started.status, 0, started.stderr);
+  return { cwd, id: started.stdout.trim() };
+}
+
+test('the environment of the call reaches the commands it runs, and the process gets its own back', async () => {
+  const { cwd, id } = await runWith('echo "marker=$TDS_TEST_MARKER"');
+  assert.equal(process.env.TDS_TEST_MARKER, undefined);
+  const verified = await run(['run', 'verify', '--id', id, '--fast'], cwd, { ...process.env, TDS_TEST_MARKER: 'one' });
+  assert.equal(verified.status, 0, verified.stderr);
+  const log = readFileSync(join(cwd, '.factory', 'runs', id, 'verify-fast.log'), 'utf8');
+  assert.match(log, /marker=one/);
+  assert.equal(process.env.TDS_TEST_MARKER, undefined);
+});
+
+test('a variable the process had is restored after a call that changed or removed it', async () => {
+  process.env.TDS_TEST_KEPT = 'before';
+  process.env.TDS_TEST_REMOVED = 'before';
+  try {
+    /** @type {NodeJS.ProcessEnv} */
+    const env = { ...process.env, TDS_TEST_KEPT: 'during', TDS_TEST_ADDED: 'during' };
+    delete env.TDS_TEST_REMOVED;
+    const result = await run(['--version'], undefined, env);
+    assert.equal(result.status, 0);
+    assert.equal(process.env.TDS_TEST_KEPT, 'before');
+    assert.equal(process.env.TDS_TEST_REMOVED, 'before');
+    assert.equal(process.env.TDS_TEST_ADDED, undefined);
+  } finally {
+    delete process.env.TDS_TEST_KEPT;
+    delete process.env.TDS_TEST_REMOVED;
+  }
+});
+
+test('the working directory is the one of the call during it and the process gets its own back', async () => {
+  const before = process.cwd();
+  const cwd = repo();
+  const result = await run(['run', 'inspect', '--json'], cwd);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(process.cwd(), before);
+});
+
+test('a call that cannot start leaves the working directory and the environment as they were', async () => {
+  const before = { cwd: process.cwd(), env: { ...process.env } };
+  await assert.rejects(main(['--version'], { cwd: join(repo(), 'does-not-exist'), env: { ONLY: 'this' } }), {
+    code: 'ENOENT',
+  });
+  assert.equal(process.cwd(), before.cwd);
+  assert.deepEqual({ ...process.env }, before.env);
+});
+
+test('two calls that overlap each see their own working directory', async () => {
+  const [a, b] = [repo(), repo()];
+  for (const [cwd, title] of [
+    [a, 'Alpha'],
+    [b, 'Beta'],
+  ]) {
+    git(cwd, 'config', 'user.name', 't');
+    git(cwd, 'config', 'user.email', 't@t');
+    const started = await run(
+      ['run', 'start', '--data', JSON.stringify({ title, agent: 'claude', commands: 'true', conventions: [] })],
+      cwd,
+    );
+    assert.equal(started.status, 0, started.stderr);
+  }
+  const [first, second] = await Promise.all([
+    run(['run', 'inspect', '--json'], a),
+    run(['run', 'inspect', '--json'], b),
+  ]);
+  assert.match(first.stdout, /alpha/);
+  assert.doesNotMatch(first.stdout, /beta/);
+  assert.match(second.stdout, /beta/);
+  assert.doesNotMatch(second.stdout, /alpha/);
 });
