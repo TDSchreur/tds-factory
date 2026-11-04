@@ -38,6 +38,7 @@ function App() {
   const [version, setVersion] = useState('');
   const [status, setStatus] = useState({ error: false, text: 'Loading...' });
   const [selectedKey, setSelectedKey] = useState(/** @type {string | null} */ (null)); // Project id and Run id of the open Run
+  const [docPath, setDocPath] = useState(/** @type {string | null} */ (null)); // the Linked document shown in the Run detail
   const [selectedStage, setSelectedStage] = useState(/** @type {string | null} */ (null));
   const [loaded, setLoaded] = useState(false); // true after the first successful poll
   const [compact, setCompact] = useState(() => window.matchMedia(COMPACT_QUERY).matches);
@@ -143,6 +144,7 @@ function App() {
     if (compact) returnFocus.current = target;
     else if (target) target.focus();
     setSelectedKey(null);
+    setDocPath(null);
   };
 
   // Confirmations are shown one after the other; each resolves to true when the user confirms.
@@ -513,6 +515,12 @@ function App() {
     select: (run) => {
       setSelectedStage(run.column);
       setSelectedKey((now) => (now === runKey(run) ? null : runKey(run)));
+      setDocPath(null);
+    },
+    openDocument: (run, path) => {
+      setSelectedStage(run.column);
+      setSelectedKey(runKey(run));
+      setDocPath(path);
     },
     toggle: (run) =>
       setExpandedKeys((now) => {
@@ -597,7 +605,7 @@ function App() {
   return html`${showsBoard && html`<a class="skip-link" href="#board" onClick=${skipToBoard}>Skip to the Runs</a>`}<${Header} project=${project} projectNames=${projects.map((p) => p.name)} version=${version} status=${status} olderLabel=${olderLabel} onOlder=${() => setShowOlder((v) => !v)} canNotify=${notifyPermission() === 'default'} onNotify=${enableNotify} waitingCount=${waiting} onlyWaiting=${onlyWaiting} onToggleWaiting=${() => setOnlyWaiting((v) => !v)} onHelp=${() => setHelpOpen(true)} />
     <div id="layout">
       ${welcome ? html`<${Welcome} onHelp=${() => setHelpOpen(true)} />` : html`<${Board} rows=${rows} onlyWaiting=${onlyWaiting} stage=${stage} onStage=${setSelectedStage} selectedKey=${selectedKey} expandedKeys=${expandedKeys} actions=${actions} />`}
-      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} />
+      <${Detail} run=${openRun} projectName=${projects.find((p) => p.id === openRun?.projectId)?.name ?? ''} onClose=${closeDetail} onCheckPr=${actions.checkPr} onCheckDetails=${actions.checkDetails} prDetails=${prDetails} onFix=${actions.fix} onGrant=${actions.grant} onSplit=${actions.split} onContinue=${actions.continueRun} doc=${openRun ? docPath : null} onDoc=${setDocPath} />
     </div>
     <${ConfirmDialog} request=${request} onClose=${closeDialog} />
     <${HelpPanel} open=${helpOpen} onClose=${() => setHelpOpen(false)} />`;

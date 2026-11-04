@@ -38,6 +38,15 @@ export const HELP_SECTIONS = [
     ],
   },
   {
+    id: 'documents',
+    title: 'Specs and Tickets',
+    items: [
+      {
+        text: 'A Spec or Ticket of a Local tracker shows its file name; hover for the full path. A click or Enter opens it in the Run detail, and Back returns to the Run. Ticket tiles on a card open it too. GitHub and Azure DevOps Tickets open in a new tab.',
+      },
+    ],
+  },
+  {
     id: 'waiting',
     title: 'Waiting on you',
     items: [
