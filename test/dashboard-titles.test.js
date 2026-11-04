@@ -1,9 +1,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, symlinkSync, rmSync, utimesSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { startDashboard } from '../src/dashboard.js';
-import { createLinkedTitles, titleOf } from '../src/run-folder.js';
+import { createLinkedTitles, locateLinkedDocument, titleOf } from '../src/run-folder.js';
 import { repo, tempDir } from './git-repo.js';
 
 /** @typedef {Awaited<ReturnType<typeof startDashboard>>} Dash */
@@ -51,7 +52,8 @@ async function titlesOf(id) {
 
 before(async () => {
   main = repo();
-  wt = tempDir('titles-worktree-');
+  wt = join(main, '.factory', 'worktrees', 'titles-wt');
+  mkdirSync(wt, { recursive: true });
   outside = tempDir('titles-outside-');
   put(outside, 'leak.md', '# Leaked\n');
   writeRun(RUN, { worktree: wt, spec_link: SPEC, tickets: [...TICKETS, '/etc/passwd.md', '../x.md'] });
@@ -74,7 +76,7 @@ before(async () => {
 
 after(async () => {
   await dash.close();
-  for (const dir of [main, wt, outside]) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  for (const dir of [main, outside]) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 test('the Run view carries a title per listed local document, the worktree winning over the main checkout', async () => {
@@ -261,4 +263,118 @@ test('many unclosed emphasis marks in 4 KB do not hang the parser', () => {
   titleOf(`# ${'[a]('.repeat(800)}\n`);
   titleOf(`# ${'`'.repeat(4000)}\n`);
   assert.ok(Number(process.hrtime.bigint() - started) / 1e9 < 5);
+});
+
+/**
+ * @template T
+ * @param {string} prefix
+ * @param {(dir: string) => Promise<T>} body
+ */
+async function withDir(prefix, body) {
+  const dir = tempDir(prefix);
+  try {
+    return await body(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+}
+
+test('a directory or a FIFO in the worktree falls through to the main checkout copy', async (t) => {
+  await withDir('titles-special-', async (dir) => {
+    const worktree = join(dir, '.factory', 'worktrees', 'w');
+    mkdirSync(join(worktree, 'dir.md'), { recursive: true });
+    put(dir, 'dir.md', '# Main dir\n');
+    put(dir, 'fifo.md', '# Main fifo\n');
+    try {
+      execFileSync('mkfifo', [join(worktree, 'fifo.md')]);
+    } catch {
+      t.diagnostic('no mkfifo here: the FIFO case is not exercised');
+    }
+    const titles = await createLinkedTitles().of(dir, { worktree, tickets: ['dir.md', 'fifo.md'] });
+    assert.deepEqual(titles, { 'dir.md': 'Main dir', 'fifo.md': 'Main fifo' });
+  });
+});
+
+test('the title of a file above 1 MiB still comes from its first 4 KB', async () => {
+  await withDir('titles-large-', async (dir) => {
+    put(dir, 'big.md', `# Big\n${'x'.repeat(2 * 1024 * 1024)}`);
+    assert.deepEqual(await createLinkedTitles().of(dir, { spec_link: 'big.md' }), { 'big.md': 'Big' });
+  });
+});
+
+test('a worktree outside .factory/worktrees/ is no root', async () => {
+  await withDir('titles-root-', async (dir) => {
+    put(dir, 'a.md', '# Main\n');
+    put(outside, 'a.md', '# Outside\n');
+    const titles = createLinkedTitles();
+    assert.deepEqual(await titles.of(dir, { worktree: outside, spec_link: 'a.md' }), { 'a.md': 'Main' });
+    assert.deepEqual(await titles.of(dir, { worktree: 7, spec_link: 'a.md' }), { 'a.md': 'Main' });
+    assert.deepEqual(await titles.of(dir, { worktree: 'rel', spec_link: 'a.md' }), { 'a.md': 'Main' });
+  });
+});
+
+/** @param {{ count: number }} counter */
+const counting = (counter) =>
+  /** @type {typeof locateLinkedDocument} */ (
+    (...args) => {
+      counter.count++;
+      return locateLinkedDocument(...args);
+    }
+  );
+
+test('an unchanged record is not located again; a changed one, or a deleted file, is', async () => {
+  await withDir('titles-located-', async (dir) => {
+    put(dir, 'a.md', '# One\n');
+    const counter = { count: 0 };
+    const titles = createLinkedTitles({ locate: counting(counter) });
+    const record = { updated: '1', spec_link: 'a.md' };
+    assert.deepEqual(await titles.of(dir, record, 'run-1'), { 'a.md': 'One' });
+    assert.deepEqual(await titles.of(dir, record, 'run-1'), { 'a.md': 'One' });
+    assert.equal(counter.count, 1);
+    await titles.of(dir, { ...record, updated: '2' }, 'run-1');
+    assert.equal(counter.count, 2);
+    rmSync(join(dir, 'a.md'));
+    assert.deepEqual(await titles.of(dir, { ...record, updated: '2' }, 'run-1'), {});
+    assert.equal(counter.count, 3);
+    put(dir, 'a.md', '# Back\n');
+    assert.deepEqual(await titles.of(dir, { ...record, updated: '2' }, 'run-1'), { 'a.md': 'Back' });
+    assert.equal(counter.count, 4);
+  });
+});
+
+test('a finished Run keeps its title without locating its documents again', async () => {
+  await withDir('titles-finished-', async (dir) => {
+    put(dir, 'a.md', '# Kept\n');
+    const counter = { count: 0 };
+    const titles = createLinkedTitles({ locate: counting(counter) });
+    const record = { stage: 'finish', status: 'done', updated: '1', spec_link: 'a.md' };
+    await titles.of(dir, record, 'run-done');
+    assert.deepEqual(await titles.of(dir, record, 'run-done'), { 'a.md': 'Kept' });
+    assert.equal(counter.count, 1);
+  });
+});
+
+test('the cache drops the least recently used entry, so a hot title survives a burst', async () => {
+  await withDir('titles-lru-', async (dir) => {
+    const rels = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md'];
+    for (const rel of rels) put(dir, rel, `# ${rel}\n`);
+    /** @type {string[]} */
+    const reads = [];
+    const titles = createLinkedTitles({
+      max: 3,
+      read: async (file) => {
+        reads.push(file);
+        return '# x\n';
+      },
+    });
+    await titles.of(dir, { tickets: ['a.md', 'b.md', 'c.md'] });
+    await titles.of(dir, { tickets: ['a.md'] });
+    await titles.of(dir, { tickets: ['d.md', 'e.md'] });
+    assert.equal(titles.size(), 3);
+    reads.length = 0;
+    await titles.of(dir, { tickets: ['a.md'] });
+    assert.equal(reads.length, 0, 'the entry used last survived');
+    await titles.of(dir, { tickets: ['b.md'] });
+    assert.equal(reads.length, 1, 'an entry nobody used was dropped');
+  });
 });
