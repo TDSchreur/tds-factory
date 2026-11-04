@@ -234,8 +234,6 @@ export function saveSelection({
   file = absolute(file, cwd);
   const previous = readSelection({ file, home, cwd, project, env }) ?? [];
   const plan = planSelection({ home, cwd, project, env, desired: selected, previous });
-  if (plan.unavailable.some((item) => !plan.desired.some((candidate) => key(candidate) === key(item))))
-    throw new Error('cannot drop an unavailable Claude destination');
   const normalized = plan.desired;
   if (dryRun) return normalized;
   const parent = path.dirname(file);

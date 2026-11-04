@@ -73,10 +73,9 @@ export function install({
   if (!selected?.length) throw new FactoryError(NO_CHOICE, { code: 'install-selection-required' });
   const plan = planSelection({ home, cwd, env, project, desired: selected, previous: previous ?? [] });
   const lost = plan.unavailable.filter((item) => !plan.desired.some((wanted) => same(wanted, item)));
-  if (lost.length)
-    throw new FactoryError(
-      `cannot change the selection while ${lost.map((item) => printable(item.configDir ?? item.agent)).join(', ')} is unavailable: mount it again or choose it. Nothing was changed.`,
-      { code: 'install-destination-unavailable' },
+  for (const item of lost)
+    warn(
+      `warning: ${printable(item.configDir ?? item.agent)} is unavailable; Factory files may remain there if it returns`,
     );
   const desired = plan.candidates.filter((item) => plan.desired.some((wanted) => same(wanted, item)));
   const removals = plan.candidates.filter((item) => item.installed && !desired.includes(item));
