@@ -13,6 +13,32 @@
  *   | { type: 'paragraph', inline: Span[] }} Block
  */
 
+// An opening fence: 3 or more backticks or tildes after any indentation (lenient: it hides more, never less); a backtick fence info string holds no backtick.
+/** @param {string} line */
+function fenceOpen(line) {
+  const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!m || (m[1][0] === '`' && m[2].includes('`'))) return null;
+  return { char: m[1][0], length: m[1].length };
+}
+// A closing fence: only the opener's character, at least as long, trailing spaces only.
+/** @param {string} line @param {{ char: string, length: number }} open */
+function fenceClose(line, open) {
+  const m = /^\s*(`+|~+)[ \t]*$/.exec(line);
+  return !!m && m[1][0] === open.char && m[1].length >= open.length;
+}
+// An ATX heading: up to 3 spaces of indent, 1 to 6 `#`, then a space, a tab or the end of the line.
+/** @param {string} line */
+function atxHeading(line) {
+  const m = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
+  if (!m) return null;
+  // A closing sequence is a run of `#` after a space or tab (or the whole content) and before only spaces and tabs.
+  const text = (m[2] ?? '').trim();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '#') end--;
+  const closing = end < text.length && (end === 0 || text[end - 1] === ' ' || text[end - 1] === '\t');
+  return { level: m[1].length, content: closing ? text.slice(0, end).trim() : text };
+}
+
 /**
  * @param {string} text
  * @returns {Block[]}
@@ -66,14 +92,16 @@ export function parseMarkdown(text) {
       i++;
       continue;
     }
-    if (/^\s*```/.test(line)) {
+    const open = fenceOpen(line);
+    const heading = atxHeading(line);
+    if (open) {
       /** @type {string[]} */
       const code = [];
-      for (i++; i < lines.length && !/^\s*```/.test(lines[i]); i++) code.push(lines[i]);
+      for (i++; i < lines.length && !fenceClose(lines[i], open); i++) code.push(lines[i]);
       i++;
       blocks.push({ type: 'code', text: code.join('\n') });
-    } else if ((m = /^\s*(#{1,6})\s+(.*)$/.exec(line))) {
-      blocks.push({ type: 'heading', level: m[1].length, inline: inline(m[2].trim()) });
+    } else if (heading) {
+      blocks.push({ type: 'heading', level: heading.level, inline: inline(heading.content) });
       i++;
     } else if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) {
       blocks.push({ type: 'rule' });
@@ -110,7 +138,9 @@ export function parseMarkdown(text) {
         ;
         i < lines.length &&
         lines[i].trim() &&
-        !/^\s*(```|#{1,6}\s|>|([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(lines[i]);
+        !fenceOpen(lines[i]) &&
+        !atxHeading(lines[i]) &&
+        !/^\s*(>|([-*+]|\d+\.)\s|(-{3,}|\*{3,})\s*$)/.test(lines[i]);
         i++
       )
         para.push(lines[i].trim());

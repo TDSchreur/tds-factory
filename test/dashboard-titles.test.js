@@ -192,6 +192,9 @@ const NO_TITLE = [
   ['a heading in a fence', '```sh\n# a shell comment\n```\n'],
   ['a fence open at the cut', `\`\`\`\n${'x\n'.repeat(3000)}# late\n`],
   ['an empty heading', '#   \n'],
+  ['only empty headings', '# \n# #\n#\n'],
+  ['a heading in a tilde fence', '~~~sh\n# a shell comment\n~~~\n'],
+  ['a heading indented four spaces', '    # Code\n'],
   ['a heading after 4 KB', `${'a'.repeat(4096)}\n# Late\n`],
   ['a line far over 4 KB', `${'a'.repeat(100_000)}\n# Late\n`],
   ['4 KB without a newline', 'a'.repeat(4096)],
@@ -218,12 +221,31 @@ const TITLES = [
     '<img src=x onerror=alert(1)> <script>x</script>',
   ],
   ['a very long title', `# ${'long '.repeat(500)}\n`, `${'long '.repeat(24)}`.trim()],
+  ['an empty first heading gives the next one', '# \n\n# #\n# Next\n', 'Next'],
+  ['a closing sequence', '# Title ##\n', 'Title'],
+  ['a heading after a tilde fence', '~~~\n# no\n~~~\n# Yes\n', 'Yes'],
   ['a heading near the 4 KB cut', `${'\n'.repeat(4000)}# Near\n`, 'Near'],
 ];
 for (const [name, body, expected] of TITLES)
   test(`title: ${name}`, async () => {
     assert.equal(await oneTitle(body), expected);
   });
+
+/** @param {string} name */
+async function labelOf(name) {
+  const dir = tempDir('titles-digits-');
+  try {
+    put(dir, name, '# Title\n');
+    return (await createLinkedTitles().of(dir, { tickets: [name] }))[name];
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+}
+
+test('the digit prefix of a file name has 1 to 6 digits', async () => {
+  assert.equal(await labelOf('123456-a.md'), '123456 Title');
+  assert.equal(await labelOf('1234567-a.md'), 'Title');
+});
 
 test('a long heading line is cut at a fixed length and the work stays small', () => {
   const started = process.hrtime.bigint();

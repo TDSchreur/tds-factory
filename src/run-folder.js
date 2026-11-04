@@ -399,17 +399,19 @@ const TITLE_CACHE_MAX = 500;
 const plainText = (spans) => spans.map((span) => ('v' in span ? span.v : plainText(span.c))).join('');
 
 /**
- * The title of a Markdown head: the first level 1 heading outside fenced code, as plain text; '' when there is none.
+ * The title of a Markdown head: the first level 1 heading with text outside fenced code, as plain text; '' when there is none.
  * @param {string} head
  */
 export function titleOf(head) {
-  const heading = parseMarkdown(head).find((block) => block.type === 'heading' && block.level === 1);
-  if (heading?.type !== 'heading') return '';
-  const text = plainText(heading.inline)
-    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return Array.from(text).slice(0, TITLE_CHARS).join('').trim();
+  for (const block of parseMarkdown(head)) {
+    if (block.type !== 'heading' || block.level !== 1) continue;
+    const text = plainText(block.inline)
+      .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) return Array.from(text).slice(0, TITLE_CHARS).join('').trim();
+  }
+  return '';
 }
 
 /** @param {string} file */
@@ -470,7 +472,7 @@ export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead } = 
           const file = await locateLinkedDocument(projectDir, rec, rel);
           const title = file === null ? '' : await titleOfFile(file);
           if (!title) continue;
-          const digits = /^(\d+)-/.exec(path.posix.basename(rel))?.[1];
+          const digits = /^(\d{1,6})-/.exec(path.posix.basename(rel))?.[1];
           titles.set(rel, digits ? `${digits} ${title}` : title);
         } catch {
           // A document that cannot be read keeps its file name as link text.

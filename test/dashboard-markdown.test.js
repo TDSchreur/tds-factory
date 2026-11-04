@@ -92,3 +92,83 @@ test('block quotes and tables', () => {
 test('empty input gives no blocks', () => {
   assert.deepEqual(parse(''), []);
 });
+
+/** @param {string} text */
+const types = (text) => parse(text).map((/** @type {{ type: string }} */ b) => b.type);
+/** @param {string} text */
+const headings = (text) =>
+  parse(text)
+    .filter((/** @type {{ type: string }} */ b) => b.type === 'heading')
+    .map((/** @type {{ inline: { v?: string }[] }} */ b) => b.inline.map((s) => s.v).join(''));
+
+const FENCES = [
+  ['a tilde fence hides a shell comment', '~~~sh\n# comment\n~~~\n# Real', ['code', 'heading']],
+  ['a tilde line inside a backtick block does not close it', '```\n~~~\n# in\n```\n# Out', ['code', 'heading']],
+  ['a backtick line inside a tilde block does not close it', '~~~\n```\n# in\n~~~\n# Out', ['code', 'heading']],
+  ['a shorter closer does not close a longer fence', '````\n```\n# in\n````\n# Out', ['code', 'heading']],
+  ['a longer closer closes', '```\n# in\n`````\n# Out', ['code', 'heading']],
+  ['a closer of the other character does not close', '~~~\n# in\n```\n# still in', ['code']],
+  ['a closer with trailing text does not close', '```\n# in\n``` x\n# still in\n```\n# Out', ['code', 'heading']],
+  ['a closer with trailing spaces closes', '```\n# in\n```   \n# Out', ['code', 'heading']],
+  ['an unclosed fence runs to the end', '~~~\n# a\n# b', ['code']],
+  ['mixed blocks one after another', '```\n# a\n```\n~~~\n# b\n~~~\n# Out', ['code', 'code', 'heading']],
+  ['a backtick fence info string with a backtick is no fence', '``` a`b\n# Out', ['paragraph', 'heading']],
+  ['a tilde fence interrupts a paragraph', 'text\n~~~\n# in\n~~~', ['paragraph', 'code']],
+];
+for (const [name, text, expected] of FENCES)
+  test(`fence: ${name}`, () => {
+    assert.deepEqual(types(String(text)), expected);
+  });
+
+test('a fence keeps its body as code text', () => {
+  assert.deepEqual(parse('~~~sh\na\n# b\n~~~'), [{ type: 'code', text: 'a\n# b' }]);
+});
+
+const HEADINGS = [
+  ['3 spaces of indent', '   # T', ['T']],
+  ['4 spaces of indent is code, not a heading', '    # T', []],
+  ['a tab indent is not a heading', '\t# T', []],
+  ['a closing sequence', '# Title ##', ['Title']],
+  ['a single closing hash', '# Title #', ['Title']],
+  ['only hashes', '# #', ['']],
+  ['only many hashes', '# ##', ['']],
+  ['an empty heading', '#', ['']],
+  ['a closing hash glued to the text stays', '# Title#', ['Title#']],
+  ['an escaped hash stays', '# Title \\#', ['Title \\#']],
+  ['text after the hashes stays', '# Title # x', ['Title # x']],
+  ['spaces after the closing sequence', '# Title ##   ', ['Title']],
+  ['a tab after the closing sequence', '# Title ##\t', ['Title']],
+  ['a tab after the opening hash', '#\tTitle', ['Title']],
+  ['a hashtag is no heading', '#hashtag', []],
+  ['more than six hashes is no heading', '####### T', []],
+];
+for (const [name, text, expected] of HEADINGS)
+  test(`heading: ${name}`, () => {
+    assert.deepEqual(headings(String(text)), expected);
+  });
+
+test('an indented hash line does not end a paragraph', () => {
+  assert.deepEqual(types('text\n    # more'), ['paragraph']);
+});
+
+const HOSTILE = [
+  ['spaces inside a heading', `# a${' '.repeat(200_000)}b`],
+  ['spaces then hashes then text', `# a${' '.repeat(100_000)}${'#'.repeat(100_000)}x`],
+  ['one huge closing sequence', `# a ${'#'.repeat(300_000)}`],
+  ['many fence lines', '~~~\n```\n'.repeat(50_000)],
+  ['many unclosed fences of growing length', Array.from({ length: 3000 }, (_, i) => '`'.repeat(i + 3)).join('\n')],
+  ['a very long fence line', `${'~'.repeat(300_000)} info`],
+  ['many headings', '# a ##\n'.repeat(50_000)],
+  ['control characters and NUL in a heading', '# a\u0000\u001b[31m b ##\r\n# c\u2028d'],
+];
+for (const [name, text] of HOSTILE)
+  test(`hostile input stays linear and does not throw: ${name}`, () => {
+    const started = process.hrtime.bigint();
+    parseMarkdown(text);
+    // A generous bound that only a quadratic regular expression breaks.
+    assert.ok(Number(process.hrtime.bigint() - started) / 1e9 < 5);
+  });
+
+test('a closing sequence is removed in one linear pass from a heading of many spaces', () => {
+  assert.deepEqual(headings(`# a${' '.repeat(50_000)}b ##`), [`a${' '.repeat(50_000)}b`]);
+});
