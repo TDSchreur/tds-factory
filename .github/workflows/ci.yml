@@ -15,6 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  trust-platforms:
+    name: Install path trust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: lts/*
+      - run: node --test test/trusted-install-paths.test.js test/trusted-install-windows.test.js test/install-identity.test.js test/install-prompt.test.js test/install-reconcile.test.js test/install-cli.test.js
+
   test:
     name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
@@ -134,7 +151,7 @@ jobs:
   # One stable name for the branch ruleset to require, so changing a matrix never needs a ruleset edit.
   ci-ok:
     if: always()
-    needs: [test, quality, browser, package, workflows, shellcheck, psscriptanalyzer]
+    needs: [trust-platforms, test, quality, browser, package, workflows, shellcheck, psscriptanalyzer]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:

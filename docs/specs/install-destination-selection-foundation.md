@@ -42,7 +42,7 @@ Exercise discovery, selection validation, planning and record persistence throug
 
 ## Out of scope
 
-CLI prompting, noninteractive CLI flags, changing `install --agent` semantics, actual installation or cleanup, trusted-path enforcement, `update` and Bootstrap integration, and automatic deletion. They remain required follow-on work and must not be reported as delivered by this foundation.
+The [integration Spec](install-destination-selection-integration.md) delivers CLI prompting, noninteractive CLI flags, the changed `install --agent` semantics, installation and cleanup and trusted-path enforcement for `tds-factory install`. Out of scope here: `update` and Bootstrap integration, and automatic deletion. They remain required follow-on work and must not be reported as delivered by this foundation.
 
 ## Size estimate
 

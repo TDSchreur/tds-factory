@@ -14,7 +14,7 @@ This guide takes you from nothing to a working `/factory` in GitHub Copilot. Cla
 
 ## 2. Install the Factory
 
-One line installs the CLI and the skills. On macOS and Linux:
+One line installs the CLI and the skills. On Linux (macOS is not supported, because the install step refuses systems whose file permissions it cannot verify):
 
 ```sh
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
@@ -28,7 +28,7 @@ pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/i
 
 The script checks that Node 24 or newer and npm are present, installs the latest Release with npm and runs `tds-factory install` for you, so you can skip part 3. It never installs Node, and it never asks for `sudo`.
 
-If you prefer to read before you run, open the script first (the same URL in a browser) or run the two commands yourself, which work the same on macOS, Linux and Windows. This is the install:
+If you prefer to read before you run, open the script first (the same URL in a browser) or run the two commands yourself, which work the same on Linux and Windows. This is the install:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
@@ -50,31 +50,45 @@ The Factory is a set of skills. Install them with:
 tds-factory install
 ```
 
-This copies the skills into `~/.claude/skills` and `~/.agents/skills` and prints an `installed` line for each skill in each folder. GitHub Copilot reads both folders, so for Copilot this one command is enough.
+`tds-factory install` asks where to install. It never picks an agent for you. The scripts and `tds-factory update` call it too, so run them from a terminal; the update and Bootstrap changes that pass the choice through are tracked in issue #568 and are not part of this command yet.
 
-To install for one agent only, use `--agent`:
+### Choose where to install
+
+In a terminal, `install` lists every destination it found: one line per agent target with the concrete skills folder, for example `1. [ ] claude ~/.claude/skills`. The first time, nothing is selected. Type the numbers to install into, separated by commas (several destinations are fine), `add:PATH` to add another Claude folder, or press Enter to cancel. Cancelling, end of input and about five minutes without an answer all change nothing. Next time your saved choices are marked `[x]`; type `yes` to keep them or the numbers of the complete set you want. New folders are never selected for you. A folder marked `legacy` holds a copy from an earlier version that was not saved as a choice.
+
+Claude destinations are `~/.claude`, `$CLAUDE_CONFIG_DIR`, every `~/.claude-*` folder and the paths you add; each is its own destination. Codex uses `~/.agents/skills` and `~/.codex/agents`, and Copilot gets its own `~/.copilot/skills` and `~/.copilot/agents` even when Claude or Codex is also selected.
+
+The interactive prompt reads the controlling terminal (`/dev/tty`, or `CONIN$` on Windows), so it also works when the script arrives on standard input. Without a terminal, name the complete selection:
 
 ```sh
-tds-factory install --agent copilot
+tds-factory install --agent claude,codex
+tds-factory install --agent claude --claude-dir ~/.claude --claude-dir ~/.claude-work
+tds-factory install --reuse-selection
 ```
 
-| Agent               | Folder `tds-factory install --agent <name>` writes to |
-| ------------------- | ----------------------------------------------------- |
-| `copilot`           | `~/.copilot/skills`                                   |
-| `claude`            | `~/.claude/skills` (see below)                        |
-| `codex`             | `~/.agents/skills`                                    |
-| `all` (the default) | Claude and Codex folders, which Copilot also reads    |
+Your answer is the complete selection. A destination you installed into before, or that holds Factory-owned skills from an earlier version, but that you did not select now is cleaned up: the Factory's own skills and agent files are removed, any you edited are first copied to a backup folder (`install-backups` next to the saved selection, in the Factory config folder) and everything else stays. If a Claude folder you chose before is unavailable (for example an unmounted drive), install keeps it and refuses the change until it is back or you choose it again. The choice is saved per user (global) and separately for each project, outside the project's files.
+
+Before it writes anything, install checks every folder it will touch and all of their parents: they must belong to you or to an administrator, no one else may write to them, they may not be symbolic links, and the filesystem must be one it can verify (local ext4 and btrfs on Linux, local NTFS on Windows, PowerShell 7 needed there). If a check fails, install prints which path and changes nothing, and your saved selection stays as it was. This is strict on purpose, so it refuses some legitimate setups, for example a folder under a shared temporary directory. macOS and other systems are refused.
+
+| Agent            | Folder `tds-factory install --agent <name>` writes to |
+| ---------------- | ----------------------------------------------------- |
+| `copilot`        | `~/.copilot/skills`                                   |
+| `claude`         | `~/.claude/skills` (see below)                        |
+| `codex`          | `~/.agents/skills`                                    |
+| `all` (explicit) | the Claude, Codex and Copilot folders                 |
 
 Add `--project` to install into the current project instead of your home folder. It never overwrites a skill folder it did not create. `--force` does overwrite it, so a skill of your own with the same name would be lost. An installed skill you edited is skipped as well, until you use `--force`. Add `--dry-run` to see what install would do without changing anything.
 
 Install options:
 
-| Option                                | Effect                                                                                                           |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `--agent claude\|codex\|copilot\|all` | Pick the Agent target. `all` is the default and means Claude plus Codex, because Copilot reads both directories. |
-| `--project`                           | Install into the current directory instead of the user-global directory.                                         |
-| `--force`                             | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install.                 |
-| `--dry-run`                           | Print what install would do and change nothing.                                                                  |
+| Option                              | Effect                                                                                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--agent claude,codex,copilot\|all` | The complete selection, one or more comma-separated targets. `all` is an explicit choice and means Claude, Codex and Copilot; there is no default. |
+| `--claude-dir PATH`                 | A Claude folder to install into; repeat it for several. Global only, and it needs `--agent claude`.                                                |
+| `--reuse-selection`                 | Repeat the saved selection. It cannot be combined with `--agent` or `--claude-dir`, and it fails when nothing is saved.                            |
+| `--project`                         | Install into the current directory instead of the user-global directory, with its own saved selection.                                             |
+| `--force`                           | Overwrite agent files and skills you edited, and skill folders that tds-factory did not install.                                                   |
+| `--dry-run`                         | Print what install would do and change nothing.                                                                                                    |
 
 | Agent   | Project directory | Global directory    |
 | ------- | ----------------- | ------------------- |
@@ -82,9 +96,9 @@ Install options:
 | codex   | `.agents/skills`  | `~/.agents/skills`  |
 | copilot | `.github/skills`  | `~/.copilot/skills` |
 
-Claude Code reads its user-level folder from `CLAUDE_CONFIG_DIR` when that variable is set to a non-empty value, and from `~/.claude` otherwise. `install`, `doctor`, project reviews and Usage follow the same rule, so with the variable set the Claude skills and agents go to `$CLAUDE_CONFIG_DIR/skills` and `$CLAUDE_CONFIG_DIR/agents` (a relative value is resolved against the current directory). `--project` installs and the Codex and Copilot folders do not change.
+Claude Code reads its user-level folder from `CLAUDE_CONFIG_DIR` when that variable is set to a non-empty value, and from `~/.claude` otherwise. `install`, `doctor`, project reviews and Usage follow the same rule, so with the variable set the Claude skills and agents go to `$CLAUDE_CONFIG_DIR/skills` and `$CLAUDE_CONFIG_DIR/agents` (a relative value is resolved against the current directory). `--project` installs and the Codex and Copilot folders do not change. `$CLAUDE_CONFIG_DIR` is one candidate in the list above, never installed into without your choice.
 
-After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
+After you change a skill in `skills/`, run `install` again so the installed copy matches. `install` also removes folders it installed earlier into a selected destination that are no longer in `skills/` (it prints a `removed` line for each) and never touches folders without the tds-factory marker.
 
 ### Check that your agent sees the skills
 

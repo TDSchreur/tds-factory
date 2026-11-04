@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, realpathSync } from '
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 export const EVAL_BIN = join(import.meta.dirname, '..', 'bin');
 const CLI = join(EVAL_BIN, 'tds-factory');
@@ -71,7 +72,17 @@ export function fixture({ agent, verify = 'exit 0' }) {
   };
   /** @param {...string} args */
   const factory = (...args) => execFileSync(CLI, args, { cwd: dir, env, encoding: 'utf8' }).trim();
-  factory('install', '--agent', agent, '--project');
+  // The fixture lives in a temp folder that the real trusted-path check refuses, so it skips that check.
+  execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import { install } from ${JSON.stringify(pathToFileURL(join(dirname(CLI), '..', '..', 'src', 'install.js')).href)}; install({ agent: process.argv[1], project: true, verifyPaths: () => {}, log() {} });`,
+      agent,
+    ],
+    { cwd: dir, env, encoding: 'utf8' },
+  );
   git(dir, 'add', '-A');
   git(dir, 'commit', '-q', '-m', 'install factory');
   git(dir, 'push', '-q', 'origin', 'main');

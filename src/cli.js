@@ -14,7 +14,7 @@ import { printable } from './printable.js';
 const USAGE = `Usage:
   tds-factory --version
   tds-factory sync [--force]       (maintainers only: needs a repository checkout, run it as node bin/tds-factory.js sync)
-  tds-factory install [--agent claude|codex|copilot|all] [--project] [--force] [--dry-run]
+  tds-factory install [--agent claude,codex,copilot|all] [--claude-dir PATH]... [--reuse-selection] [--project] [--force] [--dry-run]
   tds-factory rules [--force] [--dry-run]   (writes .claude/rules/ copies of .github/instructions/*.instructions.md, with applyTo as paths)
   tds-factory update [--no-force]
   tds-factory doctor [--agent claude|codex|copilot] [--json]
@@ -43,13 +43,20 @@ const USAGE = `Usage:
   tds-factory run verdict --id ID --axis standards|spec|security|infrastructure --value pass|fail|skipped [--carried]
   tds-factory run clean --id ID | --all     (after the PR is merged, from the main checkout: removes the Run worktree and branch)
 
-install defaults to the user-global directory; --project installs into the current directory.
+install asks which destinations to use in a terminal (the first answer is empty; saved choices are shown for confirmation) and never
+chooses all agents by itself. Without a terminal name the complete selection: --agent takes one or more comma-separated targets or
+all; --claude-dir PATH (repeatable, global only, needs --agent claude) names each Claude folder; --reuse-selection repeats the saved
+choice and cannot be combined with --agent. Destinations installed earlier but not selected are cleaned up: Factory-owned Skills and
+agents are removed and edited ones are backed up first. install defaults to the user-global directory; --project installs into the
+current directory with its own saved selection. Installing needs a verified Linux or Windows filesystem; other systems are refused.
 --dry-run prints what install would do and changes nothing.
 update installs the latest Release when yours is older and refreshes the skills with install --force, which replaces edited agent files
 and skills, and same-named skills that tds-factory did not install; --no-force keeps them.`;
 
 const OPTIONS = /** @type {const} */ ({
   agent: { type: 'string' },
+  'claude-dir': { type: 'string', multiple: true },
+  'reuse-selection': { type: 'boolean', default: false },
   project: { type: 'boolean', default: false },
   force: { type: 'boolean', default: false },
   'no-force': { type: 'boolean', default: false },
@@ -290,11 +297,17 @@ async function execute(argv, context) {
         log: out,
       });
     else if (command === 'install')
-      (await import('../src/install.js')).install({
-        ...values,
-        agent: values.agent ?? 'all',
+      await (
+        await import('../src/install.js')
+      ).runInstall({
+        agent: values.agent,
+        claudeDirs: values['claude-dir'],
+        reuseSelection: values['reuse-selection'],
+        project: values.project,
+        force: values.force,
         dryRun: values['dry-run'],
         cwd,
+        env,
         log: out,
         warn: err,
       });

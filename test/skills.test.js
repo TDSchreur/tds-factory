@@ -188,7 +188,7 @@ test('install replaces a symlinked skill with a copy', () => {
   const cwd = process.cwd();
   process.chdir(project);
   try {
-    install({ agent: 'claude', project: true, force: false });
+    install({ verifyPaths: () => {}, agent: 'claude', project: true, force: false });
   } finally {
     process.chdir(cwd);
   }
@@ -209,7 +209,7 @@ test('install removes marked skills that are no longer shipped and keeps unmarke
   const cwd = process.cwd();
   process.chdir(project);
   try {
-    install({ agent: 'claude', project: true, force: false });
+    install({ verifyPaths: () => {}, agent: 'claude', project: true, force: false });
   } finally {
     process.chdir(cwd);
     log.mock.restore();
@@ -478,7 +478,7 @@ test('install ships the reference files with the factory Skill', () => {
   const cwd = process.cwd();
   process.chdir(project);
   try {
-    install({ agent: 'claude', project: true, force: false });
+    install({ verifyPaths: () => {}, agent: 'claude', project: true, force: false });
   } finally {
     process.chdir(cwd);
   }
