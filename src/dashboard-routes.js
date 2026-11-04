@@ -37,6 +37,12 @@ export const ROUTES = [
   { methods: ['GET', 'HEAD'], pattern: /^\/api\/views$/, handler: h.views },
   { methods: ['GET', 'HEAD'], pattern: /^\/api\/projects\/([^/]+)\/runs$/, handler: h.runs, scoped: true },
   { methods: ['GET', 'HEAD'], pattern: /^\/files\/([^/]+)\/([\s\S]*)$/, handler: h.runFile, scoped: true },
+  {
+    methods: ['GET', 'HEAD'],
+    pattern: /^\/documents\/([^/]+)\/([^/]+)\/([\s\S]*)$/,
+    handler: h.linkedDocument,
+    scoped: true,
+  },
 ];
 
 /**

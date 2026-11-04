@@ -306,6 +306,71 @@ export async function readRunFile(runsDir, rawPath) {
   }
 }
 
+// A Linked document is a relative Markdown path that the Run record lists in `spec_link` or `tickets` (ADR 0037); the listing is the main defense, the path checks are a second layer.
+/** @param {unknown} value */
+const listedPaths = (value) => (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
+/** @param {string} p */
+const safeRelative = (p) =>
+  p.length > 0 &&
+  p.length <= 1024 &&
+  p.endsWith('.md') &&
+  !p.includes('\\') &&
+  !p.includes('\0') &&
+  !p.startsWith('/') &&
+  !/^[A-Za-z]:/.test(p) &&
+  !p.split('/').some((segment) => segment === '' || segment === '..');
+
+/**
+ * @param {string} root
+ * @param {string} rel
+ */
+async function readInside(root, rel) {
+  try {
+    const real = await fs.promises.realpath(root);
+    const file = await fs.promises.realpath(path.resolve(real, rel));
+    if (!file.startsWith(real + path.sep)) return null;
+    return await fs.promises.readFile(file, 'utf8');
+  } catch (err) {
+    if (!isMissing(err) && codeOf(err) !== 'ENOTDIR' && codeOf(err) !== 'EISDIR') throw err;
+    return null;
+  }
+}
+
+// Returns the Markdown of a document the Run lists, or null for every refusal. Looks in the Run worktree, then the main checkout, then (Spec only) docs/specs/archive/ of the main checkout.
+/**
+ * @param {string} projectDir The main checkout.
+ * @param {string} runId
+ * @param {string} rawPath The path as requested, percent-encoded per segment; decoded once here.
+ */
+export async function readLinkedDocument(projectDir, runId, rawPath) {
+  if (!validId(runId)) return null;
+  let rel;
+  try {
+    const parts = rawPath.split('/').map(decodeURIComponent);
+    // An encoded separator is no separator: the listed path has real ones.
+    if (parts.some((part) => part.includes('/') || part.includes('\\'))) return null;
+    rel = parts.join('/');
+  } catch {
+    return null;
+  }
+  let record;
+  try {
+    record = readRun(projectDir, runId).record;
+  } catch {
+    return null;
+  }
+  const isSpec = listedPaths(record.spec_link).includes(rel);
+  if (!isSpec && !listedPaths(record.tickets).includes(rel)) return null;
+  if (!safeRelative(rel)) return null;
+  const roots = [typeof record.worktree === 'string' ? record.worktree : '', projectDir].filter(Boolean);
+  for (const root of roots) {
+    const body = await readInside(root, rel);
+    if (body !== null) return body;
+  }
+  if (!isSpec) return null;
+  return readInside(projectDir, `docs/specs/archive/${path.posix.basename(rel)}`);
+}
+
 /** @param {string} root */
 export const runIds = (root) =>
   fs
