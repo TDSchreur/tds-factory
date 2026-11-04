@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { messageOf } from './narrow.js';
+import { printable } from './printable.js';
 
 /** Where a command's output goes: `process.stdout` and `process.stderr` qualify, and so does a test's collector. @typedef {{ write(chunk: string): unknown }} Sink */
 /**
@@ -159,8 +160,7 @@ async function execute(argv, context) {
         store.transition(values.id, values.to, data);
         if (values.to === 'check') for (const warning of store.sizeWarnings(values.id)) err(`warning: ${warning}`);
       } else if (op === 'split') {
-        for (const link of store.split(values.id, { warn: err }))
-          out(link.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, '?'));
+        for (const link of store.split(values.id, { warn: err })) out(printable(link));
       } else if (op === 'size') {
         const size = store.size(values.id, { accept: values.accept });
         if (!size) out('The Run size is unknown (no base commit, or git failed)');
