@@ -722,8 +722,8 @@ test('a local Spec and Ticket show their title as link text, cut off on the tile
         "return [...document.querySelectorAll('.card .tickets .ticket-head')].map(h => { const el = h.querySelector('button.doc-link, a'); return [el.textContent, el.title]; })",
       ),
       [
-        ['01 <img src=x onerror=alert(1)>', '.scratch/f/issues/01-a.md'],
-        [`02 ${long}`, '.scratch/f/issues/02-b.md'],
+        ['01 <img src=x onerror=alert(1)>', '01 <img src=x onerror=alert(1)> (.scratch/f/issues/01-a.md)'],
+        [`02 ${long}`, `02 ${long} (.scratch/f/issues/02-b.md)`],
         ['#7', ''],
       ],
     );

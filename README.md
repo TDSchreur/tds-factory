@@ -8,7 +8,7 @@ New here? Read the [install guide](docs/install.md) to set the Factory up, then 
 
 You need Node 24.4 or newer. One line installs the latest Release and its skills.
 
-macOS and Linux:
+Linux (macOS is not supported):
 
 ```sh
 curl -fsSL https://github.com/TDSchreur/tds-factory/releases/latest/download/install.sh | sh
@@ -20,7 +20,7 @@ Windows (PowerShell 7, `pwsh`; install it from the [PowerShell download page](ht
 pwsh -c "irm https://github.com/TDSchreur/tds-factory/releases/latest/download/install.ps1 | iex"
 ```
 
-Each script checks Node and npm, installs the Release with npm and runs `tds-factory install`. Run the same line again to update. To read the script before you run it, download and open it. You can also run the two commands yourself, the same on macOS, Linux and Windows:
+Each script checks Node and npm, installs the Release with npm and runs `tds-factory install`, which asks where to install on your terminal, even though the script arrives on standard input (see the [install guide](docs/install.md#choose-where-to-install)). To choose without a terminal, `install.sh` takes `sh -s -- --agent claude,codex` or the variables `TDS_FACTORY_AGENT`, `TDS_FACTORY_CLAUDE_DIR` and `TDS_FACTORY_REUSE=1` (the install guide lists them). `install.ps1` takes no destination choice yet: it asks on the console, and without one you run `tds-factory install --agent ...` yourself after setting `TDS_FACTORY_SKIP_SKILLS=1`. Run the same line again to update. To read the script before you run it, download and open it. You can also run the two commands yourself, the same on Linux and Windows:
 
 ```sh
 npm install -g --allow-remote=root https://github.com/TDSchreur/tds-factory/releases/latest/download/tds-factory.tgz
@@ -29,9 +29,9 @@ tds-factory install
 
 npm 12 refuses URL installs by default, so the command needs `--allow-remote=root`. `tds-factory --version` shows the installed version. Skills are not installed automatically by `npm install`. `tds-factory install` installs them, and you must run it again after every update, because the installed `factory` Skill must use the same Run commands as the CLI. `tds-factory update` and the one-line scripts do both steps.
 
-To update, run `tds-factory update`. It installs the latest Release when yours is older and checks the download against the Release's checksum. Then it runs `tds-factory install --force`, which replaces agent files and skills you edited with the defaults. It also replaces any skill folder of the same name that `tds-factory` did not install. Use `tds-factory update --no-force` to keep them. The one-line scripts keep them too. Set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI.
+To update, run `tds-factory update`. It first asks where to install (or takes `--agent`, `--claude-dir` and `--reuse-selection`), then installs the latest Release when yours is older and checks the download against the Release's checksum. Then it runs `tds-factory install --force` with your choice, which replaces agent files and skills you edited with the defaults. It also replaces any skill folder of the same name that `tds-factory` did not install. Use `tds-factory update --no-force` to keep them. The one-line scripts keep them too. Set `TDS_FACTORY_FORCE=1` to replace them, or `TDS_FACTORY_SKIP_SKILLS=1` to install only the CLI.
 
-Maintainers publish Releases manually. See the [release guide](docs/releasing.md). To work on the Factory itself, see the [development guide](docs/development.md). The [install guide](docs/install.md) describes the install options (`--agent`, `--project`, `--force`, `--dry-run`).
+Maintainers publish Releases manually. See the [release guide](docs/releasing.md). To work on the Factory itself, see the [development guide](docs/development.md). The [install guide](docs/install.md) describes the install options (`--agent`, `--claude-dir`, `--reuse-selection`, `--project`, `--force`, `--dry-run`).
 
 ## The flow
 

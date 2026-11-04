@@ -62,3 +62,14 @@ test('documentLabel falls back to the file name without titles', () => {
   assert.equal(documentLabel(runView({ titles: { 'docs/specs/x.md': '' } }), 'docs/specs/x.md'), 'x.md');
   assert.equal(documentLabel(runView({ titles: { 'docs/specs/x.md': 'The Spec' } }), 'docs/specs/x.md'), 'The Spec');
 });
+
+test('a titled Ticket tile has the tooltip "<title> (<path>)", an untitled or remote one the path', () => {
+  const run = runView({
+    tickets: ['.scratch/f/issues/01-a.md', '.scratch/f/issues/02-b.md', 'https://github.com/o/r/issues/7'],
+    titles: { '.scratch/f/issues/01-a.md': '01 <b>Skeleton</b>' },
+  });
+  assert.deepEqual(
+    ticketsOf(run).map((t) => t.tooltip),
+    ['01 <b>Skeleton</b> (.scratch/f/issues/01-a.md)', '.scratch/f/issues/02-b.md', 'https://github.com/o/r/issues/7'],
+  );
+});

@@ -321,8 +321,15 @@ const safeRelative = (p) =>
   !/^[A-Za-z]:/.test(p) &&
   !p.split('/').some((segment) => segment === '' || segment === '..');
 
+const MAX_DOCUMENT_BYTES = 1024 * 1024;
+// Windows has neither flag; there only the dev/ino comparison in openLinkedFile guards the open.
+const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+
+/** @param {unknown} err */
+const isRefusal = (err) => isMissing(err) || ['ENOTDIR', 'EISDIR', 'ELOOP', 'ENXIO'].includes(String(codeOf(err)));
+
 /**
- * The real path of `rel` inside `root`, or null when it is missing or leads outside the root (a symlink).
+ * The real path of `rel` inside `root` when it is a regular file there, or null when it is missing, leads outside the root (a symlink) or is a directory, FIFO, device or socket.
  * @param {string} root
  * @param {string} rel
  */
@@ -330,24 +337,64 @@ async function locateInside(root, rel) {
   try {
     const real = await fs.promises.realpath(root);
     const file = await fs.promises.realpath(path.resolve(real, rel));
-    return file.startsWith(real + path.sep) ? file : null;
+    if (!file.startsWith(real + path.sep)) return null;
+    return (await fs.promises.stat(file)).isFile() ? file : null;
   } catch (err) {
-    if (!isMissing(err) && codeOf(err) !== 'ENOTDIR' && codeOf(err) !== 'EISDIR') throw err;
+    if (!isRefusal(err)) throw err;
     return null;
   }
 }
 
-// The one resolution of a Linked document, shared by the document route and the titles: the allow-list of the Run record, the path checks, the Run worktree, then the main checkout, then (Spec only) docs/specs/archive/ of the main checkout. Returns the real path of the file, or null for every refusal.
+// The Run worktree is a root only when the record names it as an absolute path whose real path is under the Project's .factory/worktrees/ (ADR 0038); anything else is skipped.
+/** @param {string} projectDir @param {unknown} worktree */
+async function worktreeRoot(projectDir, worktree) {
+  if (typeof worktree !== 'string' || !path.isAbsolute(worktree)) return '';
+  try {
+    const base = await fs.promises.realpath(path.join(projectDir, '.factory', 'worktrees'));
+    const real = await fs.promises.realpath(worktree);
+    return real.startsWith(base + path.sep) ? real : '';
+  } catch (err) {
+    if (!isRefusal(err)) throw err;
+    return '';
+  }
+}
+
+/** @typedef {(file: string, flags: number) => Promise<Pick<fs.promises.FileHandle, 'stat' | 'read' | 'close'>>} OpenFile */
+
+// The one open step of Linked documents. Opens without following a final symlink and without blocking on a FIFO, then confirms the opened file is a regular file of at most `limit` bytes and the one `stat` showed just before (same dev and ino, read as bigint so Windows file indexes compare exactly). Returns null for every refusal.
+/**
+ * @param {string} file The real path located by locateInside.
+ * @param {{ open?: OpenFile, limit?: number }} [options]
+ */
+async function openLinkedFile(file, { open = fs.promises.open, limit = MAX_DOCUMENT_BYTES } = {}) {
+  let handle;
+  try {
+    const before = await fs.promises.stat(file, { bigint: true });
+    handle = await open(file, OPEN_FLAGS);
+    const opened = await handle.stat({ bigint: true });
+    if (opened.isFile() && opened.dev === before.dev && opened.ino === before.ino && Number(opened.size) <= limit)
+      return { handle, size: Number(opened.size) };
+  } catch (err) {
+    if (!isRefusal(err)) {
+      await handle?.close();
+      throw err;
+    }
+  }
+  await handle?.close();
+  return null;
+}
+
+// The one resolution of a Linked document, shared by the document route and the titles: the allow-list of the Run record, the path checks, the Run worktree, then the main checkout, then (Spec only) docs/specs/archive/ of the main checkout. Returns the real path of a regular file, or null for every refusal.
 /**
  * @param {string} projectDir The main checkout.
  * @param {Record<string, unknown>} record
  * @param {string} rel The path as the record lists it.
  */
-async function locateLinkedDocument(projectDir, record, rel) {
+export async function locateLinkedDocument(projectDir, record, rel) {
   const isSpec = listedPaths(record.spec_link).includes(rel);
   if (!isSpec && !listedPaths(record.tickets).includes(rel)) return null;
   if (!safeRelative(rel)) return null;
-  const roots = [typeof record.worktree === 'string' ? record.worktree : '', projectDir].filter(Boolean);
+  const roots = [await worktreeRoot(projectDir, record.worktree), projectDir].filter(Boolean);
   for (const root of roots) {
     const file = await locateInside(root, rel);
     if (file !== null) return file;
@@ -361,8 +408,9 @@ async function locateLinkedDocument(projectDir, record, rel) {
  * @param {string} projectDir The main checkout.
  * @param {string} runId
  * @param {string} rawPath The path as requested, percent-encoded per segment; decoded once here.
+ * @param {{ open?: OpenFile }} [options]
  */
-export async function readLinkedDocument(projectDir, runId, rawPath) {
+export async function readLinkedDocument(projectDir, runId, rawPath, { open } = {}) {
   if (!validId(runId)) return null;
   let rel;
   try {
@@ -383,11 +431,19 @@ export async function readLinkedDocument(projectDir, runId, rawPath) {
   }
   const file = await locateLinkedDocument(projectDir, record, rel);
   if (file === null) return null;
+  const opened = await openLinkedFile(file, { open });
+  if (opened === null) return null;
   try {
-    return await fs.promises.readFile(file, 'utf8');
-  } catch (err) {
-    if (!isMissing(err) && codeOf(err) !== 'EISDIR') throw err;
-    return null;
+    const buffer = Buffer.alloc(opened.size);
+    let filled = 0;
+    while (filled < buffer.length) {
+      const { bytesRead } = await opened.handle.read(buffer, filled, buffer.length - filled, filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    return buffer.subarray(0, filled).toString('utf8');
+  } finally {
+    await opened.handle.close();
   }
 }
 
@@ -399,49 +455,51 @@ const TITLE_CACHE_MAX = 500;
 const plainText = (spans) => spans.map((span) => ('v' in span ? span.v : plainText(span.c))).join('');
 
 /**
- * The title of a Markdown head: the first level 1 heading outside fenced code, as plain text; '' when there is none.
+ * The title of a Markdown head: the first level 1 heading with text outside fenced code, as plain text; '' when there is none.
  * @param {string} head
  */
 export function titleOf(head) {
-  const heading = parseMarkdown(head).find((block) => block.type === 'heading' && block.level === 1);
-  if (heading?.type !== 'heading') return '';
-  const text = plainText(heading.inline)
-    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return Array.from(text).slice(0, TITLE_CHARS).join('').trim();
+  for (const block of parseMarkdown(head)) {
+    if (block.type !== 'heading' || block.level !== 1) continue;
+    const text = plainText(block.inline)
+      .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) return Array.from(text).slice(0, TITLE_CHARS).join('').trim();
+  }
+  return '';
 }
 
 /** @param {string} file */
 async function readHead(file) {
-  const handle = await fs.promises.open(file, 'r');
+  const opened = await openLinkedFile(file, { limit: Infinity });
+  if (opened === null) return '';
   try {
     const buffer = Buffer.alloc(TITLE_BYTES);
-    const { bytesRead } = await handle.read(buffer, 0, TITLE_BYTES, 0);
+    const { bytesRead } = await opened.handle.read(buffer, 0, TITLE_BYTES, 0);
     return buffer.subarray(0, bytesRead).toString('utf8');
   } finally {
-    await handle.close();
+    await opened.handle.close();
   }
 }
 
 /**
- * The link text of the local Linked documents of Runs, with a bounded cache keyed on the real path, size and modification time.
- * @param {{ max?: number, read?: (file: string) => Promise<string> }} [options]
+ * The link text of the local Linked documents of Runs. Two caches: the title per real path, size and modification time (at most `max` entries, least recently used out first), and the located real path (or not-found) per Run and listed document, dropped when the record's `updated` changes.
+ * @param {{ max?: number, read?: (file: string) => Promise<string>, locate?: typeof locateLinkedDocument }} [options]
  */
-export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead } = {}) {
+export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead, locate = locateLinkedDocument } = {}) {
   /** @type {Map<string, { size: number, mtimeMs: number, title: string }>} */
   const cache = new Map();
-  /** @param {string} file */
-  async function titleOfFile(file) {
-    let stat;
-    try {
-      stat = await fs.promises.stat(file);
-    } catch (err) {
-      if (!isMissing(err)) throw err;
-      return '';
-    }
+  /** @type {Map<string, { updated: unknown, paths: Map<string, string | null> }>} */
+  const located = new Map();
+  /** @param {string} file @param {fs.Stats} stat */
+  async function titleOfFile(file, stat) {
     const hit = cache.get(file);
-    if (hit && hit.size === stat.size && hit.mtimeMs === stat.mtimeMs) return hit.title;
+    if (hit && hit.size === stat.size && hit.mtimeMs === stat.mtimeMs) {
+      cache.delete(file);
+      cache.set(file, hit);
+      return hit.title;
+    }
     const title = titleOf(await read(file));
     cache.delete(file);
     cache.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, title });
@@ -452,25 +510,64 @@ export function createLinkedTitles({ max = TITLE_CACHE_MAX, read = readHead } = 
     }
     return title;
   }
+  /** @param {string} file @returns {Promise<string | null>} The file when its real path is itself, else null. */
+  async function cachedRealPath(file) {
+    try {
+      return (await fs.promises.realpath(file)) === file ? file : null;
+    } catch (err) {
+      if (!isRefusal(err)) throw err;
+      return null;
+    }
+  }
+  /** @param {string} file */
+  async function statRegular(file) {
+    try {
+      const stat = await fs.promises.stat(file);
+      return stat.isFile() ? stat : null;
+    } catch (err) {
+      if (!isRefusal(err)) throw err;
+      return null;
+    }
+  }
   return {
     size: () => cache.size,
     /**
      * Label per listed local document that has a title: the title, with the digits of the file name in front. A document that is not found, has no heading or cannot be read has no entry.
      * @param {string} projectDir The main checkout.
      * @param {unknown} record
+     * @param {string} [runId] Names the Run whose located paths are cached.
      * @returns {Promise<Record<string, string>>}
      */
-    async of(projectDir, record) {
+    async of(projectDir, record, runId) {
       if (!record || typeof record !== 'object') return {};
       const rec = /** @type {Record<string, unknown>} */ (record);
+      let entry = runId === undefined ? undefined : located.get(runId);
+      if (runId !== undefined && entry?.updated !== rec.updated) {
+        entry = { updated: rec.updated, paths: new Map() };
+        located.set(runId, entry);
+      }
       /** @type {Map<string, string>} */
       const titles = new Map();
       for (const rel of new Set([...listedPaths(rec.spec_link), ...listedPaths(rec.tickets)])) {
         try {
-          const file = await locateLinkedDocument(projectDir, rec, rel);
-          const title = file === null ? '' : await titleOfFile(file);
+          const known = entry?.paths.get(rel);
+          // A cached path is used only while its real path is still itself, so a symlink swapped in later is located again.
+          let file = known ? await cachedRealPath(known) : null;
+          let stat = file === null ? null : await statRegular(file);
+          if (known === null) continue;
+          if (stat === null || file === null) {
+            file = await locate(projectDir, rec, rel);
+            stat = file === null ? null : await statRegular(file);
+            if (file === null || stat === null) {
+              // Not found stays not found until the Run record changes.
+              entry?.paths.set(rel, null);
+              continue;
+            }
+            entry?.paths.set(rel, file);
+          }
+          const title = await titleOfFile(file, stat);
           if (!title) continue;
-          const digits = /^(\d+)-/.exec(path.posix.basename(rel))?.[1];
+          const digits = /^(\d{1,6})-/.exec(path.posix.basename(rel))?.[1];
           titles.set(rel, digits ? `${digits} ${title}` : title);
         } catch {
           // A document that cannot be read keeps its file name as link text.

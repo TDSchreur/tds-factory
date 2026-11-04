@@ -48,7 +48,7 @@ test('install writes the Claude skills and agents to CLAUDE_CONFIG_DIR, not ~/.c
   process.env.CLAUDE_CONFIG_DIR = cfg;
   const log = mock.method(console, 'log', () => {});
   try {
-    install({ agent: 'claude', project: false, force: false });
+    install({ verifyPaths: () => {}, agent: 'claude', project: false, force: false });
   } finally {
     log.mock.restore();
     process.env.HOME = saved.HOME;

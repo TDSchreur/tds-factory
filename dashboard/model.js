@@ -244,9 +244,18 @@ export function chipsOf(run) {
 
 // The link text of a local Linked document: its title from the Run view data (the server's lookup), else the file name; a remote link keeps its label.
 /** @param {{ titles?: Record<string, string> }} run @param {string} href */
-export const documentLabel = (run, href) => {
+const titleOf = (run, href) => {
   const title = isLocalDocument(href) && run.titles && Object.hasOwn(run.titles, href) ? run.titles[href] : '';
-  return typeof title === 'string' && title !== '' ? title : ticketLabel(href);
+  return typeof title === 'string' ? title : '';
+};
+/** @param {{ titles?: Record<string, string> }} run @param {string} href */
+export const documentLabel = (run, href) => titleOf(run, href) || ticketLabel(href);
+
+// The tooltip of a local Linked document on a Ticket tile: "<title> (<path>)" when it has a title, the path alone otherwise.
+/** @param {{ titles?: Record<string, string> }} run @param {string} href */
+export const documentTooltip = (run, href) => {
+  const title = titleOf(run, href);
+  return title ? `${title} (${href})` : href;
 };
 
 // Short label of a Ticket link: "#111" for an issue URL, the file name for a path.
@@ -282,6 +291,7 @@ export function ticketsOf(run) {
   return (run.tickets || []).map((href, i) => ({
     href,
     label: documentLabel(run, href),
+    tooltip: documentTooltip(run, href),
     state: i < done ? 'done' : i === done && run.column === 'build' ? 'active' : 'todo',
     /** @type {UsageTileView | null} */
     usage: null,

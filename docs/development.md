@@ -9,11 +9,11 @@ To work on the Factory itself, clone with `--recurse-submodules` and run `node s
 1. checks Node, git, npm and the checkout;
 2. initialises the `vendor/` submodules;
 3. fetches `origin`, packs its default branch and installs that globally, so you use what is on `develop` instead of the last Release (your checkout and working tree are not touched);
-4. registers the Factory with `tds-factory install`, which puts the skills and agents in `~/.claude` (or `$CLAUDE_CONFIG_DIR`) and `~/.agents`;
+4. registers the Factory with `tds-factory install`, which asks where to put the skills and agents (or takes `--agent`, `--claude-dir` and `--reuse-selection` from the command line, which `dev-install.js` passes on);
 5. checks the result with `tds-factory doctor` (findings are warnings);
 6. registers the developer skills described below.
 
-A failing step skips the steps that depend on it; the others still run, and the exit code is non-zero if a step failed. Options: `--dry-run` shows what would happen and changes nothing, `--force` replaces skills it did not install, `--skip-dev-skills` leaves out step 6.
+A failing step skips the steps that depend on it; the others still run, and the exit code is non-zero if a step failed. Options: `--dry-run` shows what would happen and changes nothing, `--force` replaces skills it did not install, `--skip-dev-skills` leaves out step 6, and `--agent claude,codex`, `--claude-dir PATH` (repeatable) and `--reuse-selection` choose the destinations of step 4 without the question.
 
 ```sh
 node bin/tds-factory.js sync       # copy the skills in skills.manifest.json from vendor/ into skills/
@@ -31,11 +31,11 @@ The `factory` Skill is `skills/factory/SKILL.md`, which holds what every Run nee
 
 `scripts/doc-checks.js` holds the mechanical checks on the repository itself, which `test/doc-checks.test.js` runs: relative Markdown links resolve, ADR numbers are unique, a change to `src/`, `skills/` or `agents/` has a changelog fragment, the docs use no glossary Avoid term, the docs state the Check loop limit as the code does, and a test that calls `openPage` is named `*-browser.test.js` so CI's browser job runs it. The fragment check compares with `origin/develop` and is skipped, with a reason, when that ref does not exist or shares no history with your branch, as in a shallow CI checkout; any other git failure fails the test. When you add a statement of a constant to the docs, add its pattern to `CONSTANTS`.
 
-PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24.4 and the latest LTS. CI has no macOS jobs, because GitHub's macOS runners queue unreliably. CI has no Windows jobs. Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer.
+PRs to and pushes to `develop` and `main` run the full suite on Linux with Node 24.4 and the latest LTS. CI has no macOS jobs, because macOS is not supported. CI has no Windows jobs either: Windows is supported, but its tests run only on a Windows machine (see Working on Windows). Browser tests run separately on Linux and fail if Chrome or ChromeDriver is missing. Packaged CLI installation is checked on Linux. CI also validates the workflows with `actionlint`, lints every script under `scripts/` with `shellcheck` and PSScriptAnalyzer.
 
 ## Working on Windows
 
-CI does not run on Windows, so a Windows-only break is found by whoever works there. The tests are meant to run on Windows with PowerShell 7 and Git for Windows. `.gitattributes` keeps every text file on LF, because the tests and the Skill checks split files on `\n`. After you pull the commit that adds it, check the working tree out again: `git rm --cached -r .` then `git reset --hard` (commit or stash your changes first). Run the tests through `npm test` or `npm run test:unit`, not `node --test` directly: the runner also puts `true` and `false` commands on PATH, which cmd.exe does not have.
+CI does not run Windows, so a Windows-only break is found by whoever works there. The tests are meant to run on Windows with PowerShell 7 and Git for Windows. The install path trust against real Windows ACLs and the console is covered by `node --test test/trusted-install-paths.test.js test/trusted-install-windows.test.js test/install-identity.test.js test/install-prompt.test.js test/install-reconcile.test.js test/install-cli.test.js`, run on a Windows machine (tests that need Linux skip there with a reason, and the Windows-only ones skip on Linux). `.gitattributes` keeps every text file on LF, because the tests and the Skill checks split files on `\n`. After you pull the commit that adds it, check the working tree out again: `git rm --cached -r .` then `git reset --hard` (commit or stash your changes first). Run the tests through `npm test` or `npm run test:unit`, not `node --test` directly: the runner also puts `true` and `false` commands on PATH, which cmd.exe does not have.
 
 Tests that need symbolic links, the executable bit, `mkfifo`, POSIX signals or file names Windows does not allow are skipped on Windows with a reason. Fake `gh` commands in tests come from `test/fake-command.js`, which on Windows makes a copy of `node.exe` that runs the fake's script.
 
@@ -81,7 +81,7 @@ Every call of the `gh` command lives in `src/pr-github.js`, the GitHub adapter b
 
 ## Switching between the Release and your checkout
 
-Only one `tds-factory` is installed globally, and `tds-factory install` writes one set of skills and agents to `~/.claude` (or `$CLAUDE_CONFIG_DIR`). You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
+Only one `tds-factory` is installed globally, and `tds-factory install` writes the skills and agents to the destinations you chose and saved. You use whichever you installed last. Two scripts switch between them, in a shell version and a PowerShell 7 version. Each removes the other version first, installs its own and runs `tds-factory install --force`, so the CLI and the skills always match:
 
 ```sh
 sh scripts/use-official.sh   # the latest Release from GitHub

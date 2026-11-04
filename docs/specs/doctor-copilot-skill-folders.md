@@ -1,6 +1,6 @@
 # Doctor finds Copilot Skills in the Claude and Codex folders
 
-_The Doctor no longer defaults to Claude: [Doctor reports all three agents](doctor-all-agents.md) made it report every agent unless `--agent` names one. This Spec describes the situation before that change._
+_The Doctor no longer defaults to Claude: [Doctor reports all three agents](doctor-all-agents.md) made it report every agent unless `--agent` names one. This Spec describes the situation before that change, and before [install destination selection](install-destination-selection-integration.md), which removed the default install and gives Copilot its own Skills folder._
 
 ## Problem Statement
 

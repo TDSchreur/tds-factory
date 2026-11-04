@@ -246,7 +246,7 @@ test('cleanup accepts actual Factory installs and removes their skills and agent
   for (const agent of ['claude', 'codex', 'copilot']) {
     const cwd = path.join(f.root, agent);
     fs.mkdirSync(cwd);
-    install({ agent, project: true, cwd, log: f.log, warn: f.log });
+    install({ verifyPaths: () => {}, agent, project: true, cwd, log: f.log, warn: f.log });
     const { targets } = await import('../src/flow.js');
     assert.ok(agent === 'claude' || agent === 'codex' || agent === 'copilot');
     const skillsDir = path.join(cwd, targets[agent].project);

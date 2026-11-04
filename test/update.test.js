@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { Readable, Writable } from 'node:stream';
+import { NO_TERMINAL } from '../src/install-prompt.js';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -42,6 +44,10 @@ const HASH = createHash('sha256').update(TGZ).digest('hex');
  */
 function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, installStatus = 0 } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'update-test-'));
+  // The choice is resolved before the first request, so it reads a real (empty) home and a private config folder.
+  const base = mkdtempSync(join(tmpdir(), 'update-home-'));
+  const home = join(base, 'home');
+  mkdirSync(home);
   /** @type {{ calls: string[], cwds: (string | undefined)[], logs: string[], warns: string[], fetched: string[], sleeps: number[], version: string | undefined }} */
   const state = { calls: [], cwds: [], logs: [], warns: [], fetched: [], sleeps: [], version: undefined };
   /** @type {Record<string, Route>} */
@@ -85,19 +91,25 @@ function world({ latest = 'v0.4.0', routes = {}, installedAfter, npmStatus = 0, 
     options: {
       fetchFn,
       run,
-      home: '/home-for-test',
+      home,
+      cwd: home,
+      agent: 'codex',
       /** @param {number} ms */
       sleep: async (ms) => {
         state.sleeps.push(ms);
       },
       tmpdir: tmp,
-      env: {},
+      env: { TDS_FACTORY_CONFIG_DIR: join(base, 'config') },
       /** @param {string} m */
       log: (m) => void state.logs.push(m),
       /** @param {string} m */
       warn: (m) => void state.warns.push(m),
     },
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    base,
+    cleanup: () => {
+      rmSync(tmp, { recursive: true, force: true });
+      rmSync(base, { recursive: true, force: true });
+    },
   };
 }
 
@@ -115,7 +127,7 @@ test('an older installed version installs the latest Release, then refreshes the
     assert.match(npmCwd, /tds-factory-/);
     assert.ok(npmCwd.startsWith(w.tmp), 'npm runs inside the temp download folder');
     assert.equal(w.state.calls[1], 'tds-factory --version');
-    assert.equal(w.state.calls[2], 'tds-factory install --force');
+    assert.equal(w.state.calls[2], 'tds-factory install --force --agent codex');
     assert.deepEqual(readdirSync(w.tmp), [], 'the temp download is removed');
     assert.match(
       w.state.warns.join('\n'),
@@ -130,7 +142,7 @@ test('--no-force refreshes the skills without --force and does not warn about re
   const w = world();
   try {
     await update({ installed: '0.3.0', force: false, ...w.options });
-    assert.equal(w.state.calls.at(-1), 'tds-factory install');
+    assert.equal(w.state.calls.at(-1), 'tds-factory install --agent codex');
     assert.equal(w.state.warns.length, 0);
   } finally {
     w.cleanup();
@@ -141,7 +153,7 @@ test('already on the latest version skips npm, still refreshes the skills and sa
   const w = world();
   try {
     await update({ installed: '0.4.0', ...w.options });
-    assert.deepEqual(w.state.calls, ['tds-factory install --force']);
+    assert.deepEqual(w.state.calls, ['tds-factory install --force --agent codex']);
     assert.match(w.state.logs.join('\n'), /already on the latest version \(0\.4\.0\)/);
     assert.ok(!w.state.fetched.includes(tgzUrl('v0.4.0')), 'nothing is downloaded');
   } finally {
@@ -303,9 +315,9 @@ test('tds-factory runs in the home folder, never in the current folder', async (
       await update({ installed, ...w.options });
       w.state.calls.forEach((call, i) => {
         if (call.startsWith('tds-factory'))
-          assert.equal(w.state.cwds[i], '/home-for-test', `${call} runs in the home folder`);
+          assert.equal(w.state.cwds[i], w.options.home, `${call} runs in the home folder`);
       });
-      assert.ok(w.state.calls.some((c) => c === 'tds-factory install --force'));
+      assert.ok(w.state.calls.some((c) => c === 'tds-factory install --force --agent codex'));
     } finally {
       w.cleanup();
     }
@@ -389,8 +401,11 @@ test('the failing update command exits with 1 and prints the error', () => {
     // Spawned: the stub of `fetch` has to be loaded into the process that runs the command (`--import`).
     const result = spawnSync(
       process.execPath,
-      ['--import', pathToFileURL(stub).href, resolve('bin/tds-factory.js'), 'update'],
-      { encoding: 'utf8' },
+      ['--import', pathToFileURL(stub).href, resolve('bin/tds-factory.js'), 'update', '--agent', 'codex'],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, HOME: dir, USERPROFILE: dir, TDS_FACTORY_CONFIG_DIR: join(dir, 'config') },
+      },
     );
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.match(result.stderr, /error: offline/);
@@ -436,7 +451,7 @@ test('a version other than the Release after the npm install fails before the sk
   const w = world({ installedAfter: '0.3.0' });
   try {
     await assert.rejects(update({ installed: '0.3.0', ...w.options }), /expected 0\.4\.0/);
-    assert.ok(!w.state.calls.some((c) => c.startsWith('tds-factory install')));
+    assert.ok(!w.state.calls.some((c) => c.startsWith('tds-factory install --agent codex')));
   } finally {
     w.cleanup();
   }
@@ -446,7 +461,7 @@ test('a failing npm install rejects and skips the skills step', async () => {
   const w = world({ npmStatus: 243 });
   try {
     await assert.rejects(update({ installed: '0.3.0', ...w.options }), /npm install.*exit code 243/);
-    assert.ok(!w.state.calls.some((c) => c.startsWith('tds-factory install')));
+    assert.ok(!w.state.calls.some((c) => c.startsWith('tds-factory install --agent codex')));
     assert.deepEqual(readdirSync(w.tmp), [], 'the temp download is removed on failure too');
   } finally {
     w.cleanup();
@@ -531,7 +546,7 @@ test('versions compare as semver and a prerelease sorts below its release', () =
 
 test('the usage text lists update and the CLI dispatches it', async () => {
   const result = await cli(process.cwd());
-  assert.match(result.stdout, /tds-factory update \[--no-force\]/);
+  assert.match(result.stdout, /tds-factory update \[--agent .*\[--reuse-selection\] \[--no-force\]/);
   assert.match(readFileSync(resolve('src/cli.js'), 'utf8'), /command === 'update'/);
 });
 
@@ -640,6 +655,129 @@ test('the download may take four times as long as the other requests', async () 
     });
     assert.ok((budgets[API] ?? 0) < 100, `API budget ${budgets[API]}`);
     assert.ok((budgets[download] ?? 0) >= 120, `download budget ${budgets[download]}`);
+  } finally {
+    w.cleanup();
+  }
+});
+
+// The destinations are chosen with the running CLI before anything is fetched or replaced.
+/** A terminal that answers with these lines and counts how often it was opened. @param {string[]} lines */
+function terminalAnswering(lines) {
+  const state = { opened: 0 };
+  const terminal = () => {
+    state.opened++;
+    return /** @type {never} */ (
+      /** @type {unknown} */ ({
+        input: Readable.from(lines),
+        output: new Writable({ write: (_chunk, _encoding, done) => done() }),
+        close() {},
+      })
+    );
+  };
+  return { state, terminal };
+}
+
+/** @param {ReturnType<typeof world>} w */
+function untouched(w) {
+  assert.deepEqual(w.state.fetched, [], 'no request was made');
+  assert.deepEqual(w.state.calls, [], 'the runner was never called');
+  assert.deepEqual(readdirSync(w.options.home), [], 'no file was written');
+  assert.equal(existsSync(w.options.env.TDS_FACTORY_CONFIG_DIR), false, 'the saved selection is unchanged');
+}
+
+test('cancelling the prompt exits before the first request and changes nothing', async () => {
+  const w = world();
+  try {
+    const { terminal } = terminalAnswering(['\n']);
+    await update({ installed: '0.3.0', ...w.options, agent: undefined, terminal });
+    untouched(w);
+    assert.match(w.state.logs.join('\n'), /nothing selected/);
+  } finally {
+    w.cleanup();
+  }
+});
+
+test('without a terminal and without a choice update fails with an example before any request', async () => {
+  const w = world();
+  try {
+    const terminal = () => {
+      throw Object.assign(new Error('No interactive terminal'), { code: NO_TERMINAL });
+    };
+    await assert.rejects(
+      update({ installed: '0.3.0', ...w.options, agent: undefined, terminal }),
+      /Example: tds-factory install --agent claude,codex/,
+    );
+    untouched(w);
+  } finally {
+    w.cleanup();
+  }
+});
+
+test('invalid flags fail before the first request', async () => {
+  for (const flags of [
+    { agent: 'nothing' },
+    { agent: 'codex', claudeDirs: ['/x'] },
+    { agent: 'claude', reuseSelection: true },
+    { agent: undefined, reuseSelection: true },
+  ]) {
+    const w = world();
+    try {
+      await assert.rejects(update({ installed: '0.3.0', ...w.options, ...flags }));
+      untouched(w);
+    } finally {
+      w.cleanup();
+    }
+  }
+});
+
+test('a prompt answer reaches the install child as explicit flags and is asked once', async () => {
+  const w = world();
+  try {
+    mkdirSync(join(w.options.home, '.claude-work'));
+    const { state, terminal } = terminalAnswering(['1,2\n']);
+    await update({ installed: '0.3.0', ...w.options, agent: undefined, terminal });
+    assert.equal(state.opened, 1, 'the child is told the choice, so nobody asks twice');
+    const dirs = [join(w.options.home, '.claude'), join(w.options.home, '.claude-work')];
+    assert.equal(
+      w.state.calls.at(-1),
+      `tds-factory install --force --agent claude --claude-dir ${dirs[0]} --claude-dir ${dirs[1]}`,
+    );
+    assert.ok(w.state.calls.indexOf('npm install -g tds-factory.tgz') < w.state.calls.length - 1);
+  } finally {
+    w.cleanup();
+  }
+});
+
+test('--claude-dir and --no-force reach the install child; an already current CLI still installs', async () => {
+  const w = world();
+  try {
+    const dir = join(w.options.home, 'work-claude');
+    await update({ installed: '0.4.0', ...w.options, agent: 'claude,codex', claudeDirs: [dir], force: false });
+    assert.deepEqual(w.state.calls, [`tds-factory install --agent claude,codex --claude-dir ${dir}`]);
+  } finally {
+    w.cleanup();
+  }
+});
+
+test('--reuse-selection repeats the saved choice and is never the default', async () => {
+  const w = world();
+  try {
+    const file = join(w.options.env.TDS_FACTORY_CONFIG_DIR, 'install', 'global.json');
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ version: 1, selected: [{ agent: 'copilot' }] }));
+    const { state, terminal } = terminalAnswering(['\n']);
+    await update({ installed: '0.3.0', ...w.options, agent: undefined, reuseSelection: true, terminal });
+    assert.equal(state.opened, 0);
+    assert.equal(w.state.calls.at(-1), 'tds-factory install --force --agent copilot');
+    // Without the flag nothing is chosen silently: an empty answer cancels.
+    const again = world();
+    try {
+      const { terminal: ask } = terminalAnswering(['\n']);
+      await update({ installed: '0.3.0', ...again.options, agent: undefined, terminal: ask });
+      assert.deepEqual(again.state.calls, []);
+    } finally {
+      again.cleanup();
+    }
   } finally {
     w.cleanup();
   }
