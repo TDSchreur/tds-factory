@@ -106,6 +106,17 @@ test('clean keeps a branch whose PR head is not known locally, and says to fetch
   assert.ok(branches(main).includes(run.id));
 });
 
+test('clean keeps a branch when the PR head is a ref name or an option, not an object id', () => {
+  const main = repo();
+  const run = finished(main);
+  for (const head of [run.id, 'refs/heads/' + run.id, 'HEAD', '--all', '']) {
+    const result = run.store.clean(run.id, { prState: () => ({ state: 'MERGED', head }) });
+    assert.equal(result.outcome, 'kept', head);
+    assert.match(result.reason ?? '', /not in the merged PR/);
+  }
+  assert.ok(branches(main).includes(run.id));
+});
+
 test('clean keeps a merged Run that is not done yet, and a branch that moves while GitHub is asked', () => {
   const main = repo();
   const going = finished(main);

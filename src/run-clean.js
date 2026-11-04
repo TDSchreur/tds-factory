@@ -156,7 +156,9 @@ export function* cleanRunFlow(projectDir, callerDir, rawId, prState = ghPrInfo) 
   if (pr.state !== 'MERGED') return kept(`the PR is ${String(pr.state).toLowerCase()}, not merged`);
   if (head && head !== pr.head) {
     // "Update branch" on the host adds commits to the PR, so the local tip may be an ancestor of the merged head.
-    if (!pr.head) return kept('the branch has commits that are not in the merged PR');
+    // The host's answer is untrusted: only a full hex object id reaches git, never a ref name or an option.
+    if (!pr.head || !/^[0-9a-f]{40,64}$/i.test(pr.head))
+      return kept('the branch has commits that are not in the merged PR');
     const known = yield* git('cat-file', '-e', `${pr.head}^{commit}`);
     if (known.status !== 0) return kept('the merged PR head is not in this repository: fetch it, then run clean again');
     const ancestor = yield* git('merge-base', '--is-ancestor', head, pr.head);
