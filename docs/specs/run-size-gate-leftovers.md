@@ -61,7 +61,3 @@ The total is 15 files, at the file limit and above two thirds of it (10 files); 
 ## Out of Scope
 
 The Dashboard buttons ([#530](https://github.com/TDSchreur/tds-factory/issues/530)); an environment variable for the time limit; changing other `appendEvent` callers (`run-folder.js`, `evidence.js`) or other character filters; measuring uncommitted work.
-
-## Further Notes
-
-Follow-up after Finish keeps its PR feedback scope apart from this Spec.
