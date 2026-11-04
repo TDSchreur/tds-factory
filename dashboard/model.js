@@ -61,6 +61,7 @@
  * @property {MetricsView} [metrics]
  * @property {'fast' | 'full'} [track]
  * @property {ProjectReviewView[]} [projectReviews]
+ * @property {Record<string, string>} [titles] Link text per local Linked document, keyed by the listed path; a document without a title has no entry.
  * @property {string[]} [tickets]
  * @property {number | null} [ticketsDone]
  * @property {number | null} [ticketsTotal]
