@@ -1,3 +1,3 @@
 ### Added
 
-- Internal discovery and planning for Factory install destinations.
+- Internal discovery, planning and saved selections for Factory install destinations.
