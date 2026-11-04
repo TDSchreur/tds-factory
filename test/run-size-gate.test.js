@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'nod
 import { dirname, join } from 'node:path';
 import { cli as runCli } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
+import { growsOverTheLimit } from '../src/run-lifecycle.js';
 
 const REASON = 'Run size over the limit: split the remaining Tickets into a new Run?';
 /**
@@ -307,3 +308,26 @@ test(
     assert.equal(readFileSync(elsewhere, 'utf8'), '');
   },
 );
+
+test('a git timeout makes the Run wait through the size gate like an over-limit Run', async () => {
+  const r = await under();
+  const old = record(r.cwd, r.id);
+  const next = { ...old, tickets_done: 1 };
+  const timeout = () => ({
+    status: null,
+    stdout: '',
+    stderr: '',
+    error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }),
+  });
+  assert.equal(growsOverTheLimit(r.cwd, r.id, old, next), false);
+  assert.equal(growsOverTheLimit(r.cwd, r.id, old, next, { git: timeout }), true);
+  assert.equal(growsOverTheLimit(r.cwd, r.id, old, { ...next, size_accepted: 'now' }, { git: timeout }), false);
+  assert.equal(growsOverTheLimit(r.cwd, r.id, old, { ...next, tickets_done: 4 }, { git: timeout }), false);
+});
+
+test('run size prints the size of a normal Run in files and KB', async () => {
+  const r = await over();
+  const result = await run(r.cwd, 'size', '--id', r.id);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '1 file, 50 KB\n');
+});

@@ -157,12 +157,13 @@ export function updateRun(projectDir, id, data) {
  * @param {string | undefined} id
  * @param {Run} old
  * @param {Run} next
+ * @param {import('./run-size.js').SizeOptions} [sizeOptions] for tests
  */
-function growsOverTheLimit(projectDir, id, old, next) {
+export function growsOverTheLimit(projectDir, id, old, next, sizeOptions) {
   if (next.stage !== 'build' || next.status !== 'running' || next.size_accepted) return false;
   const done = next.tickets_done ?? 0;
   if (done <= (old.tickets_done ?? 0) || done >= (next.tickets_total ?? 0)) return false;
-  const size = runSize(projectDir, id);
+  const size = runSize(projectDir, id, sizeOptions);
   return size !== undefined && overLimit(size);
 }
 
@@ -400,11 +401,11 @@ export function splitRun(projectDir, id, { updated, handOver = false, warn = con
  * @param {string} projectDir
  * @param {string | undefined} id
  * @param {{ accept?: boolean, updated?: string, warn?: (message: string) => void }} [options]
- * @returns {{ files: number, bytes: number } | undefined}
+ * @returns {import('./run-size.js').RunSize | undefined}
  */
 export function sizeRun(projectDir, id, { accept = false, updated, warn = console.error } = {}) {
   if (!accept) return runSize(projectDir, id);
-  /** @type {{ files: number, bytes: number } | undefined} */
+  /** @type {import('./run-size.js').RunSize | undefined} */
   let size;
   changeRun(projectDir, id, (old) => {
     size = runSize(projectDir, id);

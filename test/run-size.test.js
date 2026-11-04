@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cli as runCli } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
-import { runSize, overLimit } from '../src/run-size.js';
+import { runSize, overLimit, describeSize, sizeWarnings } from '../src/run-size.js';
 
 /**
  * @param {string} cwd
@@ -133,4 +133,81 @@ test('a diff that overflows maxBuffer counts as over the limit, not as unknown',
   const size = runSize(cwd, id, { maxBuffer: 1024 });
   assert.ok(size, 'the size is known');
   assert.ok(overLimit(size));
+});
+
+/**
+ * @param {string} code a git call that failed with this error code, without running a process
+ * @returns {() => { status: null, stdout: string, stderr: string, error: Error }}
+ */
+const failing = (code) => () => ({
+  status: null,
+  stdout: '',
+  stderr: '',
+  error: Object.assign(new Error(code), { code }),
+});
+
+test('a git call that times out counts as over the limit with the reason timeout', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'a.txt': 'a\n' }]);
+  const size = runSize(cwd, id, { git: failing('ETIMEDOUT') });
+  assert.ok(size, 'the size is known');
+  assert.equal(size.reason, 'timeout');
+  assert.ok(overLimit(size));
+});
+
+test('a diff that overflows the output buffer has the reason overflow', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'big.txt': 'x'.repeat(50 * 1024) }]);
+  assert.equal(runSize(cwd, id, { maxBuffer: 1024 })?.reason, 'overflow');
+  assert.equal(runSize(cwd, id, { git: failing('ENOBUFS') })?.reason, 'overflow');
+});
+
+test('a timeout of only one of the two git calls still counts as over the limit', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'a.txt': 'a\n' }]);
+  let calls = 0;
+  /** @type {NonNullable<Parameters<typeof runSize>[2]>['git']} */
+  const git2 = () => (++calls === 1 ? { status: 0, stdout: 'x', stderr: '' } : failing('ETIMEDOUT')());
+  const size = runSize(cwd, id, { git: git2 });
+  assert.equal(size?.reason, 'timeout');
+  assert.ok(size && overLimit(size));
+});
+
+test('a plain git failure is still unknown, and a normal size has no reason', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'a.txt': 'a\n' }]);
+  assert.equal(runSize(cwd, id, { git: () => ({ status: 128, stdout: '', stderr: 'fatal' }) }), undefined);
+  assert.equal(runSize(cwd, id)?.reason, undefined);
+});
+
+test('the git calls get a time limit of 60 seconds unless a test says otherwise', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'a.txt': 'a\n' }]);
+  /** @type {(number | undefined)[]} */
+  const seen = [];
+  runSize(cwd, id, {
+    git: (_worktree, _args, options) => {
+      seen.push(options?.timeout);
+      return { status: 0, stdout: '', stderr: '' };
+    },
+  });
+  runSize(cwd, id, {
+    timeout: 5,
+    git: (_worktree, _args, options) => {
+      seen.push(options?.timeout);
+      return { status: 0, stdout: '', stderr: '' };
+    },
+  });
+  assert.deepEqual(seen, [60_000, 60_000, 5, 5]);
+});
+
+test('describeSize says why the size is unknown instead of printing sentinel numbers', async () => {
+  const sentence = 'size unknown: git timed out (or its output was too large), counted as over the limit';
+  for (const reason of /** @type {const} */ (['timeout', 'overflow']))
+    assert.equal(describeSize({ files: 16, bytes: 99999999, reason }), sentence);
+  assert.equal(describeSize({ files: 1, bytes: 2048 }), '1 file, 2 KB');
+  assert.equal(describeSize({ files: 3, bytes: 0 }), '3 files, 0 KB');
+});
+
+test('the warning before Check says the size is unknown after a timeout, and stays silent once accepted', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'a.txt': 'a\n' }]);
+  const warnings = sizeWarnings(cwd, id, { git: failing('ETIMEDOUT') });
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /size is unknown.*counted as over the limit/);
+  assert.doesNotMatch(warnings[0], /99999|KB/);
 });
