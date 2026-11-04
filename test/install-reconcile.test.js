@@ -211,14 +211,17 @@ test(
   },
 );
 
-test('an unavailable saved Claude folder is preserved and the change refused', supported, () => {
+test('an unavailable saved Claude folder can be deselected with a warning', supported, () => {
   const w = world();
   const gone = path.join(w.base, 'unmounted');
   fs.mkdirSync(gone, { mode: 0o700 });
   install(w.options({ agent: 'claude', claudeDirs: [gone] }));
   fs.rmSync(gone, { recursive: true });
-  assert.throws(() => install(w.options({ agent: 'codex' })), /unavailable/);
-  assert.equal(has(path.join(w.home, '.agents')), false);
+  install(w.options({ agent: 'codex' }));
+  assert.equal(has(path.join(w.home, '.agents', 'skills', 'tdd')), true);
+  assert.equal(has(gone), false);
+  assert.deepEqual(w.record(), [{ agent: 'codex' }]);
+  assert.ok(w.warnings.some((message) => message.includes(gone) && /remain/.test(message)));
 });
 
 test('hostile path input is refused: control characters, very long paths and a NUL byte', supported, () => {

@@ -178,16 +178,15 @@ test('an atomic replacement failure keeps the previous saved selection', () => {
   assert.deepEqual(fs.readdirSync(home), ['selection.json']);
 });
 
-test('does not drop a saved Claude destination while its directory is unavailable', () => {
+test('can forget a saved Claude destination while its directory is unavailable', () => {
   const home = tempDir('selection-home-');
   const configDir = path.join(home, '.claude-work');
   fs.mkdirSync(configDir);
   const file = path.join(home, 'selection.json');
   saveSelection({ trustedPaths: true, file, home, cwd: home, selected: [{ agent: 'claude', configDir }] });
   fs.rmdirSync(configDir);
-  const before = fs.readFileSync(file, 'utf8');
-  assert.throws(() => saveSelection({ trustedPaths: true, file, home, cwd: home, selected: [] }), /unavailable/);
-  assert.equal(fs.readFileSync(file, 'utf8'), before);
+  saveSelection({ trustedPaths: true, file, home, cwd: home, selected: [] });
+  assert.deepEqual(readSelection({ file, home, cwd: home }), []);
 });
 
 test('rejects malformed legacy agent ownership records before accepting any evidence', () => {

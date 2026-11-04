@@ -237,3 +237,5 @@ Put the project's settings in a committed `.factory/config.json`; every key is o
 - `reviews` holds [Project reviews](project-reviews.md), with the same entries as `.factory/reviews.json`, which keeps working.
 
 `.factory/` is ignored for Run records, so commit the file with `git add -f .factory/config.json`. A Run reads it from the default branch of `origin` and freezes it when it starts; `tds-factory run config --id <id>` prints what it froze. Edits apply to new Runs. `tds-factory doctor` reports a bad value as `fail` with the line to fix. See [ADR 0016](adr/0016-project-config-is-committed-and-frozen-per-run.md).
+
+If you deselect a saved install destination that is unavailable, the installer warns that its Factory files may remain if the directory returns. Available deselected destinations are cleaned up as usual.
