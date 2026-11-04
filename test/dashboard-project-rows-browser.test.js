@@ -150,7 +150,7 @@ test('blocked or corrupt storage never breaks the page and the row still toggles
 });
 
 test('a Run that starts waiting never expands a collapsed row, and neither does Needs you', async (t) => {
-  const page = await openPage(t, { projects: two() });
+  const page = await openPage(t, { projects: two() }, { pollMs: 100 });
   if (!page) return;
   try {
     await clickToggle(page, 'beta');
@@ -189,12 +189,12 @@ test('Project rows are in stable alphabetical order, and ?project= puts its row 
     name,
     runs: [run({ id: 'r-' + name, title: name + ' run' })],
   }));
-  const page = await openPage(t, { projects });
+  const page = await openPage(t, { projects }, { pollMs: 100 });
   if (!page) return;
   try {
     assert.deepEqual(await rowNames(page), ['alpha', 'Mid', 'zeta']);
     page.state.projects = [...projects].reverse();
-    await page.wait(2500);
+    await page.waitForPolls(); // a poll after the registry changed had its chance to move the rows
     assert.deepEqual(await rowNames(page), ['alpha', 'Mid', 'zeta'], 'registry order does not move the rows');
     await clickToggle(page, 'zeta');
     await page.load();
@@ -371,7 +371,7 @@ test('the compact view keeps one Stage for every row and sums the Stage counts o
 });
 
 test('a notification names the Project, and opening it expands the collapsed row of its Run', async (t) => {
-  const page = await openPage(t, { projects: two() });
+  const page = await openPage(t, { projects: two() }, { pollMs: 100 });
   if (!page) return;
   try {
     await run$(
@@ -379,7 +379,7 @@ test('a notification names the Project, and opening it expands the collapsed row
       `window.__notes = [];
       window.Notification = class { static permission = 'granted'; constructor(title, options) { window.__notes.push([title, options.tag]); window.__last = this; } };`,
     );
-    await page.wait(2200);
+    await page.waitForPolls(); // the Runs that already wait have been seen, so only a new one notifies
     await clickToggle(page, 'beta');
     page.state.projects = two().map((p) => ({
       ...p,

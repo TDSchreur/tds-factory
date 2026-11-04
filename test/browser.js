@@ -7,6 +7,7 @@ import { createServer as createPortServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { waitUntil } from './wait-until.js';
+import { withPollMs } from './poll-interval.js';
 
 /** @import { IncomingMessage } from 'node:http' */
 /** @import { AddressInfo } from 'node:net' */
@@ -55,6 +56,9 @@ import { waitUntil } from './wait-until.js';
  * @property {(cmd: string, params?: object) => Promise<PageValue>} cdp A DevTools protocol command.
  * @property {(value: string) => Promise<void>} key
  * @property {(modifier: string, value: string) => Promise<void>} keyChord
+ * @property {() => Promise<void>} waitForFrame Resolves after the page has drawn two frames, so what an answer changed is on screen.
+ * @property {(count?: number) => Promise<void>} waitForPolls Resolves after the page has received the complete answer of `count` more polls of /api/views and has drawn two frames. Use it instead of a fixed sleep; with `pollMs` it is fast.
+ * @property {(change: () => void | Promise<void>) => Promise<void>} waitForFileReads Runs `change` (a change of the served state), then resolves after the page has received one more /files/ answer (a refreshed detail reads its files again) and has drawn two frames. The count is taken before `change` runs, so a fast answer cannot be missed.
  * @property {typeof delay} wait
  */
 
@@ -187,14 +191,31 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
   await untilGone(killMs);
 }
 
+// Installed in every page before it loads. It counts the answers of /api/views and /files/ that the page has received in full,
+// without changing what the page sees: the page gets the same promise, and a clone of the response is read on the side.
+// A server-side count would only say that a request arrived, not that the page has the answer.
+const WATCH_FETCHES = `
+  window.__fetched = { views: 0, files: 0 };
+  const originalFetch = window.fetch;
+  window.fetch = function (input) {
+    const promise = originalFetch.apply(this, arguments);
+    const url = String(input && input.url ? input.url : input);
+    const kind = url.includes('/api/views') ? 'views' : url.includes('/files/') ? 'files' : null;
+    if (kind) {
+      const done = () => { window.__fetched[kind]++; };
+      promise.then((response) => response.clone().text()).then(done, done);
+    }
+    return promise;
+  };`;
+
 // Opens the real Dashboard page in headless Chromium against a stub server, or returns null (and skips the test) without a browser.
 // state.runs is served as /api/views, state.files as /files/<run>/<name>, and state.respond(req) answers DELETE and POST requests.
 /**
  * @param {{ skip: (reason: string) => void }} t
  * @param {PageState} state
- * @param {{ args?: string[], width?: number, height?: number, query?: string }} [options] `query` is added to the page URL, for example `?project=b`.
+ * @param {{ args?: string[], width?: number, height?: number, query?: string, pollMs?: number }} [options] `query` is added to the page URL, for example `?project=b`. `pollMs` sets the poll interval of the Dashboard in this page (2000 ms without it); the shipped Dashboard is not changed, the stub server serves its constants file with the value replaced.
  */
-export async function openPage(t, state, { args = [], width = 1200, height = 700, query = '' } = {}) {
+export async function openPage(t, state, { args = [], width = 1200, height = 700, query = '', pollMs } = {}) {
   if (WINDOWS) {
     t.skip('the browser tests are not supported on Windows');
     return null;
@@ -206,6 +227,9 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     t.skip('A browser and its driver (ChromeDriver and Chromium) are required');
     return null;
   }
+  // Built before anything starts: a missing constant or a bad value fails the test without a process to clean up.
+  const modelSource =
+    pollMs === undefined ? null : withPollMs(readFileSync(new URL('model.js', DASHBOARD), 'utf8'), pollMs);
   /** @type {string[]} */
   const calls = [];
   /** @type {(string | string[] | undefined)[]} */
@@ -230,6 +254,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       return send(answer.status, 'text/plain', answer.body, answer.headers);
     }
     if (routePath === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
+    if (modelSource !== null && routePath === '/model.js') return send(200, TYPES.js, modelSource);
     if (ASSET.test(routePath))
       return send(200, TYPES[routePath.split('.').pop() ?? ''], readFileSync(new URL(routePath.slice(1), DASHBOARD)));
     // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
@@ -390,11 +415,35 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       cmd: 'Emulation.setDeviceMetricsOverride',
       params: { width, height, deviceScaleFactor: 1, mobile: false },
     });
+    await request('POST', `${base}/${browser.cdp}/cdp/execute`, {
+      cmd: 'Page.addScriptToEvaluateOnNewDocument',
+      params: { source: WATCH_FETCHES },
+    });
     /**
      * @param {string} script
      * @param {unknown[]} [scriptArgs]
      */
     const execute = (script, scriptArgs = []) => request('POST', base + '/execute/sync', { script, args: scriptArgs });
+    /**
+     * @param {'views' | 'files'} kind
+     * @param {number} count
+     * @param {() => void | Promise<void>} [change] Runs after the count is taken and before the wait starts.
+     */
+    const waitForFetches = async (kind, count, change) => {
+      const before = Number(await execute('return window.__fetched ? window.__fetched[arguments[0]] : 0', [kind]));
+      await change?.();
+      await waitUntil(
+        async () =>
+          Number(await execute('return window.__fetched ? window.__fetched[arguments[0]] : 0', [kind])) >=
+          before + count,
+        {
+          timeoutMs: 5000 + count * (pollMs ?? 2000),
+          intervalMs: 20,
+          message: `the page receives ${count} more answer(s) of ${kind === 'views' ? '/api/views' : '/files/'}`,
+        },
+      );
+      await page.waitForFrame();
+    };
     /** @type {Page} */
     const page = {
       driverPid: driver.pid,
@@ -467,6 +516,19 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
             },
           ],
         }),
+      // The Dashboard polls on a timer and does not wait for an answer, so "the poll happened" is the page's own count of the
+      // answers it has received in full (WATCH_FETCHES), then two drawn frames for the redraw they cause.
+      /** @param {number} [count] */
+      waitForPolls: (count = 1) => waitForFetches('views', count),
+      /** @param {() => void | Promise<void>} change */
+      waitForFileReads: (change) => waitForFetches('files', 1, change),
+      waitForFrame: async () => {
+        for (let frame = 0; frame < 2; frame++)
+          await page.cdp('Runtime.evaluate', {
+            expression: 'new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)))',
+            awaitPromise: true,
+          });
+      },
       wait: delay,
     };
     await page.load();

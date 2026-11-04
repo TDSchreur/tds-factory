@@ -6,10 +6,14 @@ test('a refresh of the open Run keeps the scroll position of its detail', async 
   /** @param {number} n */
   const record = (n) =>
     run({ id: 'r1', title: 'Long run', files: ['define.md'], updated: new Date(Date.now() + n * 1000).toISOString() });
-  const page = await openPage(t, {
-    runs: [record(0)],
-    files: { 'r1/define.md': '# Long\n\n' + Array.from({ length: 150 }, (_, i) => `- finding ${i}`).join('\n') },
-  });
+  const page = await openPage(
+    t,
+    {
+      runs: [record(0)],
+      files: { 'r1/define.md': '# Long\n\n' + Array.from({ length: 150 }, (_, i) => `- finding ${i}`).join('\n') },
+    },
+    { pollMs: 100 },
+  );
   if (!page) return;
   try {
     await page.execute("document.querySelector('.card').click()");
@@ -18,9 +22,11 @@ test('a refresh of the open Run keeps the scroll position of its detail', async 
     );
     await page.execute("document.getElementById('detail').scrollTop = 800");
     for (let n = 1; n <= 3; n++) {
-      page.state.runs = [record(n)];
-      await page.wait(2300);
-    } // each change of `updated` refreshes the open Run
+      // Each change of `updated` refreshes the open Run: the next poll brings it and the detail reads its files again.
+      await page.waitForFileReads(() => {
+        page.state.runs = [record(n)];
+      });
+    }
     assert.equal(await page.execute("return Math.round(document.getElementById('detail').scrollTop)"), 800);
   } finally {
     await page.close();
@@ -30,7 +36,7 @@ test('a refresh of the open Run keeps the scroll position of its detail', async 
 test('a refresh never opens the modal detail again or moves its focus', async (t) => {
   /** @param {number} n */
   const record = (n) => run({ id: 'r1', title: 'Open run', updated: new Date(Date.now() + n * 1000).toISOString() });
-  const page = await openPage(t, { runs: [record(0)] });
+  const page = await openPage(t, { runs: [record(0)] }, { pollMs: 100 });
   if (!page) return;
   try {
     await page.execute(
@@ -41,7 +47,7 @@ test('a refresh never opens the modal detail again or moves its focus', async (t
     await page.execute("document.querySelector('#detail .close').focus()");
     for (let n = 1; n <= 2; n++) {
       page.state.runs = [record(n)];
-      await page.wait(2300);
+      await page.waitForPolls(); // a poll answered after the change, drawn
     }
     assert.equal(await page.execute('return window.__shown'), 1);
     assert.equal(
