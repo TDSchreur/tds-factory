@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -153,4 +153,145 @@ test('backup paths inside a destination or through a symlink are rejected before
   fs.symlinkSync(f.root, f.backupRoot);
   assert.throws(() => cleanupDestination(f), /symbolic link/);
   assert.equal(fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8'), 'edited');
+});
+
+test('cleanup removes recorded agents, backs up edits with their record and preserves user agents', () => {
+  const f = fixture();
+  const record = { 'factory-build.md': '0'.repeat(64) };
+  fs.writeFileSync(path.join(f.agentsDir, '.tds-factory-agents.json'), JSON.stringify(record));
+  fs.writeFileSync(path.join(f.agentsDir, 'factory-build.md'), 'my model');
+  fs.writeFileSync(path.join(f.agentsDir, 'my-agent.md'), 'mine');
+  const result = cleanupDestination(f);
+  assert.ok(result.backupDir);
+  assert.equal(fs.readFileSync(path.join(result.backupDir, 'agents/factory-build.md'), 'utf8'), 'my model');
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(result.backupDir, 'agents/.tds-factory-agents.json'), 'utf8')),
+    record,
+  );
+  assert.deepEqual(fs.readdirSync(f.agentsDir), ['my-agent.md']);
+  assert.equal(fs.readFileSync(path.join(f.agentsDir, 'my-agent.md'), 'utf8'), 'mine');
+});
+
+test('malformed ownership records fail before any skill removal or backup creation', () => {
+  for (const record of ['{', 'null', '[]', '{"agent.md":42}', '{"agent.md":"bad hash"}']) {
+    const f = fixture();
+    const dir = skill(f);
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), 'edited');
+    fs.writeFileSync(path.join(f.agentsDir, '.tds-factory-agents.json'), record);
+    assert.throws(() => cleanupDestination(f), /record/);
+    assert.equal(fs.existsSync(dir), true);
+    assert.equal(fs.existsSync(f.backupRoot), false);
+  }
+});
+
+test('hostile agent record names cannot reach files outside the destination', () => {
+  for (const name of [
+    '..',
+    '.',
+    '../outside',
+    '..\\outside',
+    '/outside',
+    'C:\\outside',
+    'C:outside',
+    'agent\n.md',
+    'nul',
+    '.tds-factory-agents.json',
+    'x'.repeat(200_000),
+  ]) {
+    const f = fixture();
+    const dir = skill(f);
+    fs.writeFileSync(path.join(f.root, 'outside'), 'untouched');
+    fs.writeFileSync(path.join(f.agentsDir, '.tds-factory-agents.json'), JSON.stringify({ [name]: '0'.repeat(64) }));
+    assert.throws(() => cleanupDestination(f), /record/);
+    assert.equal(fs.existsSync(dir), true);
+    assert.equal(fs.readFileSync(path.join(f.root, 'outside'), 'utf8'), 'untouched');
+    assert.equal(fs.existsSync(f.backupRoot), false);
+  }
+});
+
+test(
+  'symlink agent records fail before mutation and recorded agent links preserve their targets',
+  symlinkOptions,
+  () => {
+    const f = fixture();
+    const dir = skill(f);
+    const outside = path.join(f.root, 'outside');
+    fs.writeFileSync(outside, JSON.stringify({ 'factory-build.md': '0'.repeat(64) }));
+    const recordFile = path.join(f.agentsDir, '.tds-factory-agents.json');
+    fs.symlinkSync(outside, recordFile);
+    assert.throws(() => cleanupDestination(f), /record/);
+    assert.equal(fs.existsSync(dir), true);
+    fs.unlinkSync(recordFile);
+    fs.copyFileSync(outside, recordFile);
+    fs.symlinkSync(outside, path.join(f.agentsDir, 'factory-build.md'));
+    cleanupDestination(f);
+    assert.equal(fs.lstatSync(path.join(f.agentsDir, 'factory-build.md')).isSymbolicLink(), true);
+    assert.equal(fs.existsSync(recordFile), true);
+    assert.equal(fs.readFileSync(outside, 'utf8'), JSON.stringify({ 'factory-build.md': '0'.repeat(64) }));
+  },
+);
+
+test('cleanup accepts actual Factory installs and removes their skills and agents without backups', async () => {
+  const { install } = await import('../src/install.js');
+  const f = fixture();
+  for (const agent of ['claude', 'codex', 'copilot']) {
+    const cwd = path.join(f.root, agent);
+    fs.mkdirSync(cwd);
+    install({ agent, project: true, cwd, log: f.log, warn: f.log });
+    const { targets } = await import('../src/flow.js');
+    assert.ok(agent === 'claude' || agent === 'codex' || agent === 'copilot');
+    const skillsDir = path.join(cwd, targets[agent].project);
+    const agentsDir = path.join(cwd, targets[agent].projectAgents);
+    cleanupDestination({ ...f, skillsDir, agentsDir });
+    assert.deepEqual(fs.readdirSync(skillsDir), []);
+    assert.deepEqual(fs.readdirSync(agentsDir), []);
+    assert.equal(fs.existsSync(f.backupRoot), false);
+  }
+});
+
+test('a backup copy failure after an earlier successful copy leaves every original installed', () => {
+  const f = fixture();
+  const dir = skill(f);
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), 'edited skill');
+  fs.writeFileSync(
+    path.join(f.agentsDir, '.tds-factory-agents.json'),
+    JSON.stringify({ 'factory-build.md': '0'.repeat(64) }),
+  );
+  fs.writeFileSync(path.join(f.agentsDir, 'factory-build.md'), 'edited agent');
+  const copy = fs.cpSync;
+  /** @type {typeof fs.cpSync} */
+  const failCopy = (src, dest, options) => {
+    if (String(src) === path.join(f.agentsDir, 'factory-build.md')) throw new Error('backup storage failed');
+    return copy(src, dest, options);
+  };
+  const injected = mock.method(fs, 'cpSync', failCopy);
+  try {
+    assert.throws(() => cleanupDestination(f), /backup storage failed/);
+  } finally {
+    injected.mock.restore();
+  }
+  assert.equal(fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8'), 'edited skill');
+  assert.equal(fs.readFileSync(path.join(f.agentsDir, 'factory-build.md'), 'utf8'), 'edited agent');
+  assert.equal(fs.existsSync(path.join(f.agentsDir, '.tds-factory-agents.json')), true);
+});
+
+test('dry-run exposes its plan and preserved entries without claiming files were removed', () => {
+  const f = fixture();
+  const dir = skill(f);
+  const userFile = path.join(f.agentsDir, 'mine.md');
+  fs.writeFileSync(userFile, 'mine');
+  const result = cleanupDestination({ ...f, dryRun: true });
+  assert.deepEqual(result.removed, []);
+  assert.deepEqual(result.planned, [dir]);
+  assert.ok(result.preserved.includes(userFile));
+});
+
+test('a nested symlink cycle is backed up as a link without traversing it', symlinkOptions, () => {
+  const f = fixture();
+  const dir = skill(f);
+  fs.symlinkSync(dir, path.join(dir, 'self'));
+  const result = cleanupDestination(f);
+  assert.ok(result.backupDir);
+  assert.equal(fs.readlinkSync(path.join(result.backupDir, 'skills/factory/self')), dir);
+  assert.equal(fs.existsSync(dir), false);
 });

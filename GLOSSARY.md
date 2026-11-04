@@ -19,7 +19,7 @@ _Avoid_: Backend, platform
 One user-selected location where the Factory installs Skills and Stage agents for an Agent target. Separate Claude directories are separate install destinations, even though they use the same Agent target.
 
 **Install selection**:
-The set of install destinations a user chooses and the Factory remembers for confirmation or revision on the next install or Update. A newly discovered destination is offered without being selected automatically.
+A user's chosen set of install destinations.
 
 **Flow**:
 The ordered Stages a piece of work moves through, encoded in the `factory` Skill.
