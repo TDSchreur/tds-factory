@@ -7,6 +7,7 @@ import { defined as present } from './run-view.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
+// The path of the real binary, for a Verify command that has to call it.
 export const cli = resolve('bin/tds-factory.js');
 
 /**

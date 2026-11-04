@@ -6,6 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { repo, linked, tempDir } from './git-repo.js';
 import { projectId } from '../src/project-registry.js';
 
+// The Dashboard command starts a server and runs until a signal ends the process, so it is tested as a spawned binary.
 const cli = resolve('bin/tds-factory.js');
 const START = JSON.stringify({ title: 'Example', agent: 'codex', commands: 'npm test', conventions: ['AGENTS.md'] });
 

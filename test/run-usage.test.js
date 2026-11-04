@@ -14,18 +14,18 @@ import { metricsOf, usageOf } from './run-view.js';
  * @param {ReturnType<typeof world>} w
  * @param {string} cwd
  */
-function twoTicketRun(w, cwd) {
-  const id = w.start(cwd);
+async function twoTicketRun(w, cwd) {
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
   session.add(mention(id), claudeLine({ id: 'd1', input: 10, cacheRead: 1000, cacheWrite: 100, output: 50 }));
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1', '2'], tickets_total: 2 });
-  w.move(cwd, id, 'build');
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1', '2'], tickets_total: 2 });
+  await w.move(cwd, id, 'build');
   session.add(claudeLine({ id: 'b1', input: 20, cacheRead: 2000, cacheWrite: 200, output: 60 }));
-  w.update(cwd, id, { tickets_done: 1 });
+  await w.update(cwd, id, { tickets_done: 1 });
   session.add(claudeLine({ id: 'b2', input: 30, cacheRead: 3000, cacheWrite: 300, output: 70 }));
-  w.update(cwd, id, { tickets_done: 2 });
+  await w.update(cwd, id, { tickets_done: 2 });
   session.add(claudeLine({ id: 'b3', input: 5, cacheRead: 500, cacheWrite: 50, output: 15 }));
-  w.move(cwd, id, 'check');
+  await w.move(cwd, id, 'check');
   session.add(claudeLine({ id: 'c1', model: 'claude-opus-5-5', input: 7, cacheRead: 700, cacheWrite: 70, output: 17 }));
   session.addSub(
     claudeLine({ id: 's1', model: 'claude-haiku-5-5', input: 3, cacheRead: 30, cacheWrite: 300, output: 33 }),
@@ -35,11 +35,11 @@ function twoTicketRun(w, cwd) {
 /** @param {Run} record */
 const rows = (record) => usageOf(record).rows ?? [];
 
-test('transitions store Usage per Stage, model, Ticket and the Build wrap-up, with subagents in their Stage', () => {
+test('transitions store Usage per Stage, model, Ticket and the Build wrap-up, with subagents in their Stage', async () => {
   const w = world();
   const cwd = repo();
-  const { id } = twoTicketRun(w, cwd);
-  w.command(cwd, 'rework', '--id', id);
+  const { id } = await twoTicketRun(w, cwd);
+  await w.command(cwd, 'rework', '--id', id);
   const record = w.read(cwd, id);
   assert.equal(usageOf(record).status, 'tracked');
   assert.deepEqual(find(record, { stage: 'define' }), {
@@ -62,12 +62,12 @@ test('transitions store Usage per Stage, model, Ticket and the Build wrap-up, wi
   assert.equal(haiku.subagent_fresh, 3 + 300 + 33);
 });
 
-test('run stats prints fresh tokens and the four fields for each row', () => {
+test('run stats prints fresh tokens and the four fields for each row', async () => {
   const w = world();
   const cwd = repo();
-  const { id } = twoTicketRun(w, cwd);
-  w.command(cwd, 'rework', '--id', id);
-  const out = w.command(cwd, 'stats', '--id', id);
+  const { id } = await twoTicketRun(w, cwd);
+  await w.command(cwd, 'rework', '--id', id);
+  const out = await w.command(cwd, 'stats', '--id', id);
   assert.match(out, /Tokens: 1\.3k fresh/);
   assert.match(
     out,
@@ -78,31 +78,31 @@ test('run stats prints fresh tokens and the four fields for each row', () => {
   assert.match(out, /Check · claude-haiku-5-5 {2}fresh 336 .*subagents 336/);
 });
 
-test('Build after a Rework goes to the Rework bucket, not to a Ticket', () => {
+test('Build after a Rework goes to the Rework bucket, not to a Ticket', async () => {
   const w = world();
   const cwd = repo();
-  const { id, session } = twoTicketRun(w, cwd);
-  w.command(cwd, 'rework', '--id', id);
+  const { id, session } = await twoTicketRun(w, cwd);
+  await w.command(cwd, 'rework', '--id', id);
   session.add(claudeLine({ id: 'r1', input: 4, cacheRead: 40, cacheWrite: 4, output: 4 }));
-  w.move(cwd, id, 'check');
+  await w.move(cwd, id, 'check');
   const record = w.read(cwd, id);
   assert.equal(find(record, { stage: 'build', bucket: 'rework' }).input, 4);
   assert.equal(find(record, { stage: 'build', ticket: 2 }).input, 30);
 });
 
-test('two Runs started from the same folder never mix, and reading twice gives the same numbers', () => {
+test('two Runs started from the same folder never mix, and reading twice gives the same numbers', async () => {
   const w = world();
   const cwd = repo();
-  const one = w.start(cwd, 'One');
-  const two = w.start(cwd, 'Two');
+  const one = await w.start(cwd, 'One');
+  const two = await w.start(cwd, 'Two');
   const a = claudeSession(w.home, 'session-a');
   const b = claudeSession(w.home, 'session-b');
   a.add(mention(one), claudeLine({ id: 'a1', input: 11 }));
   b.add(mention(two), claudeLine({ id: 'b1', input: 22 }));
-  w.update(cwd, one, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.update(cwd, two, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, one, 'build');
-  w.move(cwd, two, 'build');
+  await w.update(cwd, one, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.update(cwd, two, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, one, 'build');
+  await w.move(cwd, two, 'build');
   assert.deepEqual(
     rows(w.read(cwd, one)).map((r) => r.input),
     [11],
@@ -111,38 +111,38 @@ test('two Runs started from the same folder never mix, and reading twice gives t
     rows(w.read(cwd, two)).map((r) => r.input),
     [22],
   );
-  w.update(cwd, one, { tickets_done: 1 });
-  w.move(cwd, one, 'check');
+  await w.update(cwd, one, { tickets_done: 1 });
+  await w.move(cwd, one, 'check');
   const first = structuredClone(rows(w.read(cwd, one)));
-  w.command(cwd, 'rework', '--id', one);
-  w.move(cwd, one, 'check');
+  await w.command(cwd, 'rework', '--id', one);
+  await w.move(cwd, one, 'check');
   assert.deepEqual(
     rows(w.read(cwd, one)).filter((r) => r.stage === 'define'),
     first.filter((r) => r.stage === 'define'),
   );
 });
 
-test('a Run resumed in a second session counts both sessions', () => {
+test('a Run resumed in a second session counts both sessions', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const a = claudeSession(w.home, 'session-a');
   const b = claudeSession(w.home, 'session-b', '-other-slug');
   a.add(mention(id), claudeLine({ id: 'a1', input: 1 }));
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
   b.add(mention(id), claudeLine({ id: 'b1', input: 2 }));
-  w.move(cwd, id, 'build');
+  await w.move(cwd, id, 'build');
   const record = w.read(cwd, id);
   assert.equal(find(record, { stage: 'define' }).input, 3);
   assert.deepEqual(usageOf(record).sessions?.sort(), ['session-a', 'session-b']);
 });
 
-test('a missing, truncated or unknown log never fails a transition and shows not tracked with a reason', () => {
+test('a missing, truncated or unknown log never fails a transition and shows not tracked with a reason', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
+  const id = await w.start(cwd);
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
   let record = w.read(cwd, id);
   assert.equal(usageOf(record).status, 'not tracked');
   assert.match(usageOf(record).reason ?? '', /no Claude session logs/);
@@ -153,38 +153,38 @@ test('a missing, truncated or unknown log never fails a transition and shows not
     'not json at all',
     JSON.stringify({ type: 'assistant', message: { model: 'm', usage: 'weird' } }),
   );
-  w.update(cwd, id, { tickets_done: 1 });
-  w.move(cwd, id, 'check');
+  await w.update(cwd, id, { tickets_done: 1 });
+  await w.move(cwd, id, 'check');
   record = w.read(cwd, id);
   assert.equal(record.stage, 'check');
   assert.equal(usageOf(record).status, 'not tracked');
-  assert.match(w.command(cwd, 'stats', '--id', id), /Tokens: not tracked \(no usage found/);
+  assert.match(await w.command(cwd, 'stats', '--id', id), /Tokens: not tracked \(no usage found/);
 });
 
-test('earlier Usage survives when the logs are gone, and a legacy record stays readable', () => {
+test('earlier Usage survives when the logs are gone, and a legacy record stays readable', async () => {
   const w = world();
   const cwd = repo();
-  const { id } = twoTicketRun(w, cwd);
-  w.command(cwd, 'rework', '--id', id);
+  const { id } = await twoTicketRun(w, cwd);
+  await w.command(cwd, 'rework', '--id', id);
   const before = JSON.stringify(rows(w.read(cwd, id)));
   rmSync(join(w.home, '.claude'), { recursive: true });
-  w.move(cwd, id, 'check');
+  await w.move(cwd, id, 'check');
   assert.equal(JSON.stringify(rows(w.read(cwd, id))), before);
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
   const legacy = JSON.parse(readFileSync(file, 'utf8'));
   metricsOf(legacy).usage = { tokens: 'not tracked', cost: 'not tracked' };
   writeFileSync(file, JSON.stringify(legacy));
-  assert.match(w.command(cwd, 'stats', '--id', id), /Tokens: not tracked/);
+  assert.match(await w.command(cwd, 'stats', '--id', id), /Tokens: not tracked/);
 });
 
-test('only counts reach the Run record, never conversation text', () => {
+test('only counts reach the Run record, never conversation text', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
   session.add(mention(id), claudeLine({ id: 'x1', text: 'SECRET-CONVERSATION-TEXT' }));
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
   assert.equal(usageOf(w.read(cwd, id)).status, 'tracked');
   const everything =
     readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8') +
@@ -192,26 +192,26 @@ test('only counts reach the Run record, never conversation text', () => {
   assert.doesNotMatch(everything, /SECRET-CONVERSATION-TEXT/);
 });
 
-test('the Claude session id the CLI sees is recorded and matches a transcript that never names the Run', () => {
+test('the Claude session id the CLI sees is recorded and matches a transcript that never names the Run', async () => {
   const w = world();
   w.sessionId = 'session-exact';
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-exact');
   session.add(claudeLine({ id: 'e1', input: 9 }));
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
   const record = w.read(cwd, id);
   assert.deepEqual(metricsOf(record).sessions, ['session-exact']);
   assert.equal(find(record, { stage: 'define' }).input, 9);
 });
 
-test('run stats --all adds the tokens per model of tracked Runs and names the Runs it leaves out', () => {
+test('run stats --all adds the tokens per model of tracked Runs and names the Runs it leaves out', async () => {
   const w = world();
   const cwd = repo();
-  const one = w.start(cwd, 'One');
-  const two = w.start(cwd, 'Two');
-  const three = w.start(cwd, 'Three');
+  const one = await w.start(cwd, 'One');
+  const two = await w.start(cwd, 'Two');
+  const three = await w.start(cwd, 'Three');
   const a = claudeSession(w.home, 'session-a');
   const b = claudeSession(w.home, 'session-b');
   a.add(mention(one), claudeLine({ id: 'a1', input: 10, cacheRead: 100, cacheWrite: 20, output: 5 }));
@@ -220,9 +220,9 @@ test('run stats --all adds the tokens per model of tracked Runs and names the Ru
     claudeLine({ id: 'b1', input: 1, cacheRead: 10, cacheWrite: 2, output: 3 }),
     claudeLine({ id: 'b2', model: 'claude-opus-5-5', input: 7, output: 7 }),
   );
-  for (const id of [one, two, three]) w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  for (const id of [one, two, three]) w.move(cwd, id, 'build');
-  const out = w.command(cwd, 'stats', '--all');
+  for (const id of [one, two, three]) await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  for (const id of [one, two, three]) await w.move(cwd, id, 'build');
+  const out = await w.command(cwd, 'stats', '--all');
   assert.match(out, /Token usage of 2 tracked Run\(s\)/);
   assert.match(out, /claude-sonnet-5-5 {2}fresh 41 {2}input 11 {2}cache read 110 {2}cache write 22 {2}output 8/);
   assert.match(out, /claude-opus-5-5 {2}fresh 14 {2}input 7 /);
@@ -230,10 +230,10 @@ test('run stats --all adds the tokens per model of tracked Runs and names the Ru
 });
 
 // Session logs are written by other programs, so what they hold is untrusted text.
-test('hostile logs: a model name with control characters, a symlinked transcript, very deep nesting and a very long line', () => {
+test('hostile logs: a model name with control characters, a symlinked transcript, very deep nesting and a very long line', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
   const deep = '['.repeat(100000) + ']'.repeat(100000);
   session.add(
@@ -250,28 +250,28 @@ test('hostile logs: a model name with control characters, a symlinked transcript
     outside,
     join(w.home, '.claude', 'projects', '-home-user-project', 'session-a', 'subagents', 'link.jsonl'),
   );
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
   const record = w.read(cwd, id);
   assert.deepEqual(
     rows(record).map((r) => [r.model, r.input]),
     [['claude-sonnet-5-5', 7]],
   );
-  const out = w.command(cwd, 'stats', '--id', id);
+  const out = await w.command(cwd, 'stats', '--id', id);
   assert.doesNotMatch(out, /[\u0000-\u0008\u000b-\u001f\u007f]/);
 });
 
-test('the Run record holds a bounded number of Usage rows', () => {
+test('the Run record holds a bounded number of Usage rows', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
   session.add(
     mention(id),
     ...Array.from({ length: 700 }, (_, i) => claudeLine({ id: `m${i}`, model: `model-${i}`, input: 1 })),
   );
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
   assert.equal(rows(w.read(cwd, id)).length, 500);
 });
 
@@ -292,10 +292,10 @@ test('reading stops at its time budget and reports it, instead of holding the tr
   assert.equal(ok.status, 'tracked');
 });
 
-test('a field the log does not report shows n/a, and a visited Stage without entries shows no data', () => {
+test('a field the log does not report shows n/a, and a visited Stage without entries shows no data', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
   const bare = JSON.stringify({
     type: 'assistant',
@@ -303,11 +303,11 @@ test('a field the log does not report shows n/a, and a visited Stage without ent
     message: { id: 'm1', model: 'claude-sonnet-5-5', usage: { input_tokens: 4, output_tokens: 6 } },
   });
   session.add(mention(id), bare);
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
-  w.update(cwd, id, { tickets_done: 1 });
-  w.move(cwd, id, 'check');
-  const out = w.command(cwd, 'stats', '--id', id);
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
+  await w.update(cwd, id, { tickets_done: 1 });
+  await w.move(cwd, id, 'check');
+  const out = await w.command(cwd, 'stats', '--id', id);
   assert.match(
     out,
     /Define · claude-sonnet-5-5 {2}fresh 10 {2}input 4 {2}cache read n\/a {2}cache write n\/a {2}output 6/,
@@ -315,28 +315,28 @@ test('a field the log does not report shows n/a, and a visited Stage without ent
   assert.match(out, /Build · no data/);
 });
 
-test('a Run id that is the start of another Run id does not take that Run session', () => {
+test('a Run id that is the start of another Run id does not take that Run session', async () => {
   const w = world();
   const cwd = repo();
-  const short = w.start(cwd, 'Alpha');
-  const long = w.start(cwd, 'Alpha');
+  const short = await w.start(cwd, 'Alpha');
+  const long = await w.start(cwd, 'Alpha');
   assert.ok(long.startsWith(short), `${long} should extend ${short}`);
   const session = claudeSession(w.home, 'session-a');
   session.add(mention(long), claudeLine({ id: 'p1', input: 5 }));
-  for (const id of [short, long]) w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, short, 'build');
-  w.move(cwd, long, 'build');
+  for (const id of [short, long]) await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, short, 'build');
+  await w.move(cwd, long, 'build');
   assert.equal(usageOf(w.read(cwd, short)).status, 'not tracked');
   assert.equal(find(w.read(cwd, long), { stage: 'define' }).input, 5);
 });
 
-test('a plain update never reads the logs, and a damaged stored row cannot reach the terminal', () => {
+test('a plain update never reads the logs, and a damaged stored row cannot reach the terminal', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   const session = claudeSession(w.home, 'session-a');
   session.add(mention(id), claudeLine({ id: 'u1', input: 3 }));
-  w.update(cwd, id, { activity: 'working' });
+  await w.update(cwd, id, { activity: 'working' });
   assert.deepEqual(usageOf(w.read(cwd, id)), { tokens: 'not tracked', cost: 'not tracked' });
   const file = join(cwd, '.factory', 'runs', id, 'run.json');
   const record = JSON.parse(readFileSync(file, 'utf8'));
@@ -348,29 +348,29 @@ test('a plain update never reads the logs, and a damaged stored row cannot reach
     ],
   };
   writeFileSync(file, JSON.stringify(record));
-  const out = w.command(cwd, 'stats', '--id', id);
+  const out = await w.command(cwd, 'stats', '--id', id);
   assert.match(out, /good-model/);
   assert.doesNotMatch(out, /[\u0000-\u0008\u000b-\u001f\u007f]/);
 });
 
-test('session ids stored with the Usage are checked and capped', () => {
+test('session ids stored with the Usage are checked and capped', async () => {
   const w = world();
   const cwd = repo();
-  const id = w.start(cwd);
+  const id = await w.start(cwd);
   for (let i = 0; i < 30; i++) {
     const s = claudeSession(w.home, `session-${i}`);
     s.add(mention(id), claudeLine({ id: `s${i}`, input: 1 }));
   }
-  w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-  w.move(cwd, id, 'build');
+  await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+  await w.move(cwd, id, 'build');
   assert.equal(usageOf(w.read(cwd, id)).sessions?.length, 20);
 });
 
-test('a Run id at the start of a line inside a log string is found, in all three line-break escapes', () => {
+test('a Run id at the start of a line inside a log string is found, in all three line-break escapes', async () => {
   for (const separator of ['\n', '\t', '\r']) {
     const w = world();
     const cwd = repo();
-    const id = w.start(cwd);
+    const id = await w.start(cwd);
     const session = claudeSession(w.home, 'session-a');
     // The only mention of the Run: the first word of a line in a tool result, as `run start` prints it.
     const line = JSON.stringify({
@@ -379,8 +379,8 @@ test('a Run id at the start of a line inside a log string is found, in all three
       message: { content: `output:${separator}${id}${separator}done` },
     });
     session.add(line, claudeLine({ id: 'k1', input: 4 }));
-    w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
-    w.move(cwd, id, 'build');
+    await w.update(cwd, id, { spec_link: 's.md', tickets: ['1'], tickets_total: 1 });
+    await w.move(cwd, id, 'build');
     const record = w.read(cwd, id);
     assert.equal(usageOf(record).status, 'tracked', `a Run id after ${JSON.stringify(separator)} is a mention`);
     assert.equal(find(record, { stage: 'define' }).input, 4);

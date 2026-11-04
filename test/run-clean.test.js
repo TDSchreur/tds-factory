@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
-import { resolve, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { openRunStore } from '../src/run-store.js';
+import { cli } from './cli-runner.js';
 import { git, repo } from './git-repo.js';
 
 /** @import { Run } from '../src/run-record.js' */
@@ -11,7 +11,6 @@ import { git, repo } from './git-repo.js';
 /** @type {Partial<Run>} */
 const start = { title: 'Example', agent: 'claude', commands: 'npm test', conventions: [] };
 const PR = 'https://github.com/o/r/pull/1';
-const cli = resolve('bin/tds-factory.js');
 /** @param {string} main */
 const branches = (main) => git(main, 'branch', '--format=%(refname:short)').split('\n');
 
@@ -218,25 +217,25 @@ test('clean --all sweeps merged Runs and leaves the others', () => {
  * @param {string} cwd
  * @param {...string} args
  */
-const runCli = (cwd, ...args) => spawnSync(process.execPath, [cli, 'run', ...args], { cwd, encoding: 'utf8' });
+const runCli = async (cwd, ...args) => await cli(cwd, 'run', ...args);
 
-test('the CLI clean needs --id or --all, and reports a Run without a PR as kept', () => {
+test('the CLI clean needs --id or --all, and reports a Run without a PR as kept', async () => {
   const main = repo();
   const id = openRunStore(main).start(start);
-  assert.match(runCli(main, 'clean', '--id', id).stdout, new RegExp(`kept ${id}: no PR`));
-  const bare = runCli(main, 'clean');
+  assert.match((await runCli(main, 'clean', '--id', id)).stdout, new RegExp(`kept ${id}: no PR`));
+  const bare = await runCli(main, 'clean');
   assert.equal(bare.status, 1);
   assert.match(bare.stderr, /--id.*--all/);
-  assert.match(runCli(main, 'clean', '--id', id, '--all').stderr, /not both/);
+  assert.match((await runCli(main, 'clean', '--id', id, '--all')).stderr, /not both/);
 });
 
-test('run complete tells the user how to clean up once the PR is merged', () => {
+test('run complete tells the user how to clean up once the PR is merged', async () => {
   const main = repo();
   const store = openRunStore(main);
   const id = store.start(start);
   const file = join(main, '.factory', 'runs', id, 'run.json');
   writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), stage: 'finish', pr: PR }));
-  const result = runCli(main, 'complete', '--id', id);
+  const result = await runCli(main, 'complete', '--id', id);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`tds-factory run clean --id ${id}`));
 });

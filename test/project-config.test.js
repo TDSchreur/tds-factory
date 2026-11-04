@@ -2,27 +2,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { cli, cliWith } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
 
 /** @import { Run } from '../src/run-record.js' */
 
-const cli = resolve('bin/tds-factory.js');
 /**
  * @param {string} cwd
  * @param {...string} args
  */
-const invoke = (cwd, ...args) => spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
+const invoke = async (cwd, ...args) => await cli(cwd, ...args);
 /**
  * @param {string} cwd
  * @param {string} id
  */
 const runFile = (cwd, id) => join(cwd, '.factory', 'runs', id, 'run.json');
 /** @param {string} cwd */
-const doctorConfig = (cwd) => {
+const doctorConfig = async (cwd) => {
   /** @type {{ agents: { checks: { id: string, status: string, message: string }[] }[] }} */
-  const report = JSON.parse(invoke(cwd, 'doctor', '--json', '--agent', 'codex').stdout);
+  const report = JSON.parse((await invoke(cwd, 'doctor', '--json', '--agent', 'codex')).stdout);
   const found = report.agents[0].checks.find((c) => c.id === 'config');
   assert.ok(found, 'doctor reports a config check');
   return found;
@@ -41,8 +40,8 @@ function project(config) {
   return cwd;
 }
 /** @param {string} cwd */
-const start = (cwd) => {
-  const result = invoke(
+const start = async (cwd) => {
+  const result = await invoke(
     cwd,
     'run',
     'start',
@@ -53,11 +52,11 @@ const start = (cwd) => {
   return result.stdout.trim();
 };
 
-test('a Run freezes the project settings, so later edits do not change it', () => {
+test('a Run freezes the project settings, so later edits do not change it', async () => {
   const cwd = project({ models: { build: 'gpt-x' }, max_check_loops: 1, labels: { ticket: 'agent-ready' } });
-  const id = start(cwd);
+  const id = await start(cwd);
   writeFileSync(join(cwd, '.factory/config.json'), JSON.stringify({ max_check_loops: 3 }));
-  assert.deepEqual(JSON.parse(invoke(cwd, 'run', 'config', '--id', id).stdout), {
+  assert.deepEqual(JSON.parse((await invoke(cwd, 'run', 'config', '--id', id)).stdout), {
     models: { build: 'gpt-x' },
     max_check_loops: 1,
     labels: { ticket: 'agent-ready' },
@@ -65,52 +64,54 @@ test('a Run freezes the project settings, so later edits do not change it', () =
   });
 });
 
-test('a project without a config file gets the Factory defaults', () => {
+test('a project without a config file gets the Factory defaults', async () => {
   const cwd = project();
-  const id = start(cwd);
-  assert.deepEqual(JSON.parse(invoke(cwd, 'run', 'config', '--id', id).stdout), {
+  const id = await start(cwd);
+  assert.deepEqual(JSON.parse((await invoke(cwd, 'run', 'config', '--id', id)).stdout), {
     models: {},
     max_check_loops: 4,
     labels: { ticket: 'ready-for-agent' },
     usage: true,
   });
-  assert.equal(doctorConfig(cwd).status, 'pass');
+  assert.equal((await doctorConfig(cwd)).status, 'pass');
 });
 
-test('the project cap lowers the Check loop limit', () => {
+test('the project cap lowers the Check loop limit', async () => {
   const cwd = project({ max_check_loops: 1 });
-  const id = start(cwd);
+  const id = await start(cwd);
   const record = JSON.parse(readFileSync(runFile(cwd, id), 'utf8'));
   writeFileSync(runFile(cwd, id), JSON.stringify({ ...record, stage: 'check', check_loops: 1 }));
-  const refused = invoke(cwd, 'run', 'rework', '--id', id);
+  const refused = await invoke(cwd, 'run', 'rework', '--id', id);
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /Check loop limit of 1/);
 });
 
-test('doctor names the line of each bad setting, and a cap above the Factory maximum is refused', () => {
+test('doctor names the line of each bad setting, and a cap above the Factory maximum is refused', async () => {
   const text =
     '{\n  "models": {\n    "build": "gpt-x",\n    "deploy": "gpt-y"\n  },\n  "max_check_loops": 9,\n  "colour": true\n}\n';
-  const result = doctorConfig(project(text));
+  const result = await doctorConfig(project(text));
   assert.equal(result.status, 'fail');
   assert.match(result.message, /line 4: unknown Stage "deploy"/);
   assert.match(result.message, /line 6: "max_check_loops" must be a whole number from 0 to 4/);
   assert.match(result.message, /line 7: unknown setting "colour"/);
-  const broken = doctorConfig(project('{\n  "models": \n'));
+  const broken = await doctorConfig(project('{\n  "models": \n'));
   assert.equal(broken.status, 'fail');
   assert.match(broken.message, /invalid config\.json/);
   assert.notEqual(
-    invoke(
-      project(text),
-      'run',
-      'start',
-      '--data',
-      JSON.stringify({ title: 'x', agent: 'codex', commands: 'true', conventions: [] }),
+    (
+      await invoke(
+        project(text),
+        'run',
+        'start',
+        '--data',
+        JSON.stringify({ title: 'x', agent: 'codex', commands: 'true', conventions: [] }),
+      )
     ).status,
     0,
   );
 });
 
-test('reviews in config.json join reviews.json, and an ID in both is a duplicate', () => {
+test('reviews in config.json join reviews.json, and an ID in both is a duplicate', async () => {
   const review = {
     id: 'angular',
     name: 'Angular',
@@ -123,7 +124,7 @@ test('reviews in config.json join reviews.json, and an ID in both is a duplicate
   writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify({ reviews: [{ ...review, id: 'legacy' }] }));
   git(cwd, 'add', '-f', '.');
   git(cwd, 'commit', '-qm', 'reviews');
-  const id = start(cwd);
+  const id = await start(cwd);
   /** @type {Run} */
   const record = JSON.parse(readFileSync(runFile(cwd, id), 'utf8'));
   assert.deepEqual(
@@ -131,22 +132,22 @@ test('reviews in config.json join reviews.json, and an ID in both is a duplicate
     ['legacy', 'angular'],
   );
   writeFileSync(join(cwd, '.factory/reviews.json'), JSON.stringify({ reviews: [review] }));
-  const duplicate = doctorConfig(cwd);
+  const duplicate = await doctorConfig(cwd);
   assert.equal(duplicate.status, 'fail');
   assert.match(duplicate.message, /line \d+: .*duplicate/);
 });
 
-test('usage: false is frozen into the Run, and the Run then never opens a session log', () => {
+test('usage: false is frozen into the Run, and the Run then never opens a session log', async () => {
   const cwd = project({ usage: false });
   const home = mkdtempSync(join(tmpdir(), 'usage-off-home-'));
-  const id = start(cwd);
-  assert.equal(JSON.parse(invoke(cwd, 'run', 'config', '--id', id).stdout).usage, false);
+  const id = await start(cwd);
+  assert.equal(JSON.parse((await invoke(cwd, 'run', 'config', '--id', id)).stdout).usage, false);
   // A session log that would match the Run; switched off, it must not be read.
   const dir = join(home, '.claude', 'projects', 'slug');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 's.jsonl'), `${id}\n`);
   const env = { ...process.env, HOME: home, USERPROFILE: home };
-  const set = invoke(
+  const set = await invoke(
     cwd,
     'run',
     'update',
@@ -156,19 +157,15 @@ test('usage: false is frozen into the Run, and the Run then never opens a sessio
     JSON.stringify({ spec_link: 's.md', tickets: ['1'], tickets_total: 1 }),
   );
   assert.equal(set.status, 0, set.stderr);
-  const moved = spawnSync(process.execPath, [cli, 'run', 'transition', '--id', id, '--to', 'build'], {
-    cwd,
-    encoding: 'utf8',
-    env,
-  });
+  const moved = await cliWith({ env: env }, cwd, 'run', 'transition', '--id', id, '--to', 'build');
   assert.equal(moved.status, 0, moved.stderr);
   const usage = JSON.parse(readFileSync(runFile(cwd, id), 'utf8')).metrics.usage;
   assert.deepEqual(usage, { status: 'not tracked', reason: 'switched off in the project config' });
-  assert.equal(doctorConfig(cwd).message, '.factory/config.json is valid (usage)');
+  assert.equal((await doctorConfig(cwd)).message, '.factory/config.json is valid (usage)');
 });
 
-test('doctor names the line of a usage value that is not true or false', () => {
-  const result = doctorConfig(project('{\n  "models": {},\n  "usage": "no"\n}\n'));
+test('doctor names the line of a usage value that is not true or false', async () => {
+  const result = await doctorConfig(project('{\n  "models": {},\n  "usage": "no"\n}\n'));
   assert.equal(result.status, 'fail');
   assert.match(result.message, /line 3: "usage" must be true or false/);
 });

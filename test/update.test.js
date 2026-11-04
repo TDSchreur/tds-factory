@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import http from 'node:http';
 import { update, compareVersions } from '../src/update.js';
+import { cli } from './cli-runner.js';
 import { defined } from './run-view.js';
 import './git-repo.js';
 import { waitUntil } from './wait-until.js';
@@ -385,6 +386,7 @@ test('the failing update command exits with 1 and prints the error', () => {
       `import { FactoryError } from ${JSON.stringify(pathToFileURL(resolve('src/errors.js')).href)};\n` +
         "globalThis.fetch = async () => { throw new FactoryError('offline', { code: 'http-permanent' }); };\n",
     );
+    // Spawned: the stub of `fetch` has to be loaded into the process that runs the command (`--import`).
     const result = spawnSync(
       process.execPath,
       ['--import', pathToFileURL(stub).href, resolve('bin/tds-factory.js'), 'update'],
@@ -527,8 +529,8 @@ test('versions compare as semver and a prerelease sorts below its release', () =
   assert.throws(() => compareVersions('nope', '1.0.0'), /Cannot parse version/);
 });
 
-test('the usage text lists update and the CLI dispatches it', () => {
-  const result = spawnSync(process.execPath, [resolve('bin/tds-factory.js')], { encoding: 'utf8' });
+test('the usage text lists update and the CLI dispatches it', async () => {
+  const result = await cli(process.cwd());
   assert.match(result.stdout, /tds-factory update \[--no-force\]/);
   assert.match(readFileSync(resolve('src/cli.js'), 'utf8'), /command === 'update'/);
 });

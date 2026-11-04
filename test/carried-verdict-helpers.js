@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { git, repo } from './git-repo.js';
 import { cli as runCli } from './cli-runner.js';
 
 /** @import { Run } from '../src/run-record.js' */
-
-export const cli = resolve('bin/tds-factory.js');
 
 /**
  * @param {string} cwd
