@@ -28,7 +28,33 @@ test('withPollMs fails when the constant appears twice', () => {
 });
 
 test('withPollMs refuses an interval that is not a positive whole number of milliseconds', () => {
-  for (const bad of [0, -5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-    assert.throws(() => withPollMs(MODEL, bad), /positive whole number/, String(bad));
+  for (const bad of [0, -5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, '100', null, undefined]) {
+    assert.throws(() => withPollMs(MODEL, /** @type {number} */ (bad)), /positive whole number/, String(bad));
   }
+});
+
+test('withPollMs keeps Windows line endings', () => {
+  const crlf = 'export const A = 1;\r\nexport const POLL_MS = 2000;\r\nexport const B = 2;\r\n';
+  assert.equal(withPollMs(crlf, 100), 'export const A = 1;\r\nexport const POLL_MS = 100;\r\nexport const B = 2;\r\n');
+});
+
+test('withPollMs ignores lines that only look like the constant', () => {
+  const decoys = [
+    '  export const POLL_MS = 1;',
+    '// export const POLL_MS = 1;',
+    'export const POLL_MS_OTHER = 1;',
+    'export const POLL_MS = 1000 * 2;',
+    'const POLL_MS = 1;',
+  ].join('\n');
+  assert.throws(() => withPollMs(decoys, 100), /holds it 0 times/);
+  const real = decoys + '\nexport const POLL_MS = 2000;\n';
+  assert.equal(withPollMs(real, 100), decoys + '\nexport const POLL_MS = 100;\n');
+});
+
+test('withPollMs on a very large file with many look-alike lines still finishes, with a generous bound', () => {
+  const filler = 'export const POLL_MS_X = 1;\n'.repeat(50_000) + 'x'.repeat(1_000_000) + '\n';
+  const started = Date.now();
+  const changed = withPollMs(filler + 'export const POLL_MS = 2000;\n', 100);
+  assert.ok(changed.endsWith('export const POLL_MS = 100;\n'));
+  assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
 });
