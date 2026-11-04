@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-04
+
+### Added
+- Check PR for an Azure DevOps pull request lists the failing and pending checks (build policies and statuses posted to
+  the PR) and the unresolved review threads, as it does for GitHub. The status line counts the PR statuses as checks
+  too.
+- Follow-up works for an Azure DevOps pull request: `tds-factory run follow-up --scope conflicts|checks|comments`,
+  `/factory continue <run id>` and the Dashboard buttons **Fix conflicts**, **Fix checks**, **Fix comments** and
+  **Grant extra loop and fix** behave as for GitHub. The Factory still never writes to Azure DevOps: it posts no reply and
+  resolves no thread.
+- `GET /api/projects/<id>/runs/<run-id>/pr-details` reads a Done or Follow-up Run's pull request fresh (state,
+  draft, conflicts, failing and pending checks, unresolved review threads) without touching the PR status cache. When
+  `gh` or `az` is missing or not signed in, it answers the host's setup steps. The PR provider's `checksSummary`, which
+  only the removed merge-checks route used, is replaced by `details`.
+- `POST /api/projects/<id>/runs/<run-id>/follow-up?scope=...&updated=...[&grant=true]` (the Dashboard's Fix) starts a
+  Follow-up scoped to one problem of a GitHub pull request, moves the Run to Build and leaves it waiting with "Follow-up
+  Rework ready for an agent". With `grant=true` at the Check loop limit it raises `extra_loops` by one (with the
+  `extra-loop` event) and then starts the Fix. The Run views carry `reworkInProgress`. Follow-up's `gh` reads now run
+  as steps of the same flow as its git calls, so the Dashboard does not block on them.
+- The factory Skill has `/factory continue <run id>` (`references/continue.md`), which resumes a Run from its current
+  Stage, including a Follow-up Rework started from the Dashboard. `references/follow-up.md` documents the three scopes,
+  the `run sync` step of a `conflicts` Rework and the rules of a `comments` Rework (list the comments judged to need no
+  change; never reply to or resolve threads).
+- The Dashboard has a **Check PR** button on a Done Run with an open pull request and on a Run in Follow-up. It reads
+  the pull request fresh and opens the Run detail on a "Pull request" section: state and draft, merge conflicts,
+  failing checks (each with a link to its run), pending checks and unresolved review threads. A missing or signed-out
+  `gh` or `az` shows that host's setup steps. Host text is shown as plain text and only `https:` links are anchors.
+- The "Pull request" section of the Run detail has one **Fix conflicts**, **Fix checks** and **Fix comments** button
+  next to the matching problem of a GitHub pull request. A click asks first, then starts the scoped Follow-up; a
+  refusal is shown with how to resolve it. The buttons are disabled with a visible reason while a Rework is in
+  progress, and read "Grant extra loop and fix" at the Check loop limit. A Run that waits with "Follow-up Rework ready
+  for an agent" has a **Copy agent prompt** button that copies `/factory continue <run id>`.
+- The help panel, the Dashboard guide, the glossary (Check PR, Fix) and the affected ADRs and Specs describe Check PR,
+  Fix and Copy agent prompt.
+- The Dashboard server answers `POST .../runs/<run-id>/continue?updated=<time>` for a Run in Build that waits for the Run size answer: the Run goes back to running with the size accepted, as `run size --accept` does. A Run in another state, a missing or stale `updated` is refused with HTTP 409 and a repeated `updated` with HTTP 400.
+- The Dashboard server answers `POST .../runs/<run-id>/split?updated=<time>` for the same wait: the done Tickets stay, the others leave the Run, and the answer lists the moved links. The Run waits with "Split done: ready for an agent" and not on the user, and `/factory continue` tells the agent to take it to Check and start a new Run with the links. The command line `run split` is unchanged.
+- The Dashboard shows **Split** and **Continue** on the Run card and in the Run detail for a Run in Build that waits for the Run size answer. Both ask first. **Continue** accepts the size and shows "Continued". **Split** keeps the done Tickets, lists the moved Ticket links (a link that is not a safe URL stays text) and leaves the Run waiting for an agent, for which **Copy agent prompt** shows. Help, the Dashboard guide and usage describe both.
+- A `reliable-tests` guide and Skill for tests that give the same result on every run and platform, a `waitUntil` test helper, and a Windows CI step that runs each changed unit test file three times.
+- Build waits on the user when finishing a Ticket leaves the Run over the size limit (about 40 KB of diff or 15 files)
+  with Tickets remaining. `tds-factory run split --id ID` moves the remaining Tickets out of the Run and prints their
+  links; `tds-factory run size --id ID --accept` accepts the size, and `run size` alone prints it. The Event log records
+  `split` and `size-accepted`, `run update` refuses the new `size_accepted` field, and the transition to Check prints no
+  size warning after an accept.
+
+### Changed
+- `tds-factory run follow-up` no longer says "Follow-up needs a GitHub PR URL"; the Dashboard Fix refusal for a host
+  without an adapter names GitHub and Azure DevOps.
+- The text of a failed `gh` or `az` command that reaches an error is capped at 500 characters, with control characters
+  replaced by spaces.
+- The Exit checklist of the Build stage has a new step 7, "Repeat changed tests" (the self-check is now step 8). For every changed test file or
+  helper, Build runs the repeat step of the project's reliable-tests guide (30 runs plain, under load and with
+  `--test-concurrency=1`) and sees every new test fail on the code from before the change. Build agents never use
+  `run_in_background` or `pkill` for test runs. The three Build agent files, the `factory` Skill, the glossary and the
+  canonical Exit checklist spec say the same.
+- The GitHub Actions instruction guide is about 85% shorter (54 KB to 8 KB), so an agent that edits a workflow loads far less context. It keeps the rules that matter: SHA pinning, least-privilege permissions, script injection, OIDC, caching, tests, deployment and troubleshooting.
+- `tds-factory run follow-up` takes `--scope conflicts|checks|comments`, required when the PR has findings. Only
+  findings of that scope send the Run back to Build as a Rework; the others stay in the `follow_up` snapshot, which
+  now also records whether the PR has merge conflicts (`conflicts`) and the `scope` of the Rework it started.
+- Define puts a size estimate in the Spec (a row per Ticket, the Define artifacts and a total, in files and KB) and judges it
+  against two thirds of the size limit, 10 files and 27 KB. Above that it proposes a split with a suggested cut in the
+  confirmation and you decide. After a split, Tickets are cut only for the first Run; each later Run gets one issue with its
+  scope. On the Fast track, an estimate above the limit makes the single confirmation propose the Full track.
+- CI no longer runs on Windows: the Windows check and unit test job, the `install.ps1` job and the Windows package install are removed. The Windows code and tests stay in the repository.
+- `tds-factory` starts faster: it loads the code of a command only when it runs that command, and keeps compiled code in Node's compile cache.
+- The CLI's commands run through an in-process entry point, `main(argv, context)`, that `bin/tds-factory.js` calls. Nothing changes for users. The unit tests use it through `test/cli-runner.js` instead of starting a process for every CLI call, which cuts the CPU time of `npm run test:unit` to about a third.
+- `tds-factory` reports an unknown option as `error: ...` with exit code 1, like other errors, instead of a Node stack trace.
+- The Run size leaves out lockfiles and files under `test/fixtures/`, which no reviewer reads.
+- `tds-factory run split` and the Dashboard split answer clean a printed link the same way: control characters, format
+  characters (bidi, zero-width, ZWJ) and the line and paragraph separators become a space. `run split` used to print a
+  `?` for them.
+- A git call of the Run size that takes longer than 60 seconds counts as over the limit, like an output that is too
+  large, so a Run cannot pass the size gate on a timeout. `tds-factory run size` says that the size is unknown and
+  counted as over the limit instead of printing sentinel numbers.
+- `tds-factory run transition --to check` warns that the Run size is unknown (git timed out or its output was too large)
+  and counted as over the limit, unless the size was accepted. The progress commands reference and the size gate Spec
+  now describe this warning.
+- `tds-factory run update` keeps `tickets_total` equal to the number of Ticket links: setting `tickets` sets the
+  count, and a count that does not match the list, or a list shorter than `tickets_done`, is refused.
+
+### Removed
+- The Dashboard no longer merges a pull request. The Merge button and its note on Done cards, the
+  `POST .../merge` and `GET .../merge-checks` routes, `prMerge` and `prCanMerge` and the PR provider's `merge`
+  are gone; merge on the host, where CI and review apply.
+
+### Fixed
+- The Dashboard no longer shows "Checks: failing: Require a merge strategy" for an Azure DevOps PR: that policy is
+  rejected until a merge strategy is chosen at completion, so it is not a check.
+- The browser tests no longer leave a half-deleted Chromium profile behind on a loaded machine, which made
+  `test/dashboard-teardown-browser.test.js` fail in about 3 of 5 full `npm test` runs. `openPage().close()` now lets
+  Chromium exit before ChromeDriver deletes the profile.
+- Running the eval grader no longer adds `factory-eval-*` projects to the Project registry or leaves folders in the temp directory.
+- The unit tests finish sooner: the slowest test files are split so they run side by side, the eval harness tests run concurrently, and test repositories are copied instead of built with three git commands each.
+- The `waitUntil` test now checks that the helper makes one last check when the deadline is reached and no more after it.
+- On Windows, Projects joining the Dashboard registry at the same time no longer fail with EPERM.
+- The Dashboard action tests and the browser test driver wait for a condition instead of polling with a fixed sleep, and the reliable-tests guide and Skill agree on a repeat count of 30.
+- Flaky tests that waited with a fixed sleep (Dashboard projects, PR status, Run events, update and browser teardown) now wait for a condition.
+- `tds-factory run clean` cleans a merged Run whose PR head moved ahead of the local branch (for example after "Update branch" on GitHub), as long as the local tip is an ancestor of the merged PR head. If the PR head is not in the repository yet, the Run is kept and the message says to fetch it.
+- `tds-factory run split` and `run size --accept` write a `note:` line on stderr when the `split` or `size-accepted`
+  event cannot be written to the Event log; the command still succeeds.
+- `tds-factory run sweep` and `run size` give the same answer when the git config sets `diff.mnemonicprefix` or
+  `diff.noprefix`. The sweep used to miss the lists and claims sections of a diff in that case, and the size could
+  differ by a few bytes.
+
+### Security
+- The development toolchain now resolves `minimatch` 11.0.1 or newer through an npm `overrides` entry, which
+  closes Dependabot alert #1 (denial of service through globparts amplification).
+
 ## [0.8.0] - 2026-11-03
 
 ### Added
