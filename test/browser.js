@@ -7,6 +7,7 @@ import { createServer as createPortServer } from 'node:net';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { waitUntil } from './wait-until.js';
+import { withPollMs } from './poll-interval.js';
 
 /** @import { IncomingMessage } from 'node:http' */
 /** @import { AddressInfo } from 'node:net' */
@@ -55,6 +56,9 @@ import { waitUntil } from './wait-until.js';
  * @property {(cmd: string, params?: object) => Promise<PageValue>} cdp A DevTools protocol command.
  * @property {(value: string) => Promise<void>} key
  * @property {(modifier: string, value: string) => Promise<void>} keyChord
+ * @property {string[]} fileReads The /files/ URLs the stub server served, in order; a refreshed detail reads its files again.
+ * @property {() => Promise<void>} waitForFrame Resolves after the page has drawn one frame, so what an answer changed is on screen.
+ * @property {(count?: number) => Promise<void>} waitForPolls Resolves after `count` more polls of /api/views have been answered and the page has drawn the last answer. Use it instead of a fixed sleep; with `pollMs` it is fast.
  * @property {typeof delay} wait
  */
 
@@ -192,9 +196,9 @@ export async function stopDriver(driver, port, { graceMs = 2000, killMs = 1000 }
 /**
  * @param {{ skip: (reason: string) => void }} t
  * @param {PageState} state
- * @param {{ args?: string[], width?: number, height?: number, query?: string }} [options] `query` is added to the page URL, for example `?project=b`.
+ * @param {{ args?: string[], width?: number, height?: number, query?: string, pollMs?: number }} [options] `query` is added to the page URL, for example `?project=b`. `pollMs` sets the poll interval of the Dashboard in this page (2000 ms without it); the shipped Dashboard is not changed, the stub server serves its constants file with the value replaced.
  */
-export async function openPage(t, state, { args = [], width = 1200, height = 700, query = '' } = {}) {
+export async function openPage(t, state, { args = [], width = 1200, height = 700, query = '', pollMs } = {}) {
   if (WINDOWS) {
     t.skip('the browser tests are not supported on Windows');
     return null;
@@ -206,8 +210,14 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
     t.skip('A browser and its driver (ChromeDriver and Chromium) are required');
     return null;
   }
+  // Built before anything starts: a missing constant or a bad value fails the test without a process to clean up.
+  const modelSource =
+    pollMs === undefined ? null : withPollMs(readFileSync(new URL('model.js', DASHBOARD), 'utf8'), pollMs);
+  let polls = 0; // the /api/views requests answered so far
   /** @type {string[]} */
   const calls = [];
+  /** @type {string[]} */
+  const fileReads = [];
   /** @type {(string | string[] | undefined)[]} */
   const tokens = []; // the X-Factory-Token header of each write
   const served = Object.assign(state, { runs: state.runs ?? [], files: state.files ?? {} });
@@ -230,6 +240,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       return send(answer.status, 'text/plain', answer.body, answer.headers);
     }
     if (routePath === '/') return send(200, 'text/html', readFileSync(new URL('index.html', DASHBOARD)));
+    if (modelSource !== null && routePath === '/model.js') return send(200, TYPES.js, modelSource);
     if (ASSET.test(routePath))
       return send(200, TYPES[routePath.split('.').pop() ?? ''], readFileSync(new URL(routePath.slice(1), DASHBOARD)));
     // A read of the PR status of a Run (the Check again button): recorded in state.statusCalls, answered with state.statusReply.
@@ -253,6 +264,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         'application/json',
         JSON.stringify({ project: state.project ?? 'test', version: state.version, token: 'test-token' }),
       );
+    if (routePath === '/api/views') polls++;
     if (routePath === '/api/views' && state.failViews) return send(500, 'text/plain', 'down');
     if (routePath === '/api/views')
       return send(
@@ -271,6 +283,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
         }),
       );
     if (routePath.startsWith('/files/')) {
+      fileReads.push(req.url ?? '');
       const text = served.files[decodeURIComponent(routePath.split('/').slice(3).join('/'))];
       return text === undefined ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', text);
     }
@@ -404,6 +417,7 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       },
       state: served,
       calls,
+      fileReads,
       tokens,
       execute,
       close,
@@ -466,6 +480,22 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
               ],
             },
           ],
+        }),
+      // The Dashboard polls on a timer and does not wait for an answer, so "the poll happened" is the stub server's count.
+      // One drawn frame after the last answer the page has processed it.
+      /** @param {number} [count] */
+      async waitForPolls(count = 1) {
+        const wanted = polls + count;
+        await waitUntil(() => polls >= wanted, {
+          timeoutMs: 5000 + count * (pollMs ?? 2000),
+          message: `${count} more poll(s) of /api/views`,
+        });
+        await page.waitForFrame();
+      },
+      waitForFrame: () =>
+        page.cdp('Runtime.evaluate', {
+          expression: 'new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)))',
+          awaitPromise: true,
         }),
       wait: delay,
     };
