@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cli as runCli } from './cli-runner.js';
 import { repo, git } from './git-repo.js';
@@ -97,6 +97,7 @@ test('split keeps the done Tickets, prints the moved links, releases the Run and
   const result = await run(r.cwd, 'split', '--id', r.id);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 't3\nt4\n');
+  assert.doesNotMatch(result.stderr, /note:/);
   const saved = record(r.cwd, r.id);
   assert.deepEqual(saved.tickets, ['t1', 't2']);
   assert.equal(saved.tickets_total, 2);
@@ -114,6 +115,7 @@ test('size --accept sets size_accepted, releases the Run and logs the size', asy
   await finish(r, 1);
   const result = await run(r.cwd, 'size', '--id', r.id, '--accept');
   assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /note:/);
   const saved = record(r.cwd, r.id);
   assert.ok(!Number.isNaN(Date.parse(saved.size_accepted)));
   assert.equal(saved.status, 'running');
@@ -261,5 +263,47 @@ test(
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, 't3\nt4\n');
     assert.deepEqual(record(r.cwd, r.id).tickets, ['t1', 't2']);
+  },
+);
+
+/** @param {{ cwd: string, id: string }} r the event log becomes a symbolic link, which appendEvent refuses */
+function linkTheLog({ cwd, id }) {
+  const log = join(cwd, '.factory', 'runs', id, 'events.jsonl');
+  const elsewhere = join(cwd, 'elsewhere.jsonl');
+  writeFileSync(elsewhere, '');
+  rmSync(log, { force: true });
+  symlinkSync(elsewhere, log);
+  return elsewhere;
+}
+
+test(
+  'split with a symbolic link as event log still prints the links, exits 0 and notes the lost event',
+  { skip: process.platform === 'win32' && 'needs symbolic links' },
+  async () => {
+    const r = await over();
+    await finish(r, 2);
+    const elsewhere = linkTheLog(r);
+    const result = await run(r.cwd, 'split', '--id', r.id);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 't3\nt4\n');
+    assert.match(result.stderr, /^note: the split event could not be recorded/m);
+    assert.deepEqual(record(r.cwd, r.id).tickets, ['t1', 't2']);
+    assert.equal(readFileSync(elsewhere, 'utf8'), '');
+  },
+);
+
+test(
+  'size --accept with a symbolic link as event log records the acceptance and notes the lost event',
+  { skip: process.platform === 'win32' && 'needs symbolic links' },
+  async () => {
+    const r = await over();
+    await finish(r, 1);
+    const elsewhere = linkTheLog(r);
+    const result = await run(r.cwd, 'size', '--id', r.id, '--accept');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /^note: the size-accepted event could not be recorded/m);
+    assert.ok(record(r.cwd, r.id).size_accepted);
+    assert.equal(record(r.cwd, r.id).status, 'running');
+    assert.equal(readFileSync(elsewhere, 'utf8'), '');
   },
 );

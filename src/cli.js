@@ -162,7 +162,7 @@ async function execute(argv, context) {
       } else if (op === 'split') {
         for (const link of store.split(values.id, { warn: err })) out(printable(link));
       } else if (op === 'size') {
-        const size = store.size(values.id, { accept: values.accept });
+        const size = store.size(values.id, { accept: values.accept, warn: err });
         if (!size) out('The Run size is unknown (no base commit, or git failed)');
         else out(`${size.files} file${size.files === 1 ? '' : 's'}, ${Math.round(size.bytes / 1024)} KB`);
       } else if (op === 'follow-up') out(String(store.followUp(values.id, { scope: values.scope })));
