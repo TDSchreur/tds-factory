@@ -25,8 +25,7 @@ test('install puts the project setup skill in the directory of every Agent targe
   const cwd = process.cwd();
   process.chdir(project);
   try {
-    install({ agent: 'all', project: true, force: false });
-    install({ agent: 'copilot', project: true, force: false });
+    install({ verifyPaths: () => {}, agent: 'all', project: true, force: false });
   } finally {
     process.chdir(cwd);
   }

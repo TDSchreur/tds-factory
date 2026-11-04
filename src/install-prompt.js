@@ -125,6 +125,8 @@ export function explicitDestinations({ agent, claudeDirs = [], reuse = false, pr
   }
   if (names.some((name) => !['claude', 'codex', 'copilot'].includes(name)) || new Set(names).size !== names.length)
     throw new Error('invalid or duplicate agent');
+  if (claudeDirs.some((dir) => dir.length > 4096 || /[\p{Cc}\p{Cf}\u2028\u2029]/u.test(dir)))
+    throw new Error('--claude-dir must be a path without control characters and under 4096 characters');
   if (claudeDirs.some((dir) => !dir.trim()) || (claudeDirs.length && (!names.includes('claude') || project)))
     throw new Error('--claude-dir requires a global Claude selection');
   /** @type {Array<{agent: import('./run-record.js').AgentName, configDir?: string}>} */

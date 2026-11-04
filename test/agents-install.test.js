@@ -18,7 +18,7 @@ function installIn(project, agent, force = false) {
   const cwd = process.cwd();
   process.chdir(project);
   try {
-    install({ agent, project: true, force });
+    install({ verifyPaths: () => {}, agent, project: true, force });
   } finally {
     process.chdir(cwd);
     log.mock.restore();
@@ -115,7 +115,7 @@ test('install --dry-run reports what it would do and writes nothing', () => {
   const cwd = process.cwd();
   process.chdir(project);
   try {
-    install({ agent: 'claude', project: true, force: false, dryRun: true });
+    install({ verifyPaths: () => {}, agent: 'claude', project: true, force: false, dryRun: true });
   } finally {
     process.chdir(cwd);
     log.mock.restore();

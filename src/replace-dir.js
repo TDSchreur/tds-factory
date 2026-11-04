@@ -15,7 +15,7 @@ export function replaceDir(dest, populate) {
   fs.rmSync(staging, { recursive: true, force: true });
   fs.rmSync(old, { recursive: true, force: true });
   try {
-    fs.mkdirSync(staging, { recursive: true });
+    fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
     populate(staging);
     const hadOld = fs.lstatSync(dest, { throwIfNoEntry: false }) !== undefined;
     if (hadOld) fs.renameSync(dest, old);

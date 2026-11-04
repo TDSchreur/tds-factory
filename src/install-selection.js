@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isAgent, targets } from './flow.js';
+import { FactoryError } from './errors.js';
+import { printable } from './printable.js';
 
 /** @typedef {{ agent: import('./run-record.js').AgentName, configDir?: string }} Destination */
 /** @param {string} input @param {string} cwd */
@@ -68,7 +70,19 @@ function ownedAgents(dir) {
   const stat = fs.lstatSync(record, { throwIfNoEntry: false });
   if (!stat) return false;
   if (!stat.isFile()) throw new Error(`invalid agent record: ${record}`);
-  const data = JSON.parse(fs.readFileSync(record, 'utf8'));
+  /** @type {unknown} */
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(record, 'utf8'));
+  } catch (cause) {
+    throw new FactoryError(
+      `cannot read the install record ${record}: ${printable(String(cause))} (remove the file to install again)`,
+      {
+        code: 'install-record-unreadable',
+        cause,
+      },
+    );
+  }
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(`invalid agent record: ${record}`);
   const entries = Object.entries(data);
   for (const [name, hash] of entries) {

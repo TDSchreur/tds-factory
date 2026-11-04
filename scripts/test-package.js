@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtempDisposableSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -8,16 +8,22 @@ import { spawnSync } from 'node:child_process';
 // An optional tarball argument lets Release verify the exact asset it publishes.
 using disposable = mkdtempDisposableSync(join(tmpdir(), 'tds-package-'));
 const temp = disposable.path;
+// Installing refuses shared temp folders, so the project installs below use a private folder next to the checkout.
+using projects = mkdtempDisposableSync(
+  join(process.platform === 'win32' ? homedir() : process.cwd(), '.package-install-'),
+);
+
 const windows = process.platform === 'win32';
 /**
  * @param {string} command
  * @param {string[]} args
  * @param {string} [cwd]
  */
-function run(command, args, cwd = temp) {
+function run(command, args, cwd = temp, env = process.env) {
   const shell = windows && command.endsWith('.cmd');
   const result = spawnSync(shell ? `"${command}"` : command, shell ? args.map((arg) => `"${arg}"`) : args, {
     cwd,
+    env,
     encoding: 'utf8',
     shell,
   });
@@ -60,9 +66,10 @@ for (const [agent, skills, agents, extension] of [
   ['codex', '.agents/skills', '.codex/agents', 'toml'],
   ['copilot', '.github/skills', '.github/agents', 'agent.md'],
 ]) {
-  const project = join(temp, agent);
+  const project = join(projects.path, agent);
   mkdirSync(project);
-  run(cli, ['install', '--project', '--agent', agent], project);
+  const env = { ...process.env, TDS_FACTORY_CONFIG_DIR: join(projects.path, `config-${agent}`) };
+  run(cli, ['install', '--project', '--agent', agent], project, env);
   assert.match(readFileSync(join(project, skills, 'factory', 'SKILL.md'), 'utf8'), /factory/);
   for (const stage of ['define', 'build', 'check', 'finish']) {
     assert.ok(readFileSync(join(project, agents, `factory-${stage}.${extension}`), 'utf8').length);
