@@ -22,6 +22,16 @@ test('closing a page leaves no browser process and no scoped directory', async (
   assert.equal(existsSync(page.tmp), false, 'the private temp directory is removed');
 });
 
+test('closing a page does not wait for a deadline for Chromium to leave', async (t) => {
+  const page = await openPage(t, { runs: [] });
+  if (!page) return;
+  const started = Date.now();
+  await page.close();
+  // Chromium ignores Browser.close for as long as ChromeDriver holds its session, so a wait for it to exit ran to its
+  // five second deadline in every test. A generous bound: a close takes well under a second, the old wait took five.
+  assert.ok(Date.now() - started < 3000, `close() took ${Date.now() - started} ms`);
+});
+
 test('a failed browser start leaves no browser process and no scoped directory', async (t) => {
   if (process.platform === 'win32') return t.skip('the /dev/null user data directory only fails on POSIX');
   // Chromium cannot use a user data directory below /dev/null, so the session is not created.
