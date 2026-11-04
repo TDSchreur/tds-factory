@@ -141,9 +141,11 @@ test('Clean up is offered for a merged Done Run and shows why a clean-up is refu
 });
 
 test('Needs you: a Run that starts waiting raises a browser notification, and one already waiting does not', async (t) => {
-  const page = await openPage(t, {
-    runs: [run({ id: 'old', title: 'Already waiting', waiting: true, status: 'waiting', reason: 'answer' })],
-  });
+  const page = await openPage(
+    t,
+    { runs: [run({ id: 'old', title: 'Already waiting', waiting: true, status: 'waiting', reason: 'answer' })] },
+    { pollMs: 100 },
+  );
   if (!page) return;
   try {
     assert.equal(
@@ -173,7 +175,7 @@ test('Needs you: a Run that starts waiting raises a browser notification, and on
     assert.deepEqual(await page.execute('return window.__notes'), [
       ['Needs you in p: Now waiting', 'confirm the shared understanding', 'p/new'],
     ]);
-    await page.wait(2500);
+    await page.waitForPolls(2); // the later polls had their chance to notify again
     assert.equal(await page.execute('return window.__notes.length'), 1);
     assert.match(await page.execute('return document.title'), /^\(2\) /);
   } finally {
@@ -182,12 +184,12 @@ test('Needs you: a Run that starts waiting raises a browser notification, and on
 });
 
 test('no Notify button without notification support or once permission was decided', async (t) => {
-  const page = await openPage(t, { runs: [run()] });
+  const page = await openPage(t, { runs: [run()] }, { pollMs: 100 });
   if (!page) return;
   try {
     await page.execute("window.Notification = { permission: 'denied' }");
     await page.waitFor("return document.getElementById('status').textContent.startsWith('Updated')");
-    await page.wait(2500);
+    await page.waitForPolls(); // a poll after the permission was decided had its chance to add the button
     assert.equal(await page.execute("return document.getElementById('notify')"), null);
   } finally {
     await page.close();
