@@ -712,9 +712,16 @@ test('a local Spec and Ticket open in the Run detail with a Back button, and an 
       ],
     );
     await page.execute("document.querySelector('.card .tickets button.doc-link').click()");
-    await page.waitFor("return document.getElementById('detail').open && document.querySelector('#detail h4')");
-    assert.equal(await page.execute("return document.querySelector('#detail h4').textContent"), 'Ticket A');
+    await page.waitFor("return document.getElementById('detail').open && document.querySelector('#detail h3')");
+    assert.equal(await page.execute("return document.querySelector('#detail h3').textContent"), 'Ticket A');
     assert.equal(await page.execute('return document.activeElement.tagName'), 'H2');
+    // The headings of the document view nest without a gap: the file name is h2, the document's `#` is h3.
+    assert.deepEqual(
+      await page.execute(
+        "return [...document.querySelectorAll('#detail h2, #detail h3, #detail h4, #detail h5, #detail h6')].map(h => Number(h.tagName[1]))",
+      ),
+      [2, 3],
+    );
     await page.execute("document.querySelector('#detail .doc-back').click()");
     await page.waitFor(
       "return document.activeElement && document.activeElement.dataset.doc === '.scratch/f/issues/01-a.md'",
@@ -723,7 +730,7 @@ test('a local Spec and Ticket open in the Run detail with a Back button, and an 
     await page.execute(
       "[...document.querySelectorAll('#detail .link button.doc-link')].find(b => b.dataset.doc === 'docs/specs/x.md').click()",
     );
-    await page.waitFor("return document.querySelector('#detail h4')?.textContent === 'The Spec'");
+    await page.waitFor("return document.querySelector('#detail h3')?.textContent === 'The Spec'");
     await page.execute("document.querySelector('#detail .doc-back').click()");
     await page.waitFor("return document.activeElement?.dataset.doc === 'docs/specs/x.md'");
     assert.match(await page.execute("return document.querySelector('#detail').textContent"), /Spec: x\.md/);

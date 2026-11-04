@@ -58,7 +58,7 @@ export function Link({ href, children }) {
 }
 
 // A Spec or Ticket: a path opens in the Run detail (the file name is the text, the path the tooltip); anything else is a Link.
-/** @param {{ href: unknown, label?: string, onOpen: (path: string) => void, children?: unknown }} props */
+/** @param {{ href: unknown, onOpen: (path: string) => void, children?: unknown }} props */
 function DocLink({ href, onOpen, children }) {
   if (!isLocalDocument(href)) return html`<${Link} href=${href}>${children}<//>`;
   const docPath = String(href);
@@ -92,10 +92,11 @@ function MdList({ list }) {
 }
 
 // Text becomes Preact text nodes only, so file content can never inject markup.
-/** @param {{ text: string }} props */
-export function Markdown({ text }) {
+// `base` is the heading level of a `#`: 4 under the h3 of a Run file, 3 under the h2 of a document.
+/** @param {{ text: string, base?: number }} props */
+export function Markdown({ text, base = 4 }) {
   return html`<div class="md">${parseMarkdown(text).map((b) => {
-    if (b.type === 'heading') return h('h' + Math.min(6, b.level + 3), null, inline(b.inline));
+    if (b.type === 'heading') return h('h' + Math.min(6, b.level + base - 1), null, inline(b.inline));
     if (b.type === 'paragraph') return html`<p>${inline(b.inline)}</p>`;
     if (b.type === 'quote') return html`<blockquote>${inline(b.inline)}</blockquote>`;
     if (b.type === 'rule') return html`<hr />`;
@@ -917,7 +918,7 @@ export function Detail({
             ? html`<p>Cannot load ${doc} (${current.error})</p>`
             : null
     }</div>
-    ${current?.text !== undefined && html`<${Markdown} text=${current.text} />`}
+    ${current?.text !== undefined && html`<${Markdown} text=${current.text} base=${3} />`}
     </div>
   </dialog>`;
   }
