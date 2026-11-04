@@ -6,7 +6,6 @@ import { waitUntil } from './wait-until.js';
 /** @import { Page, RunStub } from './browser.js' */
 
 const ESCAPE = '\uE00C';
-const POLL_WAIT = 2400;
 
 // The dialog closes before its request reaches the server, so wait for the call instead of racing it.
 /**
@@ -97,14 +96,18 @@ test('older Runs are folded, except those waiting on the user', async (t) => {
 test('Done cards start collapsed, expand in place and stay expanded after a refresh', async (t) => {
   /** @param {Partial<RunStub>} over */
   const done = (over) => run({ column: 'done', status: 'done', agent: 'claude', standards: 'pass', ...over });
-  const page = await openPage(t, {
-    runs: [
-      done({ id: 'd', title: 'Done run' }),
-      done({ id: '__proto__', title: 'Proto run' }),
-      done({ id: 'x', title: 'Stopped', status: 'abandoned' }),
-      run({ id: 'a', title: 'Active', agent: 'codex', standards: 'pass' }),
-    ],
-  });
+  const page = await openPage(
+    t,
+    {
+      runs: [
+        done({ id: 'd', title: 'Done run' }),
+        done({ id: '__proto__', title: 'Proto run' }),
+        done({ id: 'x', title: 'Stopped', status: 'abandoned' }),
+        run({ id: 'a', title: 'Active', agent: 'codex', standards: 'pass' }),
+      ],
+    },
+    { pollMs: 100 },
+  );
   if (!page) return;
   try {
     /** @param {string} title */
@@ -135,7 +138,7 @@ test('Done cards start collapsed, expand in place and stay expanded after a refr
       ),
       'true',
     );
-    await page.wait(POLL_WAIT);
+    await page.waitForPolls();
     assert.equal(await hidden('Done run'), false);
     assert.equal(await hidden('Proto run'), true);
   } finally {
@@ -456,10 +459,14 @@ test('the Run detail header shows the Run state and stays in view while the summ
 });
 
 test('the Run detail is keyboard friendly: focus moves in, Escape closes it and focus returns to the card', async (t) => {
-  const page = await openPage(t, {
-    runs: [run({ id: 'r1', title: 'One', files: ['define.md'] }), run({ id: 'r2', title: 'Two' })],
-    files: { 'r1/define.md': 'text' },
-  });
+  const page = await openPage(
+    t,
+    {
+      runs: [run({ id: 'r1', title: 'One', files: ['define.md'] }), run({ id: 'r2', title: 'Two' })],
+      files: { 'r1/define.md': 'text' },
+    },
+    { pollMs: 100 },
+  );
   if (!page) return;
   try {
     assert.equal(
@@ -470,9 +477,9 @@ test('the Run detail is keyboard friendly: focus moves in, Escape closes it and 
       "document.querySelector('[data-id=r1]').focus(); document.querySelector('[data-id=r1]').click()",
     );
     await page.waitFor("return document.activeElement === document.querySelector('#detail h2')");
-    await page.wait(POLL_WAIT); // a poll must not take focus away again
+    await page.waitForPolls(); // a poll must not take focus away again
     await page.execute("document.querySelector('#detail a, #detail button').focus()");
-    await page.wait(POLL_WAIT);
+    await page.waitForPolls();
     assert.equal(await page.execute("return document.activeElement.closest('#detail') !== null"), true);
     await page.key(ESCAPE);
     await page.waitFor("return document.getElementById('detail').hidden");
@@ -547,16 +554,20 @@ test('switching to another Run opens its detail at the top', async (t) => {
 });
 
 test('the Run detail closes when its Run is no longer shown', async (t) => {
-  const page = await openPage(t, { runs: [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })] });
+  const page = await openPage(
+    t,
+    { runs: [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })] },
+    { pollMs: 100 },
+  );
   if (!page) return;
   try {
     await page.execute("document.querySelector('[data-id=r1]').click()");
     await page.waitFor("return document.getElementById('detail').open");
     page.state.runs = [run({ id: 'r2', title: 'Staying' })];
-    await page.wait(POLL_WAIT);
+    await page.waitForPolls();
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true);
     page.state.runs = [run({ id: 'r1', title: 'Going' }), run({ id: 'r2', title: 'Staying' })];
-    await page.wait(POLL_WAIT);
+    await page.waitForPolls();
     assert.equal(await page.execute("return document.getElementById('detail').hidden"), true); // it does not reopen by itself
   } finally {
     await page.close();
@@ -564,7 +575,7 @@ test('the Run detail closes when its Run is no longer shown', async (t) => {
 });
 
 test('a failed refresh keeps the last data and says so', async (t) => {
-  const page = await openPage(t, { runs: [run({ id: 'r', title: 'Kept' })] });
+  const page = await openPage(t, { runs: [run({ id: 'r', title: 'Kept' })] }, { pollMs: 100 });
   if (!page) return;
   try {
     page.state.failViews = true;
