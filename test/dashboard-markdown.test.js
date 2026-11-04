@@ -159,6 +159,14 @@ const HOSTILE = [
   ['many unclosed fences of growing length', Array.from({ length: 3000 }, (_, i) => '`'.repeat(i + 3)).join('\n')],
   ['a very long fence line', `${'~'.repeat(300_000)} info`],
   ['many headings', '# a ##\n'.repeat(50_000)],
+  ['hash, spaces, then a lone CR', `#${' '.repeat(200_000)}\rx`],
+  ['hash, spaces, then U+2028', `#${' '.repeat(200_000)}\u2028`],
+  ['hash, spaces, then U+2029', `# ${' '.repeat(200_000)}\u2029x`],
+  ['indent, hash, spaces, then a lone CR', `   ###${' '.repeat(200_000)}\r`],
+  ['many backticks, then a lone CR', `${'`'.repeat(200_000)}\r`],
+  ['many tildes, then U+2028', `${'~'.repeat(200_000)}\u2028x`],
+  ['a closing fence of many backticks then a lone CR', `\`\`\`\n${'`'.repeat(200_000)}\r`],
+  ['spaces before a fence-like line', `${' '.repeat(200_000)}x`],
   ['control characters and NUL in a heading', '# a\u0000\u001b[31m b ##\r\n# c\u2028d'],
 ];
 for (const [name, text] of HOSTILE)
@@ -171,4 +179,16 @@ for (const [name, text] of HOSTILE)
 
 test('a closing sequence is removed in one linear pass from a heading of many spaces', () => {
   assert.deepEqual(headings(`# a${' '.repeat(50_000)}b ##`), [`a${' '.repeat(50_000)}b`]);
+});
+
+for (const end of ['\r', '\u2028', '\u2029'])
+  test(`a document of about 1 MiB of hash and space lines ending in ${JSON.stringify(end)} parses in bounded time`, () => {
+    const started = process.hrtime.bigint();
+    parseMarkdown(`#${' '.repeat(1000)}${end}x\n`.repeat(1000));
+    parseMarkdown(`#${' '.repeat(1_000_000)}${end}x`);
+    assert.ok(Number(process.hrtime.bigint() - started) / 1e9 < 5);
+  });
+
+test('a line terminator character other than newline is kept as heading text', () => {
+  assert.deepEqual(headings('# a\rb'), ['a\rb']);
 });

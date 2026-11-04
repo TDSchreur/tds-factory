@@ -13,30 +13,52 @@
  *   | { type: 'paragraph', inline: Span[] }} Block
  */
 
+// The fence and heading scanners below walk the line by hand instead of using a regular expression with `.*`, which backtracks quadratically on a long line that ends in a character `.` does not match (a lone CR, U+2028, U+2029).
+/** @param {string} line @returns {number} The index of the first character that is not whitespace. */
+function skipSpace(line) {
+  let i = 0;
+  while (i < line.length && /\s/.test(line[i])) i++;
+  return i;
+}
+/** @param {string} line @param {number} from @param {string} char @returns {number} The index after the run of `char`. */
+function runEnd(line, from, char) {
+  let i = from;
+  while (line[i] === char) i++;
+  return i;
+}
 // An opening fence: 3 or more backticks or tildes after any indentation (lenient: it hides more, never less); a backtick fence info string holds no backtick.
 /** @param {string} line */
 function fenceOpen(line) {
-  const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
-  if (!m || (m[1][0] === '`' && m[2].includes('`'))) return null;
-  return { char: m[1][0], length: m[1].length };
+  const start = skipSpace(line);
+  const char = line[start];
+  if (char !== '`' && char !== '~') return null;
+  const end = runEnd(line, start, char);
+  if (end - start < 3 || (char === '`' && line.indexOf('`', end) >= 0)) return null;
+  return { char, length: end - start };
 }
 // A closing fence: only the opener's character, at least as long, trailing spaces only.
 /** @param {string} line @param {{ char: string, length: number }} open */
 function fenceClose(line, open) {
-  const m = /^\s*(`+|~+)[ \t]*$/.exec(line);
-  return !!m && m[1][0] === open.char && m[1].length >= open.length;
+  const start = skipSpace(line);
+  const end = runEnd(line, start, open.char);
+  if (end - start < open.length) return false;
+  for (let i = end; i < line.length; i++) if (line[i] !== ' ' && line[i] !== '\t') return false;
+  return true;
 }
 // An ATX heading: up to 3 spaces of indent, 1 to 6 `#`, then a space, a tab or the end of the line.
 /** @param {string} line */
 function atxHeading(line) {
-  const m = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
-  if (!m) return null;
+  const indent = runEnd(line, 0, ' ');
+  if (indent > 3) return null;
+  const end = runEnd(line, indent, '#');
+  const level = end - indent;
+  if (level < 1 || level > 6 || (end < line.length && line[end] !== ' ' && line[end] !== '\t')) return null;
   // A closing sequence is a run of `#` after a space or tab (or the whole content) and before only spaces and tabs.
-  const text = (m[2] ?? '').trim();
-  let end = text.length;
-  while (end > 0 && text[end - 1] === '#') end--;
-  const closing = end < text.length && (end === 0 || text[end - 1] === ' ' || text[end - 1] === '\t');
-  return { level: m[1].length, content: closing ? text.slice(0, end).trim() : text };
+  const text = line.slice(end).trim();
+  let close = text.length;
+  while (close > 0 && text[close - 1] === '#') close--;
+  const closing = close < text.length && (close === 0 || text[close - 1] === ' ' || text[close - 1] === '\t');
+  return { level, content: closing ? text.slice(0, close).trim() : text };
 }
 
 /**
