@@ -1,17 +1,16 @@
 import assert from 'node:assert/strict';
 import { mkdtempDisposableSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { privateDir } from '../test/private-dir.js';
 
 // Exercise the installed command and shipped assets outside the source checkout.
 // An optional tarball argument lets Release verify the exact asset it publishes.
 using disposable = mkdtempDisposableSync(join(tmpdir(), 'tds-package-'));
 const temp = disposable.path;
 // Installing refuses shared temp folders, so the project installs below use a private folder next to the checkout.
-using projects = mkdtempDisposableSync(
-  join(process.platform === 'win32' ? homedir() : process.cwd(), '.package-install-'),
-);
+const projects = { path: privateDir('.package-install-') };
 
 const windows = process.platform === 'win32';
 /**

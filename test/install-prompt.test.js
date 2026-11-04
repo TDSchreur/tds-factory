@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable, Writable } from 'node:stream';
+import { spawnSync } from 'node:child_process';
 import { promptDestinations } from '../src/install-prompt.js';
 
 test('a first interactive selection chooses only the destinations named by the user', async () => {
@@ -98,7 +99,6 @@ test(
   'a noninteractive process without a controlling terminal fails with an actionable message',
   { skip: process.platform !== 'linux' },
   async () => {
-    const { spawnSync } = await import('node:child_process');
     const result = spawnSync(
       'setsid',
       [
@@ -136,9 +136,15 @@ test('explicit all includes Copilot and project mode rejects custom Claude paths
 
 test(
   'reads the controlling terminal instead of a piped standard input',
-  { skip: process.platform !== 'linux' },
+  {
+    skip:
+      process.platform !== 'linux'
+        ? 'needs a Linux pseudo-terminal'
+        : spawnSync('python3', ['--version']).error
+          ? 'python3 is needed to open a pseudo-terminal'
+          : false,
+  },
   async () => {
-    const { spawnSync } = await import('node:child_process');
     const driver = String.raw`
 import os, pty, select, sys, time
 r, w = os.pipe()
@@ -267,6 +273,19 @@ test('a typed path with control characters is refused and never echoed', async (
     /invalid destination path/,
   );
   assert.doesNotMatch(state.text, /\u001b/);
+});
+
+test('a typed path over 4096 characters is refused', async () => {
+  const { output } = sink();
+  await assert.rejects(
+    promptDestinations({
+      candidates: [],
+      previous: [],
+      input: Readable.from([`add:/${'a'.repeat(4100)}\n`]),
+      output,
+    }),
+    /invalid destination path/,
+  );
 });
 
 test('hostile numbers and very long answers are rejected without hanging', async () => {

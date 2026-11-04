@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+export { privateDir } from './private-dir.js';
+
 // Every folder this helper makes is removed when the test process exits, so repositories never pile up in the temp directory.
 /** @type {string[]} */
 const made = [];

@@ -5,6 +5,8 @@ import path from 'node:path';
 import tty from 'node:tty';
 import { printable } from './printable.js';
 
+export const NO_TERMINAL = 'no-terminal';
+
 /** Open the controlling terminal instead of reading a piped Bootstrap script. */
 export function openInstallTerminal() {
   let readFd;
@@ -27,7 +29,9 @@ export function openInstallTerminal() {
     // A missing or unusable terminal is expected for unattended invocations.
     if (readFd !== undefined) fs.closeSync(readFd);
     if (writeFd !== undefined) fs.closeSync(writeFd);
-    throw new Error('No interactive terminal; use --agent claude,codex or --reuse-selection.');
+    throw Object.assign(new Error('No interactive terminal; use --agent claude,codex or --reuse-selection.'), {
+      code: NO_TERMINAL,
+    });
   }
 }
 
@@ -81,7 +85,7 @@ export async function promptDestinations({
       if (answer.startsWith('add:') && answer.slice(4).trim()) {
         if (project) throw new Error('custom Claude directories are not supported for projects');
         const configDir = answer.slice(4).trim();
-        if (/[\p{Cc}\p{Cf}]/u.test(configDir)) throw new Error('invalid destination path');
+        if (configDir.length > 4096 || /[\p{Cc}\p{Cf}]/u.test(configDir)) throw new Error('invalid destination path');
         choices.push({ agent: 'claude', configDir, skillsDir: path.join(configDir, 'skills') });
         display();
         continue;

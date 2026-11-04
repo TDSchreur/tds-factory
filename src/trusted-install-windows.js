@@ -1,9 +1,9 @@
 // @ts-check
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { printable } from './printable.js';
+import { identityOf } from './install-identity.js';
 
 // This fixed script consumes paths as JSON on stdin; no path is interpolated into PowerShell code.
 const SCRIPT = String.raw`
@@ -50,10 +50,33 @@ foreach ($entry in $paths) {
 }
 `;
 
-/** @param {string[]} paths @param {boolean} recursive */
-export function verifyWindowsInstallPaths(paths, recursive) {
+/**
+ * PowerShell 7 at its fixed installation folder, never found through PATH or the current directory, where a planted
+ * pwsh.exe could report any path as verified.
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function resolvePwsh(env) {
+  const roots = [env.ProgramFiles, env.ProgramW6432].filter((root) => root && path.isAbsolute(root));
+  for (const root of /** @type {string[]} */ (roots)) {
+    const candidate = path.join(root, 'PowerShell', '7', 'pwsh.exe');
+    const stat = fs.lstatSync(candidate, { throwIfNoEntry: false });
+    if (stat?.isFile() && !stat.isSymbolicLink()) return candidate;
+  }
+  throw new Error(
+    'PowerShell 7 was not found in its installation folder (Program Files\\PowerShell\\7\\pwsh.exe); install PowerShell 7 from https://aka.ms/powershell and run the command again',
+  );
+}
+
+/**
+ * @param {string[]} paths @param {boolean} recursive
+ * @param {{ env?: NodeJS.ProcessEnv, spawn?: typeof spawnSync }} [options]
+ * @returns {Map<string, string | undefined>} The identity of every inspected path; an absent path maps to undefined.
+ */
+export function verifyWindowsInstallPaths(paths, recursive, { env = process.env, spawn = spawnSync } = {}) {
   /** @type {Map<string, boolean>} */
   const found = new Map();
+  /** @type {Set<string>} */
+  const absent = new Set();
   const pending = [...paths];
   while (pending.length) {
     const requested = /** @type {string} */ (pending.pop());
@@ -65,7 +88,7 @@ export function verifyWindowsInstallPaths(paths, recursive) {
       if (fs.lstatSync(current, { throwIfNoEntry: false })) {
         found.set(current, Boolean(found.get(current)) || nearest);
         nearest = false;
-      }
+      } else absent.add(current);
       const parent = path.dirname(current);
       if (parent === current) break;
       current = parent;
@@ -73,18 +96,27 @@ export function verifyWindowsInstallPaths(paths, recursive) {
     if (recursive && stat?.isDirectory() && !stat.isSymbolicLink())
       pending.push(...fs.readdirSync(requested).map((name) => path.join(requested, name)));
   }
+  const pwsh = resolvePwsh(env);
+  const systemDirectory = path.join(
+    env.SystemRoot && path.isAbsolute(env.SystemRoot) ? env.SystemRoot : 'C:\\Windows',
+    'System32',
+  );
   const encoded = Buffer.from(SCRIPT, 'utf16le').toString('base64');
-  const result = spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+  const result = spawn(pwsh, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
     input: JSON.stringify([...found].map(([file, checkInheritance]) => ({ path: file, checkInheritance }))),
     encoding: 'utf8',
     timeout: 60000,
     maxBuffer: 1024 * 1024,
-    cwd: os.homedir(),
-    env: { ...process.env, NoDefaultCurrentDirectoryInExePath: '1' },
+    cwd: systemDirectory,
+    env: { ...env, NoDefaultCurrentDirectoryInExePath: '1' },
     windowsHide: true,
   });
   if (result.error || result.status !== 0 || result.stdout !== 'verified') {
     const detail = result.stderr?.trim() || result.error?.message || 'unexpected verification output';
     throw new Error(`cannot verify Windows install paths: ${printable(detail)}`);
   }
+  return new Map([
+    ...[...found.keys()].map((file) => /** @type {const} */ ([file, identityOf(file)])),
+    ...[...absent].map((file) => /** @type {const} */ ([file, undefined])),
+  ]);
 }

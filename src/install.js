@@ -9,8 +9,9 @@ import { printable } from './printable.js';
 import { factoryConfigDir } from './project-registry.js';
 import { cleanupDestination } from './install-cleanup.js';
 import { planSelection, readSelection, saveSelection } from './install-selection.js';
-import { chooseDestinations, explicitDestinations } from './install-prompt.js';
-import { verifyInstallPaths } from './trusted-install-paths.js';
+import { chooseDestinations, explicitDestinations, NO_TERMINAL } from './install-prompt.js';
+import { assertSupportedPlatform, verifyInstallPaths } from './trusted-install-paths.js';
+import { identityGuard } from './install-identity.js';
 import { replaceDir } from './replace-dir.js';
 import { hashLine, modifiedLocally } from './tree-hash.js';
 
@@ -49,7 +50,7 @@ function copyPrivate(src, dest) {
 /**
  * Install the Skills and Stage agents into the chosen destinations, remove the Factory-owned copies from deselected
  * ones and remember the choice. Nothing is written until every affected path has been verified as trusted.
- * @param {{ agent?: string, claudeDirs?: string[], reuseSelection?: boolean, selected?: Destination[], project?: boolean, force?: boolean, dryRun?: boolean, cwd?: string, home?: string, env?: NodeJS.ProcessEnv, log?: (message: string) => void, warn?: (message: string) => void, verifyPaths?: typeof verifyInstallPaths }} options
+ * @param {{ agent?: string, claudeDirs?: string[], reuseSelection?: boolean, selected?: Destination[], project?: boolean, force?: boolean, dryRun?: boolean, cwd?: string, home?: string, env?: NodeJS.ProcessEnv, log?: (message: string) => void, warn?: (message: string) => void, verifyPaths?: (paths: string[], options?: { recursive?: boolean }) => import("./install-identity.js").IdentityGuard | void }} options
  */
 export function install({
   agent,
@@ -106,11 +107,17 @@ export function install({
       record,
     ];
   };
-  /** @param {Candidate[]} items */
+  /** Verify the paths, then return the identities to recheck immediately before each mutation. @param {Candidate[]} items */
   const verify = (items) => {
     try {
-      verifyPaths([...items.flatMap((item) => [item.skillsDir, item.agentsDir]), recordFile, backupRoot]);
-      verifyPaths(items.flatMap(affected), { recursive: true });
+      const guard = identityGuard();
+      guard.merge(
+        verifyPaths([...items.flatMap((item) => [item.skillsDir, item.agentsDir]), recordFile, backupRoot]) ??
+          identityGuard(),
+      );
+      const touched = items.flatMap(affected);
+      if (touched.length) guard.merge(verifyPaths(touched, { recursive: true }) ?? identityGuard());
+      return guard;
     } catch (cause) {
       throw new FactoryError(
         `cannot establish that the install paths are trusted: ${printable(messageOf(cause))}. Nothing was installed, removed or saved, and your saved selection is unchanged.`,
@@ -119,13 +126,20 @@ export function install({
     }
   };
   const everything = [...desired, ...removals];
-  if (dryRun) log('dry run: install path trust is checked only when installing');
-  else verify(everything);
+  // A dry run refuses an unsupported platform but only reads, so the full path trust walk runs when installing.
+  if (dryRun) {
+    try {
+      assertSupportedPlatform();
+    } catch (cause) {
+      throw new FactoryError(messageOf(cause), { code: 'install-untrusted-path', cause });
+    }
+    log('dry run: install path trust is verified only when installing');
+  } else verify(everything);
 
   // Preview, and validate the cleanup plan, before the first write.
   const preview = (/** @type {string} */ message) => log(dryRun ? message : message.replace(/^would /, 'will '));
   for (const item of removals)
-    // Trust was verified above; a dry run only reads.
+    // A dry run only reads, and a real run verified these paths above.
     cleanupDestination({ ...item, backupRoot, trustedPaths: true, dryRun: true, log: preview });
   if (dryRun) {
     for (const item of desired) installDestination(item, skills, { force, dryRun, log, warn });
@@ -142,16 +156,15 @@ export function install({
   ];
   try {
     for (const item of desired) {
-      verify([item]);
-      installDestination(item, skills, { force, dryRun, log, warn });
+      installDestination(item, skills, { force, dryRun, log, warn, guard: verify([item]) });
       done.push(/** @type {string} */ (pending.shift()));
     }
     for (const item of removals) {
-      verify([item]);
-      cleanupDestination({ ...item, backupRoot, trustedPaths: true, log });
+      cleanupDestination({ ...item, backupRoot, trustedPaths: true, log, guard: verify([item]) });
       done.push(/** @type {string} */ (pending.shift()));
     }
-    verifyPaths([recordFile]);
+    const recordGuard = verify([]);
+    recordGuard.check(recordFile);
     saveSelection({ file: recordFile, home, cwd, project, env, selected: plan.desired, trustedPaths: true });
     log(`saved the selection (${desired.map(label).join(', ')})`);
   } catch (cause) {
@@ -188,6 +201,10 @@ export async function runInstall(options) {
         previous,
         candidates: plan.candidates,
         terminal: options.terminal,
+      }).catch((/** @type {unknown} */ cause) => {
+        if (cause instanceof Error && 'code' in cause && cause.code === NO_TERMINAL)
+          throw new FactoryError(NO_CHOICE, { code: 'install-selection-required', cause });
+        throw cause;
       });
       if (!chosen.length) {
         (options.log ?? console.log)('nothing selected; no changes were made');
@@ -202,42 +219,52 @@ export async function runInstall(options) {
 /**
  * @param {Candidate} item
  * @param {string[]} skills
- * @param {{ force: boolean, dryRun: boolean, log: (message: string) => void, warn: (message: string) => void }} options
+ * @param {{ force: boolean, dryRun: boolean, log: (message: string) => void, warn: (message: string) => void, guard?: ReturnType<typeof identityGuard> }} options
  */
-function installDestination(item, skills, { force, dryRun, log, warn }) {
+function installDestination(item, skills, { force, dryRun, log, warn, guard }) {
   const name = item.agent;
   const targetDir = item.skillsDir;
-  if (!dryRun) fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+  if (!dryRun) {
+    guard?.check(targetDir);
+    fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+    guard?.adopt(targetDir);
+  }
   for (const skill of skills) {
     const dest = path.join(targetDir, skill);
     // A symlink is another installer's link to the same skill; replace it, not its target.
     const replaceable = force || fs.lstatSync(dest, { throwIfNoEntry: false })?.isSymbolicLink();
     if (fs.existsSync(dest) && !replaceable && !fs.existsSync(path.join(dest, MARKER))) {
-      warn(`skip ${name}/${skill}: exists and was not installed by tds-factory (use --force)`);
+      warn(`skip ${name}/${printable(skill)}: exists and was not installed by tds-factory (use --force)`);
       continue;
     }
     if (!replaceable && fs.existsSync(dest) && modifiedLocally(dest)) {
-      warn(`skip ${name}/${skill}: edited locally (use --force to replace)`);
+      warn(`skip ${name}/${printable(skill)}: edited locally (use --force to replace)`);
       continue;
     }
     if (!dryRun) {
+      guard?.check(dest);
       replaceDir(dest, (staging) => {
         copyPrivate(path.join(SKILLS_DIR, skill), staging);
         fs.writeFileSync(path.join(staging, MARKER), hashLine(staging), { mode: 0o600 });
       });
+      guard?.adopt(dest);
     }
-    log(`${dryRun ? 'would install' : 'installed'} ${name}/${skill} -> ${printable(dest)}`);
+    log(`${dryRun ? 'would install' : 'installed'} ${name}/${printable(skill)} -> ${printable(dest)}`);
   }
   // Marked folders that are no longer shipped are ours to remove; unmarked ones never are.
   for (const e of fs.existsSync(targetDir) ? fs.readdirSync(targetDir, { withFileTypes: true }) : []) {
     const stale = path.join(targetDir, e.name);
     if (e.isDirectory() && !skills.includes(e.name) && fs.existsSync(path.join(stale, MARKER))) {
-      if (!dryRun) fs.rmSync(stale, { recursive: true, force: true });
-      log(`${dryRun ? 'would remove' : 'removed'} ${name}/${e.name}`);
+      if (!dryRun) {
+        guard?.check(stale);
+        fs.rmSync(stale, { recursive: true, force: true });
+        guard?.adopt(stale);
+      }
+      log(`${dryRun ? 'would remove' : 'removed'} ${name}/${printable(e.name)}`);
     }
   }
   // Stage agents carry per-target model choices, so each target gets its own.
-  installAgents(name, item.agentsDir, force, dryRun, { log, warn });
+  installAgents(name, item.agentsDir, force, dryRun, { log, warn, guard });
 }
 
 // Stage agent files hold the editable model choices. Each installed file's hash is recorded, so a file you did not edit is updated
@@ -251,11 +278,15 @@ const sha = (file) => createHash('sha256').update(fs.readFileSync(file)).digest(
  * @param {string} targetDir
  * @param {boolean | undefined} force
  * @param {boolean} dryRun
- * @param {{ log: (message: string) => void, warn: (message: string) => void }} output
+ * @param {{ log: (message: string) => void, warn: (message: string) => void, guard?: ReturnType<typeof identityGuard> }} output
  */
-function installAgents(name, targetDir, force, dryRun, { log, warn }) {
+function installAgents(name, targetDir, force, dryRun, { log, warn, guard }) {
   const sourceDir = path.join(AGENTS_DIR, name);
-  if (!dryRun) fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+  if (!dryRun) {
+    guard?.check(targetDir);
+    fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+    guard?.adopt(targetDir);
+  }
   const recordFile = path.join(targetDir, AGENT_RECORD);
   /** @type {Record<string, string>} */
   let record = {};
@@ -280,11 +311,17 @@ function installAgents(name, targetDir, force, dryRun, { log, warn }) {
       continue;
     }
     if (!dryRun) {
+      guard?.check(dest);
       if (existing) fs.rmSync(dest);
       fs.writeFileSync(dest, fs.readFileSync(src), { mode: 0o600 });
+      guard?.adopt(dest);
       record[file] = sha(dest);
     }
     log(`${dryRun ? 'would install' : 'installed'} ${name}/${file} -> ${printable(dest)}`);
   }
-  if (!dryRun) fs.writeFileSync(recordFile, JSON.stringify(record, null, 2) + '\n', { mode: 0o600 });
+  if (!dryRun) {
+    guard?.check(recordFile);
+    fs.writeFileSync(recordFile, JSON.stringify(record, null, 2) + '\n', { mode: 0o600 });
+    guard?.adopt(recordFile);
+  }
 }

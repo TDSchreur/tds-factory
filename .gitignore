@@ -1,2 +1,7 @@
 node_modules/
 .factory/
+.install-e2e-*/
+.install-cli-*/
+.identity-test-*/
+.trust-test-*/
+.package-install-*/

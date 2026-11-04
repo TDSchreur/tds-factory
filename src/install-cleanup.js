@@ -88,7 +88,7 @@ function snapshot(file) {
 
 // Callers must establish that another security principal cannot replace these paths.
 // Rechecks detect ordinary edits; they do not provide atomic isolation from a concurrent writer.
-/** @param {{ skillsDir: string, agentsDir: string, backupRoot: string, trustedPaths?: boolean, dryRun?: boolean, log?: (message: string) => void }} options */
+/** @param {{ skillsDir: string, agentsDir: string, backupRoot: string, trustedPaths?: boolean, dryRun?: boolean, log?: (message: string) => void, guard?: { check: (file: string) => void } }} options */
 export function cleanupDestination({
   skillsDir,
   agentsDir,
@@ -96,6 +96,7 @@ export function cleanupDestination({
   trustedPaths = false,
   dryRun = false,
   log = console.log,
+  guard,
 }) {
   if (trustedPaths !== true) throw new Error('cleanup requires trusted filesystem paths established by the caller');
   skillsDir = directory(skillsDir);
@@ -163,6 +164,7 @@ export function cleanupDestination({
     fs.mkdirSync(backupRoot, { recursive: true, mode: 0o700 });
     backupDir = fs.mkdtempSync(path.join(backupRoot, 'cleanup-'));
     for (const item of owned.filter((entry) => entry.backup)) {
+      guard?.check(item.file);
       unchanged(item.file);
       const dest = path.join(backupDir, item.relative);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -174,6 +176,7 @@ export function cleanupDestination({
   for (const item of owned.filter((entry) => entry.backup)) if (dryRun) log(`would back up ${printable(item.file)}`);
   for (const item of owned) unchanged(item.file);
   for (const item of owned) {
+    guard?.check(item.file);
     unchanged(item.file);
     if (!dryRun) fs.rmSync(item.file, { recursive: true });
     log(`${dryRun ? 'would remove' : 'removed'} ${printable(item.file)}`);
