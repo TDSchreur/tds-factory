@@ -16,7 +16,7 @@ const USAGE = `Usage:
   tds-factory sync [--force]       (maintainers only: needs a repository checkout, run it as node bin/tds-factory.js sync)
   tds-factory install [--agent claude,codex,copilot|all] [--claude-dir PATH]... [--reuse-selection] [--project] [--force] [--dry-run]
   tds-factory rules [--force] [--dry-run]   (writes .claude/rules/ copies of .github/instructions/*.instructions.md, with applyTo as paths)
-  tds-factory update [--no-force]
+  tds-factory update [--agent claude,codex,copilot|all] [--claude-dir PATH]... [--reuse-selection] [--no-force]
   tds-factory doctor [--agent claude|codex|copilot] [--json]
   tds-factory dashboard [--port N]   (one Dashboard for every Project on port 4300, or the next free port; --port N starts a separate one that is not shared)
   tds-factory run start --data JSON
@@ -50,8 +50,11 @@ choice and cannot be combined with --agent. Destinations installed earlier but n
 agents are removed and edited ones are backed up first. install defaults to the user-global directory; --project installs into the
 current directory with its own saved selection. Installing needs a verified Linux or Windows filesystem; other systems are refused.
 --dry-run prints what install would do and changes nothing.
-update installs the latest Release when yours is older and refreshes the skills with install --force, which replaces edited agent files
-and skills, and same-named skills that tds-factory did not install; --no-force keeps them.`;
+update takes the same destination flags as install and chooses before it downloads anything: in a terminal it asks (saved choices are
+shown for confirmation), without a terminal it fails with an example unless the flags or --reuse-selection name the choice, and cancelling
+changes nothing. It then installs the latest Release when yours is older and runs install --force with the chosen destinations, which
+replaces edited agent files and skills, and same-named skills that tds-factory did not install; --no-force keeps them. update has no
+--project. The first update from a version before this change chooses after the upgrade.`;
 
 const OPTIONS = /** @type {const} */ ({
   agent: { type: 'string' },
@@ -287,7 +290,17 @@ async function execute(argv, context) {
     } else if (command === 'update')
       await (
         await import('../src/update.js')
-      ).update({ installed: version, force: !values['no-force'], env, log: out, warn: err });
+      ).update({
+        installed: version,
+        force: !values['no-force'],
+        agent: values.agent,
+        claudeDirs: values['claude-dir'],
+        reuseSelection: values['reuse-selection'],
+        cwd,
+        env,
+        log: out,
+        warn: err,
+      });
     else if (command === 'sync') (await import('../src/sync.js')).sync({ force: values.force, log: out });
     else if (command === 'rules')
       (await import('../src/rules.js')).syncRules({

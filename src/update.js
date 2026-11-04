@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { messageOf, codeOf } from './narrow.js';
 import { FactoryError } from './errors.js';
+import { installFlags, resolveSelection } from './install.js';
 
 const REPO = 'TDSchreur/tds-factory';
 const ASSET = 'tds-factory.tgz';
@@ -233,12 +234,18 @@ const formatVersion = ({ core, pre }) => core.join('.') + (pre ? `-${pre}` : '')
 /** @param {string} what @param {{ status: number | null }} result */
 const exitText = (what, result) => `'${what}' failed with exit code ${result.status}`;
 
-// Installs the latest Release when the installed version is older, then refreshes the Skills and Stage agents with the
-// freshly installed code, so the two always match. Everything that touches the world is a parameter, for tests.
+// Chooses the destinations with the running CLI, so cancelling or a missing choice leaves everything as it is, then installs
+// the latest Release when the installed version is older and refreshes the Skills and Stage agents with the freshly installed
+// code, which gets the choice as explicit flags and never asks again. Everything that touches the world is a parameter, for tests.
 /**
  * @param {object} options
  * @param {string} options.installed
  * @param {boolean} [options.force]
+ * @param {string} [options.agent] The `install` flags: the complete choice of destinations, resolved before anything is fetched.
+ * @param {string[]} [options.claudeDirs]
+ * @param {boolean} [options.reuseSelection]
+ * @param {typeof import('./install-prompt.js').openInstallTerminal} [options.terminal]
+ * @param {string} [options.cwd] Where a relative --claude-dir is resolved.
  * @param {typeof fetch} [options.fetchFn]
  * @param {(cmd: string, args: string[], options?: { inherit?: boolean, cwd?: string }) => { status: number | null, stdout?: string | null }} [options.run]
  * @param {(ms: number) => Promise<unknown>} [options.sleep]
@@ -252,6 +259,11 @@ const exitText = (what, result) => `'${what}' failed with exit code ${result.sta
 export async function update({
   installed,
   force = true,
+  agent,
+  claudeDirs,
+  reuseSelection,
+  terminal,
+  cwd = process.cwd(),
   fetchFn = fetch,
   run = defaultRun,
   sleep = sleepFor,
@@ -262,6 +274,12 @@ export async function update({
   warn = console.warn,
   timeoutMs = TIMEOUT_MS,
 }) {
+  // Before the first request: cancelling, a missing terminal and invalid flags change nothing, and the CLI is not replaced.
+  const choice = await resolveSelection({ agent, claudeDirs, reuseSelection, terminal, cwd, home, env });
+  if ('cancelled' in choice) {
+    log('nothing selected; the CLI, the skills and the saved selection were not changed');
+    return;
+  }
   const retry = { sleep, warn, timeoutMs };
   const latest = await latestRelease({ fetchFn, env, retry });
   const compared = compareVersions(installed, latest.tag);
@@ -313,7 +331,7 @@ export async function update({
     warn(
       'using --force: edited agent files and skills, and same-named skills that tds-factory did not install, are replaced (use --no-force to keep them)',
     );
-  const args = force ? ['install', '--force'] : ['install'];
+  const args = ['install', ...(force ? ['--force'] : []), ...installFlags(choice.selected)];
   const skills = run('tds-factory', args, { inherit: true, cwd: home });
   if (skills.status !== 0) throw new Error(exitText(`tds-factory ${args.join(' ')}`, skills));
 }

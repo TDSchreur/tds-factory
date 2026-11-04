@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { Readable, Writable } from 'node:stream';
+import { resolveSelection, installFlags } from '../src/install.js';
+import { explicitDestinations, NO_TERMINAL } from '../src/install-prompt.js';
 import { privateDir } from './private-dir.js';
 
 // These tests start the real binary: the terminal handling is decided by the process, not by a function call.
@@ -95,4 +98,112 @@ sys.exit(os.waitstatus_to_exitcode(status))
   assert.match(result.stdout, /nothing selected; no changes were made/);
   assert.deepEqual(fs.readdirSync(w.home), []);
   assert.equal(fs.existsSync(path.join(w.project, '.claude')), false);
+});
+
+// The seam update uses: the choice is resolved once, serialized into install flags and parsed again by install.
+const supported = { skip: !['linux', 'win32'].includes(process.platform) ? 'install needs Linux or Windows' : false };
+
+/** A terminal that answers with these lines; the prompt only needs a readable and a writable stream.
+ * @param {string[]} lines @returns {() => never} */
+const answering = (lines) => () =>
+  /** @type {never} */ (
+    /** @type {unknown} */ ({
+      input: Readable.from(lines),
+      output: new Writable({ write: (_c, _e, done) => done() }),
+      close() {},
+    })
+  );
+
+/** @param {string[]} flags */
+function parseFlags(flags) {
+  const agent = flags[flags.indexOf('--agent') + 1];
+  /** @type {string[]} */
+  const claudeDirs = [];
+  flags.forEach((flag, index) => {
+    if (flag === '--claude-dir') claudeDirs.push(flags[index + 1]);
+  });
+  return { agent, claudeDirs };
+}
+
+/** @param {Record<string, unknown>} extra */
+function seam(extra = {}) {
+  const w = world();
+  fs.mkdirSync(path.join(w.home, '.claude-work'), { mode: 0o700 });
+  return { w, options: { home: w.home, cwd: w.project, env: w.env, ...extra } };
+}
+
+/** @param {{ agent: string, configDir?: string }[]} selected @param {{ agent: string, configDir?: string }[]} expected */
+function sameSet(selected, expected) {
+  const text = (/** @type {{ agent: string, configDir?: string }[]} */ list) =>
+    list.map((item) => `${item.agent}:${item.configDir ?? ''}`).sort();
+  assert.deepEqual(text(selected), text(expected));
+}
+
+test('a resolved selection survives the trip through install flags for every destination kind', supported, async () => {
+  const { w, options } = seam();
+  const claude = path.join(w.home, '.claude');
+  const extra = path.join(w.home, '.claude-work');
+  const cases = [
+    'claude',
+    'codex',
+    'copilot',
+    'all',
+    'claude,codex',
+    `claude+${extra}`,
+    `claude+${claude}+${extra}`,
+    `claude+${extra}+codex,copilot`,
+  ];
+  for (const text of cases) {
+    const [names, ...dirs] = text.split('+');
+    const resolved = await resolveSelection({
+      ...options,
+      agent: names === 'claude' && dirs.length ? 'claude' : names,
+      claudeDirs: dirs,
+    });
+    assert.ok('selected' in resolved, text);
+    const flags = installFlags(resolved.selected);
+    const parsed = parseFlags(flags);
+    const again = await resolveSelection({ ...options, ...parsed, claudeDirs: parsed.claudeDirs });
+    assert.ok('selected' in again, text);
+    sameSet(again.selected, resolved.selected);
+    // The default Claude folder is named, so it is never lost beside extra folders.
+    if (resolved.selected.some((item) => item.agent === 'claude')) assert.ok(flags.includes('--claude-dir'), text);
+  }
+});
+
+test('a prompt answer with the default and an extra Claude folder is serialized without loss', supported, async () => {
+  const { options } = seam();
+  const resolved = await resolveSelection({ ...options, terminal: answering(['1,2\n']) });
+  assert.ok('selected' in resolved);
+  const { agent, claudeDirs } = parseFlags(installFlags(resolved.selected));
+  assert.equal(agent, 'claude');
+  assert.deepEqual(claudeDirs.map((dir) => path.basename(dir)).sort(), ['.claude', '.claude-work']);
+});
+
+test('cancellation and a missing terminal are not a choice and change nothing', supported, async () => {
+  const { w, options } = seam();
+  const cancelled = await resolveSelection({
+    ...options,
+    terminal: answering(['\n']),
+  });
+  assert.deepEqual(cancelled, { cancelled: true });
+  const noTerminal = () => {
+    throw Object.assign(new Error('No interactive terminal'), { code: NO_TERMINAL });
+  };
+  await assert.rejects(resolveSelection({ ...options, terminal: noTerminal }), (error) => {
+    assert.equal(/** @type {{ code?: string }} */ (error).code, 'install-selection-required');
+    assert.match(String(error), /Example: tds-factory install --agent claude,codex/);
+    return true;
+  });
+  assert.deepEqual(fs.readdirSync(w.home), ['.claude-work']);
+  assert.equal(fs.existsSync(w.env.TDS_FACTORY_CONFIG_DIR), false);
+});
+
+test('installFlags refuses a destination without a folder next to others it cannot name', () => {
+  assert.deepEqual(installFlags([{ agent: 'codex' }, { agent: 'copilot' }]), ['--agent', 'codex,copilot']);
+  assert.throws(
+    () => installFlags([{ agent: 'claude' }, { agent: 'claude', configDir: '/x' }]),
+    /default Claude folder/,
+  );
+  assert.deepEqual(explicitDestinations({ agent: 'claude' }), [{ agent: 'claude' }]);
 });

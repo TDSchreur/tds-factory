@@ -62,23 +62,10 @@ test('every third-party action in the CI workflow is pinned to a commit SHA', ()
   for (const [, ref] of ci.matchAll(/uses: \S+@(\S+)/g)) assert.match(ref, /^[0-9a-f]{40}$/);
 });
 
-test('native trust tests run on Windows, and ci-ok needs only jobs that exist', () => {
-  assert.match(ci, /os: \[windows-latest\]/);
-  const line = /node --test (.+)/.exec(ci.slice(ci.indexOf('trust-platforms:'), ci.indexOf('  test:')));
-  assert.ok(line);
-  const listed = line[1].trim().split(/\s+/);
-  for (const file of [
-    'trusted-install-paths',
-    'trusted-install-windows',
-    'install-identity',
-    'install-prompt',
-    'install-reconcile',
-    'install-cli',
-  ])
-    assert.ok(listed.includes(`test/${file}.test.js`), `${file} runs in the Windows job`);
+test('CI runs on Linux only, and ci-ok needs only jobs that exist', () => {
+  assert.doesNotMatch(ci, /windows|macos/i, 'no Windows or macOS runner');
   const needs = /needs: \[([^\]]+)\]/.exec(ci.slice(ci.indexOf('  ci-ok:')));
   assert.ok(needs);
-  assert.match(needs[1], /\btrust-platforms\b/);
   for (const job of needs[1].split(',').map((name) => name.trim())) assert.match(ci, new RegExp(`^  ${job}:`, 'm'));
 });
 

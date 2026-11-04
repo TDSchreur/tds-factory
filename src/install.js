@@ -179,41 +179,61 @@ export function install({
 const label = (item) => printable(item.configDir ?? `${item.agent} (${item.skillsDir})`);
 
 /**
+ * Resolve the chosen destinations from flags, the saved record or the terminal, without changing anything. A cancelled
+ * prompt returns `{ cancelled: true }`; a missing terminal throws `install-selection-required`. Global Claude destinations
+ * come back with their folder, so the result can be serialized into flags without loss.
+ * @param {Pick<Parameters<typeof install>[0], 'agent' | 'claudeDirs' | 'reuseSelection' | 'project' | 'cwd' | 'home' | 'env'> & { terminal?: typeof import('./install-prompt.js').openInstallTerminal }} options
+ * @returns {Promise<{ selected: Destination[] } | { cancelled: true }>}
+ */
+export async function resolveSelection(options) {
+  const { project = false, cwd = process.cwd(), home = os.homedir(), env = process.env } = options;
+  const recordFile = selectionRecordFile({ project, cwd, home, env });
+  const previous = readSelection({ file: recordFile, home, cwd, project, env }) ?? [];
+  const plan = planSelection({ home, cwd, env, project, desired: [], previous });
+  const chosen = await chooseDestinations({
+    agent: options.agent,
+    claudeDirs: options.claudeDirs,
+    reuse: options.reuseSelection,
+    previous,
+    project,
+    candidates: plan.candidates,
+    terminal: options.terminal,
+  }).catch((/** @type {unknown} */ cause) => {
+    if (cause instanceof Error && 'code' in cause && cause.code === NO_TERMINAL)
+      throw new FactoryError(NO_CHOICE, { code: 'install-selection-required', cause });
+    throw cause;
+  });
+  if (!chosen.length) return { cancelled: true };
+  return { selected: planSelection({ home, cwd, env, project, desired: chosen, previous }).desired };
+}
+
+/**
+ * The `tds-factory install` flags that choose exactly these destinations: one `--agent` list and a `--claude-dir` for each
+ * Claude folder. A Claude destination without a folder is the project one and may only stand alone.
+ * @param {Destination[]} destinations
+ * @returns {string[]}
+ */
+export function installFlags(destinations) {
+  const agents = [...new Set(destinations.map((item) => item.agent))];
+  const claude = destinations.filter((item) => item.agent === 'claude');
+  const dirs = claude.flatMap((item) => (item.configDir === undefined ? [] : [item.configDir]));
+  if (dirs.length && dirs.length !== claude.length)
+    throw new Error('cannot name the default Claude folder next to other Claude folders: resolve it to a path first');
+  return ['--agent', agents.join(','), ...dirs.flatMap((dir) => ['--claude-dir', dir])];
+}
+
+/**
  * Resolve the destinations from flags, saved choices or the terminal, then install.
  * @param {Parameters<typeof install>[0] & { terminal?: typeof import('./install-prompt.js').openInstallTerminal }} options
  */
 export async function runInstall(options) {
-  const { project = false, cwd = process.cwd(), home = os.homedir(), env = process.env } = options;
-  if (options.selected === undefined) {
-    const recordFile = selectionRecordFile({ project, cwd, home, env });
-    const previous = readSelection({ file: recordFile, home, cwd, project, env }) ?? [];
-    const explicit = explicitDestinations({
-      agent: options.agent,
-      claudeDirs: options.claudeDirs,
-      reuse: options.reuseSelection,
-      previous,
-      project,
-    });
-    if (explicit === undefined) {
-      const plan = planSelection({ home, cwd, env, project, desired: [], previous });
-      const chosen = await chooseDestinations({
-        project,
-        previous,
-        candidates: plan.candidates,
-        terminal: options.terminal,
-      }).catch((/** @type {unknown} */ cause) => {
-        if (cause instanceof Error && 'code' in cause && cause.code === NO_TERMINAL)
-          throw new FactoryError(NO_CHOICE, { code: 'install-selection-required', cause });
-        throw cause;
-      });
-      if (!chosen.length) {
-        (options.log ?? console.log)('nothing selected; no changes were made');
-        return;
-      }
-      return install({ ...options, selected: chosen });
-    }
+  if (options.selected !== undefined) return install(options);
+  const resolved = await resolveSelection(options);
+  if ('cancelled' in resolved) {
+    (options.log ?? console.log)('nothing selected; no changes were made');
+    return;
   }
-  return install(options);
+  return install({ ...options, selected: resolved.selected });
 }
 
 /**
