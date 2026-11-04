@@ -1,6 +1,6 @@
 # Size gate B: Define estimates the Run size and proposes a split
 
-Continues [Size gate](run-size-gate.md), whose Run A built the measurement, the wait and the two answers on the command line ([ADR 0035](../adr/0035-build-waits-on-the-user-when-a-run-outgrows-the-size-limit.md)). That Spec planned one Run B for stories 10 to 13. Its own estimate shows that Run B does not fit either, so it is cut again: this Run carries the Skill text (stories 10, 11 and 13); the Dashboard buttons (story 12) and the leftovers of Run A go to a later Run, in one issue.
+Continues [Size gate](run-size-gate.md), whose Run A built the measurement, the wait and the two answers on the command line ([ADR 0035](../adr/0035-build-waits-on-the-user-when-a-run-outgrows-the-size-limit.md)). That Spec planned one Run B for stories 10 to 13. Its own estimate shows that Run B does not fit either, so it is cut again: this Run carries the Skill text (stories 10, 11 and 13); the Dashboard buttons (story 12, [#530](https://github.com/TDSchreur/tds-factory/issues/530)) and the leftovers of Run A ([#532](https://github.com/TDSchreur/tds-factory/issues/532)) go to later Runs.
 
 ## Problem Statement
 
@@ -51,10 +51,10 @@ The work is Skill text, so the seam is `npm test`: the Skill checks (the 18 KB l
 
 ## Out of Scope
 
-Left to one later issue, [#530](https://github.com/TDSchreur/tds-factory/issues/530), which needs its own Define and a split in two (Dashboard first, then the leftovers):
+Left to later Runs, cut in two (the Dashboard buttons first, then the leftovers):
 
-- Split and Continue buttons on a Run waiting for size: guarded write routes ([ADR 0017](../adr/0017-dashboard-write-routes-need-origin-host-and-a-session-token.md)) with `updated` freshness like Accept Check ([ADR 0024](../adr/0024-the-user-can-grant-an-extra-check-loop.md)), the moved Ticket links, **Copy agent prompt**, help text, `docs/dashboard.md`, `docs/usage.md`, and the Dashboard line in the Waiting bullet and `continue.md`.
-- Leftovers of Run A: the Spec wording for `size --accept` on a running Run in Build or Check and for an overflow counting as over the limit; one shared character class for the printed links (control and format characters, with the `u` flag); reporting a split event that could not be written (check the boolean `appendEvent` returns); a timeout on the git measurement, counted as over the limit like an overflow (unknown would let a hung or huge repository pass the gate, and the user can always answer Continue).
+- [#530](https://github.com/TDSchreur/tds-factory/issues/530), Split and Continue buttons on a Run waiting for size: guarded write routes ([ADR 0017](../adr/0017-dashboard-write-routes-need-origin-host-and-a-session-token.md)) with `updated` freshness like Accept Check ([ADR 0024](../adr/0024-the-user-can-grant-an-extra-check-loop.md)), the moved Ticket links, **Copy agent prompt**, help text, `docs/dashboard.md`, `docs/usage.md`, and the Dashboard line in the Waiting bullet and `continue.md`.
+- [#532](https://github.com/TDSchreur/tds-factory/issues/532), leftovers of Run A: the Spec wording for `size --accept` on a running Run in Build or Check and for an overflow counting as over the limit; one shared character class for the printed links (control and format characters, with the `u` flag); reporting a split event that could not be written (check the boolean `appendEvent` returns); a timeout on the git measurement, counted as over the limit like an overflow (unknown would let a hung or huge repository pass the gate, and the user can always answer Continue).
 - The red-check, as in the first Spec.
 
 ## Further Notes
