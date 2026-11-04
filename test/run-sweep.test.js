@@ -261,6 +261,21 @@ test('a list that misses a member the diff added is listed, and one that has it 
   assert.doesNotMatch(lists, /docs\/c\.md/);
 });
 
+test('the lists section gives the same answer under diff.mnemonicprefix and diff.noprefix', async () => {
+  const files = {
+    'docs/a.md': 'Checks: `cli`, `git`, `tracker`.\n',
+    'docs/b.md': 'The report holds `cli`, `git` and `tracker` checks.\n',
+  };
+  const change = { 'docs/a.md': 'Checks: `cli`, `git`, `tracker`, `guides`.\n' };
+  for (const setting of ['diff.mnemonicprefix', 'diff.noprefix']) {
+    const p = await project(files, change);
+    git(p.cwd, 'config', setting, 'true');
+    const lists = sections((await sweep(p)).stdout);
+    assert.match(lists, /added `guides`/, setting);
+    assert.match(lists, /docs\/b\.md:1\b/, setting);
+  }
+});
+
 test('a list that still holds a member the diff removed is listed', async () => {
   const p = await project(
     {

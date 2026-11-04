@@ -102,6 +102,17 @@ test('runSize leaves lockfiles at any depth and test/fixtures out, and counts te
   assert.ok(size && size.bytes > 4096 && size.bytes < 4096 + 1024, `bytes ${size?.bytes}`);
 });
 
+test('runSize measures the same under diff.noprefix and diff.mnemonicprefix', async () => {
+  const { cwd, id } = await inBuild(1, [{ 'src/a.js': big, 'test/a.test.js': big }]);
+  const expected = runSize(cwd, id);
+  assert.ok(expected && expected.files === 2);
+  for (const setting of ['diff.noprefix', 'diff.mnemonicprefix']) {
+    git(cwd, 'config', setting, 'true');
+    assert.deepEqual(runSize(cwd, id), expected, setting);
+    git(cwd, 'config', '--unset', setting);
+  }
+});
+
 test('runSize does not count uncommitted changes', async () => {
   const { cwd, id } = await inBuild(1, [{ 'a.txt': 'a\n' }]);
   const worktree = JSON.parse(readFileSync(join(cwd, '.factory', 'runs', id, 'run.json'), 'utf8')).worktree;

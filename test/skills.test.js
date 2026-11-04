@@ -78,7 +78,7 @@ test('Build refuses to start without a Spec and Tickets, and Check needs every a
   assert.equal(check.split('on every Run').length, 2);
 });
 
-test('Build ends with an Exit checklist of seven steps, run after the last Ticket and after every Rework', () => {
+test('Build ends with an Exit checklist of eight steps, run after the last Ticket and after every Rework', () => {
   const build = section('Build');
   const checklist = build.slice(build.indexOf('### Exit checklist'), build.indexOf('### After a Rework'));
   const steps = [...checklist.matchAll(/^\d\. \*\*([^*]+)\*\*/gm)].map((m) => m[1]);
@@ -89,12 +89,17 @@ test('Build ends with an Exit checklist of seven steps, run after the last Ticke
     'Story trace.',
     'Security check.',
     'Hostile input.',
+    'Repeat changed tests.',
     'Self-check.',
   ]);
   assert.match(checklist, /after the last Ticket, before `run sync`, and again after every Rework/);
   assert.match(checklist, /`build\.md`/);
   assert.match(checklist, /Universal safeguards/);
   assert.match(checklist, /changelog fragment/);
+  assert.match(checklist, /30 runs/);
+  assert.match(checklist, /`--test-concurrency=1`/);
+  assert.match(checklist, /failing on the code from before/);
+  assert.match(checklist, /never `run_in_background` or `pkill`/);
   assert.match(build, /run the Exit checklist \(read `references\/exit-checklist\.md`/);
   assert.match(build, /then run `tds-factory run sync/);
 });

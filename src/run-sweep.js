@@ -235,7 +235,8 @@ export function sweepRun(projectDir, id, extra = []) {
   if (!root || !fs.existsSync(root)) throw new Error('the Run worktree is missing');
   const base = record.base_sha;
   if (!base || !/^[0-9a-f]{40,64}$/.test(base)) throw new Error('the Run has no usable base commit');
-  const plain = ['--no-ext-diff', '--no-textconv', '--no-color'];
+  // The prefixes are fixed because the header parser below reads them; diff.mnemonicprefix and diff.noprefix would change them.
+  const plain = ['--no-ext-diff', '--no-textconv', '--no-color', '--src-prefix=a/', '--dst-prefix=b/'];
   const diff = git(root, 'diff', ...plain, base, '--');
   const changed = new Set(
     git(root, 'diff', ...plain, '-z', '--name-only', base, '--')
