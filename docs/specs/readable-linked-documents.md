@@ -50,13 +50,13 @@ A Linked document that is a path (not an http(s) URL) becomes a link that opens 
 
 Counted as the Run size counts (no lockfiles, no fixtures), tests at real size, Markdown by line length. Estimates run low.
 
-| Row | Files | KB |
-| --- | --- | --- |
-| Ticket 1: document route, lookup, allow-list and adversarial tests | 4 (run-folder.js, dashboard-handlers.js, dashboard-routes.js, one new test file) | 8.5 |
-| Ticket 2: open in the drawer, Back, not-on-disk message, tile click, browser test | 3 (components.js, model.js, browser test; the test file is new to the diff) | 7 |
-| Ticket 3: documentation (Dashboard guide, help text, changelog fragment) | 3 (docs/dashboard.md, dashboard/help.js, changelog fragment) | 2.5 |
-| Define artifacts (this Spec, glossary, ADR 0037) | 3 | 13 |
-| **Total** | **12** | **31** |
+| Row                                                                               | Files                                                                            | KB     |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------ |
+| Ticket 1: document route, lookup, allow-list and adversarial tests                | 4 (run-folder.js, dashboard-handlers.js, dashboard-routes.js, one new test file) | 8.5    |
+| Ticket 2: open in the drawer, Back, not-on-disk message, tile click, browser test | 3 (components.js, model.js, browser test; the test file is new to the diff)      | 7      |
+| Ticket 3: documentation (Dashboard guide, help text, changelog fragment)          | 3 (docs/dashboard.md, dashboard/help.js, changelog fragment)                     | 2.5    |
+| Define artifacts (this Spec, glossary, ADR 0037)                                  | 3                                                                                | 13     |
+| **Total**                                                                         | **12**                                                                           | **31** |
 
 The limit for fitting is 10 files and 27 KB (two thirds of the Run size limit). The user split the work: this Run carries the route, the opening in the drawer and the documentation, with the file name as link text; the titles move to a later Run ([#574](https://github.com/TDSchreur/tds-factory/issues/574)). The total is still above the fit line, mostly from the Define artifacts, and stays under the Run size limit (15 files, 40 KB).
 

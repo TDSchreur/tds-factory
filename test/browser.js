@@ -20,6 +20,7 @@ import { waitUntil } from './wait-until.js';
  * @property {RunStub[]} [runs] Served as /api/views, in the one Project `p`.
  * @property {{ id: string, name: string, path?: string, missing?: boolean, runs?: RunStub[] }[]} [projects] Served as /api/views instead of `runs`, in this order.
  * @property {Record<string, string>} [files] Served as /files/<run>/<name>.
+ * @property {Record<string, string>} [documents] Served as /documents/<project>/<run>/<path>, keyed by the path.
  * @property {(req: IncomingMessage) => { status: number, body: string, headers?: Record<string, string> } | undefined} [respond] Answers DELETE and POST requests.
  * @property {string[]} [statusCalls] The pr-status URLs that were read.
  * @property {() => void} [statusReply] Runs on each pr-status read.
@@ -234,6 +235,10 @@ export async function openPage(t, state, { args = [], width = 1200, height = 700
       );
     if (routePath.startsWith('/files/')) {
       const text = served.files[decodeURIComponent(routePath.split('/').slice(3).join('/'))];
+      return text === undefined ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', text);
+    }
+    if (routePath.startsWith('/documents/')) {
+      const text = state.documents?.[routePath.split('/').slice(4).map(decodeURIComponent).join('/')];
       return text === undefined ? send(404, 'text/plain', 'not found') : send(200, 'text/markdown', text);
     }
     send(404, 'text/plain', 'not found');

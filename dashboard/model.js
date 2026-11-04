@@ -253,6 +253,20 @@ export const ticketLabel = (link) => {
   return /^\d+$/.test(last) ? '#' + last : last;
 };
 
+// A Linked document that is not an http(s) URL is a path of the Run worktree or the main checkout; the Dashboard opens it itself.
+/** @param {unknown} href */
+export const isLocalDocument = (href) => str(href) !== '' && safeUrl(href) === '';
+
+// The route of one Linked document of a Run; the server reads it only when the Run record lists the path.
+/** @param {{ id: string, projectId: string }} run @param {string} docPath */
+export const documentPath = (run, docPath) =>
+  '/documents/' +
+  encodeURIComponent(run.projectId) +
+  '/' +
+  encodeURIComponent(run.id) +
+  '/' +
+  docPath.split('/').map(encodeURIComponent).join('/');
+
 // The Tickets of a card with their state: Tickets finish in order, so the first ticketsDone are done and the next is active during Build.
 /** @param {RunView} run */
 export function ticketsOf(run) {
